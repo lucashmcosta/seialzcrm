@@ -2,7 +2,6 @@ import { Fragment, useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/hooks/useOrganization";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,11 +16,13 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useMetaConnection } from "@/hooks/useMetaConnection";
+import { useOrgIntegration } from "@/hooks/useOrgIntegration";
 import { MetaConnectionBanner } from "@/components/integrations/meta/MetaConnectionBanner";
 
 interface Props {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  // Mantidos por compat; a capability agora renderiza inline na página Meta.
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   integration: any;
   orgIntegration: any;
   onManageConnection?: () => void;
@@ -90,7 +91,7 @@ const statusBadge = (s: string) => {
   return <Badge className={`text-[10px] ${m.cls}`}>{m.label}</Badge>;
 };
 
-export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration: initialOrgIntegration, onManageConnection }: Props) {
+export function MetaCapiDialog({ open = true, integration, orgIntegration: initialOrgIntegration, onManageConnection }: Props) {
   const { organization } = useOrganization();
   const qc = useQueryClient();
   const [tab, setTab] = useState("connection");
@@ -132,20 +133,11 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     },
   });
 
-  const { data: orgIntegration } = useQuery({
-    queryKey: ["org-integration", "meta-capi", organization?.id],
-    enabled: !!organization?.id && !!integration?.id && open,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("organization_integrations")
-        .select("*")
-        .eq("organization_id", organization!.id)
-        .eq("integration_id", integration!.id)
-        .maybeSingle();
-      return data;
-    },
-    initialData: initialOrgIntegration,
-  });
+  const { data: orgIntegration } = useOrgIntegration(
+    organization?.id,
+    integration?.id,
+    initialOrgIntegration,
+  );
 
   // Espelha a decisão do backend (resolveOrgMetaToken): quando a credencial canônica
   // está ativa, o token de envio vem da Meta Connection — a capability não gerencia auth.
@@ -297,7 +289,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
         return;
       }
       toast.success(isConnected ? "Meta CAPI atualizado!" : "Meta CAPI conectado e validado!");
-      qc.invalidateQueries({ queryKey: ["org-integration", "meta-capi"] });
+      qc.invalidateQueries({ queryKey: ["org-integration-v2"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       setReconnectMode(false);
       setTab("events");
@@ -319,7 +311,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     },
     onSuccess: () => {
       toast.success("Meta CAPI desconectado");
-      qc.invalidateQueries({ queryKey: ["org-integration", "meta-capi"] });
+      qc.invalidateQueries({ queryKey: ["org-integration-v2"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       setDisconnectOpen(false);
     },
@@ -455,24 +447,22 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <div className="flex items-start justify-between gap-4 pr-6">
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
               <div className="flex items-start gap-3">
                 {integration?.logo_url ? (
                   <img
                     src={integration.logo_url}
                     alt={integration.name}
-                    className="w-12 h-12 rounded-lg object-contain bg-muted p-2"
+                    className="w-12 h-12 rounded-lg object-contain bg-muted p-2 shrink-0"
                   />
                 ) : (
-                  <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
                     <Plug className="h-6 w-6 text-muted-foreground" />
                   </div>
                 )}
                 <div>
-                  <DialogTitle className="text-xl">Meta Conversions API</DialogTitle>
+                  <h2 className="text-xl font-semibold">Meta Conversions API</h2>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {isConnected ? (
                       <Badge variant="outline" className="gap-1">
@@ -496,7 +486,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </div>
               </div>
               {isConnected && (
-                <div className="flex gap-2">
+                <div className="flex gap-2 shrink-0">
                   <Button variant="outline" size="sm" onClick={sendTest}>
                     Testar agora
                   </Button>
@@ -506,18 +496,13 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </div>
               )}
             </div>
-          </DialogHeader>
 
           {/* Credencial canônica: a conexão vive só na integração Meta. A capability
               mostra apenas um banner; a aba de credencial vira "Pixel" (só config).
               Sem flag/conexão, tudo permanece como o legado (aba "Conexão"). */}
-          {canonicalActive && (
-            <div className="mt-4">
-              <MetaConnectionBanner onManage={onManageConnection} />
-            </div>
-          )}
+          {canonicalActive && <MetaConnectionBanner onManage={onManageConnection} />}
 
-          <Tabs value={tab} onValueChange={setTab} className="mt-4">
+          <Tabs value={tab} onValueChange={setTab} className="w-full">
             <TabsList className="grid grid-cols-2 w-full">
               <TabsTrigger value="connection">{canonicalActive ? "Pixel" : "Conexão"}</TabsTrigger>
               <TabsTrigger value="events" disabled={!isConnected}>
@@ -705,7 +690,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </Card>
               )}
 
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Card className="p-3">
                   <p className="text-xs text-muted-foreground">Total (7d)</p>
                   <p className="text-2xl font-semibold">{stats?.total ?? "—"}</p>
@@ -824,8 +809,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
               </Card>
             </TabsContent>
           </Tabs>
-        </DialogContent>
-      </Dialog>
+      </div>
 
       <ConfirmDialog
         open={disconnectOpen}
