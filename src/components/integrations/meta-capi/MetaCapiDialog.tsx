@@ -16,6 +16,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useMetaConnection } from "@/hooks/useMetaConnection";
+import { CanonicalCredentialPanel } from "@/components/integrations/meta/CanonicalCredentialPanel";
 
 interface Props {
   open: boolean;
@@ -144,8 +146,11 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     initialData: initialOrgIntegration,
   });
 
+  // Espelha a decisão do backend (resolveOrgMetaToken): quando a credencial canônica
+  // está ativa, o token de envio vem da Meta Connection — a capability não gerencia auth.
+  const { canonicalActive, connection } = useMetaConnection(organization?.id);
   const ca = (orgIntegration?.connected_account || {}) as any;
-  const isConnected = !!orgIntegration?.is_enabled;
+  const isConnected = canonicalActive || !!orgIntegration?.is_enabled;
   const isTestMode = !!ca.test_event_code;
 
   useEffect(() => {
@@ -231,8 +236,9 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     if (reconnectMode && tok.length > 0 && tok.length < 20) {
       e.access_token = "Token muito curto. Confira se copiou completo.";
     }
-    // Atualizando integração já conectada sem token novo e sem fallback de Lead Ads
-    if (isConnected && !reconnectMode && tok.length === 0 && !hasMetaLeadAds) {
+    // Atualizando integração já conectada sem token novo e sem fallback de Lead Ads.
+    // Quando a credencial canônica está ativa, o token vem da Meta Connection — não exigir.
+    if (isConnected && !reconnectMode && tok.length === 0 && !hasMetaLeadAds && !canonicalActive) {
       e.access_token = "Informe o access token para atualizar (ou ative Meta Lead Ads para reusar).";
     }
 
@@ -257,7 +263,11 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
       const manualToken = (formValues.access_token || "").trim();
       // Usa from-existing quando: (a) novo connect em modo reuse, OU
       // (b) update sem token novo mas com Meta Lead Ads disponível
+      // Com credencial canônica ativa não se pede token manual; salvar a configuração
+      // (pixel/test code/CTWA/url) reusa o caminho sem-token. O token de envio real é
+      // resolvido server-side pela Meta Connection quando a flag está ligada.
       const useReuse =
+        (canonicalActive && !!hasMetaLeadAds) ||
         (mode === "reuse" && !isConnected) ||
         (isConnected && !reconnectMode && manualToken.length === 0 && !!hasMetaLeadAds);
       const fnName = useReuse ? "meta-capi-connect-from-existing" : "meta-capi-connect";
@@ -398,6 +408,8 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     const isPassword = field.type === "password";
     const isManualToken = field.key === "access_token";
 
+    // Credencial canônica: o token de envio vem da Meta Connection — nunca pedir aqui.
+    if (isManualToken && canonicalActive) return null;
     // Em modo reuse (não conectado), esconder access_token
     if (isManualToken && !isConnected && mode === "reuse" && !reconnectMode) return null;
 
@@ -510,23 +522,32 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                     <Label className="text-xs text-muted-foreground">Pixel ID</Label>
                     <p className="font-mono text-sm">{ca.pixel_id || "—"}</p>
                   </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Access Token</Label>
-                    <p className="font-mono text-sm">{tokenMasked}</p>
-                  </div>
-                  {ca.token_source === "meta-lead-ads" && (
-                    <Badge variant="outline" className="gap-1 w-fit">
-                      <LinkSimple className="h-3 w-3" />
-                      Reutilizando token de Meta Lead Ads
-                    </Badge>
-                  )}
-                  {ca.token_source === "meta-lead-ads" && hasMetaLeadAds === false && (
-                    <Alert variant="destructive">
-                      <Warning className="h-4 w-4" />
-                      <AlertDescription className="text-xs">
-                        Meta Lead Ads foi desconectado. Este Meta CAPI usa o token de lá e parou de funcionar. Use "Reconectar" com token manual.
-                      </AlertDescription>
-                    </Alert>
+                  {canonicalActive ? (
+                    <CanonicalCredentialPanel
+                      connection={connection}
+                      note="O token de envio da Conversions API é resolvido pela Meta Connection. O Pixel/Dataset e os campos abaixo continuam sendo configuração desta capability."
+                    />
+                  ) : (
+                    <>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Access Token</Label>
+                        <p className="font-mono text-sm">{tokenMasked}</p>
+                      </div>
+                      {ca.token_source === "meta-lead-ads" && (
+                        <Badge variant="outline" className="gap-1 w-fit">
+                          <LinkSimple className="h-3 w-3" />
+                          Reutilizando token de Meta Lead Ads
+                        </Badge>
+                      )}
+                      {ca.token_source === "meta-lead-ads" && hasMetaLeadAds === false && (
+                        <Alert variant="destructive">
+                          <Warning className="h-4 w-4" />
+                          <AlertDescription className="text-xs">
+                            Meta Lead Ads foi desconectado. Este Meta CAPI usa o token de lá e parou de funcionar. Use "Reconectar" com token manual.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </>
                   )}
                   {ca.test_event_code && (
                     <div>
@@ -575,7 +596,13 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </Card>
               ) : (
                 <Card className="p-4 space-y-4">
-                  {!isConnected && hasMetaLeadAds && (
+                  {canonicalActive && (
+                    <CanonicalCredentialPanel
+                      connection={connection}
+                      note="Credencial resolvida pela Meta Connection. Ajuste apenas os campos de configuração desta capability abaixo."
+                    />
+                  )}
+                  {!isConnected && hasMetaLeadAds && !canonicalActive && (
                     <div className="space-y-2">
                       <Label className="text-xs text-muted-foreground">Modo de conexão</Label>
                       <RadioGroup value={mode} onValueChange={(v) => setMode(v as "reuse" | "manual")} className="gap-2">

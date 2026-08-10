@@ -14,6 +14,8 @@ import { PagesAndFormsList } from "./PagesAndFormsList";
 import { MappingDrawer } from "./MappingDrawer";
 import { SettingsCard } from "./SettingsCard";
 import { StatusDashboard } from "./StatusDashboard";
+import { useMetaConnection } from "@/hooks/useMetaConnection";
+import { CanonicalCredentialPanel } from "@/components/integrations/meta/CanonicalCredentialPanel";
 
 interface Props {
   open: boolean;
@@ -44,7 +46,10 @@ export function MetaLeadAdsDialog({ open, onOpenChange, integration, orgIntegrat
     initialData: initialOrgIntegration,
   });
 
-  const isConnected = !!orgIntegration?.is_enabled;
+  // Espelha a decisão do backend: credencial canônica ativa (flag + Meta Connection)
+  // conta como conectado, mesmo antes de a UI legada refletir isso.
+  const { canonicalActive, connection } = useMetaConnection(organization?.id);
+  const isConnected = canonicalActive || !!orgIntegration?.is_enabled;
   const ca = (orgIntegration?.connected_account || {}) as any;
 
   useEffect(() => {
@@ -157,11 +162,15 @@ export function MetaLeadAdsDialog({ open, onOpenChange, integration, orgIntegrat
             </TabsList>
 
             <TabsContent value="connection" className="mt-4">
-              <ConnectionForm
-                integrationId={integration?.id}
-                existing={orgIntegration}
-                onSuccess={refetchOrg}
-              />
+              {canonicalActive ? (
+                <CanonicalCredentialPanel connection={connection} />
+              ) : (
+                <ConnectionForm
+                  integrationId={integration?.id}
+                  existing={orgIntegration}
+                  onSuccess={refetchOrg}
+                />
+              )}
             </TabsContent>
 
             <TabsContent value="forms" className="mt-4">
