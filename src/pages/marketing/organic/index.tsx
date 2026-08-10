@@ -20,11 +20,11 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from 'recharts';
 import { InstagramLogo, ArrowSquareOut } from '@phosphor-icons/react';
-import { cn } from '@/lib/utils';
 
 // ---- helpers de exibição (distinguem indisponível / zero / não-sincronizado) ----
 
@@ -65,29 +65,20 @@ const TOP_METRICS: { key: OrganicMetric; label: string }[] = [
   { key: 'saves', label: 'Salvos' },
 ];
 
-// Segmented control de origem: Instagram / Facebook / Todos.
+// Segmented control de origem: Instagram / Facebook / Todos (primitive ui/toggle-group).
 function PlatformToggle({ value, onChange }: { value: PlatformFilter; onChange: (v: PlatformFilter) => void }) {
-  const opts: { key: PlatformFilter; label: string }[] = [
-    { key: 'instagram', label: 'Instagram' },
-    { key: 'facebook', label: 'Facebook' },
-    { key: 'all', label: 'Todos' },
-  ];
   return (
-    <div className="inline-flex rounded-md border border-border bg-card p-0.5">
-      {opts.map((o) => (
-        <button
-          key={o.key}
-          type="button"
-          onClick={() => onChange(o.key)}
-          className={cn(
-            'px-3 py-1.5 text-sm font-medium rounded-[5px] transition-colors',
-            value === o.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(v) => v && onChange(v as PlatformFilter)}
+      variant="outline"
+      size="sm"
+    >
+      <ToggleGroupItem value="instagram">Instagram</ToggleGroupItem>
+      <ToggleGroupItem value="facebook">Facebook</ToggleGroupItem>
+      <ToggleGroupItem value="all">Todos</ToggleGroupItem>
+    </ToggleGroup>
   );
 }
 
