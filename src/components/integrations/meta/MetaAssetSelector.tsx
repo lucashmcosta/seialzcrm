@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
-import { Button } from '@/components/base/buttons/button';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { CircleNotch } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
 interface MetaAsset {
@@ -30,8 +33,7 @@ export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: str
 
   const load = useCallback(async () => {
     setLoading(true);
-    // cast: tabela meta_assets ainda não está em types.ts (migration aplicada no deploy da V1).
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from('meta_assets')
       .select('id,asset_type,external_id,name,selection_state')
       .eq('connection_id', connectionId)
@@ -66,8 +68,20 @@ export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: str
     }
   };
 
-  if (loading) return <p className="text-sm text-muted-foreground">Carregando ativos…</p>;
-  if (!assets.length) return <p className="text-sm text-muted-foreground">Nenhum ativo descoberto ainda. Aguarde a descoberta ou reconecte.</p>;
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        {[0, 1, 2].map((i) => <Skeleton key={i} className="h-8 w-full" />)}
+      </div>
+    );
+  }
+  if (!assets.length) {
+    return (
+      <div className="rounded-md border border-dashed border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+        Nenhum ativo descoberto ainda. Aguarde a descoberta ou reconecte.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -76,23 +90,25 @@ export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: str
         if (!items.length) return null;
         return (
           <div key={type}>
-            <h4 className="mb-1 text-sm font-medium">{label}</h4>
+            <h4 className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</h4>
             <div className="space-y-1">
               {items.map((a) => (
-                <label key={a.id} className="flex items-center gap-2 text-sm">
+                <Label key={a.id} htmlFor={`asset-${a.id}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-normal hover:bg-muted/50">
                   <Checkbox
+                    id={`asset-${a.id}`}
                     checked={!!selected[a.id]}
                     onCheckedChange={(v) => setSelected((s) => ({ ...s, [a.id]: !!v }))}
                   />
                   <span>{a.name || a.external_id}</span>
                   <span className="text-xs text-muted-foreground">{a.external_id}</span>
-                </label>
+                </Label>
               ))}
             </div>
           </div>
         );
       })}
-      <Button type="button" color="primary" size="sm" disabled={saving} onClick={() => void save()}>
+      <Button type="button" size="sm" disabled={saving} onClick={() => void save()}>
+        {saving && <CircleNotch className="animate-spin" />}
         {saving ? 'Salvando…' : 'Salvar seleção'}
       </Button>
     </div>

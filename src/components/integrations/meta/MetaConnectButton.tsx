@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Button } from '@/components/base/buttons/button';
+import { Button } from '@/components/ui/button';
+import { CircleNotch, FacebookLogo } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useFacebookSdk } from '@/hooks/useFacebookSdk';
@@ -73,7 +74,8 @@ export function MetaConnectButton({ onConnected }: { onConnected?: (connectionId
   };
 
   return (
-    <Button type="button" color="primary" disabled={loading} onClick={() => void handleConnect()}>
+    <Button type="button" disabled={loading} onClick={() => void handleConnect()}>
+      {loading ? <CircleNotch className="animate-spin" /> : <FacebookLogo weight="fill" />}
       {loading ? 'Conectando…' : 'Continuar com Facebook'}
     </Button>
   );

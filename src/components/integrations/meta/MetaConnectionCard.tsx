@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { useOrganization } from '@/hooks/useOrganization';
 import { supabase } from '@/integrations/supabase/client';
 import { MetaConnectButton } from '@/components/integrations/meta/MetaConnectButton';
@@ -22,8 +23,7 @@ export function MetaConnectionCard() {
   const load = useCallback(async () => {
     if (!organization?.id) return;
     setLoading(true);
-    // cast: tabela meta_connections ainda não está em types.ts (migration no deploy da V1).
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from('meta_connections')
       .select('id,status,token_type,authorizing_meta_user_name,created_at')
       .eq('organization_id', organization.id)
@@ -49,10 +49,12 @@ export function MetaConnectionCard() {
       </div>
       {!loading && conn && (
         <div className="mt-4 space-y-3 border-t pt-4">
-          <div className="text-xs text-muted-foreground">
-            Status: <span className="font-medium">{conn.status}</span>
-            {conn.authorizing_meta_user_name ? ` · autorizado por ${conn.authorizing_meta_user_name}` : ''}
-            {` · token: ${conn.token_type}`}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant={conn.status === 'connected' ? 'default' : 'secondary'}>
+              {conn.status === 'connected' ? 'Conectado' : conn.status}
+            </Badge>
+            {conn.authorizing_meta_user_name && <span>autorizado por {conn.authorizing_meta_user_name}</span>}
+            <span>· token: {conn.token_type}</span>
           </div>
           <MetaAssetSelector connectionId={conn.id} />
         </div>
