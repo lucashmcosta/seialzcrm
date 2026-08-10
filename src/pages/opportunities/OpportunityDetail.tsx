@@ -30,7 +30,7 @@ import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog'
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
 import { OpportunityCloseDialog } from '@/components/opportunities/OpportunityCloseDialog';
 import { OpportunityReadinessCard } from '@/components/opportunities/OpportunityReadinessCard';
-import { UnifiedDocuments } from '@/components/documents/UnifiedDocuments';
+import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
 import { transitionOpportunityStage } from '@/lib/opportunityClose';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
@@ -441,7 +441,7 @@ export default function OpportunityDetail() {
               )
             )}
             {selectedTab === 'tasks' && <ContactTasks opportunityId={opportunity.id} />}
-            {selectedTab === 'documents' && <UnifiedDocuments opportunityId={opportunity.id} contactId={opportunity.contact_id} />}
+            {selectedTab === 'documents' && <DocumentsPanel opportunityId={opportunity.id} contactId={opportunity.contact_id} />}
             {selectedTab === 'nammux' && organization && (
               <NammuxOpportunityTab
                 organizationId={organization.id}
@@ -807,7 +807,7 @@ export default function OpportunityDetail() {
             </Tabs.Panel>
 
             <Tabs.Panel id="documents">
-              <UnifiedDocuments opportunityId={opportunity.id} contactId={opportunity.contact_id} />
+              <DocumentsPanel opportunityId={opportunity.id} contactId={opportunity.contact_id} />
             </Tabs.Panel>
 
             <Tabs.Panel id="nammux">
