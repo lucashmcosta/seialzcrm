@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from '@/hooks/use-toast';
 import type { ClosePolicyMode } from '@/lib/opportunityClose';
+import { buildDocumentRules, requiredTypeIds } from '@/lib/documentRules';
 
 type Policy = {
   mode: ClosePolicyMode;
@@ -30,6 +31,8 @@ export function OpportunityCloseSettings() {
   const { organization } = useOrganization();
   const [policy, setPolicy] = useState<Policy>(empty);
   const [customFields, setCustomFields] = useState<Array<{ id: string; label: string; module: string }>>([]);
+  const [docTypes, setDocTypes] = useState<Array<{ id: string; name: string }>>([]);
+  const [reqDocIds, setReqDocIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const isBrazil = organization?.operating_country_code === 'BR';
@@ -40,10 +43,13 @@ export function OpportunityCloseSettings() {
     Promise.all([
       supabase.from('opportunity_close_policies').select('*').eq('organization_id', organization.id).maybeSingle(),
       supabase.from('custom_field_definitions').select('id,label,module').eq('organization_id', organization.id).order('order_index'),
-    ]).then(([policyResult, fieldsResult]) => {
+      supabase.from('document_types').select('id,name').eq('organization_id', organization.id).eq('is_active', true).is('deleted_at', null).order('sort_order').order('name'),
+    ]).then(([policyResult, fieldsResult, typesResult]) => {
       if (policyResult.data) setPolicy({ ...empty, ...(policyResult.data as unknown as Policy) });
       else setPolicy(empty);
+      setReqDocIds(requiredTypeIds((policyResult.data as { document_rules?: unknown } | null)?.document_rules));
       setCustomFields((fieldsResult.data || []) as Array<{ id: string; label: string; module: string }>);
+      setDocTypes((typesResult.data || []) as Array<{ id: string; name: string }>);
     }).finally(() => setLoading(false));
   }, [organization?.id]);
 
@@ -53,7 +59,7 @@ export function OpportunityCloseSettings() {
     if (!organization?.id) return;
     setSaving(true);
     const payload = isBrazil ? policy : { ...policy, require_cpf_verified: false, require_complete_address: false };
-    const { error } = await supabase.from('opportunity_close_policies').upsert({ organization_id: organization.id, ...payload }, { onConflict: 'organization_id' });
+    const { error } = await supabase.from('opportunity_close_policies').upsert({ organization_id: organization.id, ...payload, document_rules: buildDocumentRules(reqDocIds) }, { onConflict: 'organization_id' });
     setSaving(false);
     toast(error ? { title: 'Não foi possível salvar', description: error.message, variant: 'destructive' } : { title: 'Regras de fechamento salvas' });
   };
@@ -73,6 +79,7 @@ export function OpportunityCloseSettings() {
       </CardContent></Card>
       <Card><CardHeader><CardTitle className="text-base">Campos nativos obrigatórios</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-2"><div className="space-y-2"><p className="text-sm font-medium">Contato</p>{contactFields.map((field) => renderField(field.id, field.label, 'required_contact_fields'))}</div><div className="space-y-2"><p className="text-sm font-medium">Oportunidade</p>{opportunityFields.map((field) => renderField(field.id, field.label, 'required_opportunity_fields'))}</div></CardContent></Card>
       {customFields.length > 0 && <Card><CardHeader><CardTitle className="text-base">Campos personalizados obrigatórios</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-2">{customFields.map((field) => renderField(field.id, field.label, field.module === 'contacts' ? 'required_contact_custom_field_ids' : 'required_opportunity_custom_field_ids'))}</CardContent></Card>}
+      {docTypes.length > 0 && <Card><CardHeader><CardTitle className="text-base">Documentos obrigatórios para fechar</CardTitle><CardDescription>Tipos de documento que precisam existir no contato para ganhar a oportunidade.</CardDescription></CardHeader><CardContent className="grid gap-3 md:grid-cols-2">{docTypes.map((t) => <label key={t.id} className="flex items-center gap-3 rounded-md border p-3 text-sm"><Checkbox checked={reqDocIds.includes(t.id)} onCheckedChange={(checked) => setReqDocIds((cur) => (checked === true ? [...cur, t.id] : cur.filter((x) => x !== t.id)))} /><span>{t.name}</span></label>)}</CardContent></Card>}
       <Button onClick={save} disabled={saving}>{saving ? <SpinnerGap className="mr-2 animate-spin" /> : <FloppyDisk className="mr-2" />}Salvar regras</Button>
     </div>
   );
