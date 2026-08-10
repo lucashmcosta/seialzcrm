@@ -223,6 +223,7 @@ const TagsSettings = lazyWithRetry("TagsSettings", () => import("./components/se
 const PermissionProfilesSettings = lazyWithRetry("PermissionProfilesSettings", () => import("./components/settings/PermissionProfilesSettings"), "PermissionProfilesSettings");
 const BillingSettings = lazyWithRetry("BillingSettings", () => import("./components/settings/BillingSettings"), "BillingSettings");
 const IntegrationsSettings = lazyWithRetry("IntegrationsSettings", () => import("./components/settings/IntegrationsSettings"), "IntegrationsSettings");
+const MetaIntegrationPage = lazyWithRetry("MetaIntegrationPage", () => import("./pages/settings/MetaIntegrationPage"));
 const ApiWebhooksSettings = lazyWithRetry("ApiWebhooksSettings", () => import("./components/settings/ApiWebhooksSettings"), "ApiWebhooksSettings");
 const AIAgentSettings = lazyWithRetry("AIAgentSettings", () => import("./components/settings/AIAgentSettings"), "AIAgentSettings");
 const AIProvidersSettings = lazyWithRetry("AIProvidersSettings", () => import("./components/settings/AIProvidersSettings"), "AIProvidersSettings");
@@ -680,6 +681,7 @@ const App = () => (
             <Route path="tags" element={<TagsSettings />} />
             <Route path="documents" element={<DocumentsSettings />} />
             <Route path="integrations" element={<IntegrationsSettings />} />
+            <Route path="integrations/meta" element={<MetaIntegrationPage />} />
             <Route path="customer-service" element={<CustomerServiceSettings />} />
             <Route path="webchat" element={<WebchatSettings />} />
             <Route path="whatsapp-templates" element={<WhatsAppTemplatesPage />} />

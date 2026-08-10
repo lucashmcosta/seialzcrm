@@ -13,8 +13,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useTranslation } from '@/lib/i18n';
 import { useOrganization } from '@/hooks/useOrganization';
 import { 
-  ChatCircle, Phone, EnvelopeSimple, Plugs, Warning, Plus, Robot, Sparkle, 
-  UploadSimple, ArrowsClockwise, PenNib, CheckCircle, XCircle, Clock, Users, Briefcase, SlidersHorizontal
+  ChatCircle, Phone, EnvelopeSimple, Plugs, Warning, Plus, Robot, Sparkle,
+  UploadSimple, ArrowsClockwise, PenNib, CheckCircle, XCircle, Clock, Users, Briefcase, SlidersHorizontal,
+  FacebookLogo
 } from '@phosphor-icons/react';
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
@@ -26,7 +27,6 @@ import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDial
 import { NammuxDialog } from '@/components/integrations/nammux/NammuxDialog';
 import { MetaWhatsAppCloudDialog } from '@/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog';
 import { EvolutionWhatsAppDialog } from '@/components/integrations/evolution-whatsapp/EvolutionWhatsAppDialog';
-import { MetaConnectionCard } from '@/components/integrations/meta/MetaConnectionCard';
 import { AIProviderCard } from './AIProviderCard';
 import { useAIProviders } from '@/hooks/useAIProviders';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -130,6 +130,23 @@ export function IntegrationsSettings() {
     },
     enabled: !!organization,
   });
+
+  // Status da conexão Meta canônica (para o card único "Meta")
+  const { data: metaConn } = useQuery({
+    queryKey: ['meta-conn-status', organization?.id],
+    enabled: !!organization?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('meta_connections')
+        .select('status')
+        .eq('organization_id', organization!.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      return (data?.[0] as { status: string } | undefined) ?? null;
+    },
+  });
+  // Slugs de capabilities da Meta consolidados no card único "Meta".
+  const META_CAPABILITY_SLUGS = ['meta-lead-ads', 'meta-capi', 'meta-whatsapp-cloud'];
 
   // Filter integrations by category
   const filteredIntegrations = useMemo(() => {
@@ -397,9 +414,6 @@ export function IntegrationsSettings() {
           </Button>
         </div>
 
-        {/* Conexão Meta canônica (OAuth) */}
-        <MetaConnectionCard />
-
         {/* Category Filter */}
         <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
           <TabsList variant="pills" className="flex-wrap">
@@ -438,7 +452,30 @@ export function IntegrationsSettings() {
           </div>
         ) : filteredIntegrations && filteredIntegrations.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredIntegrations.map((integration) => {
+            {/* Card único "Meta" — consolida Lead Generation, Conversions API e WhatsApp Cloud.
+                A superfície completa (Conexão, Ativos, Performance, Orgânico e módulos) abre em /settings/integrations/meta. */}
+            {filteredIntegrations.some((i) => META_CAPABILITY_SLUGS.includes(i.slug)) && (
+              <Card key="meta" className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="p-2 rounded-lg bg-muted shrink-0"><FacebookLogo className="h-6 w-6 text-muted-foreground" weight="fill" /></div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-medium text-foreground">Meta</h3>
+                        {metaConn?.status === 'connected'
+                          ? <Badge className="text-[10px] bg-green-600 text-white">Conectado</Badge>
+                          : <Badge variant="secondary" className="text-[10px]">Não conectado</Badge>}
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">Ads, Orgânico, Lead Generation, Conversions API, WhatsApp.</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <Button variant="outline" size="sm" onClick={() => navigate('/settings/integrations/meta')}>Ver integração</Button>
+                </div>
+              </Card>
+            )}
+            {filteredIntegrations.filter((i) => !META_CAPABILITY_SLUGS.includes(i.slug)).map((integration) => {
               const Icon = iconMap[integration.slug] || iconMap[integration.category] || iconMap.default;
               const connection = getIntegrationStatus(integration.id);
               const isConnected = !!connection?.is_enabled;
