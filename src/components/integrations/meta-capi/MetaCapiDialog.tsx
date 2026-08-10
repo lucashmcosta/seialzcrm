@@ -2,7 +2,6 @@ import { Fragment, useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/hooks/useOrganization";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,12 +15,17 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useMetaConnection } from "@/hooks/useMetaConnection";
+import { useOrgIntegration } from "@/hooks/useOrgIntegration";
+import { MetaConnectionBanner } from "@/components/integrations/meta/MetaConnectionBanner";
 
 interface Props {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  // Mantidos por compat; a capability agora renderiza inline na página Meta.
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   integration: any;
   orgIntegration: any;
+  onManageConnection?: () => void;
 }
 
 type ConfigField = {
@@ -87,7 +91,7 @@ const statusBadge = (s: string) => {
   return <Badge className={`text-[10px] ${m.cls}`}>{m.label}</Badge>;
 };
 
-export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration: initialOrgIntegration }: Props) {
+export function MetaCapiDialog({ open = true, integration, orgIntegration: initialOrgIntegration, onManageConnection }: Props) {
   const { organization } = useOrganization();
   const qc = useQueryClient();
   const [tab, setTab] = useState("connection");
@@ -129,23 +133,17 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     },
   });
 
-  const { data: orgIntegration } = useQuery({
-    queryKey: ["org-integration", "meta-capi", organization?.id],
-    enabled: !!organization?.id && !!integration?.id && open,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("organization_integrations")
-        .select("*")
-        .eq("organization_id", organization!.id)
-        .eq("integration_id", integration!.id)
-        .maybeSingle();
-      return data;
-    },
-    initialData: initialOrgIntegration,
-  });
+  const { data: orgIntegration } = useOrgIntegration(
+    organization?.id,
+    integration?.id,
+    initialOrgIntegration,
+  );
 
+  // Espelha a decisão do backend (resolveOrgMetaToken): quando a credencial canônica
+  // está ativa, o token de envio vem da Meta Connection — a capability não gerencia auth.
+  const { canonicalActive } = useMetaConnection(organization?.id);
   const ca = (orgIntegration?.connected_account || {}) as any;
-  const isConnected = !!orgIntegration?.is_enabled;
+  const isConnected = canonicalActive || !!orgIntegration?.is_enabled;
   const isTestMode = !!ca.test_event_code;
 
   useEffect(() => {
@@ -231,8 +229,9 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     if (reconnectMode && tok.length > 0 && tok.length < 20) {
       e.access_token = "Token muito curto. Confira se copiou completo.";
     }
-    // Atualizando integração já conectada sem token novo e sem fallback de Lead Ads
-    if (isConnected && !reconnectMode && tok.length === 0 && !hasMetaLeadAds) {
+    // Atualizando integração já conectada sem token novo e sem fallback de Lead Ads.
+    // Quando a credencial canônica está ativa, o token vem da Meta Connection — não exigir.
+    if (isConnected && !reconnectMode && tok.length === 0 && !hasMetaLeadAds && !canonicalActive) {
       e.access_token = "Informe o access token para atualizar (ou ative Meta Lead Ads para reusar).";
     }
 
@@ -257,7 +256,11 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
       const manualToken = (formValues.access_token || "").trim();
       // Usa from-existing quando: (a) novo connect em modo reuse, OU
       // (b) update sem token novo mas com Meta Lead Ads disponível
+      // Com credencial canônica ativa não se pede token manual; salvar a configuração
+      // (pixel/test code/CTWA/url) reusa o caminho sem-token. O token de envio real é
+      // resolvido server-side pela Meta Connection quando a flag está ligada.
       const useReuse =
+        (canonicalActive && !!hasMetaLeadAds) ||
         (mode === "reuse" && !isConnected) ||
         (isConnected && !reconnectMode && manualToken.length === 0 && !!hasMetaLeadAds);
       const fnName = useReuse ? "meta-capi-connect-from-existing" : "meta-capi-connect";
@@ -286,7 +289,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
         return;
       }
       toast.success(isConnected ? "Meta CAPI atualizado!" : "Meta CAPI conectado e validado!");
-      qc.invalidateQueries({ queryKey: ["org-integration", "meta-capi"] });
+      qc.invalidateQueries({ queryKey: ["org-integration-v2"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       setReconnectMode(false);
       setTab("events");
@@ -308,7 +311,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     },
     onSuccess: () => {
       toast.success("Meta CAPI desconectado");
-      qc.invalidateQueries({ queryKey: ["org-integration", "meta-capi"] });
+      qc.invalidateQueries({ queryKey: ["org-integration-v2"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       setDisconnectOpen(false);
     },
@@ -398,6 +401,8 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     const isPassword = field.type === "password";
     const isManualToken = field.key === "access_token";
 
+    // Credencial canônica: o token de envio vem da Meta Connection — nunca pedir aqui.
+    if (isManualToken && canonicalActive) return null;
     // Em modo reuse (não conectado), esconder access_token
     if (isManualToken && !isConnected && mode === "reuse" && !reconnectMode) return null;
 
@@ -442,24 +447,22 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <div className="flex items-start justify-between gap-4 pr-6">
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
               <div className="flex items-start gap-3">
                 {integration?.logo_url ? (
                   <img
                     src={integration.logo_url}
                     alt={integration.name}
-                    className="w-12 h-12 rounded-lg object-contain bg-muted p-2"
+                    className="w-12 h-12 rounded-lg object-contain bg-muted p-2 shrink-0"
                   />
                 ) : (
-                  <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
                     <Plug className="h-6 w-6 text-muted-foreground" />
                   </div>
                 )}
                 <div>
-                  <DialogTitle className="text-xl">Meta Conversions API</DialogTitle>
+                  <h2 className="text-xl font-semibold">Meta Conversions API</h2>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {isConnected ? (
                       <Badge variant="outline" className="gap-1">
@@ -483,7 +486,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </div>
               </div>
               {isConnected && (
-                <div className="flex gap-2">
+                <div className="flex gap-2 shrink-0">
                   <Button variant="outline" size="sm" onClick={sendTest}>
                     Testar agora
                   </Button>
@@ -493,11 +496,15 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </div>
               )}
             </div>
-          </DialogHeader>
 
-          <Tabs value={tab} onValueChange={setTab} className="mt-4">
+          {/* Credencial canônica: a conexão vive só na integração Meta. A capability
+              mostra apenas um banner; a aba de credencial vira "Pixel" (só config).
+              Sem flag/conexão, tudo permanece como o legado (aba "Conexão"). */}
+          {canonicalActive && <MetaConnectionBanner onManage={onManageConnection} />}
+
+          <Tabs value={tab} onValueChange={setTab} className="w-full">
             <TabsList className="grid grid-cols-2 w-full">
-              <TabsTrigger value="connection">Conexão</TabsTrigger>
+              <TabsTrigger value="connection">{canonicalActive ? "Pixel" : "Conexão"}</TabsTrigger>
               <TabsTrigger value="events" disabled={!isConnected}>
                 Eventos enviados
               </TabsTrigger>
@@ -510,23 +517,27 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                     <Label className="text-xs text-muted-foreground">Pixel ID</Label>
                     <p className="font-mono text-sm">{ca.pixel_id || "—"}</p>
                   </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Access Token</Label>
-                    <p className="font-mono text-sm">{tokenMasked}</p>
-                  </div>
-                  {ca.token_source === "meta-lead-ads" && (
-                    <Badge variant="outline" className="gap-1 w-fit">
-                      <LinkSimple className="h-3 w-3" />
-                      Reutilizando token de Meta Lead Ads
-                    </Badge>
-                  )}
-                  {ca.token_source === "meta-lead-ads" && hasMetaLeadAds === false && (
-                    <Alert variant="destructive">
-                      <Warning className="h-4 w-4" />
-                      <AlertDescription className="text-xs">
-                        Meta Lead Ads foi desconectado. Este Meta CAPI usa o token de lá e parou de funcionar. Use "Reconectar" com token manual.
-                      </AlertDescription>
-                    </Alert>
+                  {!canonicalActive && (
+                    <>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Access Token</Label>
+                        <p className="font-mono text-sm">{tokenMasked}</p>
+                      </div>
+                      {ca.token_source === "meta-lead-ads" && (
+                        <Badge variant="outline" className="gap-1 w-fit">
+                          <LinkSimple className="h-3 w-3" />
+                          Reutilizando token de Meta Lead Ads
+                        </Badge>
+                      )}
+                      {ca.token_source === "meta-lead-ads" && hasMetaLeadAds === false && (
+                        <Alert variant="destructive">
+                          <Warning className="h-4 w-4" />
+                          <AlertDescription className="text-xs">
+                            Meta Lead Ads foi desconectado. Este Meta CAPI usa o token de lá e parou de funcionar. Use "Reconectar" com token manual.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </>
                   )}
                   {ca.test_event_code && (
                     <div>
@@ -575,7 +586,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </Card>
               ) : (
                 <Card className="p-4 space-y-4">
-                  {!isConnected && hasMetaLeadAds && (
+                  {!isConnected && hasMetaLeadAds && !canonicalActive && (
                     <div className="space-y-2">
                       <Label className="text-xs text-muted-foreground">Modo de conexão</Label>
                       <RadioGroup value={mode} onValueChange={(v) => setMode(v as "reuse" | "manual")} className="gap-2">
@@ -679,7 +690,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </Card>
               )}
 
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Card className="p-3">
                   <p className="text-xs text-muted-foreground">Total (7d)</p>
                   <p className="text-2xl font-semibold">{stats?.total ?? "—"}</p>
@@ -798,8 +809,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
               </Card>
             </TabsContent>
           </Tabs>
-        </DialogContent>
-      </Dialog>
+      </div>
 
       <ConfirmDialog
         open={disconnectOpen}

@@ -16,7 +16,6 @@ import {
 import { MetaConnectButton } from '@/components/integrations/meta/MetaConnectButton';
 import { MetaAssetSelector } from '@/components/integrations/meta/MetaAssetSelector';
 import { AdsManagerConfig } from '@/components/integrations/meta/AdsManagerConfig';
-import { StatusDashboard } from '@/components/integrations/meta-lead-ads/StatusDashboard';
 import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaLeadAdsDialog';
 import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDialog';
 import { MetaWhatsAppCloudDialog } from '@/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog';
@@ -40,9 +39,7 @@ export default function MetaIntegrationPage() {
   const isAdmin = permissions.canManageSettings;
   const [section, setSection] = useState<SectionId>('overview');
 
-  // dialogs maduros reusados intactos
-  const [leadOpen, setLeadOpen] = useState(false);
-  const [capiOpen, setCapiOpen] = useState(false);
+  // Lead Generation e CAPI renderizam inline (seções); WhatsApp segue modal.
   const [waOpen, setWaOpen] = useState(false);
 
   // conexão canônica (V1)
@@ -266,29 +263,22 @@ export default function MetaIntegrationPage() {
             />
           )}
 
-          {section === 'lead-generation' && (
-            <Card className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-semibold">Lead Generation</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">Descoberta de formulários, mapeamento de campos e ingestão de leads (contatos e oportunidades).</p>
-                </div>
-                <Button size="sm" onClick={() => setLeadOpen(true)}>Gerenciar</Button>
-              </div>
-              {orgId && <div className="mt-4"><StatusDashboard organizationId={orgId} /></div>}
-            </Card>
+          {section === 'lead-generation' && bySlug('meta-lead-ads') && (
+            <MetaLeadAdsDialog
+              variant="inline"
+              open
+              onOpenChange={() => {}}
+              integration={bySlug('meta-lead-ads')}
+              orgIntegration={orgBySlug('meta-lead-ads')}
+              onManageConnection={() => setSection('conexao')}
+            />
           )}
-          {section === 'capi' && (
-            <Card className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-semibold">Conversions API</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">Envio server-side de eventos de conversão para a Meta.</p>
-                </div>
-                <Button size="sm" onClick={() => setCapiOpen(true)}>Configurar</Button>
-              </div>
-              <div className="mt-3"><Badge variant={enabledSlug('meta-capi') ? 'default' : 'secondary'}>{enabledSlug('meta-capi') ? 'Ativo' : 'Não configurado'}</Badge></div>
-            </Card>
+          {section === 'capi' && bySlug('meta-capi') && (
+            <MetaCapiDialog
+              integration={bySlug('meta-capi')}
+              orgIntegration={orgBySlug('meta-capi')}
+              onManageConnection={() => setSection('conexao')}
+            />
           )}
           {section === 'whatsapp' && (
             <Card className="p-4">
@@ -321,13 +311,7 @@ export default function MetaIntegrationPage() {
         </div>
       </div>
 
-      {/* Dialogs maduros — reutilizados sem alteração */}
-      {bySlug('meta-lead-ads') && (
-        <MetaLeadAdsDialog open={leadOpen} onOpenChange={setLeadOpen} integration={bySlug('meta-lead-ads')} orgIntegration={orgBySlug('meta-lead-ads')} />
-      )}
-      {bySlug('meta-capi') && (
-        <MetaCapiDialog open={capiOpen} onOpenChange={setCapiOpen} integration={bySlug('meta-capi')} orgIntegration={orgBySlug('meta-capi')} />
-      )}
+      {/* WhatsApp permanece como modal (fora do escopo desta fase). */}
       {bySlug('meta-whatsapp-cloud') && (
         <MetaWhatsAppCloudDialog open={waOpen} onOpenChange={setWaOpen} integration={bySlug('meta-whatsapp-cloud')} orgIntegration={orgBySlug('meta-whatsapp-cloud')} />
       )}

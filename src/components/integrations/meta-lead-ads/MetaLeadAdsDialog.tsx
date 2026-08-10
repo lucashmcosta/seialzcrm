@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/hooks/useOrganization";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -14,37 +14,45 @@ import { PagesAndFormsList } from "./PagesAndFormsList";
 import { MappingDrawer } from "./MappingDrawer";
 import { SettingsCard } from "./SettingsCard";
 import { StatusDashboard } from "./StatusDashboard";
+import { useMetaConnection } from "@/hooks/useMetaConnection";
+import { useOrgIntegration } from "@/hooks/useOrgIntegration";
+import { MetaConnectionBanner } from "@/components/integrations/meta/MetaConnectionBanner";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   integration: any;
   orgIntegration: any;
+  onManageConnection?: () => void;
+  // 'inline' renderiza como seção de largura total (dentro da página Meta);
+  // 'modal' mantém o diálogo antigo. Default: modal (compat).
+  variant?: "modal" | "inline";
 }
 
-export function MetaLeadAdsDialog({ open, onOpenChange, integration, orgIntegration: initialOrgIntegration }: Props) {
+export function MetaLeadAdsDialog({
+  open,
+  onOpenChange,
+  integration,
+  orgIntegration: initialOrgIntegration,
+  onManageConnection,
+  variant = "modal",
+}: Props) {
   const { organization } = useOrganization();
   const qc = useQueryClient();
-  const [tab, setTab] = useState("connection");
+  const [tab, setTab] = useState("forms");
   const [mappingFormId, setMappingFormId] = useState<string | null>(null);
 
-  // Always refetch fresh org integration
-  const { data: orgIntegration } = useQuery({
-    queryKey: ["org-integration", "meta-lead-ads", organization?.id],
-    enabled: !!organization?.id && !!integration?.id && open,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("organization_integrations")
-        .select("*")
-        .eq("organization_id", organization!.id)
-        .eq("integration_id", integration!.id)
-        .maybeSingle();
-      return data;
-    },
-    initialData: initialOrgIntegration,
-  });
+  // Resolução robusta da linha organization_integrations (ver useOrgIntegration).
+  const { data: orgIntegration } = useOrgIntegration(
+    organization?.id,
+    integration?.id,
+    initialOrgIntegration,
+  );
 
-  const isConnected = !!orgIntegration?.is_enabled;
+  // Espelha a decisão do backend: credencial canônica ativa (flag + Meta Connection)
+  // conta como conectado, mesmo antes de a UI legada refletir isso.
+  const { canonicalActive } = useMetaConnection(organization?.id);
+  const isConnected = canonicalActive || !!orgIntegration?.is_enabled;
   const ca = (orgIntegration?.connected_account || {}) as any;
 
   useEffect(() => {
@@ -78,13 +86,136 @@ export function MetaLeadAdsDialog({ open, onOpenChange, integration, orgIntegrat
     },
     onSuccess: () => {
       toast.success("Integração desativada");
-      qc.invalidateQueries({ queryKey: ["org-integration", "meta-lead-ads"] });
+      qc.invalidateQueries({ queryKey: ["org-integration-v2"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
     },
   });
 
-  const refetchOrg = () =>
-    qc.invalidateQueries({ queryKey: ["org-integration", "meta-lead-ads"] });
+  const refetchOrg = () => qc.invalidateQueries({ queryKey: ["org-integration-v2"] });
+
+  const logo = integration?.logo_url ? (
+    <img
+      src={integration.logo_url}
+      alt={integration.name}
+      className="w-12 h-12 rounded-lg object-contain bg-muted p-2 shrink-0"
+    />
+  ) : (
+    <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+      <Plug className="h-6 w-6 text-muted-foreground" />
+    </div>
+  );
+
+  const statusBadges = (
+    <div className="flex items-center gap-2 mt-1 flex-wrap">
+      {isConnected ? (
+        <Badge variant="outline" className="gap-1">
+          <CheckCircle className="h-3 w-3 text-green-500" />
+          Conectado
+        </Badge>
+      ) : (
+        <Badge variant="secondary">Desconectado</Badge>
+      )}
+      {ca.meta_user_name && (
+        <span className="text-xs text-muted-foreground">{ca.meta_user_name}</span>
+      )}
+    </div>
+  );
+
+  const actions = isConnected ? (
+    <div className="flex gap-2 shrink-0">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => rediscover.mutate()}
+        disabled={rediscover.isPending}
+      >
+        <ArrowsClockwise className={`h-4 w-4 mr-1 ${rediscover.isPending ? "animate-spin" : ""}`} />
+        Re-sincronizar
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => disconnect.mutate()}>
+        Desconectar
+      </Button>
+    </div>
+  ) : null;
+
+  const banner = canonicalActive ? <MetaConnectionBanner onManage={onManageConnection} /> : null;
+
+  const tabsBlock = (
+    <Tabs value={tab} onValueChange={setTab} className="w-full">
+      <TabsList className={`grid w-full ${canonicalActive ? "grid-cols-3" : "grid-cols-4"}`}>
+        {!canonicalActive && <TabsTrigger value="connection">Conexão</TabsTrigger>}
+        <TabsTrigger value="forms" disabled={!isConnected}>
+          Formulários
+        </TabsTrigger>
+        <TabsTrigger value="settings" disabled={!isConnected}>
+          Configurações
+        </TabsTrigger>
+        <TabsTrigger value="status" disabled={!isConnected}>
+          Status
+        </TabsTrigger>
+      </TabsList>
+
+      {!canonicalActive && (
+        <TabsContent value="connection" className="mt-4">
+          <ConnectionForm
+            integrationId={integration?.id}
+            existing={orgIntegration}
+            onSuccess={refetchOrg}
+          />
+        </TabsContent>
+      )}
+
+      <TabsContent value="forms" className="mt-4">
+        {isConnected && orgIntegration && (
+          <Card className="p-4 sm:p-6">
+            <h3 className="text-base font-semibold mb-4">Páginas e Formulários</h3>
+            <PagesAndFormsList
+              organizationIntegrationId={orgIntegration.id}
+              onConfigureMapping={(formId) => setMappingFormId(formId)}
+            />
+          </Card>
+        )}
+      </TabsContent>
+
+      <TabsContent value="settings" className="mt-4">
+        {isConnected && orgIntegration && (
+          <SettingsCard orgIntegration={orgIntegration} onUpdated={refetchOrg} />
+        )}
+      </TabsContent>
+
+      <TabsContent value="status" className="mt-4">
+        {isConnected && organization?.id && <StatusDashboard organizationId={organization.id} />}
+      </TabsContent>
+    </Tabs>
+  );
+
+  if (variant === "inline") {
+    return (
+      <>
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-3">
+              {logo}
+              <div>
+                <h2 className="text-xl font-semibold">Meta Lead Ads</h2>
+                {statusBadges}
+              </div>
+            </div>
+            {actions}
+          </div>
+          {banner}
+          {tabsBlock}
+        </div>
+
+        <MappingDrawer
+          leadFormId={mappingFormId}
+          open={!!mappingFormId}
+          onClose={() => setMappingFormId(null)}
+          organizationId={organization?.id}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -93,101 +224,18 @@ export function MetaLeadAdsDialog({ open, onOpenChange, integration, orgIntegrat
           <DialogHeader>
             <div className="flex items-start justify-between gap-4 pr-6">
               <div className="flex items-start gap-3">
-                {integration?.logo_url ? (
-                  <img
-                    src={integration.logo_url}
-                    alt={integration.name}
-                    className="w-12 h-12 rounded-lg object-contain bg-muted p-2"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
-                    <Plug className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                )}
+                {logo}
                 <div>
                   <DialogTitle className="text-xl">Meta Lead Ads</DialogTitle>
-                  <div className="flex items-center gap-2 mt-1">
-                    {isConnected ? (
-                      <Badge variant="outline" className="gap-1">
-                        <CheckCircle className="h-3 w-3 text-green-500" />
-                        Conectado
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">Desconectado</Badge>
-                    )}
-                    {ca.meta_user_name && (
-                      <span className="text-xs text-muted-foreground">{ca.meta_user_name}</span>
-                    )}
-                  </div>
+                  {statusBadges}
                 </div>
               </div>
-              {isConnected && (
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => rediscover.mutate()}
-                    disabled={rediscover.isPending}
-                  >
-                    <ArrowsClockwise
-                      className={`h-4 w-4 mr-1 ${rediscover.isPending ? "animate-spin" : ""}`}
-                    />
-                    Re-sincronizar
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => disconnect.mutate()}>
-                    Desconectar
-                  </Button>
-                </div>
-              )}
+              {actions}
             </div>
           </DialogHeader>
 
-          <Tabs value={tab} onValueChange={setTab} className="mt-4">
-            <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="connection">Conexão</TabsTrigger>
-              <TabsTrigger value="forms" disabled={!isConnected}>
-                Formulários
-              </TabsTrigger>
-              <TabsTrigger value="settings" disabled={!isConnected}>
-                Configurações
-              </TabsTrigger>
-              <TabsTrigger value="status" disabled={!isConnected}>
-                Status
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="connection" className="mt-4">
-              <ConnectionForm
-                integrationId={integration?.id}
-                existing={orgIntegration}
-                onSuccess={refetchOrg}
-              />
-            </TabsContent>
-
-            <TabsContent value="forms" className="mt-4">
-              {isConnected && orgIntegration && (
-                <Card className="p-6">
-                  <h3 className="text-base font-semibold mb-4">Páginas e Formulários</h3>
-                  <PagesAndFormsList
-                    organizationIntegrationId={orgIntegration.id}
-                    onConfigureMapping={(formId) => setMappingFormId(formId)}
-                  />
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="settings" className="mt-4">
-              {isConnected && orgIntegration && (
-                <SettingsCard orgIntegration={orgIntegration} onUpdated={refetchOrg} />
-              )}
-            </TabsContent>
-
-            <TabsContent value="status" className="mt-4">
-              {isConnected && organization?.id && (
-                <StatusDashboard organizationId={organization.id} />
-              )}
-            </TabsContent>
-          </Tabs>
+          {banner && <div className="mt-4">{banner}</div>}
+          <div className="mt-4">{tabsBlock}</div>
         </DialogContent>
       </Dialog>
 
