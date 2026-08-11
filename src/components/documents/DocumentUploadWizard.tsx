@@ -98,10 +98,10 @@ export function DocumentUploadWizard({
                   <CaretDown className="h-4 w-4 opacity-50 shrink-0" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                <Command>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0 max-h-[70vh] overflow-hidden" align="start">
+                <Command className="max-h-[70vh]">
                   <CommandInput placeholder="Buscar tipo..." />
-                  <CommandList>
+                  <CommandList className="max-h-[min(60vh,420px)]">
                     <CommandEmpty>Nenhum tipo encontrado.</CommandEmpty>
                     <CommandGroup heading="Livre">
                       <CommandItem value="Sem tipo arquivo livre" onSelect={() => { setTypeId(FREE); setPickerOpen(false); }}>
