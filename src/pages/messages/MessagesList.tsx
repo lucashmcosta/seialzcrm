@@ -93,7 +93,7 @@ import { FunnelSimple } from '@phosphor-icons/react';
 import { formatEndpointIdentity, formatEndpointMigrationAuditLine } from '@/lib/whatsappEndpointDisplay';
 
 import { useHiddenThreads } from '@/hooks/useHiddenThreads';
-import { EyeSlash, Paperclip } from '@phosphor-icons/react';
+import { EyeSlash, Paperclip, Plus } from '@phosphor-icons/react';
 import { ToastAction } from '@/components/ui/toast';
 import { AttachMediaDialog, type AttachMedia } from '@/components/documents/AttachMediaDialog';
 import { isAttachableMedia } from '@/lib/mediaToFile';
@@ -325,18 +325,15 @@ function DesktopMessagesList() {
   
   // Image preview state
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
-  const [attachMedia, setAttachMedia] = useState<AttachMedia | null>(null); // "Vincular como documento"
-  // Outras mídias anexáveis (imagem/PDF) recebidas na conversa — p/ juntar frente e verso.
-  const attachCandidates = useMemo<AttachMedia[]>(() => (
-    (messages || [])
-      .filter((m: any) => m.direction === 'inbound' && isAttachableMedia(m.media_type) && m.media_urls?.[0])
-      .map((m: any) => ({
-        url: m.media_urls[0] as string,
-        mediaType: m.media_type,
-        fileName: null,
-        label: `${m.media_type === 'image' ? 'Imagem' : 'Documento'} · ${new Date(m.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}`,
-      }))
-  ), [messages, locale]);
+  // Sessão de "Vincular como documento": páginas (mídias) + modo de seleção na conversa.
+  const [attach, setAttach] = useState<{ pages: AttachMedia[] } | null>(null);
+  const [attachPicking, setAttachPicking] = useState(false);
+  const mediaToAttach = (m: any): AttachMedia => ({
+    url: m.media_urls[0] as string,
+    mediaType: m.media_type,
+    fileName: null,
+    label: `${m.media_type === 'image' ? 'Imagem' : 'Documento'} · ${new Date(m.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}`,
+  });
   
   // AI text improvement state
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
@@ -2217,15 +2214,30 @@ function DesktopMessagesList() {
                                           );
                                         })}
                                         {/* Triagem inline: vincular mídia recebida como documento (imagem/PDF) */}
-                                        {!isOutbound && isAttachableMedia(message.media_type) && message.media_urls[0] && (
-                                          <button
-                                            type="button"
-                                            onClick={() => setAttachMedia({ url: message.media_urls![0], mediaType: message.media_type, fileName: null })}
-                                            className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                                          >
-                                            <Paperclip className="h-3.5 w-3.5" /> Vincular como documento
-                                          </button>
-                                        )}
+                                        {!isOutbound && isAttachableMedia(message.media_type) && message.media_urls[0] && (() => {
+                                          const thisUrl = message.media_urls![0];
+                                          const already = attach?.pages.some((p) => p.url === thisUrl);
+                                          if (attachPicking) {
+                                            return (
+                                              <button
+                                                type="button"
+                                                onClick={() => { if (!already && attach) setAttach({ pages: [...attach.pages, mediaToAttach(message)] }); setAttachPicking(false); }}
+                                                className={`mt-1 flex items-center gap-1 text-xs font-medium ${already ? 'text-emerald-600' : 'text-primary hover:underline'}`}
+                                              >
+                                                {already ? <><Check className="h-3.5 w-3.5" /> Já adicionada</> : <><Plus className="h-3.5 w-3.5" /> Adicionar esta página</>}
+                                              </button>
+                                            );
+                                          }
+                                          return (
+                                            <button
+                                              type="button"
+                                              onClick={() => { setAttach({ pages: [mediaToAttach(message)] }); setAttachPicking(false); }}
+                                              className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                                            >
+                                              <Paperclip className="h-3.5 w-3.5" /> Vincular como documento
+                                            </button>
+                                          );
+                                        })()}
                                       </div>
                                     )}
 
@@ -2581,17 +2593,25 @@ function DesktopMessagesList() {
       />
 
       {/* Vincular mídia recebida como documento (triagem inline) */}
-      {attachMedia && selectedThread?.contact_id && organization?.id && (
+      {attach && selectedThread?.contact_id && organization?.id && (
         <AttachMediaDialog
-          open={!!attachMedia}
-          onOpenChange={(o) => { if (!o) setAttachMedia(null); }}
+          open={!!attach && !attachPicking}
+          onOpenChange={(o) => { if (!o) { setAttach(null); setAttachPicking(false); } }}
           organizationId={organization.id}
           contactId={selectedThread.contact_id}
           contactName={selectedThread.contact_name}
           opportunities={contactOpportunities}
-          media={attachMedia}
-          candidates={attachCandidates}
+          pages={attach.pages}
+          onPagesChange={(p) => setAttach({ pages: p })}
+          onPickMore={() => setAttachPicking(true)}
         />
+      )}
+      {/* Barra do modo de seleção: escolher a próxima página vendo a foto na conversa */}
+      {attach && attachPicking && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-full border bg-background shadow-lg px-4 py-2">
+          <span className="text-sm">Toque em <strong>“Adicionar esta página”</strong> na foto desejada · {attach.pages.length} {attach.pages.length === 1 ? 'página' : 'páginas'}</span>
+          <Button size="sm" onClick={() => setAttachPicking(false)}>Voltar ao documento</Button>
+        </div>
       )}
 
       {/* Image Preview Dialog */}

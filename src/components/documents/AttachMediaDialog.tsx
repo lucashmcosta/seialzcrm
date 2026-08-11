@@ -17,9 +17,9 @@ export type AttachOpportunity = { id: string; title?: string | null };
 
 const mediaLabel = (m: AttachMedia) => m.label || m.fileName || (m.mediaType === 'image' ? 'Imagem recebida' : 'Documento recebido');
 
-// Vincular mídia(s) recebida(s) na conversa como DOCUMENTO classificado, reaproveitando o
-// módulo de Documentos. Permite JUNTAR várias fotos num só documento (ex.: RG frente e
-// verso → 1 PDF). O TIPO define o dono (contato vs oportunidade).
+// Vincular mídia(s) recebida(s) na conversa como DOCUMENTO classificado. As PÁGINAS são
+// controladas pelo pai (MessagesList): "Adicionar página" delega a seleção de volta à
+// conversa (onde o atendente VÊ a foto). Junta várias fotos num só PDF (RG frente/verso).
 export function AttachMediaDialog({
   open,
   onOpenChange,
@@ -27,8 +27,9 @@ export function AttachMediaDialog({
   contactId,
   contactName,
   opportunities,
-  media,
-  candidates = [],
+  pages,
+  onPagesChange,
+  onPickMore,
   onAttached,
 }: {
   open: boolean;
@@ -37,15 +38,14 @@ export function AttachMediaDialog({
   contactId: string;
   contactName?: string | null;
   opportunities: AttachOpportunity[];
-  media: AttachMedia;
-  candidates?: AttachMedia[]; // outras mídias da conversa que podem virar páginas
+  pages: AttachMedia[];
+  onPagesChange: (p: AttachMedia[]) => void;
+  onPickMore: () => void; // pai entra em "modo seleção" na conversa
   onAttached?: (info: { documentTypeId: string; ownerType: 'contact' | 'opportunity'; targetId: string }) => void;
 }) {
   const [typeId, setTypeId] = useState<string>('');
   const [oppId, setOppId] = useState<string>(opportunities[0]?.id ?? '');
-  const [pages, setPages] = useState<AttachMedia[]>([media]); // ordem = ordem das páginas
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const contactDocs = useEntityDocuments('contact', contactId);
@@ -61,21 +61,16 @@ export function AttachMediaDialog({
   const needsOpp = owner === 'opportunity';
   const noOpps = needsOpp && opportunities.length === 0;
 
-  const usedUrls = new Set(pages.map((p) => p.url));
-  const addable = candidates.filter((c) => !usedUrls.has(c.url));
-
-  const pick = (id: string) => { setTypeId(id); setPickerOpen(false); };
-  const addPage = (m: AttachMedia) => { setPages((p) => (p.some((x) => x.url === m.url) ? p : [...p, m])); setAddOpen(false); };
-  const removePage = (i: number) => setPages((p) => (p.length <= 1 ? p : p.filter((_, k) => k !== i)));
-  const movePage = (i: number, dir: -1 | 1) => setPages((p) => {
-    const j = i + dir; if (j < 0 || j >= p.length) return p;
-    const next = [...p]; [next[i], next[j]] = [next[j], next[i]]; return next;
-  });
-  const reset = () => { setTypeId(''); setPages([media]); setPickerOpen(false); setAddOpen(false); setSubmitting(false); };
+  const removePage = (i: number) => { if (pages.length > 1) onPagesChange(pages.filter((_, k) => k !== i)); };
+  const movePage = (i: number, dir: -1 | 1) => {
+    const j = i + dir; if (j < 0 || j >= pages.length) return;
+    const next = [...pages]; [next[i], next[j]] = [next[j], next[i]]; onPagesChange(next);
+  };
 
   const confirm = async () => {
     if (!selectedType || !owner) { toast.error('Escolha o tipo de documento.'); return; }
     if (needsOpp && !oppId) { toast.error('Escolha a oportunidade.'); return; }
+    if (pages.length === 0) return;
     setSubmitting(true);
     try {
       const files = await Promise.all(
@@ -92,7 +87,6 @@ export function AttachMediaDialog({
       toast.success(pages.length > 1 ? 'Documento vinculado (páginas unidas)' : 'Documento vinculado');
       onAttached?.({ documentTypeId: typeId, ownerType: owner, targetId: owner === 'opportunity' ? oppId : contactId });
       onOpenChange(false);
-      reset();
     } catch (e) {
       toast.error(uploadErrorMessage(e));
     } finally {
@@ -100,10 +94,10 @@ export function AttachMediaDialog({
     }
   };
 
-  const MediaIcon = media.mediaType === 'image' ? ImageIcon : FileText;
+  const MediaIcon = pages[0]?.mediaType === 'image' ? ImageIcon : FileText;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset(); }}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Vincular como documento</DialogTitle>
@@ -111,13 +105,13 @@ export function AttachMediaDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Páginas do documento (permite juntar frente e verso) */}
+          {/* Páginas do documento (frente e verso viram 1 PDF) */}
           <div className="space-y-1.5">
             <Label className="text-xs">Páginas ({pages.length})</Label>
             <div className="border rounded-md divide-y">
               {pages.map((p, i) => (
                 <div key={p.url} className="flex items-center gap-2 p-2">
-                  <MediaIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                  {p.mediaType === 'image' ? <ImageIcon className="h-4 w-4 text-muted-foreground shrink-0" /> : <FileText className="h-4 w-4 text-muted-foreground shrink-0" />}
                   <span className="text-xs truncate flex-1">{i + 1}. {mediaLabel(p)}</span>
                   <div className="flex items-center gap-0.5 shrink-0">
                     <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={i === 0} onClick={() => movePage(i, -1)} title="Subir"><ArrowUp className="h-3.5 w-3.5" /></Button>
@@ -127,27 +121,10 @@ export function AttachMediaDialog({
                 </div>
               ))}
             </div>
-            {addable.length > 0 && (
-              <Popover open={addOpen} onOpenChange={setAddOpen}>
-                <PopoverTrigger asChild>
-                  <Button type="button" variant="ghost" size="sm" className="h-7"><Plus className="h-3.5 w-3.5 mr-1" />Adicionar outra foto/página</Button>
-                </PopoverTrigger>
-                <PopoverContent className="p-0 w-72" align="start">
-                  <Command>
-                    <CommandInput placeholder="Buscar mídia..." />
-                    <CommandList className="max-h-56">
-                      <CommandEmpty>Nenhuma outra mídia.</CommandEmpty>
-                      {addable.map((c) => (
-                        <CommandItem key={c.url} value={mediaLabel(c) + c.url} onSelect={() => addPage(c)}>
-                          {c.mediaType === 'image' ? <ImageIcon className="h-4 w-4 mr-2 text-muted-foreground" /> : <FileText className="h-4 w-4 mr-2 text-muted-foreground" />}
-                          <span className="truncate">{mediaLabel(c)}</span>
-                        </CommandItem>
-                      ))}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            )}
+            {/* Selecionar a próxima página OLHANDO a foto na conversa */}
+            <Button type="button" variant="ghost" size="sm" className="h-7" onClick={onPickMore}>
+              <Plus className="h-3.5 w-3.5 mr-1" />Adicionar página (escolher na conversa)
+            </Button>
             {twoSides && (
               <p className="text-[11px] text-amber-600">Frente e verso viram 1 PDF — adicione as duas fotos. Até {MAX_PAGES} páginas.</p>
             )}
@@ -171,7 +148,7 @@ export function AttachMediaDialog({
                     {contactTypes.length > 0 && (
                       <CommandGroup heading="Documentos do contato">
                         {contactTypes.map((t) => (
-                          <CommandItem key={t.id} value={`${t.name} ${t.code}`} onSelect={() => pick(t.id)}>
+                          <CommandItem key={t.id} value={`${t.name} ${t.code}`} onSelect={() => { setTypeId(t.id); setPickerOpen(false); }}>
                             <Check className={`h-4 w-4 mr-2 ${typeId === t.id ? 'opacity-100' : 'opacity-0'}`} />
                             {t.name}
                           </CommandItem>
@@ -181,7 +158,7 @@ export function AttachMediaDialog({
                     {opportunityTypes.length > 0 && (
                       <CommandGroup heading="Documentos da oportunidade">
                         {opportunityTypes.map((t) => (
-                          <CommandItem key={t.id} value={`${t.name} ${t.code}`} onSelect={() => pick(t.id)}>
+                          <CommandItem key={t.id} value={`${t.name} ${t.code}`} onSelect={() => { setTypeId(t.id); setPickerOpen(false); }}>
                             <Check className={`h-4 w-4 mr-2 ${typeId === t.id ? 'opacity-100' : 'opacity-0'}`} />
                             {t.name}
                           </CommandItem>
