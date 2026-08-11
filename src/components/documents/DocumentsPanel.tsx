@@ -160,16 +160,26 @@ function DocumentsGroup({
                   const twoSides = !isGroup && !!altTypes[0]?.has_two_sides;
                   const single = docs.length <= 1;
                   const doc = docs[0];
+                  const acceptedNames = altTypes.map((t) => t.name).join(' ou ');
+                  // Subtítulo: se enviado, o NOME real persistido (vai pro Nammux); senão, os aceitos.
+                  const subtitle = doc
+                    ? (isGroup ? `${typeName.get(doc.document_type_id ?? '') ?? 'Documento'} · ${docDisplayName(doc)}` : docDisplayName(doc))
+                    : (isGroup ? `Aceitos: ${acceptedNames}` : undefined);
                   return (
                     <div key={it.code}>
                       {/* Linha única do documento exigido: status + (Enviar/Completar) + ações do arquivo. */}
                       <div className="flex items-center justify-between gap-3 p-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <span className="text-sm font-medium truncate">{it.label}</span>
-                          {incomplete && (
-                            <span className="text-[11px] text-amber-600 truncate">{twoSides ? '· falta o verso' : '· incompleto'}</span>
-                          )}
+                        <div className="flex items-start gap-2 min-w-0">
+                          <FileText className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium truncate">{it.label}</span>
+                              {incomplete && (
+                                <span className="text-[11px] text-amber-600 shrink-0">{twoSides ? '· falta o verso' : '· incompleto'}</span>
+                              )}
+                            </div>
+                            {subtitle && <p className="text-[11px] text-muted-foreground truncate">{subtitle}</p>}
+                          </div>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           {sent ? (
