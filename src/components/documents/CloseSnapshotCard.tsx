@@ -13,17 +13,12 @@ export function CloseSnapshotCard({ opportunityId }: { opportunityId: string }) 
     queryKey: ['opp-close-snapshot', opportunityId],
     enabled: !!opportunityId,
     queryFn: async () => {
-      // Tabela nova (3d-3) ainda fora do types.ts gerado — cast localizado.
-      const { data } = await (supabase as unknown as {
-        from: (t: string) => {
-          select: (c: string) => { eq: (k: string, v: string) => { maybeSingle: () => Promise<{ data: unknown }> } };
-        };
-      })
+      const { data } = await supabase
         .from('opportunity_close_snapshots')
         .select('closed_at,mode,documents')
         .eq('opportunity_id', opportunityId)
         .maybeSingle();
-      return data as { closed_at: string; mode: string | null; documents: SnapDoc[] } | null;
+      return data as unknown as { closed_at: string; mode: string | null; documents: SnapDoc[] } | null;
     },
   });
   if (!data) return null;
