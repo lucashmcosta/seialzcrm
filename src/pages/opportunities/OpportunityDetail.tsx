@@ -421,7 +421,7 @@ export default function OpportunityDetail() {
                   </div>
                 </CardContent>
               </Card>
-              {organization && <OpportunityReadinessCard organizationId={organization.id} opportunityId={opportunity.id} />}
+              {organization && <OpportunityReadinessCard organizationId={organization.id} opportunityId={opportunity.id} onGoToDocuments={() => setSelectedTab('documents')} />}
               </>
             )}
             {selectedTab === 'timeline' && <ActivityTimeline opportunityId={opportunity.id} />}
@@ -770,7 +770,7 @@ export default function OpportunityDetail() {
                   </div>
                 </CardContent>
               </Card>
-              {organization && <OpportunityReadinessCard organizationId={organization.id} opportunityId={opportunity.id} />}
+              {organization && <OpportunityReadinessCard organizationId={organization.id} opportunityId={opportunity.id} onGoToDocuments={() => setSelectedTab('documents')} />}
             </Tabs.Panel>
 
             <Tabs.Panel id="timeline">
