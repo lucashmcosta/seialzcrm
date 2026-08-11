@@ -6,7 +6,8 @@ export interface OpportunityCloseItem {
   code: string;
   label: string;
   status: 'passed' | 'warning' | 'missing';
-  action?: 'edit_contact' | 'edit_opportunity';
+  action?: 'edit_contact' | 'edit_opportunity' | 'edit_documents';
+  document_type_id?: string;
   fallback?: boolean;
 }
 

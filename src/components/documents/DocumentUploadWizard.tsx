@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog';
@@ -10,7 +11,7 @@ import { UploadSimple, Check, CaretDown, ArrowUp, ArrowDown, X, SpinnerGap } fro
 import { toast } from 'sonner';
 import { uploadErrorMessage, type DocType } from '@/hooks/documents/useEntityDocuments';
 import type { ReferenceInput } from '@/lib/documentName';
-import { mergeFilesToPdf, allMergeable, MAX_PAGES } from '@/lib/pdfMerge';
+import { mergeFilesToPdf, allMergeable, pageCountOf, MAX_PAGES } from '@/lib/pdfMerge';
 
 const CATEGORY_LABELS: Record<string, string> = {
   IDENTIFICACAO: 'Identificação', ENDERECO: 'Endereço', REPRESENTACAO: 'Representação', TRIAGEM: 'Triagem',
@@ -36,25 +37,49 @@ export function DocumentUploadWizard({
   partyName,
   busy,
   onUpload,
+  initialTypeId,
+  lockType,
+  trigger,
 }: {
   types: DocType[];
   partyName?: string | null;
   busy?: boolean;
   onUpload: (input: WizardUploadInput) => Promise<unknown>;
+  // Abre já com um tipo selecionado (ex.: a partir de um slot "Documentos necessários").
+  initialTypeId?: string | null;
+  // Trava o tipo (esconde o seletor) — o upload fica garantidamente amarrado ao tipo pedido.
+  lockType?: boolean;
+  // Trigger customizado (ex.: botão "Enviar" na linha do necessário). Sem isso, usa o botão padrão.
+  trigger?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [typeId, setTypeId] = useState<string>(FREE);
+  const [typeId, setTypeId] = useState<string>(initialTypeId ?? FREE);
   const [files, setFiles] = useState<File[]>([]);
   const [refDate, setRefDate] = useState('');
   const [refMonth, setRefMonth] = useState('');
   const [refEnd, setRefEnd] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Duas faces: o usuário DECLARA se enviou frente e verso. Default inteligente pela
+  // contagem de páginas do que foi selecionado, mas a decisão final é do usuário.
+  const [hasBothSides, setHasBothSides] = useState(true);
 
   const selectedType = typeId === FREE ? null : types.find((t) => t.id === typeId) ?? null;
   const refKind = selectedType?.reference_kind ?? 'none';
   const isMultiple = selectedType?.cardinality === 'multiple';
   const twoSides = !!selectedType?.has_two_sides;
+
+  // Sugere o estado do checkbox: >=2 arquivos, ou 1 arquivo já com >=2 páginas (PDF).
+  useEffect(() => {
+    if (!twoSides) return;
+    let cancelled = false;
+    (async () => {
+      let complete = files.length >= 2;
+      if (!complete && files.length === 1) complete = (await pageCountOf(files[0])) >= 2;
+      if (!cancelled) setHasBothSides(complete);
+    })();
+    return () => { cancelled = true; };
+  }, [files, twoSides]);
 
   const groups = useMemo(() => {
     const byCat = new Map<string, DocType[]>();
@@ -71,7 +96,7 @@ export function DocumentUploadWizard({
   }, [types]);
 
   const reset = () => {
-    setTypeId(FREE); setFiles([]); setRefDate(''); setRefMonth(''); setRefEnd(''); setPickerOpen(false); setSubmitting(false);
+    setTypeId(initialTypeId ?? FREE); setFiles([]); setRefDate(''); setRefMonth(''); setRefEnd(''); setPickerOpen(false); setSubmitting(false); setHasBothSides(true);
   };
   const pickType = (id: string) => { setTypeId(id); setPickerOpen(false); };
   const move = (i: number, dir: -1 | 1) => {
@@ -108,7 +133,8 @@ export function DocumentUploadWizard({
           const base = selectedType?.name || 'documento';
           file = await mergeFilesToPdf(files, `${base}.pdf`);
         }
-        const isIncomplete = twoSides && files.length < 2;
+        // Completude declarada pelo usuário (checkbox), não inferida do nº de arquivos.
+        const isIncomplete = twoSides && !hasBothSides;
         await onUpload({ file, documentTypeId, reference, partyName, isIncomplete });
       }
       toast.success(files.length > 1 && !isMultiple ? 'Documento enviado (páginas unidas)' : 'Documento enviado');
@@ -124,20 +150,28 @@ export function DocumentUploadWizard({
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm" disabled={busy}>
-          <UploadSimple className="h-4 w-4 mr-1" /> Enviar documento
-        </Button>
+        {trigger ?? (
+          <Button type="button" variant="outline" size="sm" disabled={busy}>
+            <UploadSimple className="h-4 w-4 mr-1" /> Enviar documento
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Enviar documento</DialogTitle>
-          <DialogDescription>Escolha o tipo e os arquivos. Sem tipo = arquivo livre.</DialogDescription>
+          <DialogTitle>{lockType && selectedType ? `Enviar ${selectedType.name}` : 'Enviar documento'}</DialogTitle>
+          <DialogDescription>
+            {lockType && selectedType ? 'Documento exigido para o fechamento.' : 'Escolha o tipo e os arquivos. Sem tipo = arquivo livre.'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Tipo */}
+          {/* Tipo — travado quando veio de um slot exigido */}
           <div className="space-y-1.5">
             <Label className="text-xs">Tipo de documento</Label>
+            {lockType && selectedType ? (
+              <div className="w-full rounded-md border bg-muted/40 px-3 py-2 text-sm">{selectedType.name}</div>
+            ) : (
+            <>
             <Button type="button" variant="outline" className="w-full justify-between font-normal" onClick={() => setPickerOpen((v) => !v)}>
               <span className="truncate">{selectedType ? selectedType.name : 'Sem tipo (arquivo livre)'}</span>
               <CaretDown className={`h-4 w-4 opacity-50 shrink-0 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} />
@@ -165,6 +199,8 @@ export function DocumentUploadWizard({
                   ))}
                 </CommandList>
               </Command>
+            )}
+            </>
             )}
           </div>
 
@@ -216,6 +252,17 @@ export function DocumentUploadWizard({
                   </div>
                 ))}
               </div>
+            )}
+            {twoSides && (
+              <label className="mt-2 flex items-start gap-2 cursor-pointer">
+                <Checkbox checked={hasBothSides} onCheckedChange={(v) => setHasBothSides(v === true)} className="mt-0.5" />
+                <span className="text-xs leading-snug">
+                  Inclui <strong>frente e verso</strong>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Desmarque se enviou só um lado — fica como incompleto até completar.
+                  </span>
+                </span>
+              </label>
             )}
           </div>
         </div>

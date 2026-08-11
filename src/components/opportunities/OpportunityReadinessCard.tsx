@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { evaluateOpportunityClose, type OpportunityCloseEvaluation } from '@/lib/opportunityClose';
 
-export function OpportunityReadinessCard({ organizationId, opportunityId }: { organizationId: string; opportunityId: string }) {
+export function OpportunityReadinessCard({ organizationId, opportunityId, onGoToDocuments }: { organizationId: string; opportunityId: string; onGoToDocuments?: () => void }) {
   const [evaluation, setEvaluation] = useState<OpportunityCloseEvaluation | null>(null);
 
   useEffect(() => {
@@ -39,6 +39,9 @@ export function OpportunityReadinessCard({ organizationId, opportunityId }: { or
             </span>
             {item.status === 'missing' && evaluation.contact_id && item.action === 'edit_contact' && (
               <Button asChild variant="link" size="sm"><Link to={`/contacts/${evaluation.contact_id}/edit`}>Corrigir</Link></Button>
+            )}
+            {item.status === 'missing' && item.action === 'edit_documents' && onGoToDocuments && (
+              <Button variant="link" size="sm" onClick={onGoToDocuments}>Ir para Documentos</Button>
             )}
           </div>
         ))}

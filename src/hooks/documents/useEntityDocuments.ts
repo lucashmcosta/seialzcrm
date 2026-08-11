@@ -21,6 +21,7 @@ export interface EntityDoc {
   bucket: string;
   created_at: string;
   document_type_id: string | null;
+  is_incomplete: boolean | null;
 }
 
 // Nome de exibição/baixa: display_name gerado (2c) ⟶ original ⟶ file_name.
@@ -71,7 +72,7 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
     queryFn: async () => {
       const { data, error } = await supabase
         .from('documents')
-        .select('id,file_name,display_name,original_file_name,mime_type,size_bytes,storage_path,bucket,created_at,document_type_id')
+        .select('id,file_name,display_name,original_file_name,mime_type,size_bytes,storage_path,bucket,created_at,document_type_id,is_incomplete')
         .eq('organization_id', orgId!)
         .eq('entity_type', entityType)
         .eq('entity_id', entityId!)
@@ -209,7 +210,10 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
         if (error) throw error;
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: docsKey }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: docsKey });
+      qc.invalidateQueries({ queryKey: ['opp-close-eval'] }); // pendência dirigida por regra
+    },
   });
 
   const remove = useMutation({
@@ -219,7 +223,10 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
       const { error } = await supabase.from('documents').update({ deleted_at: new Date().toISOString() }).eq('id', doc.id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: docsKey }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: docsKey });
+      qc.invalidateQueries({ queryKey: ['opp-close-eval'] }); // pendência dirigida por regra
+    },
   });
 
   const getSignedUrl = async (doc: EntityDoc) => {
