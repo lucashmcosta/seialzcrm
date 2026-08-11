@@ -1,44 +1,33 @@
-# Tipificação obrigatória no upload de documentos
+# Corrigir crash na inicialização do dispositivo de voz
 
-## Situação confirmada
-- `document_types`: 135 tipos ativos no catálogo global (`organization_id = NULL`) e apenas 5 registros antigos por organização (soft-deletados).
-- `organization_document_types` existe (`organization_id`, `document_type_id`, `is_enabled`, `sort_order`) mas está **vazia** e não é lida por nenhum código.
-- Frontend (`useDocumentTypes`, `useEntityDocuments`, `OpportunityCloseSettings`) filtra `organization_id = orgId`, então o catálogo global fica invisível → tela de Configurações vazia e checklist não renderiza.
-- Hoje 4.845 de 4.866 documentos estão sem `document_type_id`, e é isso que faz o payload do Nammux sair com `document_submissions` vazio.
+## Diagnóstico (confirmado no código e nos breadcrumbs)
 
-## O plano
+O Sentry aponta `TypeError: undefined is not an object (evaluating 'oe.message')` em `initializeDevice` (`src/contexts/OutboundCallContext.tsx`, linha 900).
 
-### 1. Ligar o catálogo global à organização
-- Passar a ler tipos por união: tipos globais habilitados via `organization_document_types` + tipos próprios da organização.
-- Criar a leitura em uma função no banco (ex.: `rpc_list_document_types(p_organization_id)`) para um único lugar de verdade, usada pelos três consumidores.
-- Semeamento inicial: habilitar para Central Trabalhista e Viagi os tipos globais que já fazem sentido (os que o Nammux espera e os usados na tipificação do Jonas), deixando o restante do catálogo disponível para habilitar depois.
+Sequência observada nos breadcrumbs:
 
-### 2. Configurações → Documentos passa a ser tela de curadoria
-- Duas áreas: **Tipos habilitados** (do catálogo, com ordem e "obrigatório" por organização) e **Tipos próprios** (CRUD atual, mantido).
-- Ação "Adicionar do catálogo": busca nos 135 tipos globais e liga/desliga via `organization_document_types` (`is_enabled`, `sort_order`).
-- "Obrigatório" e ordem passam a ser por organização no vínculo, não no tipo global.
+```text
+18:32:47  initializeDevice START  -> device.register()
+18:41:24  [OutboundCall] Device registration timeout   (timeout de 10s já havia estourado)
+18:41:24  Twilio Device unregistered
+18:41:24  Device initialization error: undefined   <-- rejeição com valor nulo
+18:41:24  TransportError (31009): No transport available
+18:41:24  TypeError: undefined is not an object
+```
 
-### 3. Obrigar o tipo no upload
-- No `DocumentsPanel`, o botão "Adicionar arquivo" deixa de enviar direto: abre um diálogo que exige escolher o tipo (combobox com busca sobre os tipos habilitados) antes de confirmar o envio.
-- Sem tipo selecionado, o botão de confirmar fica desabilitado — não existe mais caminho de upload avulso pela UI.
-- Se a organização não tiver nenhum tipo habilitado, o painel mostra estado vazio com link para Configurações → Documentos, em vez de cair no upload livre.
-- Slots do checklist ("Enviar"/"Substituir") continuam funcionando como hoje, já tipificados.
+O log `Device initialization error: null` prova que `device.register()` rejeitou com `null`/`undefined` (falha de transporte WebSocket do Twilio). O `catch` faz `error.message` diretamente, então a leitura da propriedade estoura antes de qualquer tratamento — o erro real (transporte indisponível) é substituído por um TypeError.
 
-### 4. Fechar a porta no banco
-- `documents.document_type_id` passa a ser obrigatório para novos registros de entidades de negócio (contato/oportunidade), preservando as linhas históricas nulas — via trigger de validação, não CHECK, para não invalidar o legado.
-- Anexos de mensagem/mídia de conversa, se gravarem em `documents`, ficam explicitamente fora dessa exigência.
+Existe o mesmo padrão frágil no handler `device.on('error')` (linha 844) e em outros pontos do arquivo que assumem `error.message`.
 
-### 5. Legado
-- Os 4.845 documentos sem tipo não são tocados automaticamente. Na UI eles ganham um aviso "Sem tipo" com ação de tipificar, para limpeza sob demanda (o caso Jonas mostrou que tipificar + replay do evento resolve no Nammux).
-- Backfill em massa fica como decisão separada, fora deste escopo.
+## O que fazer
 
-## Detalhes técnicos
-- Migração: `organization_document_types` ganha grants/RLS de leitura por membros da org e escrita por administradores; nova RPC de listagem; trigger de validação em `documents`.
-- Arquivos afetados: `src/hooks/documents/useDocumentTypes.ts`, `src/hooks/documents/useEntityDocuments.ts`, `src/components/settings/DocumentsSettings.tsx`, `src/components/documents/DocumentsPanel.tsx`, `src/components/settings/OpportunityCloseSettings.tsx`, mais o painel mobile de documentos se existir.
-- `src/integrations/supabase/types.ts` é regenerado após a migração; nada é editado à mão.
-- Documentação: atualizar `docs/modules/settings/data-model.md` e o módulo de documentos com o novo modelo catálogo global + vínculo por organização.
+1. Em `src/contexts/OutboundCallContext.tsx`, usar o helper já existente `toErrorMessageString` de `src/lib/errorMessage.ts` nos pontos que hoje leem `error.message` sem guarda:
+   - `catch` de `initializeDevice` (linha ~900) — fallback "Erro ao inicializar chamada".
+   - handler `device.on('error')` (linha ~844) — fallback "Erro no dispositivo de áudio".
+   - handlers de chamada nas linhas ~683 e ~694 (mesmo padrão, `error?.message` / `error.message`).
+2. Nesse mesmo `catch`, quando a rejeição for vazia mas o Twilio já tiver reportado transporte indisponível (código 31009), exibir mensagem de rede em vez de mensagem genérica, para o usuário entender que é conectividade e não falha do CRM.
+3. Garantir limpeza do `initTimeoutRef` no caminho de falha, evitando que o timeout dispare depois e sobrescreva o estado de erro.
 
-## Fora do escopo
-- Alterar o contrato do payload Nammux.
-- Workflow de aprovação/revisão de documentos.
-- Backfill automático dos documentos históricos.
+## Observação
+
+Isto corrige apenas o crash de leitura e a mensagem exibida. A causa raiz da falha de conexão (WebSocket do Twilio Voice sem transporte por ~9 minutos naquela sessão) é de rede/ambiente e não é alterada por este ajuste; após a correção, o Sentry passará a registrar o `TransportError` real em vez do TypeError.
