@@ -134,11 +134,13 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
       documentTypeId,
       reference,
       partyName,
+      isIncomplete,
     }: {
       file: File;
       documentTypeId?: string | null;
       reference?: ReferenceInput;
       partyName?: string | null;
+      isIncomplete?: boolean;
     }) => {
       if (!orgId || !entityId || !userProfile?.id) throw new Error('missing context');
       const hash = await sha256Hex(file);
@@ -195,6 +197,7 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
           uploaded_by_user_id: userProfile.id,
           document_type_id: documentTypeId ?? null,
           is_single: !!isSingle,
+          is_incomplete: !!isIncomplete,
           content_hash: hash,
           reference_date: refCols.reference_date,
           reference_month: refCols.reference_month,

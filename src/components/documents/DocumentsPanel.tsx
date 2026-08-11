@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { FileText, DownloadSimple, TrashSimple, Eye } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { useEntityDocuments, docDisplayName, uploadErrorMessage, type DocEntityType, type EntityDoc } from '@/hooks/documents/useEntityDocuments';
+import { useEntityDocuments, docDisplayName, type DocEntityType, type EntityDoc } from '@/hooks/documents/useEntityDocuments';
 import { DocumentUploadWizard } from '@/components/documents/DocumentUploadWizard';
 import type { ReferenceInput } from '@/lib/documentName';
 
@@ -86,11 +86,14 @@ function DocumentsGroup({
   const ownerTypes = types.filter((t) => t.owner_type === entityType);
   const typeName = new Map(types.map((t) => [t.id, t.name] as const));
 
-  const doUpload = (input: { file: File; documentTypeId?: string | null; reference?: ReferenceInput; partyName?: string | null }) =>
-    upload.mutate(input, {
-      onError: (e: unknown) => toast.error(uploadErrorMessage(e)),
-      onSuccess: () => toast.success('Documento enviado'),
-    });
+  // Awaitable: o wizard pode fazer merge de páginas e/ou enviar vários (multiple).
+  const doUpload = (input: {
+    file: File;
+    documentTypeId?: string | null;
+    reference?: ReferenceInput;
+    partyName?: string | null;
+    isIncomplete?: boolean;
+  }) => upload.mutateAsync(input);
   const doRemove = (doc: EntityDoc) =>
     remove.mutate(doc, { onError: (e: unknown) => toast.error((e as Error)?.message || 'Falha ao remover') });
   const doPreview = async (doc: EntityDoc) => {
