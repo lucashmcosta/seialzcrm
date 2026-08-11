@@ -23,11 +23,16 @@ function fieldOptions(f?: EditorCustomField): { label: string; value: string }[]
     .map((o) => ({ value: String(o.value), label: String(o.label ?? o.value) }));
 }
 
+// Nomes dos tipos escolhidos, na ordem de `codes`.
+function namesOf(types: CatalogType[], codes: string[]): string[] {
+  return codes.map((c) => types.find((t) => t.code === c)?.name).filter((n): n is string => !!n);
+}
+
 // Multi-seleção de tipos de documento (por CÓDIGO), em popover com busca.
-function TypeMultiSelect({ types, selected, onChange, placeholder }: { types: CatalogType[]; selected: string[]; onChange: (codes: string[]) => void; placeholder?: string }) {
+function TypeMultiSelect({ types, selected, onChange, placeholder, joinWith = ', ' }: { types: CatalogType[]; selected: string[]; onChange: (codes: string[]) => void; placeholder?: string; joinWith?: string }) {
   const [open, setOpen] = useState(false);
   const toggle = (code: string) => onChange(selected.includes(code) ? selected.filter((c) => c !== code) : [...selected, code]);
-  const text = selected.length ? types.filter((t) => selected.includes(t.code)).map((t) => t.name).join(', ') : (placeholder ?? 'Selecionar tipos...');
+  const text = selected.length ? namesOf(types, selected).join(joinWith) : (placeholder ?? 'Selecionar tipos...');
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -55,21 +60,30 @@ function TypeMultiSelect({ types, selected, onChange, placeholder }: { types: Ca
   );
 }
 
-// Editor de grupos "um de N" (anyOf): rótulo + alternativas.
+// Editor de exigências com alternativas (OU): rótulo + alternativas ligadas por "ou".
 function GroupsEditor({ types, groups, onChange }: { types: CatalogType[]; groups: RequiredGroup[]; onChange: (g: RequiredGroup[]) => void }) {
   const set = (i: number, patch: Partial<RequiredGroup>) => onChange(groups.map((g, idx) => (idx === i ? { ...g, ...patch } : g)));
   return (
     <div className="space-y-2">
-      {groups.map((g, i) => (
-        <div key={i} className="rounded-md border p-3 space-y-2">
-          <div className="flex gap-2">
-            <Input placeholder='Rótulo (ex.: "Documento de identidade")' value={g.label ?? ''} onChange={(e) => set(i, { label: e.target.value })} />
-            <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={() => onChange(groups.filter((_, idx) => idx !== i))}><TrashSimple className="h-4 w-4" /></Button>
+      {groups.map((g, i) => {
+        const names = namesOf(types, g.anyOf);
+        return (
+          <div key={i} className="rounded-md border p-3 space-y-2">
+            <div className="flex gap-2">
+              <Input placeholder='Nome da exigência (ex.: "Documento de identidade")' value={g.label ?? ''} onChange={(e) => set(i, { label: e.target.value })} />
+              <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={() => onChange(groups.filter((_, idx) => idx !== i))}><TrashSimple className="h-4 w-4" /></Button>
+            </div>
+            <TypeMultiSelect types={types} selected={g.anyOf} onChange={(codes) => set(i, { anyOf: codes })} placeholder="Escolher documentos aceitos" joinWith=" ou " />
+            {/* Expressão OU explícita. */}
+            {names.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Basta enviar <span className="font-medium text-foreground">{names.join(' ou ')}</span>.
+              </p>
+            )}
           </div>
-          <TypeMultiSelect types={types} selected={g.anyOf} onChange={(codes) => set(i, { anyOf: codes })} placeholder="Alternativas — qualquer uma satisfaz" />
-        </div>
-      ))}
-      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...groups, { anyOf: [], label: '' }])}><Plus className="h-4 w-4 mr-1" />Adicionar grupo "um de N"</Button>
+        );
+      })}
+      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...groups, { anyOf: [], label: '' }])}><Plus className="h-4 w-4 mr-1" />Adicionar exigência com alternativas (OU)</Button>
     </div>
   );
 }
@@ -80,8 +94,14 @@ function RequiredEditor({ types, value, onChange }: { types: CatalogType[]; valu
   const groups = value.filter(isRequiredGroup);
   return (
     <div className="space-y-2">
-      <TypeMultiSelect types={types} selected={codes} onChange={(c) => onChange([...c, ...groups])} placeholder="Documentos exigidos" />
-      <GroupsEditor types={types} groups={groups} onChange={(g) => onChange([...codes, ...g])} />
+      <div className="space-y-1">
+        <p className="text-[11px] text-muted-foreground">Exigir todos (E):</p>
+        <TypeMultiSelect types={types} selected={codes} onChange={(c) => onChange([...c, ...groups])} placeholder="Documentos exigidos" />
+      </div>
+      <div className="space-y-1">
+        <p className="text-[11px] text-muted-foreground">Com alternativas (OU) — basta um:</p>
+        <GroupsEditor types={types} groups={groups} onChange={(g) => onChange([...codes, ...g])} />
+      </div>
     </div>
   );
 }
@@ -129,8 +149,8 @@ function ConditionsEditor({ customFields, when, onChange }: { customFields: Edit
       <div className="flex items-center gap-2 text-sm">
         <span className="text-muted-foreground">Aplica quando</span>
         <Select value={mode} onValueChange={(m: 'all' | 'any') => onChange(m === 'any' ? { any: conds } : { all: conds })}>
-          <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="all">todas</SelectItem><SelectItem value="any">qualquer</SelectItem></SelectContent>
+          <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="all">E — todas</SelectItem><SelectItem value="any">OU — qualquer</SelectItem></SelectContent>
         </Select>
         <span className="text-muted-foreground">das condições:</span>
       </div>
@@ -203,19 +223,19 @@ export function AdvancedDocumentRules({
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Regras avançadas de documentos</CardTitle>
-        <CardDescription>Grupos "um de N" (ex.: identidade = RG ou CNH) e regras condicionais (If/And/Or) com prioridade. Opcional — a checklist acima continua valendo como base.</CardDescription>
+        <CardDescription>Exigências com alternativas (ex.: identidade = RG <strong>ou</strong> CNH) e regras condicionais (E / OU) com prioridade. Opcional — a checklist acima continua valendo como base.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <section className="space-y-2">
           <div>
-            <p className="text-sm font-medium">Grupos "um de N" (sempre exigidos)</p>
-            <p className="text-xs text-muted-foreground">Qualquer uma das alternativas satisfaz. As alternativas devem ser do mesmo dono (contato ou oportunidade).</p>
+            <p className="text-sm font-medium">Documentos com alternativas (OU)</p>
+            <p className="text-xs text-muted-foreground">Basta enviar <strong>um</strong> dos documentos aceitos. Ex.: <em>RG ou CNH</em>. As alternativas devem ser do mesmo dono (contato ou oportunidade).</p>
           </div>
           <GroupsEditor types={enabledTypes} groups={groups} onChange={onGroupsChange} />
         </section>
         <section className="space-y-2">
           <div>
-            <p className="text-sm font-medium">Regras condicionais</p>
+            <p className="text-sm font-medium">Regras condicionais (E / OU)</p>
             <p className="text-xs text-muted-foreground">Exigências que valem só quando as condições batem. Maior prioridade vence; se nenhuma aplica, vale a base acima.</p>
           </div>
           <ConditionalSetsEditor types={enabledTypes} customFields={customFields} sets={sets} onChange={onSetsChange} />
