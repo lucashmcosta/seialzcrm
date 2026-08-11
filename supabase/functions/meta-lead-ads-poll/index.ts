@@ -37,7 +37,7 @@ serve(async (req) => {
     const { data: forms } = await admin
       .from("lead_forms")
       .select(
-        "id, organization_id, provider_form_id, provider_form_name, last_synced_lead_created_time, organization_integration_id, meta_lead_page_id, consecutive_errors",
+        "id, organization_id, provider_form_id, provider_form_name, last_synced_lead_created_time, organization_integration_id, meta_lead_page_id, consecutive_errors, last_seen_leads_count, silent_empty_alerted_at",
       )
       .eq("provider", "meta_lead_ads")
       .eq("is_monitored", true);
@@ -175,6 +175,70 @@ serve(async (req) => {
               last_health_check_at: new Date().toISOString(),
             })
             .eq("id", page.id);
+        }
+
+        // Silent-empty guard: a token from an app without leads_retrieval Advanced
+        // Access reads the form node (leads_count) fine but returns an empty /leads
+        // edge with HTTP 200 (no error) — so the fetch above looks "successful" with
+        // 0 leads. Detect it by comparing the cumulative leads_count against the last
+        // observed value: if it grew but we fetched nothing, the token is degraded.
+        try {
+          const node = await metaGraphGet(`/${form.provider_form_id}`, { fields: "leads_count" }, {
+            accessToken: pageToken,
+            appSecret,
+          });
+          const leadsCount = Number(node.leads_count ?? 0);
+          const baseline = form.last_seen_leads_count == null ? null : Number(form.last_seen_leads_count);
+          const grew = baseline != null && leadsCount > baseline;
+
+          if (formLeads === 0 && grew) {
+            const reason =
+              `leads_count subiu ${baseline}→${leadsCount} mas /leads retornou 0 — ` +
+              `token provavelmente sem leads_retrieval Advanced Access / lead access.`;
+            console.error(`[meta-lead-ads-poll] silent-empty on form ${form.id}: ${reason}`);
+            await admin
+              .from("meta_lead_pages")
+              .update({
+                last_health_check_status: "degraded_lead_access",
+                last_health_check_error: reason,
+                last_health_check_at: new Date().toISOString(),
+              })
+              .eq("id", page.id);
+            // Notify once per 6h cooldown to avoid spamming on every poll.
+            const lastAlert = form.silent_empty_alerted_at
+              ? new Date(form.silent_empty_alerted_at).getTime()
+              : 0;
+            if (Date.now() - lastAlert > 6 * 60 * 60 * 1000) {
+              await notifyOrgUsers(admin, form.organization_id, {
+                type: "warning",
+                title: "Leads Meta não estão entrando",
+                body:
+                  `O formulário "${form.provider_form_name}" tem novos leads na Meta que não ` +
+                  `estão sendo importados. Verifique a conexão/permissões (leads_retrieval).`,
+                entity_type: "integration",
+                entity_id: orgIntegration.id,
+              });
+              await admin
+                .from("lead_forms")
+                .update({ silent_empty_alerted_at: new Date().toISOString() })
+                .eq("id", form.id);
+            }
+          } else if (formLeads > 0 && form.silent_empty_alerted_at) {
+            // Recovered → clear the alert latch so a future incident notifies again.
+            await admin
+              .from("lead_forms")
+              .update({ silent_empty_alerted_at: null })
+              .eq("id", form.id);
+          }
+
+          if (baseline == null || leadsCount !== baseline) {
+            await admin
+              .from("lead_forms")
+              .update({ last_seen_leads_count: leadsCount })
+              .eq("id", form.id);
+          }
+        } catch (probeErr) {
+          console.warn("[meta-lead-ads-poll] leads_count probe failed", form.id, String(probeErr));
         }
       } catch (e: any) {
         formError = e.message || String(e);

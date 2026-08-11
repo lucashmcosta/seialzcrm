@@ -19,6 +19,57 @@ const AUTO_MAP: Record<string, string> = {
   zip_code: "address_zip",
 };
 
+// Verifies that a Page token can actually READ the /leads edge — not just the
+// form node. A token from an app WITHOUT leads_retrieval Advanced Access (or
+// without lead access on the Page) reads `leads_count` fine but returns an empty
+// /leads edge (HTTP 200, no error). That silent-empty state is what broke Viagi
+// ingestion on 2026-08-10. Returns { degraded } only when a form provably HAS
+// leads (leads_count>0) yet the edge yields none — never a false positive from
+// "no new leads".
+async function smoketestLeadsEdge(
+  pageToken: string,
+  appSecret: string | undefined,
+  forms: Array<{ provider_form_id: string }>,
+): Promise<{ degraded: boolean; reason: string; checked_form_id?: string; leads_count?: number }> {
+  for (const f of forms) {
+    let leadsCount = 0;
+    try {
+      const node = await metaGraphGet(`/${f.provider_form_id}`, { fields: "leads_count" }, {
+        accessToken: pageToken,
+        appSecret,
+      });
+      leadsCount = Number(node.leads_count ?? 0);
+    } catch {
+      continue; // can't even read the node with this token; try next form
+    }
+    if (leadsCount <= 0) continue; // nothing to verify against on this form
+    try {
+      const edge = await metaGraphGet(`/${f.provider_form_id}/leads`, { limit: 1 }, {
+        accessToken: pageToken,
+        appSecret,
+      });
+      const returned = (edge.data || []).length;
+      if (returned === 0) {
+        return {
+          degraded: true,
+          reason: `token reads leads_count=${leadsCount} but /leads edge returned empty (missing leads_retrieval Advanced Access / lead access)`,
+          checked_form_id: f.provider_form_id,
+          leads_count: leadsCount,
+        };
+      }
+      return { degraded: false, reason: "ok", checked_form_id: f.provider_form_id, leads_count: leadsCount };
+    } catch (e: any) {
+      return {
+        degraded: true,
+        reason: `/leads edge error: ${e?.message || String(e)}`,
+        checked_form_id: f.provider_form_id,
+        leads_count: leadsCount,
+      };
+    }
+  }
+  return { degraded: false, reason: "no monitored form with leads_count>0 to verify" };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
@@ -74,25 +125,59 @@ serve(async (req) => {
 
     const pages: any[] = pagesResp.data || [];
     const pageIds: string[] = [];
+    const tokenWarnings: any[] = [];
 
     for (const page of pages) {
-      const pageTokenEnc = await encryptSecret(page.access_token);
+      // Never silently overwrite a working Page token with one that cannot read
+      // the /leads edge. Only guard when a token already exists — a fresh connect
+      // has no forms to smoketest yet (the poll's silent-empty detector covers it).
+      const { data: existingPage } = await admin
+        .from("meta_lead_pages")
+        .select("id, page_access_token_encrypted")
+        .eq("organization_integration_id", organization_integration_id)
+        .eq("meta_page_id", page.id)
+        .maybeSingle();
+
+      let persistToken = true;
+      let degradedReason: string | null = null;
+      if (existingPage?.id && existingPage.page_access_token_encrypted) {
+        const { data: monitoredForms } = await admin
+          .from("lead_forms")
+          .select("provider_form_id")
+          .eq("meta_lead_page_id", existingPage.id)
+          .eq("provider", "meta_lead_ads")
+          .eq("is_monitored", true);
+        const st = await smoketestLeadsEdge(page.access_token, appSecret, monitoredForms || []);
+        if (st.degraded) {
+          persistToken = false;
+          degradedReason = st.reason;
+          tokenWarnings.push({ page_id: page.id, page_name: page.name, ...st });
+          console.warn(`[discover] keeping existing token for page ${page.id}: ${st.reason}`);
+        }
+      }
+
+      const pageUpsert: Record<string, unknown> = {
+        organization_id,
+        organization_integration_id,
+        meta_page_id: page.id,
+        meta_page_name: page.name,
+        meta_business_id: ca.business_id || null,
+        meta_page_category: page.category || null,
+        is_active: true,
+        discovered_at: new Date().toISOString(),
+      };
+      if (persistToken) {
+        // Only touch the token when the new one is safe (or on fresh connect).
+        pageUpsert.page_access_token_encrypted = await encryptSecret(page.access_token);
+      } else {
+        // Keep the existing token; surface the degraded state so poll/UI stop trusting it.
+        pageUpsert.last_health_check_status = "degraded_lead_access";
+        pageUpsert.last_health_check_error = degradedReason;
+        pageUpsert.last_health_check_at = new Date().toISOString();
+      }
       const { data: upserted } = await admin
         .from("meta_lead_pages")
-        .upsert(
-          {
-            organization_id,
-            organization_integration_id,
-            meta_page_id: page.id,
-            meta_page_name: page.name,
-            meta_business_id: ca.business_id || null,
-            meta_page_category: page.category || null,
-            page_access_token_encrypted: pageTokenEnc,
-            is_active: true,
-            discovered_at: new Date().toISOString(),
-          },
-          { onConflict: "organization_integration_id,meta_page_id" },
-        )
+        .upsert(pageUpsert, { onConflict: "organization_integration_id,meta_page_id" })
         .select("id")
         .single();
       if (upserted) pageIds.push(upserted.id);
@@ -174,7 +259,11 @@ serve(async (req) => {
       }
     }
 
-    return json({ success: true, pages_discovered: pages.length });
+    return json({
+      success: true,
+      pages_discovered: pages.length,
+      ...(tokenWarnings.length ? { token_warnings: tokenWarnings } : {}),
+    });
   } catch (e: any) {
     console.error("meta-lead-ads-discover error", e);
     return json({ error: e.message || "Internal error" }, 500);
