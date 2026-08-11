@@ -1,13 +1,12 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
-import { UploadSimple, CaretDown, Check } from '@phosphor-icons/react';
+import { UploadSimple, Check } from '@phosphor-icons/react';
 import type { DocType } from '@/hooks/documents/useEntityDocuments';
 import type { ReferenceInput } from '@/lib/documentName';
 
@@ -36,13 +35,11 @@ export function DocumentUploadWizard({
   onUpload: (input: { file: File; documentTypeId?: string | null; reference?: ReferenceInput; partyName?: string | null }) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [typeId, setTypeId] = useState<string>(FREE);
   const [file, setFile] = useState<File | null>(null);
   const [refDate, setRefDate] = useState('');
   const [refMonth, setRefMonth] = useState('');
   const [refEnd, setRefEnd] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const selectedType = typeId === FREE ? null : types.find((t) => t.id === typeId) ?? null;
   const refKind = selectedType?.reference_kind ?? 'none';
@@ -62,9 +59,7 @@ export function DocumentUploadWizard({
     }));
   }, [types]);
 
-  const reset = () => {
-    setTypeId(FREE); setFile(null); setRefDate(''); setRefMonth(''); setRefEnd('');
-  };
+  const reset = () => { setTypeId(FREE); setFile(null); setRefDate(''); setRefMonth(''); setRefEnd(''); };
 
   const confirm = () => {
     if (!file) return;
@@ -81,52 +76,41 @@ export function DocumentUploadWizard({
           <UploadSimple className="h-4 w-4 mr-1" /> Enviar documento
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Enviar documento</DialogTitle>
           <DialogDescription>Escolha o tipo e o arquivo. Sem tipo = arquivo livre.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Tipo (combobox pesquisável agrupado por categoria) */}
+          {/* Tipo — busca + lista rolável DENTRO do dialog (sem dropdown flutuante). */}
           <div className="space-y-1.5">
             <Label className="text-xs">Tipo de documento</Label>
-            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-              <PopoverTrigger asChild>
-                <Button type="button" variant="outline" role="combobox" className="w-full justify-between font-normal">
-                  <span className="truncate">{selectedType ? selectedType.name : 'Sem tipo (arquivo livre)'}</span>
-                  <CaretDown className="h-4 w-4 opacity-50 shrink-0" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0 max-h-[70vh] overflow-hidden" align="start">
-                <Command className="max-h-[70vh]">
-                  <CommandInput placeholder="Buscar tipo..." />
-                  <CommandList className="max-h-[min(60vh,420px)]">
-                    <CommandEmpty>Nenhum tipo encontrado.</CommandEmpty>
-                    <CommandGroup heading="Livre">
-                      <CommandItem value="Sem tipo arquivo livre" onSelect={() => { setTypeId(FREE); setPickerOpen(false); }}>
-                        <Check className={`h-4 w-4 mr-2 ${typeId === FREE ? 'opacity-100' : 'opacity-0'}`} />
-                        Sem tipo (arquivo livre)
+            <Command className="rounded-md border">
+              <CommandInput placeholder="Buscar tipo..." />
+              <CommandList className="max-h-56">
+                <CommandEmpty>Nenhum tipo encontrado.</CommandEmpty>
+                <CommandGroup heading="Livre">
+                  <CommandItem value="Sem tipo arquivo livre" onSelect={() => setTypeId(FREE)}>
+                    <Check className={`h-4 w-4 mr-2 ${typeId === FREE ? 'opacity-100' : 'opacity-0'}`} />
+                    Sem tipo (arquivo livre)
+                  </CommandItem>
+                </CommandGroup>
+                {groups.map((g) => (
+                  <CommandGroup key={g.code} heading={g.label}>
+                    {g.items.map((t) => (
+                      <CommandItem key={t.id} value={`${t.name} ${t.code}`} onSelect={() => setTypeId(t.id)}>
+                        <Check className={`h-4 w-4 mr-2 ${typeId === t.id ? 'opacity-100' : 'opacity-0'}`} />
+                        {t.name}
                       </CommandItem>
-                    </CommandGroup>
-                    {groups.map((g) => (
-                      <CommandGroup key={g.code} heading={g.label}>
-                        {g.items.map((t) => (
-                          <CommandItem
-                            key={t.id}
-                            value={`${t.name} ${t.code}`}
-                            onSelect={() => { setTypeId(t.id); setPickerOpen(false); }}
-                          >
-                            <Check className={`h-4 w-4 mr-2 ${typeId === t.id ? 'opacity-100' : 'opacity-0'}`} />
-                            {t.name}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
                     ))}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+                  </CommandGroup>
+                ))}
+              </CommandList>
+            </Command>
+            <p className="text-[11px] text-muted-foreground">
+              Selecionado: <span className="font-medium">{selectedType ? selectedType.name : 'Sem tipo (arquivo livre)'}</span>
+            </p>
           </div>
 
           {/* Referência condicional */}
@@ -158,7 +142,7 @@ export function DocumentUploadWizard({
           {/* Arquivo */}
           <div className="space-y-1.5">
             <Label className="text-xs">Arquivo</Label>
-            <Input ref={fileRef} type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </div>
         </div>
 
@@ -166,9 +150,7 @@ export function DocumentUploadWizard({
           <DialogClose asChild>
             <Button type="button" variant="ghost" size="sm">Cancelar</Button>
           </DialogClose>
-          <Button type="button" size="sm" disabled={!file || busy} onClick={confirm}>
-            Enviar
-          </Button>
+          <Button type="button" size="sm" disabled={!file || busy} onClick={confirm}>Enviar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
