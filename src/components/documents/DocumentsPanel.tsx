@@ -133,17 +133,27 @@ function DocumentsGroup({
               <div className="border rounded-lg divide-y">
                 {groupRequired.map((it) => {
                   const sent = it.status === 'passed';
+                  // Doc do tipo já existe mas está incompleto (ex.: two_sides só com a frente).
+                  const incomplete = !sent && documents.some((d) => d.document_type_id === it.document_type_id && d.is_incomplete);
+                  const twoSides = ownerTypes.find((t) => t.id === it.document_type_id)?.has_two_sides;
                   return (
                     <div key={it.code} className="flex items-center justify-between gap-3 p-3">
                       <div className="flex items-center gap-2 min-w-0">
                         <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                         <span className="text-sm font-medium truncate">{it.label}</span>
+                        {incomplete && (
+                          <span className="text-[11px] text-amber-600 truncate">{twoSides ? '· falta o verso' : '· incompleto'}</span>
+                        )}
                       </div>
                       {sent ? (
                         <Badge variant="outline" className="gap-1 text-[10px] shrink-0"><CheckCircle className="h-3 w-3 text-green-500" />Enviado</Badge>
                       ) : (
                         <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant="secondary" className="gap-1 text-[10px]"><Warning className="h-3 w-3" />Pendente</Badge>
+                          {incomplete ? (
+                            <Badge variant="outline" className="gap-1 text-[10px] border-amber-300 text-amber-700"><Warning className="h-3 w-3" />Incompleto</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="gap-1 text-[10px]"><Warning className="h-3 w-3" />Pendente</Badge>
+                          )}
                           {/* Enviar já amarrado ao tipo exigido — some dúvida sobre "qual tipo escolher". */}
                           <DocumentUploadWizard
                             types={ownerTypes}
@@ -152,7 +162,7 @@ function DocumentsGroup({
                             onUpload={doUpload}
                             initialTypeId={it.document_type_id}
                             lockType
-                            trigger={<Button type="button" size="sm" className="h-7"><UploadSimple className="h-3.5 w-3.5 mr-1" />Enviar</Button>}
+                            trigger={<Button type="button" size="sm" className="h-7"><UploadSimple className="h-3.5 w-3.5 mr-1" />{incomplete ? 'Completar' : 'Enviar'}</Button>}
                           />
                         </div>
                       )}
