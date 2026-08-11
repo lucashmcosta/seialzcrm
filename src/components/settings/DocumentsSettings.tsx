@@ -1,79 +1,111 @@
-import { useState } from 'react';
-import { useDocumentTypes, type DocumentType } from '@/hooks/documents/useDocumentTypes';
+import { useMemo, useState } from 'react';
+import { useDocumentCatalog, type CatalogType, type LocalTypeInput } from '@/hooks/documents/useDocumentCatalog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { SpinnerGap, Plus, PencilSimple, TrashSimple } from '@phosphor-icons/react';
-
-interface FormState {
-  name: string;
-  code: string;
-  is_required: boolean;
-  sort_order: number;
-  is_active: boolean;
-}
-
-const empty: FormState = { name: '', code: '', is_required: false, sort_order: 0, is_active: true };
+import { CATEGORY_LABELS, CATEGORY_ORDER, categoryLabel } from '@/lib/documentCategories';
 
 function slugify(s: string) {
   return s
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
 }
 
-export function DocumentsSettings() {
-  const { types, loading, create, update, softDelete } = useDocumentTypes();
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<DocumentType | null>(null);
-  const [form, setForm] = useState<FormState>(empty);
-  const [saving, setSaving] = useState(false);
-  const [removing, setRemoving] = useState<DocumentType | null>(null);
+const emptyLocal: LocalTypeInput = {
+  name: '', code: '', category_code: 'OUTROS', owner_type: 'contact', cardinality: 'single',
+  reference_kind: 'none', validity_mode: 'none', validity_days: null, has_two_sides: false,
+};
 
-  const openCreate = () => {
-    setEditing(null);
-    setForm({ ...empty, sort_order: types.length });
+function TypeBadges({ t }: { t: CatalogType }) {
+  const refLabel: Record<string, string> = { date: 'Data', month: 'Mês', period: 'Período' };
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <Badge variant="secondary" className="text-[10px]">{t.cardinality === 'single' ? 'Único' : 'Vários'}</Badge>
+      <Badge variant="outline" className="text-[10px]">{t.owner_type === 'contact' ? 'Contato' : 'Oportunidade'}</Badge>
+      {t.reference_kind !== 'none' && <Badge variant="outline" className="text-[10px]">{refLabel[t.reference_kind]}</Badge>}
+      {t.has_two_sides && <Badge variant="outline" className="text-[10px]">Frente/Verso</Badge>}
+      {t.validity_mode === 'derived' && <Badge variant="outline" className="text-[10px]">Vence {t.validity_days}d</Badge>}
+      {t.validity_mode === 'stated' && <Badge variant="outline" className="text-[10px]">Validade no doc</Badge>}
+      {t.is_local && <Badge className="text-[10px]">Local</Badge>}
+    </div>
+  );
+}
+
+export function DocumentsSettings() {
+  const { catalog, loading, setEnabled, createLocal, updateLocal, deleteLocal } = useDocumentCatalog();
+  const { toast } = useToast();
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<LocalTypeInput>(emptyLocal);
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState<CatalogType | null>(null);
+
+  const groups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = q ? catalog.filter((t) => `${t.name} ${t.code}`.toLowerCase().includes(q)) : catalog;
+    const byCat = new Map<string, CatalogType[]>();
+    for (const t of filtered) {
+      const cat = t.category_code || 'OUTROS';
+      if (!byCat.has(cat)) byCat.set(cat, []);
+      byCat.get(cat)!.push(t);
+    }
+    return CATEGORY_ORDER.filter((c) => byCat.has(c)).map((c) => ({ code: c, label: CATEGORY_LABELS[c], items: byCat.get(c)! }));
+  }, [catalog, search]);
+
+  const enabledCount = catalog.filter((t) => t.is_enabled).length;
+
+  const openCreate = () => { setEditingId(null); setForm(emptyLocal); setOpen(true); };
+  const openEdit = (t: CatalogType) => {
+    setEditingId(t.id);
+    setForm({
+      name: t.name, code: t.code, category_code: t.category_code || 'OUTROS', owner_type: t.owner_type,
+      cardinality: t.cardinality, reference_kind: t.reference_kind, validity_mode: t.validity_mode,
+      validity_days: t.validity_days, has_two_sides: t.has_two_sides,
+    });
     setOpen(true);
   };
 
-  const openEdit = (t: DocumentType) => {
-    setEditing(t);
-    setForm({
-      name: t.name,
-      code: t.code,
-      is_required: t.is_required,
-      sort_order: t.sort_order,
-      is_active: t.is_active,
+  const toggle = (t: CatalogType, enabled: boolean) => {
+    setEnabled.mutate({ typeId: t.id, enabled }, {
+      onError: (e: unknown) => toast({ variant: 'destructive', description: (e as Error)?.message || 'Erro ao alterar' }),
     });
-    setOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return;
     const code = form.code.trim() || slugify(form.name);
+    // Coerência com os CHECKs do banco.
+    const input: LocalTypeInput = {
+      ...form,
+      code,
+      validity_days: form.validity_mode === 'derived' ? (form.validity_days ?? 0) : null,
+      has_two_sides: form.cardinality === 'multiple' ? false : form.has_two_sides,
+    };
     setSaving(true);
     try {
-      if (editing) {
-        await update(editing.id, { ...form, code });
+      if (editingId) {
+        await updateLocal.mutateAsync({ id: editingId, input });
         toast({ description: 'Tipo atualizado' });
       } else {
-        await create({ ...form, code });
-        toast({ description: 'Tipo criado' });
+        await createLocal.mutateAsync(input);
+        toast({ description: 'Tipo criado e habilitado' });
       }
       setOpen(false);
-    } catch (e: any) {
-      toast({ variant: 'destructive', description: e.message || 'Erro' });
+    } catch (err) {
+      toast({ variant: 'destructive', description: (err as Error)?.message || 'Erro ao salvar' });
     } finally {
       setSaving(false);
     }
@@ -82,11 +114,11 @@ export function DocumentsSettings() {
   const handleRemove = async () => {
     if (!removing) return;
     try {
-      await softDelete(removing.id);
-      toast({ description: 'Tipo desativado' });
+      await deleteLocal.mutateAsync(removing.id);
+      toast({ description: 'Tipo removido' });
       setRemoving(null);
-    } catch (e: any) {
-      toast({ variant: 'destructive', description: e.message || 'Erro' });
+    } catch (err) {
+      toast({ variant: 'destructive', description: (err as Error)?.message || 'Erro ao remover' });
     }
   };
 
@@ -95,128 +127,131 @@ export function DocumentsSettings() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <div>
-            <CardTitle>Tipos de Documento</CardTitle>
+            <CardTitle>Catálogo de documentos</CardTitle>
             <CardDescription>
-              Configure os documentos exigidos no checklist de cada contato. Aplicado também nas oportunidades.
+              Ligue/desligue quais tipos aparecem no upload desta organização. {enabledCount} habilitado(s).
             </CardDescription>
           </div>
-          <Button onClick={openCreate}>
-            <Plus className="w-4 h-4 mr-1" /> Novo tipo
-          </Button>
+          <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Novo tipo local</Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <Input placeholder="Buscar tipo..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
           {loading ? (
-            <div className="py-8 flex justify-center">
-              <SpinnerGap className="h-6 w-6 animate-spin" />
-            </div>
-          ) : types.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground py-8">
-              Nenhum tipo configurado ainda.
-            </p>
+            <div className="py-8 flex justify-center"><SpinnerGap className="h-6 w-6 animate-spin" /></div>
+          ) : groups.length === 0 ? (
+            <p className="text-center text-sm text-muted-foreground py-8">Nenhum tipo encontrado.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-16">Ordem</TableHead>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Obrigatório</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-24" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {types.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell>{t.sort_order}</TableCell>
-                    <TableCell className="font-medium">{t.name}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{t.code}</TableCell>
-                    <TableCell>{t.is_required ? 'Sim' : 'Não'}</TableCell>
-                    <TableCell>
-                      <Badge variant={t.is_active ? 'default' : 'secondary'}>
-                        {t.is_active ? 'Ativo' : 'Inativo'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(t)}>
-                        <PencilSimple className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setRemoving(t)}>
-                        <TrashSimple className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="space-y-5">
+              {groups.map((g) => (
+                <div key={g.code} className="space-y-1.5">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{g.label}</p>
+                  <div className="border rounded-lg divide-y">
+                    {g.items.map((t) => (
+                      <div key={t.id} className="flex items-center justify-between gap-3 p-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">{t.name}</span>
+                          </div>
+                          <div className="mt-1"><TypeBadges t={t} /></div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {t.is_local && (
+                            <>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)} title="Editar"><PencilSimple className="w-4 h-4" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRemoving(t)} title="Remover"><TrashSimple className="w-4 h-4" /></Button>
+                            </>
+                          )}
+                          <Switch checked={t.is_enabled} onCheckedChange={(v) => toggle(t, v)} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Editar tipo' : 'Novo tipo de documento'}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editingId ? 'Editar tipo local' : 'Novo tipo local'}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Nome</Label>
-              <Input
-                id="name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-              />
+              <Label>Nome</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="code">Code (identificador)</Label>
-              <Input
-                id="code"
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
-                placeholder="ex: cpf, rg, contrato_social"
-              />
-              <p className="text-xs text-muted-foreground">Único por organização. Deixe vazio para gerar a partir do nome.</p>
+              <Label>Code (identificador)</Label>
+              <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="vazio = gera do nome" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="order">Ordem</Label>
-                <Input
-                  id="order"
-                  type="number"
-                  value={form.sort_order}
-                  onChange={(e) => setForm({ ...form, sort_order: parseInt(e.target.value || '0', 10) })}
-                />
+                <Label>Categoria</Label>
+                <Select value={form.category_code} onValueChange={(v) => setForm({ ...form, category_code: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{CATEGORY_ORDER.map((c) => <SelectItem key={c} value={c}>{CATEGORY_LABELS[c]}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
-                <Label>Obrigatório</Label>
-                <div className="flex items-center h-10">
-                  <Switch
-                    checked={form.is_required}
-                    onCheckedChange={(v) => setForm({ ...form, is_required: v })}
-                  />
-                </div>
+                <Label>Dono</Label>
+                <Select value={form.owner_type} onValueChange={(v) => setForm({ ...form, owner_type: v as LocalTypeInput['owner_type'] })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="contact">Contato</SelectItem>
+                    <SelectItem value="opportunity">Oportunidade</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
-            {editing && (
               <div className="space-y-2">
-                <Label>Ativo</Label>
-                <div className="flex items-center h-10">
-                  <Switch
-                    checked={form.is_active}
-                    onCheckedChange={(v) => setForm({ ...form, is_active: v })}
-                  />
+                <Label>Cardinalidade</Label>
+                <Select value={form.cardinality} onValueChange={(v) => setForm({ ...form, cardinality: v as LocalTypeInput['cardinality'] })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Único (substitui/versiona)</SelectItem>
+                    <SelectItem value="multiple">Vários (acumula)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Referência</Label>
+                <Select value={form.reference_kind} onValueChange={(v) => setForm({ ...form, reference_kind: v as LocalTypeInput['reference_kind'] })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhuma</SelectItem>
+                    <SelectItem value="date">Data</SelectItem>
+                    <SelectItem value="month">Competência (mês)</SelectItem>
+                    <SelectItem value="period">Período</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Validade</Label>
+                <Select value={form.validity_mode} onValueChange={(v) => setForm({ ...form, validity_mode: v as LocalTypeInput['validity_mode'] })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Não vence</SelectItem>
+                    <SelectItem value="derived">Vence após N dias da referência</SelectItem>
+                    <SelectItem value="stated">Impressa no documento</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.validity_mode === 'derived' && (
+                <div className="space-y-2">
+                  <Label>Dias de validade</Label>
+                  <Input type="number" min={1} value={form.validity_days ?? ''} onChange={(e) => setForm({ ...form, validity_days: parseInt(e.target.value || '0', 10) })} />
                 </div>
+              )}
+            </div>
+            {form.cardinality === 'single' && (
+              <div className="flex items-center justify-between">
+                <Label>Duas faces (frente/verso)</Label>
+                <Switch checked={form.has_two_sides} onCheckedChange={(v) => setForm({ ...form, has_two_sides: v })} />
               </div>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving && <SpinnerGap className="w-4 h-4 mr-1 animate-spin" />}
-                Salvar
-              </Button>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+              <Button type="submit" disabled={saving}>{saving && <SpinnerGap className="w-4 h-4 mr-1 animate-spin" />}Salvar</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -225,9 +260,9 @@ export function DocumentsSettings() {
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title="Excluir tipo"
-        description={`Excluir o tipo "${removing?.name}"? Documentos já enviados serão mantidos no histórico.`}
-        confirmText="Excluir"
+        title="Remover tipo local"
+        description={`Remover o tipo "${removing?.name}"? Documentos já enviados são mantidos no histórico.`}
+        confirmText="Remover"
         variant="destructive"
         onConfirm={handleRemove}
       />
