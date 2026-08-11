@@ -93,8 +93,10 @@ import { FunnelSimple } from '@phosphor-icons/react';
 import { formatEndpointIdentity, formatEndpointMigrationAuditLine } from '@/lib/whatsappEndpointDisplay';
 
 import { useHiddenThreads } from '@/hooks/useHiddenThreads';
-import { EyeSlash } from '@phosphor-icons/react';
+import { EyeSlash, Paperclip } from '@phosphor-icons/react';
 import { ToastAction } from '@/components/ui/toast';
+import { AttachMediaDialog, type AttachMedia } from '@/components/documents/AttachMediaDialog';
+import { isAttachableMedia } from '@/lib/mediaToFile';
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
@@ -323,6 +325,7 @@ function DesktopMessagesList() {
   
   // Image preview state
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [attachMedia, setAttachMedia] = useState<AttachMedia | null>(null); // "Vincular como documento"
   
   // AI text improvement state
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
@@ -2202,6 +2205,16 @@ function DesktopMessagesList() {
                                             </a>
                                           );
                                         })}
+                                        {/* Triagem inline: vincular mídia recebida como documento (imagem/PDF) */}
+                                        {!isOutbound && isAttachableMedia(message.media_type) && message.media_urls[0] && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setAttachMedia({ url: message.media_urls![0], mediaType: message.media_type, fileName: null })}
+                                            className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                                          >
+                                            <Paperclip className="h-3.5 w-3.5" /> Vincular como documento
+                                          </button>
+                                        )}
                                       </div>
                                     )}
 
@@ -2555,6 +2568,19 @@ function DesktopMessagesList() {
         onSend={handleMediaUpload}
         isLoading={mediaUploading}
       />
+
+      {/* Vincular mídia recebida como documento (triagem inline) */}
+      {attachMedia && selectedThread?.contact_id && organization?.id && (
+        <AttachMediaDialog
+          open={!!attachMedia}
+          onOpenChange={(o) => { if (!o) setAttachMedia(null); }}
+          organizationId={organization.id}
+          contactId={selectedThread.contact_id}
+          contactName={selectedThread.contact_name}
+          opportunities={contactOpportunities}
+          media={attachMedia}
+        />
+      )}
 
       {/* Image Preview Dialog */}
       <Dialog open={!!previewImageUrl} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
