@@ -1,20 +1,39 @@
-import { useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FileText, UploadSimple, DownloadSimple, TrashSimple, Eye, CheckCircle, Warning } from '@phosphor-icons/react';
+import { FileText, DownloadSimple, TrashSimple, Eye } from '@phosphor-icons/react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { useEntityDocuments, docDisplayName, uploadErrorMessage, type DocEntityType, type EntityDoc } from '@/hooks/documents/useEntityDocuments';
+import { DocumentUploadWizard } from '@/components/documents/DocumentUploadWizard';
+import type { ReferenceInput } from '@/lib/documentName';
 
 interface Props {
   contactId?: string | null;
   opportunityId?: string | null;
 }
 
-// Superfície única de Documentos. Na oportunidade, mostra 2 grupos: documentos do contato
-// (herdados) + documentos da própria oportunidade. Um único uploader (livre ou por tipo).
+// Superfície única de Documentos. Na oportunidade: 2 grupos (documentos do contato +
+// documentos da própria oportunidade). Upload por WIZARD (escolhe o tipo ou livre).
+// "Documentos necessários" NÃO é o catálogo — vem da regra de fechamento (Etapa 3).
 export function DocumentsPanel({ contactId, opportunityId }: Props) {
+  // Nome da parte (contato) para gerar o display_name dos documentos.
+  const { data: partyName } = useQuery({
+    queryKey: ['doc-party-name', contactId],
+    enabled: !!contactId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contacts')
+        .select('first_name,last_name,full_name')
+        .eq('id', contactId!)
+        .maybeSingle();
+      if (!data) return null;
+      const fromParts = [data.first_name, data.last_name].filter(Boolean).join(' ').trim();
+      return fromParts || data.full_name || null;
+    },
+  });
+
   if (opportunityId) {
     return (
       <div className="space-y-5">
@@ -24,6 +43,7 @@ export function DocumentsPanel({ contactId, opportunityId }: Props) {
             subtitle="Do contato — visíveis em todas as oportunidades dele."
             entityType="contact"
             entityId={contactId}
+            partyName={partyName}
           />
         )}
         <DocumentsGroup
@@ -31,6 +51,7 @@ export function DocumentsPanel({ contactId, opportunityId }: Props) {
           subtitle="Exclusivos desta oportunidade."
           entityType="opportunity"
           entityId={opportunityId}
+          partyName={partyName}
         />
       </div>
     );
@@ -38,45 +59,11 @@ export function DocumentsPanel({ contactId, opportunityId }: Props) {
   if (contactId) {
     return (
       <div className="space-y-5">
-        <DocumentsGroup title="Documentos" entityType="contact" entityId={contactId} />
+        <DocumentsGroup title="Documentos" entityType="contact" entityId={contactId} partyName={partyName} />
       </div>
     );
   }
   return <p className="text-sm text-muted-foreground">Nenhum vínculo disponível.</p>;
-}
-
-function UploadButton({
-  onFile,
-  label,
-  variant = 'outline',
-  size = 'sm',
-  disabled,
-}: {
-  onFile: (file: File) => void;
-  label: string;
-  variant?: 'outline' | 'default' | 'ghost';
-  size?: 'sm' | 'default';
-  disabled?: boolean;
-}) {
-  const ref = useRef<HTMLInputElement>(null);
-  return (
-    <>
-      <Button type="button" variant={variant} size={size} disabled={disabled} onClick={() => ref.current?.click()}>
-        <UploadSimple className="h-4 w-4 mr-1" />
-        {label}
-      </Button>
-      <input
-        ref={ref}
-        type="file"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onFile(f);
-          e.target.value = '';
-        }}
-      />
-    </>
-  );
 }
 
 function DocumentsGroup({
@@ -84,26 +71,26 @@ function DocumentsGroup({
   subtitle,
   entityType,
   entityId,
+  partyName,
 }: {
   title: string;
   subtitle?: string;
   entityType: DocEntityType;
   entityId: string;
+  partyName?: string | null;
 }) {
   const { documents, types, isLoading, upload, remove, download, getSignedUrl } = useEntityDocuments(entityType, entityId);
   const busy = upload.isPending || remove.isPending;
 
-  // "Necessários" = tipos habilitados cujo dono (owner_type) é esta entidade.
-  const requiredTypes = types.filter((t) => t.owner_type === entityType);
-  const byType = new Map<string, EntityDoc>();
-  for (const d of documents) if (d.document_type_id) byType.set(d.document_type_id, d);
-  const freeDocs = documents.filter((d) => !d.document_type_id);
+  // Tipos que este grupo pode classificar (owner_type = a entidade).
+  const ownerTypes = types.filter((t) => t.owner_type === entityType);
+  const typeName = new Map(types.map((t) => [t.id, t.name] as const));
 
-  const doUpload = (file: File, documentTypeId?: string) =>
-    upload.mutate(
-      { file, documentTypeId },
-      { onError: (e: unknown) => toast.error(uploadErrorMessage(e)), onSuccess: () => toast.success('Arquivo enviado') },
-    );
+  const doUpload = (input: { file: File; documentTypeId?: string | null; reference?: ReferenceInput; partyName?: string | null }) =>
+    upload.mutate(input, {
+      onError: (e: unknown) => toast.error(uploadErrorMessage(e)),
+      onSuccess: () => toast.success('Documento enviado'),
+    });
   const doRemove = (doc: EntityDoc) =>
     remove.mutate(doc, { onError: (e: unknown) => toast.error((e as Error)?.message || 'Falha ao remover') });
   const doPreview = async (doc: EntityDoc) => {
@@ -115,87 +102,41 @@ function DocumentsGroup({
     }
   };
 
-  const fileRow = (doc: EntityDoc) => (
-    <div key={doc.id} className="flex items-center justify-between gap-3 p-3">
-      <button type="button" onClick={() => doPreview(doc)} className="flex items-start gap-3 min-w-0 flex-1 text-left">
-        <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-        <span className="text-sm truncate">{docDisplayName(doc)}</span>
-      </button>
-      <div className="flex items-center gap-1 shrink-0">
-        <Button type="button" variant="ghost" size="sm" onClick={() => doPreview(doc)} title="Ver"><Eye className="h-4 w-4" /></Button>
-        <Button type="button" variant="ghost" size="sm" onClick={() => download(doc)} title="Baixar"><DownloadSimple className="h-4 w-4" /></Button>
-        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => doRemove(doc)} title="Remover"><TrashSimple className="h-4 w-4" /></Button>
-      </div>
-    </div>
-  );
-
   return (
     <Card className="p-4 sm:p-6 space-y-4">
-      <div>
-        <h3 className="text-base font-semibold">{title}</h3>
-        {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold">{title}</h3>
+          {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+        </div>
+        <DocumentUploadWizard types={ownerTypes} partyName={partyName} busy={busy} onUpload={doUpload} />
       </div>
 
       {isLoading ? (
         <Skeleton className="h-24 w-full" />
+      ) : documents.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhum documento enviado.</p>
       ) : (
-        <>
-          {requiredTypes.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Documentos necessários</p>
-              <div className="border rounded-lg divide-y">
-                {requiredTypes.map((t) => {
-                  const doc = byType.get(t.id);
-                  return (
-                    <div key={t.id} className="flex items-center justify-between gap-3 p-3">
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium truncate">{t.name}</span>
-                            {t.is_required && <Badge variant="outline" className="text-[10px]">Obrigatório</Badge>}
-                            {doc ? (
-                              <Badge variant="outline" className="gap-1 text-[10px]"><CheckCircle className="h-3 w-3 text-green-500" />Enviado</Badge>
-                            ) : (
-                              <Badge variant="secondary" className="gap-1 text-[10px]"><Warning className="h-3 w-3" />Pendente</Badge>
-                            )}
-                          </div>
-                          {doc && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{docDisplayName(doc)}</p>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {doc ? (
-                          <>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => doPreview(doc)} title="Ver"><Eye className="h-4 w-4" /></Button>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => download(doc)} title="Baixar"><DownloadSimple className="h-4 w-4" /></Button>
-                            <UploadButton label="Substituir" variant="ghost" disabled={busy} onFile={(f) => doUpload(f, t.id)} />
-                            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => doRemove(doc)} title="Remover"><TrashSimple className="h-4 w-4" /></Button>
-                          </>
-                        ) : (
-                          <UploadButton label="Enviar" disabled={busy} onFile={(f) => doUpload(f, t.id)} />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+        <div className="border rounded-lg divide-y">
+          {documents.map((doc) => (
+            <div key={doc.id} className="flex items-center justify-between gap-3 p-3">
+              <button type="button" onClick={() => doPreview(doc)} className="flex items-start gap-3 min-w-0 flex-1 text-left">
+                <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm truncate">{docDisplayName(doc)}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    {doc.document_type_id ? typeName.get(doc.document_type_id) ?? 'Documento' : 'Arquivo livre'}
+                  </p>
+                </div>
+              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button type="button" variant="ghost" size="sm" onClick={() => doPreview(doc)} title="Ver"><Eye className="h-4 w-4" /></Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => download(doc)} title="Baixar"><DownloadSimple className="h-4 w-4" /></Button>
+                <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => doRemove(doc)} title="Remover"><TrashSimple className="h-4 w-4" /></Button>
               </div>
             </div>
-          )}
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {requiredTypes.length > 0 ? 'Outros arquivos' : 'Arquivos'}
-              </p>
-              <UploadButton label="Adicionar arquivo" disabled={busy} onFile={(f) => doUpload(f)} />
-            </div>
-            {freeDocs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhum arquivo.</p>
-            ) : (
-              <div className="border rounded-lg divide-y">{freeDocs.map(fileRow)}</div>
-            )}
-          </div>
-        </>
+          ))}
+        </div>
       )}
     </Card>
   );

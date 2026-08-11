@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
+import { buildDisplayName, computeExpiresAt, referenceColumns, type ReferenceInput } from '@/lib/documentName';
 
 // Hook único de documentos por entidade (contato OU oportunidade), sobre a tabela `documents`.
 // Uploader único, sem workflow de aprovação.
@@ -55,6 +56,7 @@ export interface DocType {
   validity_mode: 'none' | 'derived' | 'stated';
   validity_days: number | null;
   has_two_sides: boolean;
+  category_code: string | null;
 }
 
 export function useEntityDocuments(entityType: DocEntityType, entityId?: string | null) {
@@ -91,7 +93,7 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
       const { data, error } = await supabase
         .from('organization_document_types')
         .select(
-          'sort_order, document_types!inner(id,code,name,is_required,sort_order,owner_type,cardinality,reference_kind,validity_mode,validity_days,has_two_sides)',
+          'sort_order, document_types!inner(id,code,name,is_required,sort_order,owner_type,cardinality,reference_kind,validity_mode,validity_days,has_two_sides,category_code)',
         )
         .eq('organization_id', orgId!)
         .eq('is_enabled', true)
@@ -127,7 +129,17 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
   // opaco por org). Cardinalidade do tipo dirige a gravação: `single` substitui
   // versionando (RPC atômica), `multiple` acumula (cada arquivo é documento próprio).
   const upload = useMutation({
-    mutationFn: async ({ file, documentTypeId }: { file: File; documentTypeId?: string | null }) => {
+    mutationFn: async ({
+      file,
+      documentTypeId,
+      reference,
+      partyName,
+    }: {
+      file: File;
+      documentTypeId?: string | null;
+      reference?: ReferenceInput;
+      partyName?: string | null;
+    }) => {
       if (!orgId || !entityId || !userProfile?.id) throw new Error('missing context');
       const hash = await sha256Hex(file);
       const path = `${orgId}/${crypto.randomUUID()}`; // opaco — nunca o hash
@@ -139,6 +151,13 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
       const type = documentTypeId ? types.find((t) => t.id === documentTypeId) : null;
       const isSingle = type?.cardinality === 'single';
       const existing = documentTypeId && isSingle ? documents.find((d) => d.document_type_id === documentTypeId) : null;
+
+      // Nome gerado + vencimento + colunas de referência (só quando classificado).
+      const displayName = type
+        ? buildDisplayName({ typeName: type.name, partyName, referenceKind: type.reference_kind, reference }) || null
+        : null;
+      const expiresAt = type ? computeExpiresAt(type.validity_mode, type.validity_days, type.reference_kind, reference) : null;
+      const refCols = referenceColumns(type?.reference_kind ?? 'none', reference);
 
       if (existing) {
         // single ocupado ⟶ nova versão corrente + antigo preservado como substituído.
@@ -152,6 +171,11 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
           _size_bytes: file.size,
           _uploaded_by: userProfile.id,
           _bucket: 'attachments',
+          _reference_date: refCols.reference_date,
+          _reference_month: refCols.reference_month,
+          _reference_end_date: refCols.reference_end_date,
+          _expires_at: expiresAt,
+          _display_name: displayName,
         });
         if (error) throw error;
       } else {
@@ -165,12 +189,17 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
           storage_path: path,
           file_name: file.name,
           original_file_name: file.name,
+          display_name: displayName,
           mime_type: file.type,
           size_bytes: file.size,
           uploaded_by_user_id: userProfile.id,
           document_type_id: documentTypeId ?? null,
           is_single: !!isSingle,
           content_hash: hash,
+          reference_date: refCols.reference_date,
+          reference_month: refCols.reference_month,
+          reference_end_date: refCols.reference_end_date,
+          expires_at: expiresAt,
           version: 1,
           root_document_id: id,
         });
