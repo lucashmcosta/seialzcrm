@@ -11,8 +11,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from '@/hooks/use-toast';
 import type { ClosePolicyMode } from '@/lib/opportunityClose';
-import { defaultRequiredCodes, upsertDefaultRequired } from '@/lib/documentRules';
+import { defaultRequiredCodes, defaultGroups, conditionalSets, buildDocumentRules, type DocumentSet, type RequiredGroup } from '@/lib/documentRules';
 import { useDocumentCatalog, type CatalogType } from '@/hooks/documents/useDocumentCatalog';
+import { AdvancedDocumentRules, type EditorCustomField } from '@/components/settings/AdvancedDocumentRules';
 
 type Policy = {
   mode: ClosePolicyMode;
@@ -32,9 +33,10 @@ export function OpportunityCloseSettings() {
   const { organization } = useOrganization();
   const { catalog, loading: catalogLoading } = useDocumentCatalog();
   const [policy, setPolicy] = useState<Policy>(empty);
-  const [customFields, setCustomFields] = useState<Array<{ id: string; label: string; module: string }>>([]);
+  const [customFields, setCustomFields] = useState<EditorCustomField[]>([]);
   const [reqDocCodes, setReqDocCodes] = useState<string[]>([]);
-  const [rawRules, setRawRules] = useState<unknown>(null);
+  const [docGroups, setDocGroups] = useState<RequiredGroup[]>([]);
+  const [condSets, setCondSets] = useState<DocumentSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const isBrazil = organization?.operating_country_code === 'BR';
@@ -44,14 +46,15 @@ export function OpportunityCloseSettings() {
     setLoading(true);
     Promise.all([
       supabase.from('opportunity_close_policies').select('*').eq('organization_id', organization.id).maybeSingle(),
-      supabase.from('custom_field_definitions').select('id,label,module').eq('organization_id', organization.id).order('order_index'),
+      supabase.from('custom_field_definitions').select('id,label,module,field_type,options').eq('organization_id', organization.id).order('order_index'),
     ]).then(([policyResult, fieldsResult]) => {
       const raw = (policyResult.data as { document_rules?: unknown } | null)?.document_rules ?? null;
       if (policyResult.data) setPolicy({ ...empty, ...(policyResult.data as unknown as Policy) });
       else setPolicy(empty);
-      setRawRules(raw);
       setReqDocCodes(defaultRequiredCodes(raw));
-      setCustomFields((fieldsResult.data || []) as Array<{ id: string; label: string; module: string }>);
+      setDocGroups(defaultGroups(raw));
+      setCondSets(conditionalSets(raw));
+      setCustomFields((fieldsResult.data || []) as EditorCustomField[]);
     }).finally(() => setLoading(false));
   }, [organization?.id]);
 
@@ -66,8 +69,9 @@ export function OpportunityCloseSettings() {
     if (!organization?.id) return;
     setSaving(true);
     const payload = isBrazil ? policy : { ...policy, require_cpf_verified: false, require_complete_address: false };
+    const document_rules = buildDocumentRules({ defaultCodes: reqDocCodes, defaultGroups: docGroups, conditionalSets: condSets });
     const { error } = await supabase.from('opportunity_close_policies').upsert(
-      { organization_id: organization.id, ...payload, document_rules: upsertDefaultRequired(rawRules, reqDocCodes) },
+      { organization_id: organization.id, ...payload, document_rules },
       { onConflict: 'organization_id' },
     );
     setSaving(false);
@@ -118,6 +122,16 @@ export function OpportunityCloseSettings() {
           )}
         </CardContent>
       </Card>
+      {!catalogLoading && (
+        <AdvancedDocumentRules
+          enabledTypes={enabledTypes}
+          customFields={customFields}
+          groups={docGroups}
+          onGroupsChange={setDocGroups}
+          sets={condSets}
+          onSetsChange={setCondSets}
+        />
+      )}
       <Button onClick={save} disabled={saving}>{saving ? <SpinnerGap className="mr-2 animate-spin" /> : <FloppyDisk className="mr-2" />}Salvar</Button>
     </div>
   );
