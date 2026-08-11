@@ -901,7 +901,23 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
     } catch (error: any) {
       console.error('Device initialization error:', error);
-      setErrorMessage(error.message || 'Erro ao inicializar chamada');
+      if (initTimeoutRef.current) {
+        clearTimeout(initTimeoutRef.current);
+        initTimeoutRef.current = null;
+      }
+      // device.register() can reject with a nullish value when the Twilio
+      // WebSocket transport is unavailable; fall back to the last device error.
+      const deviceError = lastDeviceErrorRef.current;
+      const transportFailure =
+        Number(deviceError?.code) === 31009 ||
+        deviceError?.name === 'TransportError';
+      const message = transportFailure
+        ? 'Sem conexão com o serviço de voz. Verifique sua rede e atualize a página.'
+        : toErrorMessageString(
+            error ?? deviceError,
+            'Erro ao inicializar chamada',
+          );
+      setErrorMessage(message);
       setStatus('failed');
       isInitializingRef.current = false;
     }
