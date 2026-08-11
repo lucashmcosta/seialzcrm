@@ -113,6 +113,19 @@ function DocumentsGroup({
     }
   };
 
+  // Ações de arquivo (ver/baixar/excluir) reaproveitadas em qualquer linha.
+  const fileActions = (doc: EntityDoc) => (
+    <div className="flex items-center gap-1 shrink-0">
+      <Button type="button" variant="ghost" size="sm" onClick={() => doPreview(doc)} title="Ver"><Eye className="h-4 w-4" /></Button>
+      <Button type="button" variant="ghost" size="sm" onClick={() => download(doc)} title="Baixar"><DownloadSimple className="h-4 w-4" /></Button>
+      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => doRemove(doc)} title="Remover"><TrashSimple className="h-4 w-4" /></Button>
+    </div>
+  );
+
+  const requiredTypeIds = new Set(groupRequired.map((it) => it.document_type_id!));
+  // Uploads que NÃO são exigidos (arquivo livre ou tipo não exigido) — vão pra "Outros".
+  const otherDocs = documents.filter((d) => !d.document_type_id || !requiredTypeIds.has(d.document_type_id));
+
   return (
     <Card className="p-4 sm:p-6 space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -133,39 +146,54 @@ function DocumentsGroup({
               <div className="border rounded-lg divide-y">
                 {groupRequired.map((it) => {
                   const sent = it.status === 'passed';
-                  // Doc do tipo já existe mas está incompleto (ex.: two_sides só com a frente).
-                  const incomplete = !sent && documents.some((d) => d.document_type_id === it.document_type_id && d.is_incomplete);
+                  const docs = documents.filter((d) => d.document_type_id === it.document_type_id);
+                  const incomplete = !sent && docs.some((d) => d.is_incomplete);
                   const twoSides = ownerTypes.find((t) => t.id === it.document_type_id)?.has_two_sides;
+                  const single = docs.length <= 1;
+                  const doc = docs[0];
                   return (
-                    <div key={it.code} className="flex items-center justify-between gap-3 p-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm font-medium truncate">{it.label}</span>
-                        {incomplete && (
-                          <span className="text-[11px] text-amber-600 truncate">{twoSides ? '· falta o verso' : '· incompleto'}</span>
-                        )}
-                      </div>
-                      {sent ? (
-                        <Badge variant="outline" className="gap-1 text-[10px] shrink-0"><CheckCircle className="h-3 w-3 text-green-500" />Enviado</Badge>
-                      ) : (
-                        <div className="flex items-center gap-2 shrink-0">
-                          {incomplete ? (
+                    <div key={it.code}>
+                      {/* Linha única do documento exigido: status + (Enviar/Completar) + ações do arquivo. */}
+                      <div className="flex items-center justify-between gap-3 p-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm font-medium truncate">{it.label}</span>
+                          {incomplete && (
+                            <span className="text-[11px] text-amber-600 truncate">{twoSides ? '· falta o verso' : '· incompleto'}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {sent ? (
+                            <Badge variant="outline" className="gap-1 text-[10px]"><CheckCircle className="h-3 w-3 text-green-500" />Enviado</Badge>
+                          ) : incomplete ? (
                             <Badge variant="outline" className="gap-1 text-[10px] border-amber-300 text-amber-700"><Warning className="h-3 w-3" />Incompleto</Badge>
                           ) : (
                             <Badge variant="secondary" className="gap-1 text-[10px]"><Warning className="h-3 w-3" />Pendente</Badge>
                           )}
-                          {/* Enviar já amarrado ao tipo exigido — some dúvida sobre "qual tipo escolher". */}
-                          <DocumentUploadWizard
-                            types={ownerTypes}
-                            partyName={partyName}
-                            busy={busy}
-                            onUpload={doUpload}
-                            initialTypeId={it.document_type_id}
-                            lockType
-                            trigger={<Button type="button" size="sm" className="h-7"><UploadSimple className="h-3.5 w-3.5 mr-1" />{incomplete ? 'Completar' : 'Enviar'}</Button>}
-                          />
+                          {!sent && (
+                            <DocumentUploadWizard
+                              types={ownerTypes}
+                              partyName={partyName}
+                              busy={busy}
+                              onUpload={doUpload}
+                              initialTypeId={it.document_type_id}
+                              lockType
+                              trigger={<Button type="button" size="sm" className="h-7"><UploadSimple className="h-3.5 w-3.5 mr-1" />{incomplete ? 'Completar' : 'Enviar'}</Button>}
+                            />
+                          )}
+                          {/* Um único arquivo do tipo → ações inline na própria linha (sem duplicar). */}
+                          {single && doc && fileActions(doc)}
                         </div>
-                      )}
+                      </div>
+                      {/* Vários arquivos do mesmo tipo (cardinalidade múltipla) → lista abaixo. */}
+                      {!single && docs.map((d) => (
+                        <div key={d.id} className="flex items-center justify-between gap-3 py-2 pl-9 pr-3">
+                          <button type="button" onClick={() => doPreview(d)} className="min-w-0 flex-1 text-left">
+                            <span className="text-sm truncate">{docDisplayName(d)}</span>
+                          </button>
+                          {fileActions(d)}
+                        </div>
+                      ))}
                     </div>
                   );
                 })}
@@ -173,15 +201,13 @@ function DocumentsGroup({
             </div>
           )}
 
-          <div className="space-y-2">
-            {groupRequired.length > 0 && (
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Documentos enviados</p>
-            )}
-            {documents.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhum documento enviado.</p>
-            ) : (
+          {otherDocs.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {groupRequired.length > 0 ? 'Outros documentos' : 'Documentos enviados'}
+              </p>
               <div className="border rounded-lg divide-y">
-                {documents.map((doc) => (
+                {otherDocs.map((doc) => (
                   <div key={doc.id} className="flex items-center justify-between gap-3 p-3">
                     <button type="button" onClick={() => doPreview(doc)} className="flex items-start gap-3 min-w-0 flex-1 text-left">
                       <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
@@ -192,16 +218,16 @@ function DocumentsGroup({
                         </p>
                       </div>
                     </button>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => doPreview(doc)} title="Ver"><Eye className="h-4 w-4" /></Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => download(doc)} title="Baixar"><DownloadSimple className="h-4 w-4" /></Button>
-                      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => doRemove(doc)} title="Remover"><TrashSimple className="h-4 w-4" /></Button>
-                    </div>
+                    {fileActions(doc)}
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {groupRequired.length === 0 && otherDocs.length === 0 && (
+            <p className="text-sm text-muted-foreground">Nenhum documento enviado.</p>
+          )}
         </>
       )}
     </Card>
