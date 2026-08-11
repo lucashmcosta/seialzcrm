@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FileText, UploadSimple, DownloadSimple, TrashSimple, Eye, CheckCircle, Warning } from '@phosphor-icons/react';
 import { toast } from 'sonner';
-import { useEntityDocuments, type DocEntityType, type EntityDoc } from '@/hooks/documents/useEntityDocuments';
+import { useEntityDocuments, docDisplayName, uploadErrorMessage, type DocEntityType, type EntityDoc } from '@/hooks/documents/useEntityDocuments';
 
 interface Props {
   contactId?: string | null;
@@ -102,7 +102,7 @@ function DocumentsGroup({
   const doUpload = (file: File, documentTypeId?: string) =>
     upload.mutate(
       { file, documentTypeId },
-      { onError: (e: unknown) => toast.error((e as Error)?.message || 'Falha no upload'), onSuccess: () => toast.success('Arquivo enviado') },
+      { onError: (e: unknown) => toast.error(uploadErrorMessage(e)), onSuccess: () => toast.success('Arquivo enviado') },
     );
   const doRemove = (doc: EntityDoc) =>
     remove.mutate(doc, { onError: (e: unknown) => toast.error((e as Error)?.message || 'Falha ao remover') });
@@ -119,7 +119,7 @@ function DocumentsGroup({
     <div key={doc.id} className="flex items-center justify-between gap-3 p-3">
       <button type="button" onClick={() => doPreview(doc)} className="flex items-start gap-3 min-w-0 flex-1 text-left">
         <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-        <span className="text-sm truncate">{doc.file_name}</span>
+        <span className="text-sm truncate">{docDisplayName(doc)}</span>
       </button>
       <div className="flex items-center gap-1 shrink-0">
         <Button type="button" variant="ghost" size="sm" onClick={() => doPreview(doc)} title="Ver"><Eye className="h-4 w-4" /></Button>
@@ -160,7 +160,7 @@ function DocumentsGroup({
                               <Badge variant="secondary" className="gap-1 text-[10px]"><Warning className="h-3 w-3" />Pendente</Badge>
                             )}
                           </div>
-                          {doc && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{doc.file_name}</p>}
+                          {doc && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{docDisplayName(doc)}</p>}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">

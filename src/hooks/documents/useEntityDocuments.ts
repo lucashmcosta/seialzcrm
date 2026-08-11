@@ -12,12 +12,35 @@ export type DocEntityType = 'contact' | 'opportunity';
 export interface EntityDoc {
   id: string;
   file_name: string;
+  display_name: string | null;
+  original_file_name: string | null;
   mime_type: string | null;
   size_bytes: number | null;
   storage_path: string;
   bucket: string;
   created_at: string;
   document_type_id: string | null;
+}
+
+// Nome de exibição/baixa: display_name gerado (2c) ⟶ original ⟶ file_name.
+export const docDisplayName = (d: EntityDoc): string =>
+  d.display_name || d.original_file_name || d.file_name;
+
+// Mensagem amigável no upload. Duplicata de conteúdo (unique de content_hash)
+// vira texto claro em vez do erro cru do Postgres.
+export function uploadErrorMessage(e: unknown): string {
+  const err = e as { code?: string; message?: string } | null;
+  const msg = err?.message ?? '';
+  if (err?.code === '23505' || /documents_hash_uk|duplicate key/i.test(msg)) {
+    return 'Este documento já foi enviado (mesmo conteúdo).';
+  }
+  return msg || 'Falha no upload';
+}
+
+// SHA-256 (hex) do conteúdo — content_hash / detecção de duplicata.
+async function sha256Hex(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 export interface DocType {
@@ -46,11 +69,12 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
     queryFn: async () => {
       const { data, error } = await supabase
         .from('documents')
-        .select('id,file_name,mime_type,size_bytes,storage_path,bucket,created_at,document_type_id')
+        .select('id,file_name,display_name,original_file_name,mime_type,size_bytes,storage_path,bucket,created_at,document_type_id')
         .eq('organization_id', orgId!)
         .eq('entity_type', entityType)
         .eq('entity_id', entityId!)
         .is('deleted_at', null)
+        .is('superseded_by_id', null)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as EntityDoc[];
@@ -99,34 +123,59 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, entityType, entityId]);
 
-  // Um único caminho de upload: livre (documentTypeId undefined) ou classificado (slot).
+  // Upload único: livre (sem tipo) ou classificado. Storage ANTES do banco (path
+  // opaco por org). Cardinalidade do tipo dirige a gravação: `single` substitui
+  // versionando (RPC atômica), `multiple` acumula (cada arquivo é documento próprio).
   const upload = useMutation({
     mutationFn: async ({ file, documentTypeId }: { file: File; documentTypeId?: string | null }) => {
       if (!orgId || !entityId || !userProfile?.id) throw new Error('missing context');
-      const ext = file.name.split('.').pop();
-      const path = `${orgId}/${entityType}/${entityId}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('attachments').upload(path, file);
+      const hash = await sha256Hex(file);
+      const path = `${orgId}/${crypto.randomUUID()}`; // opaco — nunca o hash
+      const { error: upErr } = await supabase.storage
+        .from('attachments')
+        .upload(path, file, { contentType: file.type || undefined });
       if (upErr) throw upErr;
-      // Slot ocupado: substitui (soft-delete o anterior; respeita o índice único parcial).
-      if (documentTypeId) {
-        const existing = documents.find((d) => d.document_type_id === documentTypeId);
-        if (existing) {
-          await supabase.from('documents').update({ deleted_at: new Date().toISOString() }).eq('id', existing.id);
-        }
+
+      const type = documentTypeId ? types.find((t) => t.id === documentTypeId) : null;
+      const isSingle = type?.cardinality === 'single';
+      const existing = documentTypeId && isSingle ? documents.find((d) => d.document_type_id === documentTypeId) : null;
+
+      if (existing) {
+        // single ocupado ⟶ nova versão corrente + antigo preservado como substituído.
+        const { error } = await supabase.rpc('replace_document_single_v1', {
+          _old_id: existing.id,
+          _content_hash: hash,
+          _storage_path: path,
+          _file_name: file.name,
+          _original_file_name: file.name,
+          _mime_type: file.type,
+          _size_bytes: file.size,
+          _uploaded_by: userProfile.id,
+          _bucket: 'attachments',
+        });
+        if (error) throw error;
+      } else {
+        const id = crypto.randomUUID();
+        const { error } = await supabase.from('documents').insert({
+          id,
+          organization_id: orgId,
+          entity_type: entityType,
+          entity_id: entityId,
+          bucket: 'attachments',
+          storage_path: path,
+          file_name: file.name,
+          original_file_name: file.name,
+          mime_type: file.type,
+          size_bytes: file.size,
+          uploaded_by_user_id: userProfile.id,
+          document_type_id: documentTypeId ?? null,
+          is_single: !!isSingle,
+          content_hash: hash,
+          version: 1,
+          root_document_id: id,
+        });
+        if (error) throw error;
       }
-      const { error: insErr } = await supabase.from('documents').insert({
-        organization_id: orgId,
-        entity_type: entityType,
-        entity_id: entityId,
-        bucket: 'attachments',
-        storage_path: path,
-        file_name: file.name,
-        mime_type: file.type,
-        size_bytes: file.size,
-        uploaded_by_user_id: userProfile.id,
-        document_type_id: documentTypeId ?? null,
-      });
-      if (insErr) throw insErr;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: docsKey }),
   });
@@ -153,7 +202,7 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
     const url = URL.createObjectURL(data);
     const a = document.createElement('a');
     a.href = url;
-    a.download = doc.file_name;
+    a.download = docDisplayName(doc);
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
