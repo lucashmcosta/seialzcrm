@@ -6,11 +6,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
-import { UploadSimple, Check, CaretDown } from '@phosphor-icons/react';
-import type { DocType } from '@/hooks/documents/useEntityDocuments';
+import { UploadSimple, Check, CaretDown, ArrowUp, ArrowDown, X, SpinnerGap } from '@phosphor-icons/react';
+import { toast } from 'sonner';
+import { uploadErrorMessage, type DocType } from '@/hooks/documents/useEntityDocuments';
 import type { ReferenceInput } from '@/lib/documentName';
+import { mergeFilesToPdf, allMergeable, MAX_PAGES } from '@/lib/pdfMerge';
 
-// Rótulos/ordem dos blocos de categoria vivem em código (categoria é agrupamento visual).
 const CATEGORY_LABELS: Record<string, string> = {
   IDENTIFICACAO: 'Identificação', ENDERECO: 'Endereço', REPRESENTACAO: 'Representação', TRIAGEM: 'Triagem',
   CONTRATACAO: 'Contratação', FINANCEIRO: 'Financeiro', PARCERIA: 'Parceria', VINCULO: 'Vínculo',
@@ -20,8 +21,15 @@ const CATEGORY_LABELS: Record<string, string> = {
   PROVA: 'Prova', OUTROS: 'Outros',
 };
 const CATEGORY_ORDER = Object.keys(CATEGORY_LABELS);
-
 const FREE = '__free__';
+
+export type WizardUploadInput = {
+  file: File;
+  documentTypeId?: string | null;
+  reference?: ReferenceInput;
+  partyName?: string | null;
+  isIncomplete?: boolean;
+};
 
 export function DocumentUploadWizard({
   types,
@@ -32,20 +40,22 @@ export function DocumentUploadWizard({
   types: DocType[];
   partyName?: string | null;
   busy?: boolean;
-  onUpload: (input: { file: File; documentTypeId?: string | null; reference?: ReferenceInput; partyName?: string | null }) => void;
+  onUpload: (input: WizardUploadInput) => Promise<unknown>;
 }) {
   const [open, setOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [typeId, setTypeId] = useState<string>(FREE);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [refDate, setRefDate] = useState('');
   const [refMonth, setRefMonth] = useState('');
   const [refEnd, setRefEnd] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const selectedType = typeId === FREE ? null : types.find((t) => t.id === typeId) ?? null;
   const refKind = selectedType?.reference_kind ?? 'none';
+  const isMultiple = selectedType?.cardinality === 'multiple';
+  const twoSides = !!selectedType?.has_two_sides;
 
-  // Agrupa os tipos por categoria, na ordem de CATEGORY_ORDER.
   const groups = useMemo(() => {
     const byCat = new Map<string, DocType[]>();
     for (const t of types) {
@@ -60,16 +70,55 @@ export function DocumentUploadWizard({
     }));
   }, [types]);
 
-  const reset = () => { setTypeId(FREE); setFile(null); setRefDate(''); setRefMonth(''); setRefEnd(''); setPickerOpen(false); };
-
+  const reset = () => {
+    setTypeId(FREE); setFiles([]); setRefDate(''); setRefMonth(''); setRefEnd(''); setPickerOpen(false); setSubmitting(false);
+  };
   const pickType = (id: string) => { setTypeId(id); setPickerOpen(false); };
+  const move = (i: number, dir: -1 | 1) => {
+    setFiles((prev) => {
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  };
+  const removeAt = (i: number) => setFiles((prev) => prev.filter((_, k) => k !== i));
 
-  const confirm = () => {
-    if (!file) return;
+  const hint = isMultiple
+    ? 'Cada arquivo será enviado como um documento.'
+    : twoSides
+      ? `Frente e verso viram 1 PDF (2 páginas). Até ${MAX_PAGES}.`
+      : `Vários arquivos viram 1 PDF (páginas), na ordem abaixo. Até ${MAX_PAGES}.`;
+
+  const confirm = async () => {
+    if (files.length === 0) return;
     const reference: ReferenceInput = { date: refDate || null, month: refMonth || null, endDate: refEnd || null };
-    onUpload({ file, documentTypeId: typeId === FREE ? null : typeId, reference, partyName });
-    setOpen(false);
-    reset();
+    const documentTypeId = typeId === FREE ? null : typeId;
+    setSubmitting(true);
+    try {
+      if (isMultiple) {
+        for (const file of files) {
+          await onUpload({ file, documentTypeId, reference, partyName });
+        }
+      } else {
+        let file = files[0];
+        if (files.length > 1) {
+          if (!allMergeable(files)) throw new Error('Para juntar em 1 PDF, use apenas imagens ou PDFs.');
+          const base = selectedType?.name || 'documento';
+          file = await mergeFilesToPdf(files, `${base}.pdf`);
+        }
+        const isIncomplete = twoSides && files.length < 2;
+        await onUpload({ file, documentTypeId, reference, partyName, isIncomplete });
+      }
+      toast.success(files.length > 1 && !isMultiple ? 'Documento enviado (páginas unidas)' : 'Documento enviado');
+      setOpen(false);
+      reset();
+    } catch (e) {
+      toast.error(uploadErrorMessage(e));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -82,19 +131,14 @@ export function DocumentUploadWizard({
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Enviar documento</DialogTitle>
-          <DialogDescription>Escolha o tipo e o arquivo. Sem tipo = arquivo livre.</DialogDescription>
+          <DialogDescription>Escolha o tipo e os arquivos. Sem tipo = arquivo livre.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Tipo — botão que abre a lista inline (dentro do dialog) e FECHA ao selecionar. */}
+          {/* Tipo */}
           <div className="space-y-1.5">
             <Label className="text-xs">Tipo de documento</Label>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-between font-normal"
-              onClick={() => setPickerOpen((v) => !v)}
-            >
+            <Button type="button" variant="outline" className="w-full justify-between font-normal" onClick={() => setPickerOpen((v) => !v)}>
               <span className="truncate">{selectedType ? selectedType.name : 'Sem tipo (arquivo livre)'}</span>
               <CaretDown className={`h-4 w-4 opacity-50 shrink-0 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} />
             </Button>
@@ -150,18 +194,40 @@ export function DocumentUploadWizard({
             </div>
           )}
 
-          {/* Arquivo */}
+          {/* Arquivos */}
           <div className="space-y-1.5">
-            <Label className="text-xs">Arquivo</Label>
-            <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <Label className="text-xs">Arquivos</Label>
+            <Input type="file" multiple onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
+            <p className="text-[11px] text-muted-foreground">{hint}</p>
+            {files.length > 0 && (
+              <div className="border rounded-lg divide-y mt-1">
+                {files.map((f, i) => (
+                  <div key={`${f.name}-${i}`} className="flex items-center justify-between gap-2 p-2">
+                    <span className="text-xs truncate flex-1">{isMultiple ? '' : `${i + 1}. `}{f.name}</span>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {!isMultiple && (
+                        <>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={i === 0} onClick={() => move(i, -1)} title="Subir"><ArrowUp className="h-3.5 w-3.5" /></Button>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={i === files.length - 1} onClick={() => move(i, 1)} title="Descer"><ArrowDown className="h-3.5 w-3.5" /></Button>
+                        </>
+                      )}
+                      <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => removeAt(i)} title="Remover"><X className="h-3.5 w-3.5" /></Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         <DialogFooter>
           <DialogClose asChild>
-            <Button type="button" variant="ghost" size="sm">Cancelar</Button>
+            <Button type="button" variant="ghost" size="sm" disabled={submitting}>Cancelar</Button>
           </DialogClose>
-          <Button type="button" size="sm" disabled={!file || busy} onClick={confirm}>Enviar</Button>
+          <Button type="button" size="sm" disabled={files.length === 0 || submitting || busy} onClick={confirm}>
+            {submitting && <SpinnerGap className="h-4 w-4 mr-1 animate-spin" />}
+            Enviar
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
