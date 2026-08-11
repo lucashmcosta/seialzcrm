@@ -5377,6 +5377,7 @@ export type Database = {
           id: string
           is_mapping_configured: boolean
           is_monitored: boolean
+          last_seen_leads_count: number | null
           last_sync_error: string | null
           last_sync_status: string | null
           last_synced_at: string | null
@@ -5390,6 +5391,7 @@ export type Database = {
           provider_form_name: string
           provider_metadata: Json
           questions_synced_at: string | null
+          silent_empty_alerted_at: string | null
           total_synced_leads: number
           updated_at: string
         }
@@ -5401,6 +5403,7 @@ export type Database = {
           id?: string
           is_mapping_configured?: boolean
           is_monitored?: boolean
+          last_seen_leads_count?: number | null
           last_sync_error?: string | null
           last_sync_status?: string | null
           last_synced_at?: string | null
@@ -5414,6 +5417,7 @@ export type Database = {
           provider_form_name: string
           provider_metadata?: Json
           questions_synced_at?: string | null
+          silent_empty_alerted_at?: string | null
           total_synced_leads?: number
           updated_at?: string
         }
@@ -5425,6 +5429,7 @@ export type Database = {
           id?: string
           is_mapping_configured?: boolean
           is_monitored?: boolean
+          last_seen_leads_count?: number | null
           last_sync_error?: string | null
           last_sync_status?: string | null
           last_synced_at?: string | null
@@ -5438,6 +5443,7 @@ export type Database = {
           provider_form_name?: string
           provider_metadata?: Json
           questions_synced_at?: string | null
+          silent_empty_alerted_at?: string | null
           total_synced_leads?: number
           updated_at?: string
         }
@@ -8885,6 +8891,60 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_close_snapshots: {
+        Row: {
+          closed_at: string
+          contact_id: string | null
+          created_at: string
+          documents: Json
+          evaluation: Json
+          mode: string | null
+          opportunity_id: string
+          organization_id: string
+          policy_version: number | null
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string
+          contact_id?: string | null
+          created_at?: string
+          documents?: Json
+          evaluation: Json
+          mode?: string | null
+          opportunity_id: string
+          organization_id: string
+          policy_version?: number | null
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string
+          contact_id?: string | null
+          created_at?: string
+          documents?: Json
+          evaluation?: Json
+          mode?: string | null
+          opportunity_id?: string
+          organization_id?: string
+          policy_version?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_close_snapshots_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: true
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_snapshots_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: true
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
           },
         ]
       }
@@ -13324,6 +13384,25 @@ export type Database = {
       release_worker_lease: {
         Args: { p_holder: string; p_name: string }
         Returns: undefined
+      }
+      replace_document_single_v1: {
+        Args: {
+          _bucket?: string
+          _content_hash: string
+          _display_name?: string
+          _expires_at?: string
+          _file_name: string
+          _mime_type: string
+          _old_id: string
+          _original_file_name: string
+          _reference_date?: string
+          _reference_end_date?: string
+          _reference_month?: string
+          _size_bytes: number
+          _storage_path: string
+          _uploaded_by: string
+        }
+        Returns: string
       }
       reserve_telephony_transfer_target: {
         Args: {
