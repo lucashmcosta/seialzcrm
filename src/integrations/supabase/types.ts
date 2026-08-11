@@ -38,6 +38,75 @@ export type Database = {
         }
         Relationships: []
       }
+      _document_submissions_backup_phase1: {
+        Row: {
+          attachment_id: string | null
+          contact_id: string | null
+          created_at: string | null
+          deleted_at: string | null
+          document_type_id: string | null
+          id: string | null
+          organization_id: string | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by_user_id: string | null
+          status: string | null
+          updated_at: string | null
+          uploaded_at: string | null
+          uploaded_by_user_id: string | null
+        }
+        Insert: {
+          attachment_id?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          document_type_id?: string | null
+          id?: string | null
+          organization_id?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+          uploaded_at?: string | null
+          uploaded_by_user_id?: string | null
+        }
+        Update: {
+          attachment_id?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          document_type_id?: string | null
+          id?: string | null
+          organization_id?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+          uploaded_at?: string | null
+          uploaded_by_user_id?: string | null
+        }
+        Relationships: []
+      }
+      _documents_e1_backup: {
+        Row: {
+          document_type_id: string | null
+          entity_type: string | null
+          id: string | null
+        }
+        Insert: {
+          document_type_id?: string | null
+          entity_type?: string | null
+          id?: string | null
+        }
+        Update: {
+          document_type_id?: string | null
+          entity_type?: string | null
+          id?: string | null
+        }
+        Relationships: []
+      }
       activities: {
         Row: {
           activity_type: Database["public"]["Enums"]["activity_type"]
@@ -964,69 +1033,6 @@ export type Database = {
           {
             foreignKeyName: "ai_usage_logs_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      attachments: {
-        Row: {
-          bucket: string
-          created_at: string | null
-          deleted_at: string | null
-          entity_id: string
-          entity_type: string
-          file_name: string
-          id: string
-          is_sample: boolean | null
-          mime_type: string | null
-          organization_id: string
-          size_bytes: number | null
-          storage_path: string
-          uploaded_by_user_id: string | null
-        }
-        Insert: {
-          bucket?: string
-          created_at?: string | null
-          deleted_at?: string | null
-          entity_id: string
-          entity_type: string
-          file_name: string
-          id?: string
-          is_sample?: boolean | null
-          mime_type?: string | null
-          organization_id: string
-          size_bytes?: number | null
-          storage_path: string
-          uploaded_by_user_id?: string | null
-        }
-        Update: {
-          bucket?: string
-          created_at?: string | null
-          deleted_at?: string | null
-          entity_id?: string
-          entity_type?: string
-          file_name?: string
-          id?: string
-          is_sample?: boolean | null
-          mime_type?: string | null
-          organization_id?: string
-          size_bytes?: number | null
-          storage_path?: string
-          uploaded_by_user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "attachments_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "attachments_uploaded_by_user_id_fkey"
-            columns: ["uploaded_by_user_id"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -3032,128 +3038,72 @@ export type Database = {
           },
         ]
       }
-      document_submissions: {
-        Row: {
-          attachment_id: string
-          contact_id: string
-          created_at: string
-          deleted_at: string | null
-          document_type_id: string
-          id: string
-          organization_id: string
-          rejection_reason: string | null
-          reviewed_at: string | null
-          reviewed_by_user_id: string | null
-          status: string
-          updated_at: string
-          uploaded_at: string
-          uploaded_by_user_id: string
-        }
-        Insert: {
-          attachment_id: string
-          contact_id: string
-          created_at?: string
-          deleted_at?: string | null
-          document_type_id: string
-          id?: string
-          organization_id: string
-          rejection_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by_user_id?: string | null
-          status?: string
-          updated_at?: string
-          uploaded_at?: string
-          uploaded_by_user_id: string
-        }
-        Update: {
-          attachment_id?: string
-          contact_id?: string
-          created_at?: string
-          deleted_at?: string | null
-          document_type_id?: string
-          id?: string
-          organization_id?: string
-          rejection_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by_user_id?: string | null
-          status?: string
-          updated_at?: string
-          uploaded_at?: string
-          uploaded_by_user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "document_submissions_attachment_id_fkey"
-            columns: ["attachment_id"]
-            isOneToOne: false
-            referencedRelation: "attachments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "document_submissions_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "contacts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "document_submissions_document_type_id_fkey"
-            columns: ["document_type_id"]
-            isOneToOne: false
-            referencedRelation: "document_types"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "document_submissions_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       document_types: {
         Row: {
+          cardinality: string
+          category_code: string | null
           code: string
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          has_two_sides: boolean
           id: string
           is_active: boolean
           is_required: boolean
+          is_syncable: boolean
           name: string
-          organization_id: string
+          organization_id: string | null
+          owner_type: string
+          reference_kind: string
           sort_order: number
           updated_at: string
           updated_by: string | null
+          validity_days: number | null
+          validity_mode: string
         }
         Insert: {
+          cardinality?: string
+          category_code?: string | null
           code: string
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          has_two_sides?: boolean
           id?: string
           is_active?: boolean
           is_required?: boolean
+          is_syncable?: boolean
           name: string
-          organization_id: string
+          organization_id?: string | null
+          owner_type?: string
+          reference_kind?: string
           sort_order?: number
           updated_at?: string
           updated_by?: string | null
+          validity_days?: number | null
+          validity_mode?: string
         }
         Update: {
+          cardinality?: string
+          category_code?: string | null
           code?: string
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          has_two_sides?: boolean
           id?: string
           is_active?: boolean
           is_required?: boolean
+          is_syncable?: boolean
           name?: string
-          organization_id?: string
+          organization_id?: string | null
+          owner_type?: string
+          reference_kind?: string
           sort_order?: number
           updated_at?: string
           updated_by?: string | null
+          validity_days?: number | null
+          validity_mode?: string
         }
         Relationships: [
           {
@@ -3208,6 +3158,200 @@ export type Database = {
             columns: ["updated_by_admin_id"]
             isOneToOne: false
             referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          both_sides_in_file: boolean
+          bucket: string
+          content_hash: string | null
+          created_at: string | null
+          deleted_at: string | null
+          display_name: string | null
+          document_type_id: string | null
+          entity_id: string
+          entity_type: string
+          expires_at: string | null
+          external_ref: string | null
+          external_source: string | null
+          file_name: string
+          id: string
+          is_current: boolean | null
+          is_incomplete: boolean
+          is_sample: boolean | null
+          is_single: boolean
+          mime_type: string | null
+          organization_id: string
+          original_file_name: string | null
+          reference_date: string | null
+          reference_end_date: string | null
+          reference_month: string | null
+          root_document_id: string | null
+          size_bytes: number | null
+          storage_path: string
+          superseded_at: string | null
+          superseded_by_id: string | null
+          uploaded_by_user_id: string | null
+          version: number
+        }
+        Insert: {
+          both_sides_in_file?: boolean
+          bucket?: string
+          content_hash?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          display_name?: string | null
+          document_type_id?: string | null
+          entity_id: string
+          entity_type: string
+          expires_at?: string | null
+          external_ref?: string | null
+          external_source?: string | null
+          file_name: string
+          id?: string
+          is_current?: boolean | null
+          is_incomplete?: boolean
+          is_sample?: boolean | null
+          is_single?: boolean
+          mime_type?: string | null
+          organization_id: string
+          original_file_name?: string | null
+          reference_date?: string | null
+          reference_end_date?: string | null
+          reference_month?: string | null
+          root_document_id?: string | null
+          size_bytes?: number | null
+          storage_path: string
+          superseded_at?: string | null
+          superseded_by_id?: string | null
+          uploaded_by_user_id?: string | null
+          version?: number
+        }
+        Update: {
+          both_sides_in_file?: boolean
+          bucket?: string
+          content_hash?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          display_name?: string | null
+          document_type_id?: string | null
+          entity_id?: string
+          entity_type?: string
+          expires_at?: string | null
+          external_ref?: string | null
+          external_source?: string | null
+          file_name?: string
+          id?: string
+          is_current?: boolean | null
+          is_incomplete?: boolean
+          is_sample?: boolean | null
+          is_single?: boolean
+          mime_type?: string | null
+          organization_id?: string
+          original_file_name?: string | null
+          reference_date?: string | null
+          reference_end_date?: string | null
+          reference_month?: string | null
+          root_document_id?: string | null
+          size_bytes?: number | null
+          storage_path?: string
+          superseded_at?: string | null
+          superseded_by_id?: string | null
+          uploaded_by_user_id?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_uploaded_by_user_id_fkey"
+            columns: ["uploaded_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_root_document_id_fkey"
+            columns: ["root_document_id"]
+            isOneToOne: false
+            referencedRelation: "attachments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_root_document_id_fkey"
+            columns: ["root_document_id"]
+            isOneToOne: false
+            referencedRelation: "document_submissions"
+            referencedColumns: ["attachment_id"]
+          },
+          {
+            foreignKeyName: "documents_root_document_id_fkey"
+            columns: ["root_document_id"]
+            isOneToOne: false
+            referencedRelation: "document_submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_root_document_id_fkey"
+            columns: ["root_document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_root_document_id_fkey"
+            columns: ["root_document_id"]
+            isOneToOne: false
+            referencedRelation: "documents_current"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "attachments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "document_submissions"
+            referencedColumns: ["attachment_id"]
+          },
+          {
+            foreignKeyName: "documents_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "document_submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "documents_current"
             referencedColumns: ["id"]
           },
         ]
@@ -8675,6 +8819,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          document_rules: Json
           mode: string
           organization_id: string
           require_complete_address: boolean
@@ -8690,6 +8835,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          document_rules?: Json
           mode?: string
           organization_id: string
           require_complete_address?: boolean
@@ -8705,6 +8851,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          document_rules?: Json
           mode?: string
           organization_id?: string
           require_complete_address?: boolean
@@ -8785,6 +8932,48 @@ export type Database = {
           },
           {
             foreignKeyName: "organization_api_keys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_document_types: {
+        Row: {
+          created_at: string
+          document_type_id: string
+          is_enabled: boolean
+          organization_id: string
+          sort_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          document_type_id: string
+          is_enabled?: boolean
+          organization_id: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          document_type_id?: string
+          is_enabled?: boolean
+          organization_id?: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_document_types_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_document_types_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -11732,6 +11921,79 @@ export type Database = {
       }
     }
     Views: {
+      attachments: {
+        Row: {
+          bucket: string | null
+          created_at: string | null
+          deleted_at: string | null
+          document_type_id: string | null
+          entity_id: string | null
+          entity_type: string | null
+          file_name: string | null
+          id: string | null
+          is_sample: boolean | null
+          mime_type: string | null
+          organization_id: string | null
+          size_bytes: number | null
+          storage_path: string | null
+          uploaded_by_user_id: string | null
+        }
+        Insert: {
+          bucket?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          document_type_id?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          file_name?: string | null
+          id?: string | null
+          is_sample?: boolean | null
+          mime_type?: string | null
+          organization_id?: string | null
+          size_bytes?: number | null
+          storage_path?: string | null
+          uploaded_by_user_id?: string | null
+        }
+        Update: {
+          bucket?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          document_type_id?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          file_name?: string | null
+          id?: string | null
+          is_sample?: boolean | null
+          mime_type?: string | null
+          organization_id?: string | null
+          size_bytes?: number | null
+          storage_path?: string | null
+          uploaded_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_uploaded_by_user_id_fkey"
+            columns: ["uploaded_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       best_time_per_contact: {
         Row: {
           best_connect_rate: number | null
@@ -11746,6 +12008,273 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_submissions: {
+        Row: {
+          attachment_id: string | null
+          contact_id: string | null
+          created_at: string | null
+          deleted_at: string | null
+          document_type_id: string | null
+          id: string | null
+          organization_id: string | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by_user_id: string | null
+          status: string | null
+          updated_at: string | null
+          uploaded_at: string | null
+          uploaded_by_user_id: string | null
+        }
+        Insert: {
+          attachment_id?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          document_type_id?: string | null
+          id?: string | null
+          organization_id?: string | null
+          rejection_reason?: never
+          reviewed_at?: never
+          reviewed_by_user_id?: never
+          status?: never
+          updated_at?: string | null
+          uploaded_at?: string | null
+          uploaded_by_user_id?: string | null
+        }
+        Update: {
+          attachment_id?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          document_type_id?: string | null
+          id?: string | null
+          organization_id?: string | null
+          rejection_reason?: never
+          reviewed_at?: never
+          reviewed_by_user_id?: never
+          status?: never
+          updated_at?: string | null
+          uploaded_at?: string | null
+          uploaded_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_uploaded_by_user_id_fkey"
+            columns: ["uploaded_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents_current: {
+        Row: {
+          both_sides_in_file: boolean | null
+          bucket: string | null
+          content_hash: string | null
+          created_at: string | null
+          deleted_at: string | null
+          display_name: string | null
+          document_type_id: string | null
+          entity_id: string | null
+          entity_type: string | null
+          expires_at: string | null
+          external_ref: string | null
+          external_source: string | null
+          file_name: string | null
+          id: string | null
+          is_current: boolean | null
+          is_incomplete: boolean | null
+          is_sample: boolean | null
+          is_single: boolean | null
+          mime_type: string | null
+          organization_id: string | null
+          original_file_name: string | null
+          reference_date: string | null
+          reference_end_date: string | null
+          reference_month: string | null
+          root_document_id: string | null
+          size_bytes: number | null
+          storage_path: string | null
+          superseded_at: string | null
+          superseded_by_id: string | null
+          uploaded_by_user_id: string | null
+          version: number | null
+        }
+        Insert: {
+          both_sides_in_file?: boolean | null
+          bucket?: string | null
+          content_hash?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          display_name?: string | null
+          document_type_id?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          expires_at?: string | null
+          external_ref?: string | null
+          external_source?: string | null
+          file_name?: string | null
+          id?: string | null
+          is_current?: boolean | null
+          is_incomplete?: boolean | null
+          is_sample?: boolean | null
+          is_single?: boolean | null
+          mime_type?: string | null
+          organization_id?: string | null
+          original_file_name?: string | null
+          reference_date?: string | null
+          reference_end_date?: string | null
+          reference_month?: string | null
+          root_document_id?: string | null
+          size_bytes?: number | null
+          storage_path?: string | null
+          superseded_at?: string | null
+          superseded_by_id?: string | null
+          uploaded_by_user_id?: string | null
+          version?: number | null
+        }
+        Update: {
+          both_sides_in_file?: boolean | null
+          bucket?: string | null
+          content_hash?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          display_name?: string | null
+          document_type_id?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          expires_at?: string | null
+          external_ref?: string | null
+          external_source?: string | null
+          file_name?: string | null
+          id?: string | null
+          is_current?: boolean | null
+          is_incomplete?: boolean | null
+          is_sample?: boolean | null
+          is_single?: boolean | null
+          mime_type?: string | null
+          organization_id?: string | null
+          original_file_name?: string | null
+          reference_date?: string | null
+          reference_end_date?: string | null
+          reference_month?: string | null
+          root_document_id?: string | null
+          size_bytes?: number | null
+          storage_path?: string | null
+          superseded_at?: string | null
+          superseded_by_id?: string | null
+          uploaded_by_user_id?: string | null
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_uploaded_by_user_id_fkey"
+            columns: ["uploaded_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_root_document_id_fkey"
+            columns: ["root_document_id"]
+            isOneToOne: false
+            referencedRelation: "attachments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_root_document_id_fkey"
+            columns: ["root_document_id"]
+            isOneToOne: false
+            referencedRelation: "document_submissions"
+            referencedColumns: ["attachment_id"]
+          },
+          {
+            foreignKeyName: "documents_root_document_id_fkey"
+            columns: ["root_document_id"]
+            isOneToOne: false
+            referencedRelation: "document_submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_root_document_id_fkey"
+            columns: ["root_document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_root_document_id_fkey"
+            columns: ["root_document_id"]
+            isOneToOne: false
+            referencedRelation: "documents_current"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "attachments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "document_submissions"
+            referencedColumns: ["attachment_id"]
+          },
+          {
+            foreignKeyName: "documents_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "document_submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "documents_current"
             referencedColumns: ["id"]
           },
         ]
