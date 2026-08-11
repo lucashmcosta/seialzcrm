@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FloppyDisk, Info, SpinnerGap } from '@phosphor-icons/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from '@/hooks/use-toast';
 import type { ClosePolicyMode } from '@/lib/opportunityClose';
-import { buildDocumentRules, requiredTypeIds } from '@/lib/documentRules';
+import { defaultRequiredCodes, upsertDefaultRequired } from '@/lib/documentRules';
+import { useDocumentCatalog, type CatalogType } from '@/hooks/documents/useDocumentCatalog';
 
 type Policy = {
   mode: ClosePolicyMode;
@@ -29,10 +30,11 @@ const opportunityFields = [{ id: 'title', label: 'Título' }, { id: 'amount', la
 
 export function OpportunityCloseSettings() {
   const { organization } = useOrganization();
+  const { catalog, loading: catalogLoading } = useDocumentCatalog();
   const [policy, setPolicy] = useState<Policy>(empty);
   const [customFields, setCustomFields] = useState<Array<{ id: string; label: string; module: string }>>([]);
-  const [docTypes, setDocTypes] = useState<Array<{ id: string; name: string }>>([]);
-  const [reqDocIds, setReqDocIds] = useState<string[]>([]);
+  const [reqDocCodes, setReqDocCodes] = useState<string[]>([]);
+  const [rawRules, setRawRules] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const isBrazil = organization?.operating_country_code === 'BR';
@@ -43,33 +45,58 @@ export function OpportunityCloseSettings() {
     Promise.all([
       supabase.from('opportunity_close_policies').select('*').eq('organization_id', organization.id).maybeSingle(),
       supabase.from('custom_field_definitions').select('id,label,module').eq('organization_id', organization.id).order('order_index'),
-      supabase.from('document_types').select('id,name').eq('organization_id', organization.id).eq('is_active', true).is('deleted_at', null).order('sort_order').order('name'),
-    ]).then(([policyResult, fieldsResult, typesResult]) => {
+    ]).then(([policyResult, fieldsResult]) => {
+      const raw = (policyResult.data as { document_rules?: unknown } | null)?.document_rules ?? null;
       if (policyResult.data) setPolicy({ ...empty, ...(policyResult.data as unknown as Policy) });
       else setPolicy(empty);
-      setReqDocIds(requiredTypeIds((policyResult.data as { document_rules?: unknown } | null)?.document_rules));
+      setRawRules(raw);
+      setReqDocCodes(defaultRequiredCodes(raw));
       setCustomFields((fieldsResult.data || []) as Array<{ id: string; label: string; module: string }>);
-      setDocTypes((typesResult.data || []) as Array<{ id: string; name: string }>);
     }).finally(() => setLoading(false));
   }, [organization?.id]);
 
+  const enabledTypes = useMemo(() => catalog.filter((t) => t.is_enabled), [catalog]);
+  const contactTypes = useMemo(() => enabledTypes.filter((t) => t.owner_type === 'contact').sort((a, b) => a.name.localeCompare(b.name)), [enabledTypes]);
+  const opportunityTypes = useMemo(() => enabledTypes.filter((t) => t.owner_type === 'opportunity').sort((a, b) => a.name.localeCompare(b.name)), [enabledTypes]);
+
   const toggleArray = (key: keyof Policy, value: string, checked: boolean) => setPolicy((current) => ({ ...current, [key]: checked ? [...(current[key] as string[]), value] : (current[key] as string[]).filter((item) => item !== value) }));
+  const toggleCode = (code: string, checked: boolean) => setReqDocCodes((cur) => (checked ? Array.from(new Set([...cur, code])) : cur.filter((c) => c !== code)));
 
   const save = async () => {
     if (!organization?.id) return;
     setSaving(true);
     const payload = isBrazil ? policy : { ...policy, require_cpf_verified: false, require_complete_address: false };
-    const { error } = await supabase.from('opportunity_close_policies').upsert({ organization_id: organization.id, ...payload, document_rules: buildDocumentRules(reqDocIds) }, { onConflict: 'organization_id' });
+    const { error } = await supabase.from('opportunity_close_policies').upsert(
+      { organization_id: organization.id, ...payload, document_rules: upsertDefaultRequired(rawRules, reqDocCodes) },
+      { onConflict: 'organization_id' },
+    );
     setSaving(false);
-    toast(error ? { title: 'Não foi possível salvar', description: error.message, variant: 'destructive' } : { title: 'Regras de fechamento salvas' });
+    toast(error ? { title: 'Não foi possível salvar', description: error.message, variant: 'destructive' } : { title: 'Configurações de oportunidade salvas' });
   };
 
   if (loading) return <div className="flex justify-center py-12"><SpinnerGap className="h-6 w-6 animate-spin" /></div>;
   const renderField = (id: string, label: string, key: keyof Policy) => <label key={id} className="flex items-center gap-3 rounded-md border p-3 text-sm"><Checkbox checked={(policy[key] as string[]).includes(id)} onCheckedChange={(checked) => toggleArray(key, id, checked === true)} /><span>{label}</span></label>;
+  const docColumn = (label: string, list: CatalogType[]) => (
+    <div className="space-y-2">
+      <p className="text-sm font-medium">{label}</p>
+      <div className="border rounded-md divide-y max-h-64 overflow-y-auto">
+        {list.length === 0 ? (
+          <p className="text-xs text-muted-foreground p-3">Nenhum tipo habilitado.</p>
+        ) : (
+          list.map((t) => (
+            <label key={t.id} className="flex items-center gap-3 p-2.5 text-sm">
+              <Checkbox checked={reqDocCodes.includes(t.code)} onCheckedChange={(c) => toggleCode(t.code, c === true)} />
+              <span className="truncate">{t.name}</span>
+            </label>
+          ))
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      <Card><CardHeader><CardTitle>Regras de fechamento</CardTitle><CardDescription>Defina os dados necessários para mover uma oportunidade para Ganho nesta organização.</CardDescription></CardHeader><CardContent className="space-y-5">
+      <Card><CardHeader><CardTitle>Configurações de oportunidade</CardTitle><CardDescription>Regras de fechamento (ganho): o que é obrigatório para mover uma oportunidade para Ganho nesta organização.</CardDescription></CardHeader><CardContent className="space-y-5">
         <div className="space-y-2"><Label>Modo de execução</Label><Select value={policy.mode} onValueChange={(mode: ClosePolicyMode) => setPolicy({ ...policy, mode })}><SelectTrigger className="max-w-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="off">Desligado</SelectItem><SelectItem value="monitor">Monitorar sem bloquear</SelectItem><SelectItem value="enforce">Aplicar e bloquear</SelectItem></SelectContent></Select></div>
         {policy.mode === 'monitor' && <Alert><Info /><AlertTitle>Monitoramento seguro</AlertTitle><AlertDescription>As pendências serão exibidas e auditadas, mas o ganho continuará permitido.</AlertDescription></Alert>}
         {policy.mode === 'enforce' && <Alert variant="destructive"><Info /><AlertTitle>Bloqueio ativo</AlertTitle><AlertDescription>Oportunidades incompletas não poderão ser ganhas nem gerar o evento para integrações.</AlertDescription></Alert>}
@@ -79,8 +106,19 @@ export function OpportunityCloseSettings() {
       </CardContent></Card>
       <Card><CardHeader><CardTitle className="text-base">Campos nativos obrigatórios</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-2"><div className="space-y-2"><p className="text-sm font-medium">Contato</p>{contactFields.map((field) => renderField(field.id, field.label, 'required_contact_fields'))}</div><div className="space-y-2"><p className="text-sm font-medium">Oportunidade</p>{opportunityFields.map((field) => renderField(field.id, field.label, 'required_opportunity_fields'))}</div></CardContent></Card>
       {customFields.length > 0 && <Card><CardHeader><CardTitle className="text-base">Campos personalizados obrigatórios</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-2">{customFields.map((field) => renderField(field.id, field.label, field.module === 'contacts' ? 'required_contact_custom_field_ids' : 'required_opportunity_custom_field_ids'))}</CardContent></Card>}
-      {docTypes.length > 0 && <Card><CardHeader><CardTitle className="text-base">Documentos obrigatórios para fechar</CardTitle><CardDescription>Tipos de documento que precisam existir no contato para ganhar a oportunidade.</CardDescription></CardHeader><CardContent className="grid gap-3 md:grid-cols-2">{docTypes.map((t) => <label key={t.id} className="flex items-center gap-3 rounded-md border p-3 text-sm"><Checkbox checked={reqDocIds.includes(t.id)} onCheckedChange={(checked) => setReqDocIds((cur) => (checked === true ? [...cur, t.id] : cur.filter((x) => x !== t.id)))} /><span>{t.name}</span></label>)}</CardContent></Card>}
-      <Button onClick={save} disabled={saving}>{saving ? <SpinnerGap className="mr-2 animate-spin" /> : <FloppyDisk className="mr-2" />}Salvar regras</Button>
+      <Card>
+        <CardHeader><CardTitle className="text-base">Documentos exigidos para fechar</CardTitle><CardDescription>Documentos (dos tipos habilitados) que precisam existir — corrente e completo — para ganhar. Contato: exigido no contato; Oportunidade: na própria oportunidade.</CardDescription></CardHeader>
+        <CardContent className="space-y-3">
+          {policy.mode === 'enforce' && reqDocCodes.length > 0 && <Alert variant="destructive"><Info /><AlertDescription>Em "Aplicar e bloquear", oportunidades sem estes documentos não poderão ser ganhas.</AlertDescription></Alert>}
+          {catalogLoading ? <div className="py-4 flex justify-center"><SpinnerGap className="h-5 w-5 animate-spin" /></div> : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {docColumn('Documentos do contato', contactTypes)}
+              {docColumn('Documentos da oportunidade', opportunityTypes)}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      <Button onClick={save} disabled={saving}>{saving ? <SpinnerGap className="mr-2 animate-spin" /> : <FloppyDisk className="mr-2" />}Salvar</Button>
     </div>
   );
 }
