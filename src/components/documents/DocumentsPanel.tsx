@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FileText, UploadSimple, DownloadSimple, TrashSimple, Eye, CheckCircle, Warning } from '@phosphor-icons/react';
 import { toast } from 'sonner';
-import { useEntityDocuments, docDisplayName, type DocEntityType, type EntityDoc } from '@/hooks/documents/useEntityDocuments';
+import { useEntityDocuments, docDisplayName, uploadErrorMessage, type DocEntityType, type EntityDoc } from '@/hooks/documents/useEntityDocuments';
 
 interface Props {
   contactId?: string | null;
@@ -102,7 +102,7 @@ function DocumentsGroup({
   const doUpload = (file: File, documentTypeId?: string) =>
     upload.mutate(
       { file, documentTypeId },
-      { onError: (e: unknown) => toast.error((e as Error)?.message || 'Falha no upload'), onSuccess: () => toast.success('Arquivo enviado') },
+      { onError: (e: unknown) => toast.error(uploadErrorMessage(e)), onSuccess: () => toast.success('Arquivo enviado') },
     );
   const doRemove = (doc: EntityDoc) =>
     remove.mutate(doc, { onError: (e: unknown) => toast.error((e as Error)?.message || 'Falha ao remover') });

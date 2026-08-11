@@ -26,6 +26,17 @@ export interface EntityDoc {
 export const docDisplayName = (d: EntityDoc): string =>
   d.display_name || d.original_file_name || d.file_name;
 
+// Mensagem amigável no upload. Duplicata de conteúdo (unique de content_hash)
+// vira texto claro em vez do erro cru do Postgres.
+export function uploadErrorMessage(e: unknown): string {
+  const err = e as { code?: string; message?: string } | null;
+  const msg = err?.message ?? '';
+  if (err?.code === '23505' || /documents_hash_uk|duplicate key/i.test(msg)) {
+    return 'Este documento já foi enviado (mesmo conteúdo).';
+  }
+  return msg || 'Falha no upload';
+}
+
 // SHA-256 (hex) do conteúdo — content_hash / detecção de duplicata.
 async function sha256Hex(file: File): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
