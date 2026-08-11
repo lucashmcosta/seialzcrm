@@ -2217,6 +2217,14 @@ function DesktopMessagesList() {
                                         {!isOutbound && isAttachableMedia(message.media_type) && message.media_urls[0] && (() => {
                                           const thisUrl = message.media_urls![0];
                                           const already = attach?.pages.some((p) => p.url === thisUrl);
+                                          const linkedInfo = (message.metadata as any)?.attached_document;
+                                          if (!attachPicking && linkedInfo) {
+                                            return (
+                                              <span className="mt-1 inline-flex items-center gap-1 text-xs text-emerald-600">
+                                                <Check className="h-3.5 w-3.5" /> Vinculado{linkedInfo.type_name ? ` · ${linkedInfo.type_name}` : ''}
+                                              </span>
+                                            );
+                                          }
                                           if (attachPicking) {
                                             return (
                                               <button
@@ -2604,6 +2612,16 @@ function DesktopMessagesList() {
           pages={attach.pages}
           onPagesChange={(p) => setAttach({ pages: p })}
           onPickMore={() => setAttachPicking(true)}
+          onAttached={async (info) => {
+            const urls = new Set(info.sourceUrls);
+            const linked = { type_name: info.typeName, at: new Date().toISOString() };
+            const targets = (messages as any[]).filter((m) => m.media_urls?.[0] && urls.has(m.media_urls[0]));
+            // Selo imediato (otimista) + persiste em messages.metadata.attached_document
+            setMessages((prev) => prev.map((m: any) => (targets.some((t) => t.id === m.id) ? { ...m, metadata: { ...(m.metadata || {}), attached_document: linked } } : m)));
+            await Promise.all(targets.map((m: any) =>
+              supabase.from('messages').update({ metadata: { ...(m.metadata || {}), attached_document: linked } }).eq('id', m.id),
+            ));
+          }}
         />
       )}
       {/* Barra do modo de seleção: escolher a próxima página vendo a foto na conversa */}

@@ -41,7 +41,7 @@ export function AttachMediaDialog({
   pages: AttachMedia[];
   onPagesChange: (p: AttachMedia[]) => void;
   onPickMore: () => void; // pai entra em "modo seleção" na conversa
-  onAttached?: (info: { documentTypeId: string; ownerType: 'contact' | 'opportunity'; targetId: string }) => void;
+  onAttached?: (info: { documentTypeId: string; typeName: string; ownerType: 'contact' | 'opportunity'; targetId: string; sourceUrls: string[] }) => void;
 }) {
   const [typeId, setTypeId] = useState<string>('');
   const [oppId, setOppId] = useState<string>(opportunities[0]?.id ?? '');
@@ -85,7 +85,13 @@ export function AttachMediaDialog({
       const up = owner === 'opportunity' ? oppDocs.upload : contactDocs.upload;
       await up.mutateAsync({ file, documentTypeId: typeId, partyName: contactName, isIncomplete });
       toast.success(pages.length > 1 ? 'Documento vinculado (páginas unidas)' : 'Documento vinculado');
-      onAttached?.({ documentTypeId: typeId, ownerType: owner, targetId: owner === 'opportunity' ? oppId : contactId });
+      onAttached?.({
+        documentTypeId: typeId,
+        typeName: selectedType.name,
+        ownerType: owner,
+        targetId: owner === 'opportunity' ? oppId : contactId,
+        sourceUrls: pages.map((p) => p.url),
+      });
       onOpenChange(false);
     } catch (e) {
       toast.error(uploadErrorMessage(e));
