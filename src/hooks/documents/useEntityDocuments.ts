@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 
-// Hook único de documentos por entidade (contato OU oportunidade), sobre a tabela `documents`
-// (ex-`attachments`). Substitui useContactDocuments + os 2 uploaders. Sem workflow de aprovação.
+// Hook único de documentos por entidade (contato OU oportunidade), sobre a tabela `documents`.
+// Uploader único, sem workflow de aprovação.
 // "Necessário" é derivado (document_types × documents com aquele tipo) — não há tabela de slot.
 
 export type DocEntityType = 'contact' | 'opportunity';

@@ -34,4 +34,4 @@ Padrão `organization_id = ANY(current_user_org_ids())` — 5 policies.
 
 ## Hooks
 - `src/hooks/contacts/useContactConversationsByContext.ts`.
-- `src/hooks/documents/useContactDocuments.ts`.
+- `src/hooks/documents/useEntityDocuments.ts`.
