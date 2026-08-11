@@ -316,7 +316,7 @@ Deno.serve(async (req) => {
   }
 
   // --- Create attachment record ---
-  const { error: attachError } = await supabase.from("attachments").insert({
+  const { error: attachError } = await supabase.from("documents").insert({
     organization_id: orgId,
     entity_type: "opportunity",
     entity_id: opportunity.id,
