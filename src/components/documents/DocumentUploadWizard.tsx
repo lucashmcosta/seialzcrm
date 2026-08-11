@@ -6,7 +6,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
-import { UploadSimple, Check } from '@phosphor-icons/react';
+import { UploadSimple, Check, CaretDown } from '@phosphor-icons/react';
 import type { DocType } from '@/hooks/documents/useEntityDocuments';
 import type { ReferenceInput } from '@/lib/documentName';
 
@@ -35,6 +35,7 @@ export function DocumentUploadWizard({
   onUpload: (input: { file: File; documentTypeId?: string | null; reference?: ReferenceInput; partyName?: string | null }) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [typeId, setTypeId] = useState<string>(FREE);
   const [file, setFile] = useState<File | null>(null);
   const [refDate, setRefDate] = useState('');
@@ -59,7 +60,9 @@ export function DocumentUploadWizard({
     }));
   }, [types]);
 
-  const reset = () => { setTypeId(FREE); setFile(null); setRefDate(''); setRefMonth(''); setRefEnd(''); };
+  const reset = () => { setTypeId(FREE); setFile(null); setRefDate(''); setRefMonth(''); setRefEnd(''); setPickerOpen(false); };
+
+  const pickType = (id: string) => { setTypeId(id); setPickerOpen(false); };
 
   const confirm = () => {
     if (!file) return;
@@ -83,34 +86,42 @@ export function DocumentUploadWizard({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Tipo — busca + lista rolável DENTRO do dialog (sem dropdown flutuante). */}
+          {/* Tipo — botão que abre a lista inline (dentro do dialog) e FECHA ao selecionar. */}
           <div className="space-y-1.5">
             <Label className="text-xs">Tipo de documento</Label>
-            <Command className="rounded-md border">
-              <CommandInput placeholder="Buscar tipo..." />
-              <CommandList className="max-h-56">
-                <CommandEmpty>Nenhum tipo encontrado.</CommandEmpty>
-                <CommandGroup heading="Livre">
-                  <CommandItem value="Sem tipo arquivo livre" onSelect={() => setTypeId(FREE)}>
-                    <Check className={`h-4 w-4 mr-2 ${typeId === FREE ? 'opacity-100' : 'opacity-0'}`} />
-                    Sem tipo (arquivo livre)
-                  </CommandItem>
-                </CommandGroup>
-                {groups.map((g) => (
-                  <CommandGroup key={g.code} heading={g.label}>
-                    {g.items.map((t) => (
-                      <CommandItem key={t.id} value={`${t.name} ${t.code}`} onSelect={() => setTypeId(t.id)}>
-                        <Check className={`h-4 w-4 mr-2 ${typeId === t.id ? 'opacity-100' : 'opacity-0'}`} />
-                        {t.name}
-                      </CommandItem>
-                    ))}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-between font-normal"
+              onClick={() => setPickerOpen((v) => !v)}
+            >
+              <span className="truncate">{selectedType ? selectedType.name : 'Sem tipo (arquivo livre)'}</span>
+              <CaretDown className={`h-4 w-4 opacity-50 shrink-0 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} />
+            </Button>
+            {pickerOpen && (
+              <Command className="rounded-md border">
+                <CommandInput placeholder="Buscar tipo..." />
+                <CommandList className="max-h-56">
+                  <CommandEmpty>Nenhum tipo encontrado.</CommandEmpty>
+                  <CommandGroup heading="Livre">
+                    <CommandItem value="Sem tipo arquivo livre" onSelect={() => pickType(FREE)}>
+                      <Check className={`h-4 w-4 mr-2 ${typeId === FREE ? 'opacity-100' : 'opacity-0'}`} />
+                      Sem tipo (arquivo livre)
+                    </CommandItem>
                   </CommandGroup>
-                ))}
-              </CommandList>
-            </Command>
-            <p className="text-[11px] text-muted-foreground">
-              Selecionado: <span className="font-medium">{selectedType ? selectedType.name : 'Sem tipo (arquivo livre)'}</span>
-            </p>
+                  {groups.map((g) => (
+                    <CommandGroup key={g.code} heading={g.label}>
+                      {g.items.map((t) => (
+                        <CommandItem key={t.id} value={`${t.name} ${t.code}`} onSelect={() => pickType(t.id)}>
+                          <Check className={`h-4 w-4 mr-2 ${typeId === t.id ? 'opacity-100' : 'opacity-0'}`} />
+                          {t.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  ))}
+                </CommandList>
+              </Command>
+            )}
           </div>
 
           {/* Referência condicional */}
