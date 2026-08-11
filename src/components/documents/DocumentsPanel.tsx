@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FileText, DownloadSimple, TrashSimple, Eye, CheckCircle, Warning } from '@phosphor-icons/react';
+import { FileText, DownloadSimple, TrashSimple, Eye, CheckCircle, Warning, UploadSimple } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -142,7 +142,19 @@ function DocumentsGroup({
                       {sent ? (
                         <Badge variant="outline" className="gap-1 text-[10px] shrink-0"><CheckCircle className="h-3 w-3 text-green-500" />Enviado</Badge>
                       ) : (
-                        <Badge variant="secondary" className="gap-1 text-[10px] shrink-0"><Warning className="h-3 w-3" />Pendente</Badge>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="secondary" className="gap-1 text-[10px]"><Warning className="h-3 w-3" />Pendente</Badge>
+                          {/* Enviar já amarrado ao tipo exigido — some dúvida sobre "qual tipo escolher". */}
+                          <DocumentUploadWizard
+                            types={ownerTypes}
+                            partyName={partyName}
+                            busy={busy}
+                            onUpload={doUpload}
+                            initialTypeId={it.document_type_id}
+                            lockType
+                            trigger={<Button type="button" size="sm" className="h-7"><UploadSimple className="h-3.5 w-3.5 mr-1" />Enviar</Button>}
+                          />
+                        </div>
                       )}
                     </div>
                   );

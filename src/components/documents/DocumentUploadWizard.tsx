@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,15 +36,24 @@ export function DocumentUploadWizard({
   partyName,
   busy,
   onUpload,
+  initialTypeId,
+  lockType,
+  trigger,
 }: {
   types: DocType[];
   partyName?: string | null;
   busy?: boolean;
   onUpload: (input: WizardUploadInput) => Promise<unknown>;
+  // Abre já com um tipo selecionado (ex.: a partir de um slot "Documentos necessários").
+  initialTypeId?: string | null;
+  // Trava o tipo (esconde o seletor) — o upload fica garantidamente amarrado ao tipo pedido.
+  lockType?: boolean;
+  // Trigger customizado (ex.: botão "Enviar" na linha do necessário). Sem isso, usa o botão padrão.
+  trigger?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [typeId, setTypeId] = useState<string>(FREE);
+  const [typeId, setTypeId] = useState<string>(initialTypeId ?? FREE);
   const [files, setFiles] = useState<File[]>([]);
   const [refDate, setRefDate] = useState('');
   const [refMonth, setRefMonth] = useState('');
@@ -71,7 +80,7 @@ export function DocumentUploadWizard({
   }, [types]);
 
   const reset = () => {
-    setTypeId(FREE); setFiles([]); setRefDate(''); setRefMonth(''); setRefEnd(''); setPickerOpen(false); setSubmitting(false);
+    setTypeId(initialTypeId ?? FREE); setFiles([]); setRefDate(''); setRefMonth(''); setRefEnd(''); setPickerOpen(false); setSubmitting(false);
   };
   const pickType = (id: string) => { setTypeId(id); setPickerOpen(false); };
   const move = (i: number, dir: -1 | 1) => {
@@ -124,20 +133,28 @@ export function DocumentUploadWizard({
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm" disabled={busy}>
-          <UploadSimple className="h-4 w-4 mr-1" /> Enviar documento
-        </Button>
+        {trigger ?? (
+          <Button type="button" variant="outline" size="sm" disabled={busy}>
+            <UploadSimple className="h-4 w-4 mr-1" /> Enviar documento
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Enviar documento</DialogTitle>
-          <DialogDescription>Escolha o tipo e os arquivos. Sem tipo = arquivo livre.</DialogDescription>
+          <DialogTitle>{lockType && selectedType ? `Enviar ${selectedType.name}` : 'Enviar documento'}</DialogTitle>
+          <DialogDescription>
+            {lockType && selectedType ? 'Documento exigido para o fechamento.' : 'Escolha o tipo e os arquivos. Sem tipo = arquivo livre.'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Tipo */}
+          {/* Tipo — travado quando veio de um slot exigido */}
           <div className="space-y-1.5">
             <Label className="text-xs">Tipo de documento</Label>
+            {lockType && selectedType ? (
+              <div className="w-full rounded-md border bg-muted/40 px-3 py-2 text-sm">{selectedType.name}</div>
+            ) : (
+            <>
             <Button type="button" variant="outline" className="w-full justify-between font-normal" onClick={() => setPickerOpen((v) => !v)}>
               <span className="truncate">{selectedType ? selectedType.name : 'Sem tipo (arquivo livre)'}</span>
               <CaretDown className={`h-4 w-4 opacity-50 shrink-0 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} />
@@ -165,6 +182,8 @@ export function DocumentUploadWizard({
                   ))}
                 </CommandList>
               </Command>
+            )}
+            </>
             )}
           </div>
 
