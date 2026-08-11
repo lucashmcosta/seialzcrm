@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useEntityDocuments, docDisplayName, type DocEntityType, type EntityDoc } from '@/hooks/documents/useEntityDocuments';
 import { DocumentUploadWizard } from '@/components/documents/DocumentUploadWizard';
+import { CloseSnapshotCard } from '@/components/documents/CloseSnapshotCard';
 import { evaluateOpportunityClose, type OpportunityCloseItem } from '@/lib/opportunityClose';
 import type { ReferenceInput } from '@/lib/documentName';
 
@@ -45,6 +46,7 @@ export function DocumentsPanel({ contactId, opportunityId }: Props) {
   if (opportunityId) {
     return (
       <div className="space-y-5">
+        <CloseSnapshotCard opportunityId={opportunityId} />
         {contactId && (
           <DocumentsGroup
             title="Documentos do contato"
