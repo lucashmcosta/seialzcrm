@@ -683,7 +683,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
         callFinalizedRef.current = true;
         lastProcessedStatusRef.current = 'failed';
         clearStateTimeout();
-        setErrorMessage(error?.message || 'Erro na chamada');
+        setErrorMessage(toErrorMessageString(error, 'Erro na chamada'));
         setStatus('failed');
         updateCallRecord('failed', new Date());
         void updatePresence(null);
