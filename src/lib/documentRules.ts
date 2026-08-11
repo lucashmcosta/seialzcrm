@@ -76,3 +76,35 @@ export function upsertDefaultRequired(raw: unknown, requiredCodes: string[]): Do
   const defaultSet: DocumentSet = { id: 'default', priority: 0, when: null, required: [...codes, ...groups] };
   return { version: 2, sets: [defaultSet, ...others] };
 }
+
+// --- Editor avançado (3d-2): grupos "um de N" no default + sets condicionais ---
+
+// Grupos (anyOf) já presentes no set default.
+export function defaultGroups(raw: unknown): RequiredGroup[] {
+  const def = parseDocumentRules(raw).sets.find((s) => s.when == null);
+  return (def?.required ?? []).filter(isRequiredGroup);
+}
+
+// Sets condicionais (when != null), ordenados por prioridade desc.
+export function conditionalSets(raw: unknown): DocumentSet[] {
+  return parseDocumentRules(raw)
+    .sets.filter((s) => s.when != null)
+    .sort((a, b) => b.priority - a.priority);
+}
+
+// Monta o document_rules final a partir das 3 fontes editadas na UI:
+// checklist simples (defaultCodes) + grupos do default + sets condicionais.
+export function buildDocumentRules(input: {
+  defaultCodes: string[];
+  defaultGroups: RequiredGroup[];
+  conditionalSets: DocumentSet[];
+}): DocumentRules {
+  const codes = Array.from(new Set(input.defaultCodes.filter(Boolean)));
+  const groups = input.defaultGroups.filter((g) => g.anyOf.length >= 1);
+  const def: DocumentSet = { id: 'default', priority: 0, when: null, required: [...codes, ...groups] };
+  // saneia sets condicionais: descarta os sem exigências ou sem condição.
+  const conds = input.conditionalSets.filter(
+    (s) => s.required.length > 0 && s.when != null && ((s.when.all?.length ?? 0) + (s.when.any?.length ?? 0) > 0),
+  );
+  return { version: 2, sets: [def, ...conds] };
+}
