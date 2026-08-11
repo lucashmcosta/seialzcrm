@@ -843,8 +843,9 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
       device.on('error', (error) => {
         console.error('Twilio Device error:', error);
+        lastDeviceErrorRef.current = error;
         deviceRegisteredRef.current = false;
-        setErrorMessage(error.message || 'Erro no dispositivo de áudio');
+        setErrorMessage(toErrorMessageString(error, 'Erro no dispositivo de áudio'));
         setStatus('failed');
         setIsDeviceReady(false);
         removePresence();
