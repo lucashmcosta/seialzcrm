@@ -1,7 +1,8 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog';
@@ -59,11 +60,26 @@ export function DocumentUploadWizard({
   const [refMonth, setRefMonth] = useState('');
   const [refEnd, setRefEnd] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Duas faces: o usuário DECLARA se enviou frente e verso. Default inteligente pela
+  // contagem de páginas do que foi selecionado, mas a decisão final é do usuário.
+  const [hasBothSides, setHasBothSides] = useState(true);
 
   const selectedType = typeId === FREE ? null : types.find((t) => t.id === typeId) ?? null;
   const refKind = selectedType?.reference_kind ?? 'none';
   const isMultiple = selectedType?.cardinality === 'multiple';
   const twoSides = !!selectedType?.has_two_sides;
+
+  // Sugere o estado do checkbox: >=2 arquivos, ou 1 arquivo já com >=2 páginas (PDF).
+  useEffect(() => {
+    if (!twoSides) return;
+    let cancelled = false;
+    (async () => {
+      let complete = files.length >= 2;
+      if (!complete && files.length === 1) complete = (await pageCountOf(files[0])) >= 2;
+      if (!cancelled) setHasBothSides(complete);
+    })();
+    return () => { cancelled = true; };
+  }, [files, twoSides]);
 
   const groups = useMemo(() => {
     const byCat = new Map<string, DocType[]>();
@@ -80,7 +96,7 @@ export function DocumentUploadWizard({
   }, [types]);
 
   const reset = () => {
-    setTypeId(initialTypeId ?? FREE); setFiles([]); setRefDate(''); setRefMonth(''); setRefEnd(''); setPickerOpen(false); setSubmitting(false);
+    setTypeId(initialTypeId ?? FREE); setFiles([]); setRefDate(''); setRefMonth(''); setRefEnd(''); setPickerOpen(false); setSubmitting(false); setHasBothSides(true);
   };
   const pickType = (id: string) => { setTypeId(id); setPickerOpen(false); };
   const move = (i: number, dir: -1 | 1) => {
@@ -117,8 +133,8 @@ export function DocumentUploadWizard({
           const base = selectedType?.name || 'documento';
           file = await mergeFilesToPdf(files, `${base}.pdf`);
         }
-        // Completo por PÁGINAS reais (não por nº de arquivos): 1 PDF de 2 páginas já conta.
-        const isIncomplete = twoSides && (await pageCountOf(file)) < 2;
+        // Completude declarada pelo usuário (checkbox), não inferida do nº de arquivos.
+        const isIncomplete = twoSides && !hasBothSides;
         await onUpload({ file, documentTypeId, reference, partyName, isIncomplete });
       }
       toast.success(files.length > 1 && !isMultiple ? 'Documento enviado (páginas unidas)' : 'Documento enviado');
@@ -236,6 +252,17 @@ export function DocumentUploadWizard({
                   </div>
                 ))}
               </div>
+            )}
+            {twoSides && (
+              <label className="mt-2 flex items-start gap-2 cursor-pointer">
+                <Checkbox checked={hasBothSides} onCheckedChange={(v) => setHasBothSides(v === true)} className="mt-0.5" />
+                <span className="text-xs leading-snug">
+                  Inclui <strong>frente e verso</strong>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Desmarque se enviou só um lado — fica como incompleto até completar.
+                  </span>
+                </span>
+              </label>
             )}
           </div>
         </div>
