@@ -102,6 +102,8 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   // Track if call has reached a final state to reject stale events
   const callFinalizedRef = useRef(false);
   const initTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Last error reported by the Twilio Device (register() can reject with a nullish value)
+  const lastDeviceErrorRef = useRef<any>(null);
   const realtimeCleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cleanupCallRef = useRef<(() => void) | null>(null);
   const incomingCallRef = useRef<TwilioCall | null>(null);
