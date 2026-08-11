@@ -30,8 +30,8 @@ export function requiredTypeIds(raw: unknown): string[] {
 
 export function buildDocumentRules(typeIds: string[]): DocumentRules {
   const seen = new Set<string>();
-  const rules = typeIds
+  const rules: DocumentRules['rules'] = typeIds
     .filter((id) => (seen.has(id) ? false : (seen.add(id), true)))
-    .map((id) => ({ document_type_id: id, effect: 'require' as const, when: null }));
+    .map((id) => ({ document_type_id: id, effect: 'require' as const, when: null as never }));
   return { version: 1, rules };
 }
