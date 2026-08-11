@@ -14,6 +14,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { OutboundCallContext } from './outbound-call/context';
 import type { CallInfo, CallStatus, IncomingCallInfo, OutboundCallContextType, TokenCache, CallTransferSession, CallTransferTarget, CallTransferState, OutboundNumberSelection, CallTransferOperation } from './outbound-call/types';
 import { closeTransferLegs, isTransferGenerationCurrent } from './outbound-call/transferLegCoordinator';
+import { toErrorMessageString } from '@/lib/errorMessage';
 
 // Re-export public API so existing import paths
 // (`@/contexts/OutboundCallContext`) keep working unchanged.
@@ -101,6 +102,8 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   // Track if call has reached a final state to reject stale events
   const callFinalizedRef = useRef(false);
   const initTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Last error reported by the Twilio Device (register() can reject with a nullish value)
+  const lastDeviceErrorRef = useRef<any>(null);
   const realtimeCleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cleanupCallRef = useRef<(() => void) | null>(null);
   const incomingCallRef = useRef<TwilioCall | null>(null);
@@ -680,7 +683,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
         callFinalizedRef.current = true;
         lastProcessedStatusRef.current = 'failed';
         clearStateTimeout();
-        setErrorMessage(error?.message || 'Erro na chamada');
+        setErrorMessage(toErrorMessageString(error, 'Erro na chamada'));
         setStatus('failed');
         updateCallRecord('failed', new Date());
         void updatePresence(null);
@@ -691,7 +694,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       console.error('Call connection error:', error);
       clearStateTimeout();
       void updatePresence(null);
-      setErrorMessage(error.message || 'Erro ao conectar chamada');
+      setErrorMessage(toErrorMessageString(error, 'Erro ao conectar chamada'));
       setStatus('failed');
     }
   }, [telephonyV2, organization, updateCallRecord, createCallRecordAsync, setStateTimeout, clearStateTimeout, subscribeToCallStatus, updatePresence]);
@@ -840,8 +843,9 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
       device.on('error', (error) => {
         console.error('Twilio Device error:', error);
+        lastDeviceErrorRef.current = error;
         deviceRegisteredRef.current = false;
-        setErrorMessage(error.message || 'Erro no dispositivo de áudio');
+        setErrorMessage(toErrorMessageString(error, 'Erro no dispositivo de áudio'));
         setStatus('failed');
         setIsDeviceReady(false);
         removePresence();
@@ -897,7 +901,23 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
     } catch (error: any) {
       console.error('Device initialization error:', error);
-      setErrorMessage(error.message || 'Erro ao inicializar chamada');
+      if (initTimeoutRef.current) {
+        clearTimeout(initTimeoutRef.current);
+        initTimeoutRef.current = null;
+      }
+      // device.register() can reject with a nullish value when the Twilio
+      // WebSocket transport is unavailable; fall back to the last device error.
+      const deviceError = lastDeviceErrorRef.current;
+      const transportFailure =
+        Number(deviceError?.code) === 31009 ||
+        deviceError?.name === 'TransportError';
+      const message = transportFailure
+        ? 'Sem conexão com o serviço de voz. Verifique sua rede e atualize a página.'
+        : toErrorMessageString(
+            error ?? deviceError,
+            'Erro ao inicializar chamada',
+          );
+      setErrorMessage(message);
       setStatus('failed');
       isInitializingRef.current = false;
     }
