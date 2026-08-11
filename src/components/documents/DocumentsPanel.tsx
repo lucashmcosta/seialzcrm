@@ -98,8 +98,13 @@ function DocumentsGroup({
   const ownerTypeIds = new Set(ownerTypes.map((t) => t.id));
   const typeName = new Map(types.map((t) => [t.id, t.name] as const));
 
-  // Necessários deste grupo: itens da regra cujo tipo pertence a este owner.
-  const groupRequired = (requiredItems ?? []).filter((it) => it.document_type_id && ownerTypeIds.has(it.document_type_id));
+  // Alternativas de um item exigido (grupo anyOf; single = 1). Fallback p/ o campo antigo.
+  const itemTypeIds = (it: OpportunityCloseItem): string[] =>
+    it.document_type_ids?.length ? it.document_type_ids : (it.document_type_id ? [it.document_type_id] : []);
+  // Necessários deste grupo: itens da regra cujo owner é este grupo (contato/oportunidade).
+  const groupRequired = (requiredItems ?? []).filter((it) =>
+    it.owner_type ? it.owner_type === entityType : itemTypeIds(it).some((id) => ownerTypeIds.has(id)),
+  );
 
   const doUpload = (input: { file: File; documentTypeId?: string | null; reference?: ReferenceInput; partyName?: string | null; isIncomplete?: boolean }) =>
     upload.mutateAsync(input);
@@ -122,7 +127,7 @@ function DocumentsGroup({
     </div>
   );
 
-  const requiredTypeIds = new Set(groupRequired.map((it) => it.document_type_id!));
+  const requiredTypeIds = new Set(groupRequired.flatMap(itemTypeIds));
   // Uploads que NÃO são exigidos (arquivo livre ou tipo não exigido) — vão pra "Outros".
   const otherDocs = documents.filter((d) => !d.document_type_id || !requiredTypeIds.has(d.document_type_id));
 
@@ -146,9 +151,13 @@ function DocumentsGroup({
               <div className="border rounded-lg divide-y">
                 {groupRequired.map((it) => {
                   const sent = it.status === 'passed';
-                  const docs = documents.filter((d) => d.document_type_id === it.document_type_id);
+                  const altIds = itemTypeIds(it);                       // alternativas (grupo anyOf) ou 1
+                  const altTypes = ownerTypes.filter((t) => altIds.includes(t.id));
+                  const isGroup = altTypes.length > 1;
+                  const docs = documents.filter((d) => d.document_type_id && altIds.includes(d.document_type_id));
                   const incomplete = !sent && docs.some((d) => d.is_incomplete);
-                  const twoSides = ownerTypes.find((t) => t.id === it.document_type_id)?.has_two_sides;
+                  // "falta o verso" só faz sentido p/ tipo único de duas faces.
+                  const twoSides = !isGroup && !!altTypes[0]?.has_two_sides;
                   const single = docs.length <= 1;
                   const doc = docs[0];
                   return (
@@ -171,13 +180,15 @@ function DocumentsGroup({
                             <Badge variant="secondary" className="gap-1 text-[10px]"><Warning className="h-3 w-3" />Pendente</Badge>
                           )}
                           {!sent && (
+                            // Single → tipo travado. Grupo (anyOf) → escolhe entre as alternativas (sem "livre").
                             <DocumentUploadWizard
-                              types={ownerTypes}
+                              types={altTypes}
                               partyName={partyName}
                               busy={busy}
                               onUpload={doUpload}
-                              initialTypeId={it.document_type_id}
-                              lockType
+                              initialTypeId={isGroup ? undefined : altIds[0]}
+                              lockType={!isGroup}
+                              hideFree
                               trigger={<Button type="button" size="sm" className="h-7"><UploadSimple className="h-3.5 w-3.5 mr-1" />{incomplete ? 'Completar' : 'Enviar'}</Button>}
                             />
                           )}

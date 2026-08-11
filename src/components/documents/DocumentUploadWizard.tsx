@@ -40,6 +40,7 @@ export function DocumentUploadWizard({
   initialTypeId,
   lockType,
   trigger,
+  hideFree,
 }: {
   types: DocType[];
   partyName?: string | null;
@@ -51,10 +52,14 @@ export function DocumentUploadWizard({
   lockType?: boolean;
   // Trigger customizado (ex.: botão "Enviar" na linha do necessário). Sem isso, usa o botão padrão.
   trigger?: ReactNode;
+  // Esconde "sem tipo (arquivo livre)" — usado em slots exigidos (grupo anyOf: força escolher uma alternativa).
+  hideFree?: boolean;
 }) {
+  // Seleção inicial: tipo pedido; senão, se "sem livre", a 1ª alternativa; senão FREE.
+  const defaultTypeId = initialTypeId ?? (hideFree && types[0] ? types[0].id : FREE);
   const [open, setOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [typeId, setTypeId] = useState<string>(initialTypeId ?? FREE);
+  const [typeId, setTypeId] = useState<string>(defaultTypeId);
   const [files, setFiles] = useState<File[]>([]);
   const [refDate, setRefDate] = useState('');
   const [refMonth, setRefMonth] = useState('');
@@ -96,7 +101,7 @@ export function DocumentUploadWizard({
   }, [types]);
 
   const reset = () => {
-    setTypeId(initialTypeId ?? FREE); setFiles([]); setRefDate(''); setRefMonth(''); setRefEnd(''); setPickerOpen(false); setSubmitting(false); setHasBothSides(true);
+    setTypeId(defaultTypeId); setFiles([]); setRefDate(''); setRefMonth(''); setRefEnd(''); setPickerOpen(false); setSubmitting(false); setHasBothSides(true);
   };
   const pickType = (id: string) => { setTypeId(id); setPickerOpen(false); };
   const move = (i: number, dir: -1 | 1) => {
@@ -181,12 +186,14 @@ export function DocumentUploadWizard({
                 <CommandInput placeholder="Buscar tipo..." />
                 <CommandList className="max-h-56">
                   <CommandEmpty>Nenhum tipo encontrado.</CommandEmpty>
+                  {!hideFree && (
                   <CommandGroup heading="Livre">
                     <CommandItem value="Sem tipo arquivo livre" onSelect={() => pickType(FREE)}>
                       <Check className={`h-4 w-4 mr-2 ${typeId === FREE ? 'opacity-100' : 'opacity-0'}`} />
                       Sem tipo (arquivo livre)
                     </CommandItem>
                   </CommandGroup>
+                  )}
                   {groups.map((g) => (
                     <CommandGroup key={g.code} heading={g.label}>
                       {g.items.map((t) => (
