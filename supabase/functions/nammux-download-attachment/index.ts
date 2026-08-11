@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
   // Load attachment
   const { data: att, error: attErr } = await supabase
     .from("documents")
-    .select("id, organization_id, entity_type, entity_id, bucket, storage_path, file_name, mime_type, size_bytes, deleted_at")
+    .select("id, organization_id, entity_type, entity_id, bucket, storage_path, file_name, display_name, original_file_name, mime_type, size_bytes, deleted_at")
     .eq("id", attachmentId)
     .maybeSingle();
 
@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
 
   const buf = await file.arrayBuffer();
   const mime = att.mime_type || "application/octet-stream";
-  const safeName = att.file_name.replace(/"/g, "");
+  const safeName = (att.display_name || att.original_file_name || att.file_name).replace(/"/g, "");
 
   await logAudit(supabase, {
     ...baseAudit,
