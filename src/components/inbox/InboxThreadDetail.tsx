@@ -282,6 +282,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
         <InboxConversationTimeline
           threadId={thread.id}
           organizationId={organization?.id}
+          contactId={(thread as any).contact_id ?? null}
           contactName={thread.contact?.name || undefined}
           currentEndpoint={thread.primary_endpoint}
           onReply={(m) => setReplyTo(m)}

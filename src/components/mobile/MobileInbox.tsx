@@ -500,6 +500,7 @@ function ChatView({
       <InboxConversationTimeline
         threadId={thread.id}
         organizationId={organization?.id}
+        contactId={(thread as any).contact_id ?? null}
         contactName={thread.contact?.name || undefined}
         onReply={(m) => setReplyTo(m)}
       />
