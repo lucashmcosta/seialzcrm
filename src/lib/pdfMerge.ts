@@ -26,6 +26,21 @@ async function normalizedJpegBytes(file: File): Promise<Uint8Array> {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
+// Nº real de páginas de um arquivo: PDF → páginas do documento; imagem → 1;
+// outros formatos → 1 (não temos como paginar). Base para saber se um doc de
+// duas faces está completo (>= 2 páginas), em vez de contar arquivos.
+export async function pageCountOf(file: File): Promise<number> {
+  if (isPdfFile(file)) {
+    try {
+      const doc = await PDFDocument.load(await file.arrayBuffer());
+      return doc.getPageCount();
+    } catch {
+      return 1;
+    }
+  }
+  return 1;
+}
+
 // Mescla imagens e/ou PDFs em um único PDF (teto de MAX_PAGES páginas).
 export async function mergeFilesToPdf(files: File[], outName = 'documento.pdf'): Promise<File> {
   const out = await PDFDocument.create();

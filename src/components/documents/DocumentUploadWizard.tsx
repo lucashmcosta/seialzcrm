@@ -10,7 +10,7 @@ import { UploadSimple, Check, CaretDown, ArrowUp, ArrowDown, X, SpinnerGap } fro
 import { toast } from 'sonner';
 import { uploadErrorMessage, type DocType } from '@/hooks/documents/useEntityDocuments';
 import type { ReferenceInput } from '@/lib/documentName';
-import { mergeFilesToPdf, allMergeable, MAX_PAGES } from '@/lib/pdfMerge';
+import { mergeFilesToPdf, allMergeable, pageCountOf, MAX_PAGES } from '@/lib/pdfMerge';
 
 const CATEGORY_LABELS: Record<string, string> = {
   IDENTIFICACAO: 'Identificação', ENDERECO: 'Endereço', REPRESENTACAO: 'Representação', TRIAGEM: 'Triagem',
@@ -117,7 +117,8 @@ export function DocumentUploadWizard({
           const base = selectedType?.name || 'documento';
           file = await mergeFilesToPdf(files, `${base}.pdf`);
         }
-        const isIncomplete = twoSides && files.length < 2;
+        // Completo por PÁGINAS reais (não por nº de arquivos): 1 PDF de 2 páginas já conta.
+        const isIncomplete = twoSides && (await pageCountOf(file)) < 2;
         await onUpload({ file, documentTypeId, reference, partyName, isIncomplete });
       }
       toast.success(files.length > 1 && !isMultiple ? 'Documento enviado (páginas unidas)' : 'Documento enviado');
