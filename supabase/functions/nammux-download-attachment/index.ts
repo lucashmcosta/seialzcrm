@@ -146,7 +146,7 @@ Deno.serve(async (req) => {
 
   // Load attachment
   const { data: att, error: attErr } = await supabase
-    .from("attachments")
+    .from("documents")
     .select("id, organization_id, entity_type, entity_id, bucket, storage_path, file_name, mime_type, size_bytes, deleted_at")
     .eq("id", attachmentId)
     .maybeSingle();

@@ -444,7 +444,7 @@ export function GeneralSettings() {
                         supabase.from('activities').delete().eq('organization_id', organization.id).eq('is_sample', true),
                         supabase.from('calls').delete().eq('organization_id', organization.id).eq('is_sample', true),
                         supabase.from('messages').delete().eq('organization_id', organization.id).eq('is_sample', true),
-                        supabase.from('attachments').delete().eq('organization_id', organization.id).eq('is_sample', true),
+                        supabase.from('documents').delete().eq('organization_id', organization.id).eq('is_sample', true),
                       ]);
                       
                       toast({
