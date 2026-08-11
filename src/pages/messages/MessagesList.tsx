@@ -326,6 +326,17 @@ function DesktopMessagesList() {
   // Image preview state
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [attachMedia, setAttachMedia] = useState<AttachMedia | null>(null); // "Vincular como documento"
+  // Outras mídias anexáveis (imagem/PDF) recebidas na conversa — p/ juntar frente e verso.
+  const attachCandidates = useMemo<AttachMedia[]>(() => (
+    (messages || [])
+      .filter((m: any) => m.direction === 'inbound' && isAttachableMedia(m.media_type) && m.media_urls?.[0])
+      .map((m: any) => ({
+        url: m.media_urls[0] as string,
+        mediaType: m.media_type,
+        fileName: null,
+        label: `${m.media_type === 'image' ? 'Imagem' : 'Documento'} · ${new Date(m.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}`,
+      }))
+  ), [messages, locale]);
   
   // AI text improvement state
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
@@ -2579,6 +2590,7 @@ function DesktopMessagesList() {
           contactName={selectedThread.contact_name}
           opportunities={contactOpportunities}
           media={attachMedia}
+          candidates={attachCandidates}
         />
       )}
 
