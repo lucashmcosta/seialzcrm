@@ -26,6 +26,12 @@ export interface DocType {
   name: string;
   is_required: boolean;
   sort_order: number;
+  owner_type: 'contact' | 'opportunity';
+  cardinality: 'single' | 'multiple';
+  reference_kind: 'none' | 'date' | 'month' | 'period';
+  validity_mode: 'none' | 'derived' | 'stated';
+  validity_days: number | null;
+  has_two_sides: boolean;
 }
 
 export function useEntityDocuments(entityType: DocEntityType, entityId?: string | null) {
@@ -51,20 +57,28 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
     },
   });
 
+  // Tipos habilitados p/ a org: catálogo canônico (org_id NULL) filtrado pela
+  // habilitação em organization_document_types. Ordena por sort_order da org
+  // (fallback p/ o do tipo) e depois nome.
   const { data: types = [] } = useQuery({
-    queryKey: ['document-types', orgId],
+    queryKey: ['document-types-enabled', orgId],
     enabled: !!orgId,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('document_types')
-        .select('id,code,name,is_required,sort_order')
+        .from('organization_document_types')
+        .select(
+          'sort_order, document_types!inner(id,code,name,is_required,sort_order,owner_type,cardinality,reference_kind,validity_mode,validity_days,has_two_sides)',
+        )
         .eq('organization_id', orgId!)
-        .eq('is_active', true)
-        .is('deleted_at', null)
-        .order('sort_order', { ascending: true })
-        .order('name', { ascending: true });
+        .eq('is_enabled', true)
+        .eq('document_types.is_active', true)
+        .is('document_types.deleted_at', null);
       if (error) throw error;
-      return (data ?? []) as DocType[];
+      const rows = (data ?? []) as unknown as Array<{ sort_order: number | null; document_types: DocType }>;
+      return rows
+        .map((r) => ({ dt: r.document_types, ord: r.sort_order ?? r.document_types.sort_order }))
+        .sort((a, b) => a.ord - b.ord || a.dt.name.localeCompare(b.dt.name))
+        .map((r) => r.dt);
     },
   });
 
