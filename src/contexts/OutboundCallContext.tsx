@@ -694,7 +694,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       console.error('Call connection error:', error);
       clearStateTimeout();
       void updatePresence(null);
-      setErrorMessage(error.message || 'Erro ao conectar chamada');
+      setErrorMessage(toErrorMessageString(error, 'Erro ao conectar chamada'));
       setStatus('failed');
     }
   }, [telephonyV2, organization, updateCallRecord, createCallRecordAsync, setStateTimeout, clearStateTimeout, subscribeToCallStatus, updatePresence]);
