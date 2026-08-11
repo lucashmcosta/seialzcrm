@@ -14,6 +14,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { OutboundCallContext } from './outbound-call/context';
 import type { CallInfo, CallStatus, IncomingCallInfo, OutboundCallContextType, TokenCache, CallTransferSession, CallTransferTarget, CallTransferState, OutboundNumberSelection, CallTransferOperation } from './outbound-call/types';
 import { closeTransferLegs, isTransferGenerationCurrent } from './outbound-call/transferLegCoordinator';
+import { toErrorMessageString } from '@/lib/errorMessage';
 
 // Re-export public API so existing import paths
 // (`@/contexts/OutboundCallContext`) keep working unchanged.
