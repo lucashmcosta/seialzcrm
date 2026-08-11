@@ -209,7 +209,10 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
         if (error) throw error;
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: docsKey }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: docsKey });
+      qc.invalidateQueries({ queryKey: ['opp-close-eval'] }); // pendência dirigida por regra
+    },
   });
 
   const remove = useMutation({
@@ -219,7 +222,10 @@ export function useEntityDocuments(entityType: DocEntityType, entityId?: string 
       const { error } = await supabase.from('documents').update({ deleted_at: new Date().toISOString() }).eq('id', doc.id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: docsKey }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: docsKey });
+      qc.invalidateQueries({ queryKey: ['opp-close-eval'] }); // pendência dirigida por regra
+    },
   });
 
   const getSignedUrl = async (doc: EntityDoc) => {
