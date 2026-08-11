@@ -24,7 +24,6 @@ export function DocumentsPanel({ contactId, opportunityId }: Props) {
             subtitle="Do contato — visíveis em todas as oportunidades dele."
             entityType="contact"
             entityId={contactId}
-            showRequired
           />
         )}
         <DocumentsGroup
@@ -39,7 +38,7 @@ export function DocumentsPanel({ contactId, opportunityId }: Props) {
   if (contactId) {
     return (
       <div className="space-y-5">
-        <DocumentsGroup title="Documentos" entityType="contact" entityId={contactId} showRequired />
+        <DocumentsGroup title="Documentos" entityType="contact" entityId={contactId} />
       </div>
     );
   }
@@ -85,17 +84,17 @@ function DocumentsGroup({
   subtitle,
   entityType,
   entityId,
-  showRequired = false,
 }: {
   title: string;
   subtitle?: string;
   entityType: DocEntityType;
   entityId: string;
-  showRequired?: boolean;
 }) {
   const { documents, types, isLoading, upload, remove, download, getSignedUrl } = useEntityDocuments(entityType, entityId);
   const busy = upload.isPending || remove.isPending;
 
+  // "Necessários" = tipos habilitados cujo dono (owner_type) é esta entidade.
+  const requiredTypes = types.filter((t) => t.owner_type === entityType);
   const byType = new Map<string, EntityDoc>();
   for (const d of documents) if (d.document_type_id) byType.set(d.document_type_id, d);
   const freeDocs = documents.filter((d) => !d.document_type_id);
@@ -141,11 +140,11 @@ function DocumentsGroup({
         <Skeleton className="h-24 w-full" />
       ) : (
         <>
-          {showRequired && types.length > 0 && (
+          {requiredTypes.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Documentos necessários</p>
               <div className="border rounded-lg divide-y">
-                {types.map((t) => {
+                {requiredTypes.map((t) => {
                   const doc = byType.get(t.id);
                   return (
                     <div key={t.id} className="flex items-center justify-between gap-3 p-3">
@@ -186,7 +185,7 @@ function DocumentsGroup({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {showRequired ? 'Outros arquivos' : 'Arquivos'}
+                {requiredTypes.length > 0 ? 'Outros arquivos' : 'Arquivos'}
               </p>
               <UploadButton label="Adicionar arquivo" disabled={busy} onFile={(f) => doUpload(f)} />
             </div>
