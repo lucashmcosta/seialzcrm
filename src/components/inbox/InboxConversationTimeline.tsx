@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { SpinnerGap, FileText, ArrowBendUpLeft } from '@phosphor-icons/react';
+import { SpinnerGap, FileText, ArrowBendUpLeft, Paperclip, Plus, Check } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { useInboxThreadMessages, type InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
+import { Button } from '@/components/ui/button';
+import { AttachMediaDialog, type AttachMedia, type AttachOpportunity } from '@/components/documents/AttachMediaDialog';
+import { isAttachableMedia } from '@/lib/mediaToFile';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
@@ -15,6 +18,7 @@ import { formatEndpointMigrationAuditLine, type EndpointDisplayInfo } from '@/li
 interface Props {
   threadId: string;
   organizationId: string | undefined;
+  contactId?: string | null;
   contactName?: string;
   currentEndpoint?: EndpointDisplayInfo | null;
   onReply?: (msg: InboxMessageRow) => void;
@@ -80,14 +84,38 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
   );
 }
 
-export function InboxConversationTimeline({ threadId, organizationId, contactName, currentEndpoint, onReply }: Props) {
+export function InboxConversationTimeline({ threadId, organizationId, contactId, contactName, currentEndpoint, onReply }: Props) {
   const { messages, loading, error } = useInboxThreadMessages(threadId);
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Vincular mídia recebida como documento (triagem inline), igual ao Comercial.
+  const [attach, setAttach] = useState<{ pages: AttachMedia[] } | null>(null);
+  const [attachPicking, setAttachPicking] = useState(false);
+  const [justLinked, setJustLinked] = useState<Record<string, string>>({}); // url → tipo (feedback imediato)
+  const [opportunities, setOpportunities] = useState<AttachOpportunity[]>([]);
+  const mediaToAttach = (m: InboxMessageRow): AttachMedia => ({
+    url: m.media_urls![0],
+    mediaType: m.media_type,
+    fileName: null,
+    label: `${m.media_type === 'image' ? 'Imagem' : 'Documento'} · ${new Date(m.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+  });
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setAccessToken(data.session?.access_token));
   }, []);
+
+  // Oportunidades abertas do contato (destino possível ao vincular).
+  useEffect(() => {
+    if (!organizationId || !contactId) { setOpportunities([]); return; }
+    (async () => {
+      const { data } = await supabase.from('opportunities')
+        .select('id, title')
+        .eq('organization_id', organizationId).eq('contact_id', contactId)
+        .eq('status', 'open').is('deleted_at', null);
+      setOpportunities((data as AttachOpportunity[]) || []);
+    })();
+  }, [organizationId, contactId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -207,6 +235,32 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
 
                     <Media msg={m} orgId={organizationId} accessToken={accessToken} />
 
+                    {/* Triagem inline: vincular mídia recebida (imagem/PDF) como documento */}
+                    {!isOutbound && contactId && isAttachableMedia(m.media_type) && m.media_urls?.[0] && (() => {
+                      const thisUrl = m.media_urls[0];
+                      const already = attach?.pages.some((p) => p.url === thisUrl);
+                      const linkedName = (m.metadata as any)?.attached_document?.type_name ?? justLinked[thisUrl];
+                      if (!attachPicking && linkedName) {
+                        return <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-600"><Check size={13} /> Vinculado{linkedName ? ` · ${linkedName}` : ''}</span>;
+                      }
+                      if (attachPicking) {
+                        return (
+                          <button type="button"
+                            onClick={() => { if (!already && attach) setAttach({ pages: [...attach.pages, mediaToAttach(m)] }); setAttachPicking(false); }}
+                            className={`mt-1 flex items-center gap-1 text-[11px] font-medium ${already ? 'text-emerald-600' : 'text-primary hover:underline'}`}>
+                            {already ? <><Check size={13} /> Já adicionada</> : <><Plus size={13} /> Adicionar esta página</>}
+                          </button>
+                        );
+                      }
+                      return (
+                        <button type="button"
+                          onClick={() => { setAttach({ pages: [mediaToAttach(m)] }); setAttachPicking(false); }}
+                          className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
+                          <Paperclip size={13} /> Vincular como documento
+                        </button>
+                      );
+                    })()}
+
                     {m.content && !isAudioOnly && !isMediaPlaceholder && (
                       <MetaRichMessageContent
                         metadata={m.metadata}
@@ -247,6 +301,35 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
         )}
         </div>
       </div>
+
+      {attach && contactId && organizationId && (
+        <AttachMediaDialog
+          open={!!attach && !attachPicking}
+          onOpenChange={(o) => { if (!o) { setAttach(null); setAttachPicking(false); } }}
+          organizationId={organizationId}
+          contactId={contactId}
+          contactName={contactName}
+          opportunities={opportunities}
+          pages={attach.pages}
+          onPagesChange={(p) => setAttach({ pages: p })}
+          onPickMore={() => setAttachPicking(true)}
+          onAttached={async (info) => {
+            const urls = new Set(info.sourceUrls);
+            const linked = { type_name: info.typeName, at: new Date().toISOString() };
+            setJustLinked((prev) => ({ ...prev, ...Object.fromEntries(info.sourceUrls.map((u) => [u, info.typeName])) }));
+            const targets = (messages as InboxMessageRow[]).filter((m) => m.media_urls?.[0] && urls.has(m.media_urls[0]));
+            await Promise.all(targets.map((m) =>
+              supabase.from('messages').update({ metadata: { ...((m.metadata as any) || {}), attached_document: linked } }).eq('id', m.id),
+            ));
+          }}
+        />
+      )}
+      {attach && attachPicking && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-full border bg-background shadow-lg px-4 py-2">
+          <span className="text-sm">Toque em <strong>“Adicionar esta página”</strong> na foto desejada · {attach.pages.length} {attach.pages.length === 1 ? 'página' : 'páginas'}</span>
+          <Button size="sm" onClick={() => setAttachPicking(false)}>Voltar ao documento</Button>
+        </div>
+      )}
     </div>
   );
 }
