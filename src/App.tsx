@@ -213,6 +213,7 @@ const MarketingPosts = lazyWithRetry("MarketingPosts", () => import("./pages/mar
 const MarketingComments = lazyWithRetry("MarketingComments", () => import("./pages/marketing/comments/index"));
 const MarketingWebhooks = lazyWithRetry("MarketingWebhooks", () => import("./pages/marketing/webhooks/index"));
 const MarketingCampaigns = lazyWithRetry("MarketingCampaigns", () => import("./pages/marketing/campaigns/index"));
+const SocialInboxPage = lazyWithRetry("SocialInboxPage", () => import("./pages/social/index"));
 // Settings layout + grid (replaces old Settings page)
 const SettingsLayout = lazyWithRetry("SettingsLayout", () => import("./components/settings/SettingsLayout"), "SettingsLayout");
 const SettingsGrid = lazyWithRetry("SettingsGrid", () => import("./components/settings/SettingsGrid"), "SettingsGrid");
@@ -675,6 +676,7 @@ const App = () => (
           <Route path="/marketing/comments" element={<ProtectedRoute><MarketingComments /></ProtectedRoute>} />
           <Route path="/marketing/webhooks" element={<ProtectedRoute><MarketingWebhooks /></ProtectedRoute>} />
           <Route path="/marketing/campaigns" element={<ProtectedRoute><MarketingCampaigns /></ProtectedRoute>} />
+          <Route path="/social" element={<ProtectedRoute><SocialInboxPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
             <Route index element={<SettingsGrid />} />
             <Route path="general" element={<GeneralSettings />} />
