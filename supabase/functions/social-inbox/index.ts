@@ -204,15 +204,26 @@ serve(async (req) => {
       const recipient_id = String(body.recipient_id ?? "");
       const text = String(body.text ?? "").trim();
       const platform = String(body.platform ?? "messenger");
-      if (!recipient_id || !text) return json({ error: "missing_fields" }, 400);
-      try {
+      // Anexo opcional: { type: image|video|audio|file, url } — a Meta busca a URL pública.
+      const att = body.attachment as { type?: string; url?: string } | undefined;
+      const attUrl = att?.url ? String(att.url) : "";
+      const attType = ["image", "video", "audio", "file"].includes(String(att?.type)) ? String(att!.type) : "file";
+      if (!recipient_id || (!text && !attUrl)) return json({ error: "missing_fields" }, 400);
+      const sendMessage = async (message: Record<string, unknown>) => {
         const payload: Record<string, string> = {
           recipient: JSON.stringify({ id: recipient_id }),
-          message: JSON.stringify({ text }),
+          message: JSON.stringify(message),
           messaging_type: "RESPONSE",
         };
         const r = await metaGraphPost(`/${pageId}/messages`, payload, { accessToken: pageToken, appSecret });
-        return json({ ok: true, id: r?.message_id, platform });
+        return r?.message_id as string | undefined;
+      };
+      try {
+        const ids: (string | undefined)[] = [];
+        // Anexo primeiro (a Meta manda texto e anexo em mensagens separadas).
+        if (attUrl) ids.push(await sendMessage({ attachment: { type: attType, payload: { url: attUrl, is_reusable: false } } }));
+        if (text) ids.push(await sendMessage({ text }));
+        return json({ ok: true, ids: ids.filter(Boolean), platform });
       } catch (e) { return json({ ok: false, error: errMsg(e) }, 502); }
     }
 

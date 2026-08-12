@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useMarketingPublishingFlag } from '@/hooks/useMarketingPublishingFlag';
 import {
-  useSocialConversations, useSocialMessages, useSendSocialMessage, useSocialProfile,
-  type SocialConversation, type SocialPlatform, type SocialAttachment, type SocialMessage,
+  useSocialConversations, useSocialMessages, useSendSocialMessage, useSocialProfile, uploadSocialMedia,
+  type SocialConversation, type SocialPlatform, type SocialAttachment, type SocialMessage, type SocialSendAttachment,
 } from './useSocialInbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { InstagramLogo, MessengerLogo, PaperPlaneTilt, ChatsCircle, WarningCircle, ArrowSquareOut, Paperclip, SealCheck, Users } from '@phosphor-icons/react';
+import { InstagramLogo, MessengerLogo, PaperPlaneTilt, ChatsCircle, WarningCircle, ArrowSquareOut, Paperclip, SealCheck, Users, X, SpinnerGap } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -89,6 +89,9 @@ export default function SocialInboxPage() {
   const { enabled, loading: flagLoading } = useMarketingPublishingFlag(orgId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [pending, setPending] = useState<(SocialSendAttachment & { name: string }) | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const convos = useSocialConversations(enabled ? orgId : undefined);
   const messages = useSocialMessages(orgId, selectedId);
@@ -111,17 +114,29 @@ export default function SocialInboxPage() {
 
   const doSend = async () => {
     const text = draft.trim();
-    if (!text || !selected) return;
+    if ((!text && !pending) || !selected) return;
     if (!selected.participant_id) { toast.error('Sem destinatário para esta conversa'); return; }
     try {
       await send.mutateAsync({
         conversation_id: selected.id,
         recipient_id: selected.participant_id,
-        text,
+        text: text || undefined,
         platform: selected.platform,
+        attachment: pending ? { type: pending.type, url: pending.url } : undefined,
       });
-      setDraft('');
+      setDraft(''); setPending(null);
     } catch (e) { toast.error((e as Error)?.message || 'Falha ao enviar'); }
+  };
+
+  const onPickFile = async (file: File | undefined) => {
+    if (!file || !orgId) return;
+    if (file.size > 25 * 1024 * 1024) { toast.error('Arquivo muito grande (máx. 25 MB)'); return; }
+    setUploading(true);
+    try {
+      const up = await uploadSocialMedia(orgId, file);
+      setPending({ ...up, name: file.name });
+    } catch (e) { toast.error((e as Error)?.message || 'Falha no upload'); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
   return (
@@ -235,7 +250,25 @@ export default function SocialInboxPage() {
                 </ScrollArea>
 
                 <div className="border-t border-border p-3">
+                  {pending && (
+                    <div className="mb-2 flex items-center gap-2 rounded-md border border-border bg-muted/40 p-1.5 text-xs w-fit max-w-full">
+                      {pending.type === 'image'
+                        ? <img src={pending.url} alt={pending.name} className="h-10 w-10 rounded object-cover" />
+                        : <span className="inline-flex h-10 w-10 items-center justify-center rounded bg-muted"><Paperclip className="h-4 w-4" /></span>}
+                      <span className="truncate max-w-[200px]">{pending.name}</span>
+                      <button onClick={() => setPending(null)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+                    </div>
+                  )}
                   <div className="flex items-end gap-2">
+                    <input
+                      ref={fileRef} type="file" className="hidden"
+                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
+                      onChange={(e) => onPickFile(e.target.files?.[0])}
+                    />
+                    <Button variant="outline" size="icon" className="h-11 w-11 shrink-0"
+                      disabled={uploading} onClick={() => fileRef.current?.click()} title="Anexar mídia">
+                      {uploading ? <SpinnerGap className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                    </Button>
                     <Textarea
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
@@ -243,11 +276,11 @@ export default function SocialInboxPage() {
                       placeholder="Escreva uma resposta…"
                       className="min-h-[44px] max-h-40 resize-none"
                     />
-                    <Button onClick={doSend} disabled={!draft.trim() || send.isPending} className="h-11 shrink-0">
+                    <Button onClick={doSend} disabled={(!draft.trim() && !pending) || send.isPending || uploading} className="h-11 shrink-0">
                       <PaperPlaneTilt className="h-4 w-4" weight="fill" />
                     </Button>
                   </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground">Enter envia · Shift+Enter quebra linha</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">Enter envia · Shift+Enter quebra linha · 📎 anexa mídia</p>
                 </div>
               </>
             )}

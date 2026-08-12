@@ -92,10 +92,15 @@ export function useSocialProfile(orgId?: string, participantId?: string | null, 
   });
 }
 
+export type SocialSendAttachment = { type: 'image' | 'video' | 'audio' | 'file'; url: string };
+
 export function useSendSocialMessage(orgId?: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (i: { conversation_id: string; recipient_id: string; text: string; platform: SocialPlatform }) => {
+    mutationFn: async (i: {
+      conversation_id: string; recipient_id: string; text?: string;
+      platform: SocialPlatform; attachment?: SocialSendAttachment;
+    }) => {
       const { data, error } = await supabase.functions.invoke('social-inbox', {
         body: { organization_id: orgId, action: 'send', ...i },
       });
@@ -108,4 +113,25 @@ export function useSendSocialMessage(orgId?: string) {
       qc.invalidateQueries({ queryKey: ['social-conversations', orgId] });
     },
   });
+}
+
+// Faz upload de um anexo pro bucket público social-media e devolve URL + tipo.
+// A Meta busca essa URL ao enviar o attachment. Nome com timestamp evitado
+// (Date.now proibido em alguns contextos); usamos random + org como pasta.
+export async function uploadSocialMedia(
+  orgId: string, file: File,
+): Promise<SocialSendAttachment> {
+  const ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const rand = Math.random().toString(36).slice(2);
+  const path = `${orgId}/${rand}.${ext}`;
+  const { error } = await supabase.storage.from('social-media').upload(path, file, {
+    contentType: file.type || 'application/octet-stream', upsert: false,
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from('social-media').getPublicUrl(path);
+  const mime = file.type || '';
+  const type: SocialSendAttachment['type'] =
+    mime.startsWith('image') ? 'image' : mime.startsWith('video') ? 'video'
+    : mime.startsWith('audio') ? 'audio' : 'file';
+  return { type, url: data.publicUrl };
 }
