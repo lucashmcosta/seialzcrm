@@ -10647,6 +10647,84 @@ export type Database = {
         }
         Relationships: []
       }
+      social_conversations: {
+        Row: {
+          avatar_url: string | null
+          conversation_id: string | null
+          last_message: string | null
+          name: string | null
+          organization_id: string
+          participant_id: string
+          platform: string
+          profile_link: string | null
+          refreshed_at: string
+          updated_time: string | null
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          conversation_id?: string | null
+          last_message?: string | null
+          name?: string | null
+          organization_id: string
+          participant_id: string
+          platform: string
+          profile_link?: string | null
+          refreshed_at?: string
+          updated_time?: string | null
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          conversation_id?: string | null
+          last_message?: string | null
+          name?: string | null
+          organization_id?: string
+          participant_id?: string
+          platform?: string
+          profile_link?: string | null
+          refreshed_at?: string
+          updated_time?: string | null
+          username?: string | null
+        }
+        Relationships: []
+      }
+      social_messages: {
+        Row: {
+          attachments: Json
+          body: string | null
+          created_time: string | null
+          from_name: string | null
+          from_page: boolean
+          message_id: string
+          organization_id: string
+          participant_id: string
+          platform: string
+        }
+        Insert: {
+          attachments?: Json
+          body?: string | null
+          created_time?: string | null
+          from_name?: string | null
+          from_page?: boolean
+          message_id: string
+          organization_id: string
+          participant_id: string
+          platform: string
+        }
+        Update: {
+          attachments?: Json
+          body?: string | null
+          created_time?: string | null
+          from_name?: string | null
+          from_page?: boolean
+          message_id?: string
+          organization_id?: string
+          participant_id?: string
+          platform?: string
+        }
+        Relationships: []
+      }
       subscription_usage: {
         Row: {
           current_seat_count: number
