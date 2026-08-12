@@ -1,77 +1,81 @@
-# FASE 2 — Migração Comercial (execução aprovada, pendente de build mode)
+# FASE 2 — Migração Comercial (preview de roteamento histórico)
 
-Ainda estou em modo de planejamento, então **nada foi escrito no banco**. Abaixo: o dry-run detalhado que você pediu, dois achados novos que mudam a execução, e o roteiro exato pronto para rodar.
-
----
-
-## 1. Decisões já incorporadas
-
-- **Meta 2890 (Viagi)** — opção 1‑A: vínculo apenas como endpoint **inbound** da Route Comercial (`95beef60…`). `active_endpoint_id` permanece Evolution 8439. Nenhuma thread ou mensagem histórica é alterada pelo vínculo.
-- **Twilio 5098 (Viagi)** e **Meta 7020 (Central)** — opção 2‑B: **não** vinculados, não reativados. Histórico preservado; threads entram no backfill/merge.
-- **Backfill** — somente as 142 threads determinísticas do 5098. Ambíguas intactas. `lifecycle_stage` não é usado.
-- **Unique** — só depois de duplicidades `sales` = 0, com validação bloqueante imediatamente antes.
-- **Flag** — `conv_route_resolver_v2` ligada apenas para a Viagi, e só ao fim de todos os gates. Nunca global.
-- **Atendimento** — intocado.
+Nada foi escrito no banco. Abaixo o preview específico que você pediu, a semântica de `messaging_line_endpoints` e a execução ajustada.
 
 ---
 
-## 2. DRY-RUN — grupos com assignee divergente (o número real é 7, não 10)
+## 1. Semântica: estado técnico ≠ associação à Route
 
-Os 10 grupos do preview anterior incluíam threads já mergeadas em rodadas antigas (`merged_into_thread_id` preenchido). Filtrando apenas threads vivas, restam **7 grupos / 14 threads** — nenhum com oportunidade vinculada, nenhum com duas oportunidades abertas.
+Os dois conceitos já vivem em tabelas diferentes e não precisam de mudança de schema:
 
-| contato | thread | criada | última msg | status | assignee | owner original | endpoint | msgs | winner (antiguidade) | fonte do assignee (atividade recente) |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 25d23519 | d2a3aaa4 | 01/06 | 02/06 19:01 | open | Ketlyn Vieira | – | 5098 | 6 | **SIM** | |
-| 25d23519 | e196f6ed | 09/07 | 13/07 18:23 | awaiting_client | Marlisa Fernandes | Marlisa Fernandes | 2890 | 26 | | **Marlisa** |
-| 4fc63900 | 795a02a9 | 11/07 | 07/08 14:37 | open | Tamires Sousa | Tamires Sousa | 7020 | 11 | **SIM** | |
-| 4fc63900 | 24b506a4 | 07/08 | 07/08 14:38 | open | Eduarda Ubeid | Eduarda Ubeid | 7067 | 1 | | **Eduarda** |
-| 534f0152 | 2a821bc4 | 12/05 | 12/05 15:34 | open | Ketlyn Vieira | – | 5098 | 1 | **SIM** | |
-| 534f0152 | 7cd9d957 | 10/07 | 10/07 22:47 | resolved | Marlisa Fernandes | Marlisa Fernandes | 2890 | 5 | | **Marlisa** |
-| 6ddebdab | f3d710de | 26/06 | 26/06 18:23 | resolved | Luyza Calegari | Victoria Amorim | (none) | 2 | **SIM** | |
-| 6ddebdab | 04c5dada | 29/06 | 01/07 14:26 | open | Victoria Amorim | Victoria Amorim | 7020 | 101 | | **Victoria** |
-| 8424fc8e | 1d09c288 | 06/07 | 07/08 16:26 | awaiting_client | Tamires Sousa | Tamires Sousa | 7020 | 22 | **SIM** | |
-| 8424fc8e | 2d0acad4 | 07/08 | 07/08 18:24 | open | Eduarda Ubeid | Eduarda Ubeid | 7067 | 1 | | **Eduarda** |
-| ceec2ee3 | 84e5f30c | 21/06 | 24/06 18:28 | resolved | Mariane Carvalho | Luana Cardoso | (none) | 81 | **SIM** | |
-| ceec2ee3 | 6202885a | 14/07 | 14/07 20:47 | awaiting_client | Luana Cardoso | Luana Cardoso | 7067 | 17 | | **Luana** |
-| d64e3b40 | c4abd068 | 22/06 | 22/06 18:41 | open | Luana Cardoso | Luana Cardoso | (none) | 4 | **SIM** | |
-| d64e3b40 | de049d3b | 07/07 | 07/07 03:24 | open | Victoria Amorim | Luana Cardoso | 7020 | 1 | | **Victoria** |
+- `communication_endpoints.is_active` = **capacidade técnica atual** do número (recebe inbound novo, pode enviar). É o único campo consultado para decidir envio e para aceitar inbound novo.
+- `messaging_line_endpoints.is_active` = **validade da associação Endpoint → Route**. Significa "este número pertence a esta Route", inclusive para números desligados. `false`/`unlinked_at` só é usado quando um administrador **desvincula** o número da Route (ex.: número devolvido ao provider e reatribuído a outra Route) — nunca para refletir estado técnico.
 
-Observação relevante para a política: em **6 dos 7 grupos** o assignee da thread mais recente coincide com o `original_owner_user_id` dessa thread; o único caso "estranho" é `6ddebdab`, onde a thread antiga tem assignee (Luyza) diferente do owner original (Victoria), e a thread recente concentra 101 mensagens com Victoria.
+Verifiquei o gatilho de integridade criado na Fase 1 (`fn_validate_messaging_line_endpoint`): ele valida Route `sales`, mesma org e mesmo canal, e **não exige** `communication_endpoints.is_active`. Portanto vincular endpoints históricos inativos é permitido hoje, sem migration.
 
-**Política de assignee que preciso que você escolha (nada será executado antes):**
+Consequência para o resolver outbound: a Route é descoberta pelo **endpoint da última inbound roteável**, mesmo que aquele número esteja tecnicamente inativo; o envio sempre sai pelo `active_endpoint_id` da Route (8439 na Viagi, 7067 na Central). O estado técnico continua governando inbound novo e capacidade de envio.
 
-- **(A) Recomendada** — assignee = da thread com atividade mais recente (`last_message_at DESC`). Resultado: Marlisa, Eduarda, Marlisa, Victoria, Eduarda, Luana, Victoria.
-- **(B)** assignee = da thread winner (mais antiga), preservando o dono histórico.
-- **(C)** deixar os 7 grupos sem merge e sem unique nesse recorte — inviabiliza a unique global.
+## 2. PREVIEW — última inbound roteável das threads Comerciais vivas
 
-## 3. ACHADO NOVO — a RPC de merge atual recusa merge cross-endpoint
+**Viagi (6.734 threads `sales`, canal whatsapp)**
 
-A função existente `public.merge_message_threads(winner, loser, batch)` valida `primary_endpoint_id` **igual** entre winner e loser e aborta com `grouping key mismatch` quando diferem. Como a GMUD unifica justamente threads de números diferentes (69 dos grupos), ela não serve para a Fase 2. Ela também move `message_thread_reads` com `UPDATE` direto, o que colide com a chave (`thread_id`,`user_id`) quando os dois lados têm leitura do mesmo usuário.
+| última inbound | provider | endpoint ativo? | mapping hoje | threads | resolve hoje? |
+|---|---|---|---|---|---|
+| 5098 | twilio | não | não | 3.075 | REPLY_ROUTE_UNRESOLVED |
+| 2890 | meta_cloud_api | sim | não | 303 | REPLY_ROUTE_UNRESOLVED |
+| 8439 | evolution_api | sim | sim | 403 | OK |
+| sem inbound roteável | – | – | – | 2.953 | REPLY_ROUTE_UNRESOLVED |
 
-Correção proposta (migration, sem alterar a função atual usada pelo Atendimento): nova RPC `merge_sales_threads(p_winner, p_loser, p_batch)`, `SECURITY DEFINER`, que:
+Hoje: **403 resolvem / 6.331 falhariam**.
 
-- exige `business_context='sales'` nos dois lados e mesma `organization_id + contact_id + channel`, **sem** exigir endpoint igual (erro tipado `MERGE_NOT_SALES` / `MERGE_KEY_MISMATCH`);
-- preserva `primary_endpoint_id` do winner (thread mais antiga = origem);
-- deduplica `message_thread_reads` mantendo o `last_read_at` mais recente por usuário;
-- reaponta mensagens, histórico de atribuição, tempos de resposta, agendamentos, tarefas e logs de IA, como a função atual;
-- recalcula `last_message_*` do winner, reabre o winner se algum lado estava aberto, fecha o loser com `merged_into_thread_id`;
-- grava auditoria em `message_thread_merge_audit` (compatível com `unmerge_message_thread`).
+**Central Trabalhista (5.513 threads `sales`, canal whatsapp)**
 
-## 4. Ordem de execução (ao entrar em build mode)
+| última inbound | provider | endpoint ativo? | mapping hoje | threads | resolve hoje? |
+|---|---|---|---|---|---|
+| 7067 | meta_cloud_api | sim | sim | 3.715 | OK |
+| 7020 | meta_cloud_api | não | não | 1.181 | REPLY_ROUTE_UNRESOLVED |
+| 7027 (Atendimento) | meta_cloud_api | sim | não | 4 | REPLY_ROUTE_UNRESOLVED |
+| sem inbound roteável | – | – | – | 613 | REPLY_ROUTE_UNRESOLVED |
 
-1. **Vínculo inbound do Meta 2890** em `messaging_line_endpoints` (`is_active=true`), sem tocar `active_endpoint_id`.
-2. **Backfill** das 142 threads do 5098 (`business_context = 'sales'`), com contagem antes/depois e checagem de que nada de Atendimento foi tocado.
-3. **Migration** da RPC `merge_sales_threads`.
-4. **Recalcular os grupos** (o backfill cria novos grupos, pois threads do 5098 passam a contar como `sales`) e executar o merge **somente dos grupos sem conflito de assignee e sem oportunidade divergente**; relatório dos pendentes.
-5. **PARADA** nos grupos com assignee divergente — aguardando sua escolha do item 2.
-6. **Webhooks V2** (`meta-whatsapp-webhook`, `twilio-whatsapp-webhook`, `evolution-webhook`): lookup `org + contato + channel + business_context='sales'`, independente de endpoint e status, com reabertura em vez de nova thread — aplicado **apenas** quando o endpoint receptor pertence a uma Route Comercial V2 **e** a flag está ligada para a org; caso contrário caminho legado idêntico. Nenhum ramo `customer_service` alterado.
-7. **Outbound V2** pelo resolver autoritativo (thread → última inbound roteável → `messaging_line_endpoints` → Route → `active_endpoint_id` → provider), sem fallback silencioso; sem resolução ⇒ `REPLY_ROUTE_UNRESOLVED`.
-8. **Testes** (paridade Meta/Twilio/Evolution, reopen, inbound por números diferentes, rotação 1111→3333, cliente voltando pelo 2890, Atendimento sem regressão) com a flag ainda OFF; shadow comparado por org.
-9. **Unique** `message_threads (organization_id, contact_id, channel) WHERE business_context='sales' AND merged_into_thread_id IS NULL` — precedida por validação bloqueante `duplicidades sales = 0`; se > 0, aborta e reporta, sem improvisar merge.
-10. **Flag** ligada só para a Viagi depois de todos os gates. Relatório final no formato solicitado.
+Hoje: **3.715 resolvem / 1.798 falhariam**.
 
-**Fora do escopo:** Fase 3 (Timeline V2, Composer, UI de Routes), Route para a org `0cc6e2a4`, qualquer alteração de Atendimento.
+**Resultado esperado após vincular os históricos (2890 + 5098 na Viagi, 7020 na Central):**
+
+| org | resolvem | falham | motivo do que falha |
+|---|---|---|---|
+| Viagi | 3.781 (403 + 303 + 3.075) | 2.953 | thread nunca recebeu inbound com `endpoint_id` |
+| Central | 4.896 (3.715 + 1.181) | 617 | 613 sem inbound roteável + 4 com última inbound no número de Atendimento |
+
+Evidência de que o 7020 é deterministicamente o comercial anterior da mesma Route: Meta, `purpose='commercial'`, 9.986 inbounds entre 11/03 e 13/07/2026, hoje inativo; o 7067 (ativo, `active_endpoint_id`) começa em 11/07/2026 — handover limpo, mesma org e canal. Vinculo como inbound histórico, sem reativar e sem trocar `active_endpoint_id`.
+
+**Ponto que sobra e não vou decidir sozinho:** as 2.953 (Viagi) + 613 (Central) threads sem nenhuma inbound com `endpoint_id` (threads antigas, muitas só com outbound ou com mensagens sem endpoint gravado). Pela regra normativa "sem fallback silencioso", elas dariam `REPLY_ROUTE_UNRESOLVED` no primeiro envio. Duas saídas possíveis, para decidir **antes de ligar a flag** (não bloqueia os passos 1–5 abaixo): (a) permitir, apenas quando não existe nenhuma inbound roteável, resolver pela **Route Comercial ativa única da org** — determinístico hoje, pois cada org tem exatamente uma; (b) manter o erro e exigir que o operador escolha a Route na UI (Fase 3). Recomendo (a), restrita a esse caso e registrada no log do resolver.
+
+## 3. Mappings a criar (nenhum outro)
+
+| org | endpoint | papel | `mle.is_active` | altera `active_endpoint_id`? |
+|---|---|---|---|---|
+| Viagi | 8439 (evolution) | envio atual + inbound | true (já existe) | não |
+| Viagi | 2890 (meta) | inbound histórico | true | não |
+| Viagi | 5098 (twilio, inativo) | inbound histórico | true | não |
+| Central | 7067 (meta) | envio atual + inbound | true (já existe) | não |
+| Central | 7020 (meta, inativo) | inbound histórico | true | não |
+
+Não são tocados: `communication_endpoints.is_active`, `provider`, mensagens antigas, `active_endpoint_id`, nada de Atendimento (o 7027 e o 2896 continuam sem mapping).
+
+## 4. Execução aprovada (ordem)
+
+1. Criar os 3 mappings históricos novos (2890, 5098, 7020).
+2. Backfill das 142 threads determinísticas do 5098 → `business_context='sales'`.
+3. Migration da RPC `merge_sales_threads` (a atual `merge_message_threads` recusa merge com `primary_endpoint_id` diferente e colide na chave de `message_thread_reads`; a nova exige `sales` + mesma org/contato/canal, deduplica leituras, preserva o `primary_endpoint_id` do winner e grava auditoria compatível com `unmerge_message_thread`).
+4. Merge dos grupos sem conflito (winner = mais antiga), recalculando os grupos após o backfill.
+5. Merge dos 7 grupos com assignee divergente pela **política A** (assignee = da thread com `last_message_at` mais recente): quando o assignee final difere do assignee do winner, gravar a transição em `thread_assignment_history` (thread winner, `from` = assignee do winner, `to` = assignee final, motivo `MERGE_SALES_V2`), preservando o histórico anterior e **sem sobrescrever** `original_owner_user_id`.
+6. Webhooks V2 (Meta, Twilio, Evolution) e outbound resolver, atrás da flag, com o caminho legado intacto quando desligada; Atendimento sem nenhum ramo alterado.
+7. Testes com flag OFF + shadow por org.
+8. Validação bloqueante `duplicidades sales = 0` e só então o índice unique parcial.
+9. Flag ligada apenas para a Viagi, ao fim de todos os gates.
+
+Fase 3 não é iniciada. Org `0cc6e2a4` permanece fora.
 
 ---
 
-Para eu começar, preciso de duas coisas: **build mode** e a **escolha da política de assignee** (recomendo A). Os passos 1–4 podem rodar imediatamente após isso; a unique e a flag ficam bloqueadas até os 7 grupos serem resolvidos.
+Confirmando este preview e me colocando em **build mode**, executo os passos 1 a 7 e paro antes da unique/flag.
