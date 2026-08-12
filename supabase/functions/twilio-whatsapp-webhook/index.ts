@@ -2,7 +2,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
-import { isSalesEndpoint, resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
+import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
+import { salesCanonicalPathEnabled } from "../_shared/sales-canonical-gate.ts";
 
 
 const corsHeaders = {
