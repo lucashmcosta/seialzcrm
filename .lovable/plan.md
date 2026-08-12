@@ -124,18 +124,18 @@ Uma fase por provider (Opção B aprovada).
 - **Rollback:** flag off por provider.
 
 ### Fase 7 — Política + consolidação de Threads
-- **Objetivo:** aprovar a Política de Consolidação (seção 5) e consolidar ≈116 grupos / ≈238 threads.
+- **Objetivo:** aprovar a Política de Consolidação (seção 5) e consolidar **todas** as threads duplicadas por `(org, contact, business_context)`, independentemente do status — não só as abertas. Os ≈116 grupos / ≈238 threads medidos consideravam apenas threads abertas; o número final (incluindo pares aberta+resolvida e múltiplas resolvidas) é apurado no dry-run desta fase.
 - **Tabelas afetadas:** `message_threads`, `messages`, `message_thread_reads`, `thread_assignment_history`, `message_response_times`, `scheduled_messages`, `tasks`, `ai_agent_logs`, `ai_interaction_logs`, `message_thread_merge_audit`.
-- **RPC:** nova `merge_threads_same_inbox_v1` (a `merge_message_threads` atual recusa endpoints diferentes; herda apenas a mecânica de movimentação e auditoria).
+- **RPC:** nova `merge_threads_same_inbox_v1` (a `merge_message_threads` atual recusa endpoints diferentes; herda apenas a mecânica de movimentação e auditoria). Ignora `channel` como critério de bloqueio.
 - **Migration:** sim (RPC nova + execução em lote).
-- **Rollout:** dry-run com relatório por grupo → aprovação humana → execução em lotes com cron pausado.
-- **Aceite:** zero grupo com >1 thread aberta por `(org, contact, inbox)`; auditoria reversível.
+- **Rollout:** dry-run com relatório por grupo → aprovação humana → execução em lotes com cron pausado. Ordem sugerida: primeiro os conflitos de abertas (53 contatos em `sales`), depois os grupos com resolvidas, que são maioria em volume.
+- **Aceite:** zero grupo com mais de uma thread por `(org, contact, business_context)` em qualquer status; auditoria reversível.
 - **Rollback:** `unmerge` equivalente, validado no dry-run antes do merge.
 
 ### Fase 8 — Nova unique key da Thread
 - **Objetivo:** identidade nova garantida estruturalmente.
-- **Migration:** sim — `business_context` NOT NULL; nova unique parcial `(org, contact, channel, business_context)` em status abertos; remoção das uniques por endpoint.
-- **Pré-requisito:** `conv_thread_identity_v2` 100% ligada e Fase 7 concluída.
+- **Migration:** sim — `business_context` NOT NULL; nova unique **total** `(organization_id, contact_id, business_context)`, **sem `channel` e sem filtro de status**; remoção das uniques por endpoint.
+- **Pré-requisito:** `conv_thread_identity_v2` 100% ligada e Fase 7 concluída em todos os status (não só abertas) — sem isso o índice não é criável.
 - **Aceite:** zero violação na criação do índice.
 - **Rollback:** migration inversa restaurando as uniques antigas.
 
