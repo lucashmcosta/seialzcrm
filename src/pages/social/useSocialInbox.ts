@@ -29,6 +29,7 @@ export type SocialMessage = {
   from_name: string;
   created_time: string;
   attachments?: SocialAttachment[];
+  pending?: boolean;
 };
 
 // Busca conversas de UM canal (ou os dois). O Instagram é lento (~8s, latência da
@@ -111,7 +112,27 @@ export function useSendSocialMessage(orgId?: string) {
       if (!data?.ok) throw new Error(data?.error || 'Falha ao enviar');
       return data;
     },
-    onSuccess: (_d, v) => {
+    // Optimistic UI: a bolha aparece na hora e o request continua por trás.
+    onMutate: async (v) => {
+      const key = ['social-messages', orgId, v.conversation_id];
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<SocialMessage[]>(key);
+      const optimistic: SocialMessage = {
+        id: 'optimistic-' + Math.random().toString(36).slice(2),
+        text: v.text ?? '',
+        from_page: true,
+        from_name: '',
+        created_time: new Date().toISOString(),
+        attachments: v.attachment ? [{ type: v.attachment.type, url: v.attachment.url }] : [],
+        pending: true,
+      };
+      qc.setQueryData<SocialMessage[]>(key, (old = []) => [...old, optimistic]);
+      return { prev, key };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev && ctx?.key) qc.setQueryData(ctx.key, ctx.prev);
+    },
+    onSettled: (_d, _e, v) => {
       qc.invalidateQueries({ queryKey: ['social-messages', orgId, v.conversation_id] });
       qc.invalidateQueries({ queryKey: ['social-conversations', orgId] });
     },
