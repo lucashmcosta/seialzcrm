@@ -2,7 +2,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
-import { isSalesEndpoint, resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
+import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
+import { salesCanonicalPathEnabled } from "../_shared/sales-canonical-gate.ts";
 
 
 const corsHeaders = {
@@ -872,13 +873,16 @@ serve(async (req) => {
       let existingThread: { id: string; primary_endpoint_id: string | null } | null = null
       let canonicalHandled = false
 
-      if (endpointId && orgId && await isSalesEndpoint(supabase, endpointId)) {
+      const salesGate = await salesCanonicalPathEnabled(supabase, {
+        organizationId: orgId as string | null,
+        endpointId,
+      })
+
+      if (salesGate.allowed && endpointId && orgId) {
         const canonical = await resolveSalesWhatsappThread(supabase, {
           organizationId: orgId as string,
-
-
           contactId,
-          endpointId,
+          endpointId: endpointId as string,
           inboundAt: new Date().toISOString(),
           externalId: waId,
         })
