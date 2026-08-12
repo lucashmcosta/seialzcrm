@@ -6689,6 +6689,64 @@ export type Database = {
         }
         Relationships: []
       }
+      messaging_line_endpoints: {
+        Row: {
+          created_at: string
+          endpoint_id: string
+          id: string
+          is_active: boolean
+          line_id: string
+          linked_at: string
+          organization_id: string
+          unlinked_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          endpoint_id: string
+          id?: string
+          is_active?: boolean
+          line_id: string
+          linked_at?: string
+          organization_id: string
+          unlinked_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          endpoint_id?: string
+          id?: string
+          is_active?: boolean
+          line_id?: string
+          linked_at?: string
+          organization_id?: string
+          unlinked_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messaging_line_endpoints_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_line_endpoints_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: false
+            referencedRelation: "messaging_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_line_endpoints_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messaging_line_rotations: {
         Row: {
           from_endpoint_id: string | null
@@ -6764,9 +6822,13 @@ export type Database = {
           channel: string
           created_at: string
           id: string
-          key: string
+          inbox_key: string
+          is_active: boolean
+          key: string | null
           name: string
           organization_id: string
+          owner_user_id: string | null
+          route_slug: string
           updated_at: string
         }
         Insert: {
@@ -6774,9 +6836,13 @@ export type Database = {
           channel?: string
           created_at?: string
           id?: string
-          key: string
+          inbox_key: string
+          is_active?: boolean
+          key?: string | null
           name: string
           organization_id: string
+          owner_user_id?: string | null
+          route_slug: string
           updated_at?: string
         }
         Update: {
@@ -6784,9 +6850,13 @@ export type Database = {
           channel?: string
           created_at?: string
           id?: string
-          key?: string
+          inbox_key?: string
+          is_active?: boolean
+          key?: string | null
           name?: string
           organization_id?: string
+          owner_user_id?: string | null
+          route_slug?: string
           updated_at?: string
         }
         Relationships: [
@@ -6802,6 +6872,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_lines_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -13453,6 +13530,10 @@ export type Database = {
       resolve_communication_endpoint: {
         Args: { _address: string; _channel: string; _organization_id: string }
         Returns: string
+      }
+      rotate_messaging_line_endpoint: {
+        Args: { p_endpoint_id: string; p_line_id: string; p_reason?: string }
+        Returns: Json
       }
       rpc_claim_inbound_events: {
         Args: {
