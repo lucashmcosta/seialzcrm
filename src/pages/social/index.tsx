@@ -164,7 +164,10 @@ export default function SocialInboxPage() {
                   )}
                 >
                   <div className="relative shrink-0">
-                    <Avatar className="h-9 w-9"><AvatarFallback className="text-xs">{initials(c.name)}</AvatarFallback></Avatar>
+                    <Avatar className="h-9 w-9">
+                      {c.avatar_url && <AvatarImage src={c.avatar_url} alt={c.name} />}
+                      <AvatarFallback className="text-xs">{initials(c.name)}</AvatarFallback>
+                    </Avatar>
                     <PlatformIcon platform={c.platform} className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-background p-[1px]" />
                   </div>
                   <div className="min-w-0 flex-1">

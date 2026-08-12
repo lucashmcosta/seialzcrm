@@ -115,6 +115,7 @@ serve(async (req) => {
           participant_id: other.id ?? "",
           name: other.name || username || "Contato",
           username: username ?? null,
+          avatar_url: null as string | null,
           // Instagram expõe link público por username; Facebook/Messenger não expõe
           // URL pública por PSID, então fica null.
           profile_link: platform === "instagram" && username ? `https://instagram.com/${username}` : null,
@@ -165,6 +166,21 @@ serve(async (req) => {
         catch (e) { channels[platform] = errMsg(e); }
       }
       out.sort((a, b) => String(b.updated_time).localeCompare(String(a.updated_time)));
+
+      // Enriquece conversas do Instagram com foto + nome real do contato
+      // (User Profile API, em paralelo, com teto). Messenger não tem foto via API
+      // sem a feature "Business Asset User Profile Access" — fica com nome+iniciais.
+      const igToEnrich = out.filter((c) => c.platform === "instagram" && c.participant_id).slice(0, 20);
+      await Promise.all(igToEnrich.map(async (c) => {
+        try {
+          const p = await metaGraphGet(`/${c.participant_id}`,
+            { fields: "name,username,profile_pic" }, { accessToken: pageToken, appSecret });
+          if (p?.profile_pic) c.avatar_url = p.profile_pic;
+          if (p?.name) c.name = p.name;        // nome real no lugar do username
+          if (p?.username) c.username = p.username;
+        } catch { /* mantém fallback (username/iniciais) */ }
+      }));
+
       return json({ ok: true, conversations: out, channels });
     }
 
