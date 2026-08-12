@@ -15,7 +15,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { metaWaGetMediaUrl, metaWaDownloadMedia, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
-import { isSalesEndpoint, resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
+import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
+import { salesCanonicalPathEnabled } from "../_shared/sales-canonical-gate.ts";
 
 import {
   resolveVerifyTokenForOi,
