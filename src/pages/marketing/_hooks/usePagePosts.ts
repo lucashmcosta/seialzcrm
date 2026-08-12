@@ -29,6 +29,32 @@ export function usePagePostsList(orgId?: string) {
   });
 }
 
+// Sobe uma imagem pro bucket público de marketing e devolve a URL pública
+// (Instagram exige URL pública; usamos a mesma p/ o Facebook).
+export async function uploadMarketingImage(orgId: string, file: File): Promise<string> {
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${orgId}/${crypto.randomUUID()}-${safe}`;
+  const { error } = await supabase.storage.from('marketing-media').upload(path, file, { contentType: file.type || undefined });
+  if (error) throw error;
+  return supabase.storage.from('marketing-media').getPublicUrl(path).data.publicUrl;
+}
+
+// Apaga um post (Facebook).
+export function useDeletePost(orgId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { post_id: string; platform: PublishTarget }): Promise<true> => {
+      const { data, error } = await supabase.functions.invoke('marketing-page-posts', {
+        body: { organization_id: orgId, action: 'delete', ...input },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Falha ao apagar');
+      return true;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['page-posts', orgId] }); },
+  });
+}
+
 // Publica um post na Página e/ou Instagram.
 export function usePublishPost(orgId?: string) {
   const qc = useQueryClient();

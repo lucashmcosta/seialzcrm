@@ -6,7 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { facebookAppSecret, resolveConnectionToken } from "../_shared/meta/connection.ts";
-import { metaGraphGet, metaGraphPost, MetaGraphError } from "../_shared/meta-graph.ts";
+import { metaGraphGet, metaGraphPost, metaGraphDelete, MetaGraphError } from "../_shared/meta-graph.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -127,6 +127,20 @@ serve(async (req) => {
 
       const anyOk = Object.values(result).some((r) => r.id);
       return json({ ok: anyOk, result }, anyOk ? 200 : 502);
+    }
+
+    if (action === "delete") {
+      const post_id = String(body.post_id ?? "");
+      const platform = String(body.platform ?? "facebook");
+      if (!post_id) return json({ error: "missing_post_id" }, 400);
+      if (platform !== "facebook") return json({ error: "delete_only_facebook" }, 400);
+      if (!pageToken) return json({ error: "Página não conectada" }, 400);
+      try {
+        await metaGraphDelete(`/${post_id}`, { accessToken: pageToken, appSecret });
+        return json({ ok: true });
+      } catch (e) {
+        return json({ ok: false, error: errMsg(e) }, 502);
+      }
     }
 
     return json({ error: "unknown_action" }, 400);
