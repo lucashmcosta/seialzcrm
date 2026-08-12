@@ -20,6 +20,8 @@ DECLARE
   v_contact uuid; v_a uuid; v_b uuid; v_c uuid;
   v_ma uuid; v_mb uuid; v_mc uuid;
   v_batch1 uuid := gen_random_uuid(); v_batch2 uuid := gen_random_uuid();
+  v_t0 timestamptz := now();
+
   s0 jsonb; s1 jsonb; s2 jsonb; s3 jsonb; s4 jsonb;
   b0 jsonb; c0 jsonb; b4 jsonb; c4 jsonb;
   diff jsonb := '{}'::jsonb;
