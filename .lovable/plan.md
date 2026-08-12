@@ -65,15 +65,28 @@ BEGIN
    HAVING count(*) = 3;
   IF NOT FOUND THEN RAISE EXCEPTION 'SETUP_ENDPOINTS_ORG_MISMATCH'; END IF;
 
+  -- Usuarios: deduplicar PRIMEIRO, numerar DEPOIS
   SELECT u1,u2,u3 INTO v_u1, v_u2, v_u3
   FROM (
     SELECT max(CASE WHEN rn=1 THEN user_id END) u1,
            max(CASE WHEN rn=2 THEN user_id END) u2,
            max(CASE WHEN rn=3 THEN user_id END) u3
-    FROM (SELECT DISTINCT user_id, row_number() OVER (ORDER BY user_id) rn
-          FROM public.user_organizations WHERE organization_id = v_org) t
+    FROM (
+      SELECT user_id, row_number() OVER (ORDER BY user_id) rn
+      FROM (
+        SELECT DISTINCT user_id
+        FROM public.user_organizations
+        WHERE organization_id = v_org
+      ) d
+    ) x
     WHERE rn <= 3
   ) y;
+
+  IF v_u1 IS NULL OR v_u2 IS NULL OR v_u3 IS NULL
+     OR v_u1 = v_u2 OR v_u1 = v_u3 OR v_u2 = v_u3 THEN
+    RAISE EXCEPTION 'SETUP_USERS_INVALID';
+  END IF;
+
 
   -- 1) Dados sintéticos
   INSERT INTO public.contacts (organization_id, name)
