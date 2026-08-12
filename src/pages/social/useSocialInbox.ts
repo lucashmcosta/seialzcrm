@@ -9,6 +9,7 @@ export type SocialConversation = {
   participant_id: string;
   name: string;
   username: string | null;
+  avatar_url: string | null;
   profile_link: string | null;
   updated_time: string;
   last_message: string;
