@@ -233,7 +233,7 @@ O merge move o vínculo de `thread_id` mas não recalcula `message_response_time
 
 ## 8. Observabilidade transversal
 
-Eventos estruturados: `route_resolution_attempt`, `route_resolution_divergence`, `unrouted_inbound`, `thread_reused`/`thread_created`, `merge_executed`, `send_blocked_no_route`. Expostos em `service-health` (taxa de não roteados como métrica de saúde) e `service-events`. Alerta imediato para qualquer `unrouted_inbound` — nesse modelo, evento não roteado é incidente.
+Eventos estruturados: `route_resolution_attempt`, `route_resolution_divergence`, `unrouted_inbound`, `thread_reused`/`thread_created`/`thread_reopened`, `merge_executed`, `reply_route_unresolved`. Expostos em `service-health` (taxa de não roteados e de `reply_route_unresolved` como métricas de saúde) e `service-events`. Alerta imediato para qualquer `unrouted_inbound` — nesse modelo, evento não roteado é incidente. `reply_route_unresolved` é sinal de endpoint sem Route, não de conversa inválida.
 
 ---
 
