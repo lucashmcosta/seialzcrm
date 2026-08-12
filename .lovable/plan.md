@@ -73,10 +73,10 @@ Não são tocados: `communication_endpoints.is_active`, `provider`, mensagens an
 5. Merge dos 7 grupos com assignee divergente pela **política A** (assignee = da thread com `last_message_at` mais recente): quando o assignee final difere do assignee do winner, gravar a transição em `thread_assignment_history` (thread winner, `from` = assignee do winner, `to` = assignee final, motivo `MERGE_SALES_V2`), preservando o histórico anterior e **sem sobrescrever** `original_owner_user_id`.
 6. Webhooks V2 (Meta, Twilio, Evolution) e outbound resolver, atrás da flag, com o caminho legado intacto quando desligada; Atendimento sem nenhum ramo alterado.
 7. Testes com flag OFF + shadow por org.
-8. Validação bloqueante `duplicidades sales = 0` e só então o índice unique parcial.
-9. Flag ligada apenas para a Viagi, ao fim de todos os gates.
+8. **Revisão obrigatória antes do merge destrutivo:** apresento a RPC final, os grupos recalculados após o backfill, a contagem final de winners/losers e qualquer conflito novo. O merge só roda depois dessa revisão.
+9. Sem unique, sem ligar flag, sem Fase 3 nesta etapa.
 
-Fase 3 não é iniciada. Org `0cc6e2a4` permanece fora.
+Ao terminar, paro e entrego: mappings históricos finais, resultado do backfill, dry-run recalculado dos merges, contrato final da `merge_sales_threads`, shadow do resolver por organização, `REPLY_ROUTE_UNRESOLVED` restante, testes Meta/Twilio/Evolution e regressão de Atendimento.
 
 ---
 
