@@ -14,6 +14,9 @@ function json(body: unknown, status = 200): Response {
 const errMsg = (e: unknown): string =>
   e instanceof MetaGraphError ? (e.error?.message || `Meta error ${e.status}`) : (e as Error)?.message || "erro";
 
+// Cache do page token por isolate (chave = pageId). Evita 1 chamada Graph por request.
+const pageTokenCache = new Map<string, { token: string; exp: number }>();
+
 // Normaliza os anexos de uma mensagem (imagem/vídeo/áudio/arquivo/compartilhamento)
 // num formato simples pro front: { type, url, name?, mime? }.
 type SocialAttachment = { type: "image" | "video" | "audio" | "file" | "share"; url: string; name?: string; mime?: string };
@@ -87,13 +90,19 @@ serve(async (req) => {
     const igId = igAsset?.external_id as string | undefined;
     const selfIds = new Set([String(pageId), ...(igId ? [String(igId)] : [])]);
 
-    const accessToken = await resolveConnectionToken(admin, connection_id);
     const appSecret = facebookAppSecret();
-    let pageToken: string | undefined;
-    try {
-      const r = await metaGraphGet(`/${pageId}`, { fields: "access_token" }, { accessToken, appSecret });
-      pageToken = r?.access_token;
-    } catch { /* segue */ }
+    // Cache do page token por isolate (evita 1 chamada Graph por request — vale p/
+    // todas as actions). O token de página derivado do system user é estável.
+    let pageToken: string | undefined = pageTokenCache.get(pageId)?.token;
+    if (pageToken && (pageTokenCache.get(pageId)!.exp < Date.now())) pageToken = undefined;
+    if (!pageToken) {
+      const accessToken = await resolveConnectionToken(admin, connection_id);
+      try {
+        const r = await metaGraphGet(`/${pageId}`, { fields: "access_token" }, { accessToken, appSecret });
+        pageToken = r?.access_token;
+        if (pageToken) pageTokenCache.set(pageId, { token: pageToken, exp: Date.now() + 10 * 60_000 });
+      } catch { /* segue */ }
+    }
     if (!pageToken) return json({ error: "no_page_token" }, 400);
 
     // Lista conversas de um canal (instagram|messenger); erros por canal não derrubam o outro.
@@ -101,9 +110,10 @@ serve(async (req) => {
     // Messenger: com fields pesados + limit alto retorna "reduce the amount of data".
     // Por isso o IG usa fields enxutos e limit menor.
     async function listConversations(platform: "instagram" | "messenger") {
+      // Payload enxuto nos dois canais (a lista só precisa de nome + última msg + hora).
       const params: Record<string, string | number> = platform === "instagram"
         ? { fields: "id,updated_time,participants,messages.limit(1){message}", platform: "instagram", limit: 10 }
-        : { fields: "id,updated_time,participants,messages.limit(1){message,from,created_time}", limit: 25 };
+        : { fields: "id,updated_time,participants,messages.limit(1){message}", limit: 20 };
       const r = await metaGraphGet(`/${pageId}/conversations`, params, { accessToken: pageToken!, appSecret });
       return (r?.data ?? []).map((cv: any) => {
         const parts = (cv.participants?.data ?? []).filter((p: any) => !selfIds.has(String(p.id)));
@@ -159,12 +169,18 @@ serve(async (req) => {
     }
 
     if (action === "conversations") {
-      const out: any[] = [];
+      // O endpoint do Instagram é lento (~8s, latência da Meta) e o do Messenger é
+      // rápido (~1s). O front pede UM canal por vez (param `platform`) pra renderizar
+      // o Messenger na hora e o Instagram assim que chegar. Sem `platform`, busca os dois.
+      const only = String(body.platform ?? "");
+      const wanted: ("instagram" | "messenger")[] = (only === "instagram" || only === "messenger")
+        ? [only] : ["instagram", "messenger"];
       const channels: Record<string, string | null> = {};
-      for (const platform of ["instagram", "messenger"] as const) {
-        try { out.push(...await listConversations(platform)); channels[platform] = null; }
-        catch (e) { channels[platform] = errMsg(e); }
-      }
+      const perChannel = await Promise.all(wanted.map(async (platform) => {
+        try { const r = await listConversations(platform); channels[platform] = null; return r; }
+        catch (e) { channels[platform] = errMsg(e); return []; }
+      }));
+      const out: any[] = perChannel.flat();
       out.sort((a, b) => String(b.updated_time).localeCompare(String(a.updated_time)));
 
       // Enriquece conversas do Instagram com foto + nome real do contato

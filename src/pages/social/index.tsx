@@ -93,13 +93,21 @@ export default function SocialInboxPage() {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const convos = useSocialConversations(enabled ? orgId : undefined);
+  // Messenger (rápido) e Instagram (lento, ~8s) em queries separadas: a lista aparece
+  // na hora com o Messenger e o Instagram entra quando chega.
+  const msgrConvos = useSocialConversations(enabled ? orgId : undefined, 'messenger');
+  const igConvos = useSocialConversations(enabled ? orgId : undefined, 'instagram');
   const messages = useSocialMessages(orgId, selectedId);
   const send = useSendSocialMessage(orgId);
 
+  const conversationsAll = useMemo<SocialConversation[]>(() => {
+    const all = [...(msgrConvos.data?.conversations ?? []), ...(igConvos.data?.conversations ?? [])];
+    return all.sort((a, b) => String(b.updated_time).localeCompare(String(a.updated_time)));
+  }, [msgrConvos.data, igConvos.data]);
+
   const selected = useMemo<SocialConversation | null>(
-    () => convos.data?.conversations.find((c) => c.id === selectedId) ?? null,
-    [convos.data, selectedId],
+    () => conversationsAll.find((c) => c.id === selectedId) ?? null,
+    [conversationsAll, selectedId],
   );
   const profile = useSocialProfile(orgId, selected?.participant_id, selected?.platform).data;
 
@@ -108,9 +116,12 @@ export default function SocialInboxPage() {
   }
   if (!enabled) return <Navigate to="/" replace />;
 
-  const conversations = convos.data?.conversations ?? [];
-  const channels = convos.data?.channels ?? {};
+  const conversations = conversationsAll;
+  const channels = { ...(msgrConvos.data?.channels ?? {}), ...(igConvos.data?.channels ?? {}) };
   const channelErrors = Object.entries(channels).filter(([, v]) => v);
+  // Lista utilizável assim que o Messenger chega; Instagram entra depois.
+  const listLoading = msgrConvos.isLoading && igConvos.isLoading;
+  const igLoading = igConvos.isLoading;
 
   const doSend = async () => {
     const text = draft.trim();
@@ -165,7 +176,12 @@ export default function SocialInboxPage() {
           {/* Lista de conversas */}
           <aside className="w-80 shrink-0 border-r border-border flex flex-col min-h-0">
             <ScrollArea className="flex-1">
-              {convos.isLoading ? (
+              {igLoading && (
+                <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-muted-foreground border-b border-border/60">
+                  <SpinnerGap className="h-3.5 w-3.5 animate-spin" /> Carregando Instagram…
+                </div>
+              )}
+              {listLoading ? (
                 <div className="p-3 space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
               ) : conversations.length === 0 ? (
                 <p className="p-4 text-sm text-muted-foreground">Nenhuma conversa encontrada.</p>

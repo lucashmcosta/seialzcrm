@@ -114,6 +114,17 @@ serve(async (req) => {
           try {
             const container = await metaGraphPost(`/${igId}/media`, { image_url, caption: message }, { accessToken, appSecret });
             const creationId = container?.id;
+            // O container do IG é assíncrono: publicar antes de terminar dá erro de
+            // "media id"/"not ready" (comum ao publicar FB+IG junto). Espera FINISHED.
+            let ready = false;
+            for (let i = 0; i < 10 && !ready; i++) {
+              const st = await metaGraphGet(`/${creationId}`, { fields: "status_code" }, { accessToken, appSecret });
+              const code = st?.status_code;
+              if (code === "FINISHED") { ready = true; break; }
+              if (code === "ERROR" || code === "EXPIRED") throw new Error(`IG container ${String(code).toLowerCase()}`);
+              await new Promise((r) => setTimeout(r, 1500));
+            }
+            if (!ready) throw new Error("IG container ainda processando; tente de novo");
             const pub = await metaGraphPost(`/${igId}/media_publish`, { creation_id: creationId }, { accessToken, appSecret });
             result.instagram = { id: pub?.id };
           } catch (e) { result.instagram = { error: errMsg(e) }; }
@@ -128,10 +139,16 @@ serve(async (req) => {
       const post_id = String(body.post_id ?? "");
       const platform = String(body.platform ?? "facebook");
       if (!post_id) return json({ error: "missing_post_id" }, 400);
-      if (platform !== "facebook") return json({ error: "delete_only_facebook" }, 400);
-      if (!pageToken) return json({ error: "Página não conectada" }, 400);
       try {
-        await metaGraphDelete(`/${post_id}`, { accessToken: pageToken, appSecret });
+        if (platform === "instagram") {
+          // IG Media Delete API (nov/2025): DELETE /{ig_media_id} no graph.facebook.com,
+          // com o token de usuário/sistema (escopos instagram_basic + instagram_manage_contents).
+          if (!igId) return json({ error: "Instagram não conectado" }, 400);
+          await metaGraphDelete(`/${post_id}`, { accessToken, appSecret });
+        } else {
+          if (!pageToken) return json({ error: "Página não conectada" }, 400);
+          await metaGraphDelete(`/${post_id}`, { accessToken: pageToken, appSecret });
+        }
         return json({ ok: true });
       } catch (e) {
         return json({ ok: false, error: errMsg(e) }, 502);
