@@ -878,13 +878,11 @@ serve(async (req) => {
         endpointId,
       })
 
-      if (salesGate.allowed) {
+      if (salesGate.allowed && endpointId && orgId) {
         const canonical = await resolveSalesWhatsappThread(supabase, {
           organizationId: orgId as string,
-
-
           contactId,
-          endpointId,
+          endpointId: endpointId as string,
           inboundAt: new Date().toISOString(),
           externalId: waId,
         })
