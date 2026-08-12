@@ -71,12 +71,13 @@ function MessageBubble({ m }: { m: SocialMessage }) {
       <div className={cn(
         'max-w-[75%] rounded-2xl px-3 py-2 text-sm space-y-1.5',
         m.from_page ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted rounded-bl-sm',
+        m.pending && 'opacity-70',
       )}>
         {atts.map((a, i) => <AttachmentView key={i} att={a} fromPage={m.from_page} />)}
         {m.text && <div className="whitespace-pre-wrap break-words">{m.text}</div>}
         {empty && <span className="italic opacity-70">(sem texto)</span>}
-        <div className={cn('text-[10px]', m.from_page ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
-          {fmtTime(m.created_time)}
+        <div className={cn('text-[10px] flex items-center gap-1', m.from_page ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+          {m.pending ? 'enviando…' : fmtTime(m.created_time)}
         </div>
       </div>
     </div>
@@ -127,16 +128,21 @@ export default function SocialInboxPage() {
     const text = draft.trim();
     if ((!text && !pending) || !selected) return;
     if (!selected.participant_id) { toast.error('Sem destinatário para esta conversa'); return; }
+    const att = pending;
+    // Limpa o compositor NA HORA (a bolha otimista já aparece); restaura se falhar.
+    setDraft(''); setPending(null);
     try {
       await send.mutateAsync({
         conversation_id: selected.id,
         recipient_id: selected.participant_id,
         text: text || undefined,
         platform: selected.platform,
-        attachment: pending ? { type: pending.type, url: pending.url } : undefined,
+        attachment: att ? { type: att.type, url: att.url } : undefined,
       });
-      setDraft(''); setPending(null);
-    } catch (e) { toast.error((e as Error)?.message || 'Falha ao enviar'); }
+    } catch (e) {
+      setDraft(text); setPending(att);
+      toast.error((e as Error)?.message || 'Falha ao enviar');
+    }
   };
 
   const onPickFile = async (file: File | undefined) => {
