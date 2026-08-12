@@ -24,6 +24,7 @@ export function MarketingLayout({ children, title }: { children: ReactNode; titl
     ? [...BASE_TABS,
         { href: '/marketing/posts', label: 'Publicações', icon: PaperPlaneTilt },
         { href: '/marketing/comments', label: 'Comentários', icon: ChatCircle },
+        { href: '/marketing/campaigns', label: 'Campanhas', icon: Megaphone },
         { href: '/marketing/webhooks', label: 'Webhooks', icon: BellRinging }]
     : BASE_TABS;
   return (
