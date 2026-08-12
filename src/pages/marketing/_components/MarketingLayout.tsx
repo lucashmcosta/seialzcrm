@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
-import { ChartBar, Megaphone, Funnel, ChartLine, House, InstagramLogo, PaperPlaneTilt, ChatCircle } from '@phosphor-icons/react';
+import { ChartBar, Megaphone, Funnel, ChartLine, House, InstagramLogo, PaperPlaneTilt, ChatCircle, BellRinging } from '@phosphor-icons/react';
 import { useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -23,7 +23,8 @@ export function MarketingLayout({ children, title }: { children: ReactNode; titl
   const TABS = publishingEnabled
     ? [...BASE_TABS,
         { href: '/marketing/posts', label: 'Publicações', icon: PaperPlaneTilt },
-        { href: '/marketing/comments', label: 'Comentários', icon: ChatCircle }]
+        { href: '/marketing/comments', label: 'Comentários', icon: ChatCircle },
+        { href: '/marketing/webhooks', label: 'Webhooks', icon: BellRinging }]
     : BASE_TABS;
   return (
     <Layout>
