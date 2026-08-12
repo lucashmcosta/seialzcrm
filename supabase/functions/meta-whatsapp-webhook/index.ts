@@ -830,66 +830,82 @@ async function handleInbound(
     await saveReferralFields(supabase, contactId, referral);
   }
 
-  // 6) Find or create thread — determinístico, tolera duplicatas históricas
-  //    (PR-A: substitui .maybeSingle() por lookup ordenado com limit(5))
-  const { data: threads, error: threadLookupErr } = await supabase
-    .from("message_threads")
-    .select("id, status, last_message_at, created_at")
-    .eq("organization_id", endpoint.organization_id)
-    .eq("contact_id", contactId)
-    .eq("channel", "whatsapp")
-    .eq("primary_endpoint_id", endpoint.id)
-    .order("last_message_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(5);
+  // 6) Find or create thread.
+  //    Comercial (purpose sales/commercial) → caminho CANÔNICO compartilhado
+  //    (org + contact + whatsapp + business_context='sales' + não consolidada),
+  //    sem usar primary_endpoint_id como identidade.
+  //    Atendimento / purpose ausente → caminho legado inalterado.
+  let threadId: string | undefined;
 
-  if (threadLookupErr) {
-    console.error("[meta-wa-webhook] thread_lookup_error", {
-      contact_id: contactId,
-      endpoint_id: endpoint.id,
-      error: threadLookupErr,
+  if (await isSalesEndpoint(supabase, endpoint.id)) {
+    const canonical = await resolveSalesWhatsappThread(supabase, {
+      organizationId: endpoint.organization_id,
+      contactId,
+      endpointId: endpoint.id,
+      inboundAt: new Date().toISOString(),
     });
-  }
-
-  const threadCount = threads?.length ?? 0;
-  let threadId: string | undefined = threads?.[0]?.id;
-
-  if (threadCount > 1) {
-    console.warn("[meta-wa-webhook] duplicate_thread_detected", JSON.stringify({
-      contact_id: contactId,
-      endpoint_id: endpoint.id,
-      thread_count: threadCount,
-      selected_thread_id: threadId,
-      all_thread_ids: (threads ?? []).map((t: any) => t.id),
-    }));
-  }
-
-  if (!threadId) {
-    const { data: createdThread, error: threadInsErr } = await supabase
+    threadId = canonical.threadId ?? undefined;
+  } else {
+    const { data: threads, error: threadLookupErr } = await supabase
       .from("message_threads")
-      .insert({
-        organization_id: endpoint.organization_id,
+      .select("id, status, last_message_at, created_at")
+      .eq("organization_id", endpoint.organization_id)
+      .eq("contact_id", contactId)
+      .eq("channel", "whatsapp")
+      .eq("primary_endpoint_id", endpoint.id)
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    if (threadLookupErr) {
+      console.error("[meta-wa-webhook] thread_lookup_error", {
         contact_id: contactId,
-        channel: "whatsapp",
-        subject: "WhatsApp",
-        primary_endpoint_id: endpoint.id,
-        whatsapp_last_inbound_at: new Date().toISOString(),
-        last_inbound_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
-    if (threadInsErr) console.error("[meta-wa-webhook] thread_insert_error", threadInsErr);
-    threadId = createdThread?.id;
-    if (threadId) {
-      console.log("[meta-wa-webhook] thread_created", JSON.stringify({
-        thread_id: threadId, contact_id: contactId, endpoint_id: endpoint.id,
+        endpoint_id: endpoint.id,
+        error: threadLookupErr,
+      });
+    }
+
+    const threadCount = threads?.length ?? 0;
+    threadId = threads?.[0]?.id;
+
+    if (threadCount > 1) {
+      console.warn("[meta-wa-webhook] duplicate_thread_detected", JSON.stringify({
+        contact_id: contactId,
+        endpoint_id: endpoint.id,
+        thread_count: threadCount,
+        selected_thread_id: threadId,
+        all_thread_ids: (threads ?? []).map((t: any) => t.id),
       }));
     }
-  } else {
-    console.log("[meta-wa-webhook] thread_selected", JSON.stringify({
-      thread_id: threadId, thread_count: threadCount, contact_id: contactId,
-    }));
+
+    if (!threadId) {
+      const { data: createdThread, error: threadInsErr } = await supabase
+        .from("message_threads")
+        .insert({
+          organization_id: endpoint.organization_id,
+          contact_id: contactId,
+          channel: "whatsapp",
+          subject: "WhatsApp",
+          primary_endpoint_id: endpoint.id,
+          whatsapp_last_inbound_at: new Date().toISOString(),
+          last_inbound_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      if (threadInsErr) console.error("[meta-wa-webhook] thread_insert_error", threadInsErr);
+      threadId = createdThread?.id;
+      if (threadId) {
+        console.log("[meta-wa-webhook] thread_created", JSON.stringify({
+          thread_id: threadId, contact_id: contactId, endpoint_id: endpoint.id,
+        }));
+      }
+    } else {
+      console.log("[meta-wa-webhook] thread_selected", JSON.stringify({
+        thread_id: threadId, thread_count: threadCount, contact_id: contactId,
+      }));
+    }
   }
+
 
   if (!threadId) {
     console.error("[meta-wa-webhook] no_thread_id_after_lookup_and_insert", {
