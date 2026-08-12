@@ -64,19 +64,17 @@ Evidência de que o 7020 é deterministicamente o comercial anterior da mesma Ro
 
 Não são tocados: `communication_endpoints.is_active`, `provider`, mensagens antigas, `active_endpoint_id`, nada de Atendimento (o 7027 e o 2896 continuam sem mapping).
 
-## 4. Execução aprovada (ordem)
+## 4. Execução autorizada nesta rodada (nenhum merge)
 
-1. Criar os 3 mappings históricos novos (2890, 5098, 7020).
+1. Criar os 3 mappings históricos novos (2890, 5098, 7020) — sem alterar `active_endpoint_id` e sem reativar `communication_endpoints`.
 2. Backfill das 142 threads determinísticas do 5098 → `business_context='sales'`.
-3. Migration da RPC `merge_sales_threads` (a atual `merge_message_threads` recusa merge com `primary_endpoint_id` diferente e colide na chave de `message_thread_reads`; a nova exige `sales` + mesma org/contato/canal, deduplica leituras, preserva o `primary_endpoint_id` do winner e grava auditoria compatível com `unmerge_message_thread`).
-4. Merge dos grupos sem conflito (winner = mais antiga), recalculando os grupos após o backfill.
-5. Merge dos 7 grupos com assignee divergente pela **política A** (assignee = da thread com `last_message_at` mais recente): quando o assignee final difere do assignee do winner, gravar a transição em `thread_assignment_history` (thread winner, `from` = assignee do winner, `to` = assignee final, motivo `MERGE_SALES_V2`), preservando o histórico anterior e **sem sobrescrever** `original_owner_user_id`.
-6. Webhooks V2 (Meta, Twilio, Evolution) e outbound resolver, atrás da flag, com o caminho legado intacto quando desligada; Atendimento sem nenhum ramo alterado.
-7. Testes com flag OFF + shadow por org.
-8. **Revisão obrigatória antes do merge destrutivo:** apresento a RPC final, os grupos recalculados após o backfill, a contagem final de winners/losers e qualquer conflito novo. O merge só roda depois dessa revisão.
-9. Sem unique, sem ligar flag, sem Fase 3 nesta etapa.
+3. Criar a RPC `merge_sales_threads` por migration — **sem chamá-la em nenhuma thread**. Motivo da RPC nova: a atual `merge_message_threads` recusa merge quando `primary_endpoint_id` difere e colide na chave de `message_thread_reads`; a nova exige `sales` + mesma org/contato/canal, deduplica leituras, preserva o `primary_endpoint_id` do winner, aplica a política A de assignee com registro em `thread_assignment_history` (`reason = MERGE_SALES_V2`, sem sobrescrever `original_owner_user_id`) e grava auditoria compatível com `unmerge_message_thread`.
+4. Recalcular, após o backfill, todos os grupos duplicados `sales`: winners, losers, assignees, statuses, oportunidades, mensagens, endpoints de origem e conflitos novos — **dry-run apenas**.
+5. Implementar Webhooks V2 (Meta, Twilio, Evolution) e o outbound resolver atrás da flag, com `conv_route_resolver_v2 = OFF` e caminho legado idêntico em produção; Atendimento sem nenhum ramo alterado.
+6. Rodar os testes com flag OFF + shadow por organização.
+7. **PARAR** e entregar o relatório de 16 itens para você autorizar (ou não) os merges.
 
-Ao terminar, paro e entrego: mappings históricos finais, resultado do backfill, dry-run recalculado dos merges, contrato final da `merge_sales_threads`, shadow do resolver por organização, `REPLY_ROUTE_UNRESOLVED` restante, testes Meta/Twilio/Evolution e regressão de Atendimento.
+**Não autorizado nesta rodada:** executar `merge_sales_threads`, alterar `merged_into_thread_id`, mover mensagens entre threads, criar a unique de `sales`, ligar a flag, iniciar a Fase 3.
 
 ---
 
