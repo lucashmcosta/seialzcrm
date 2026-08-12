@@ -13337,6 +13337,10 @@ export type Database = {
         Args: { p_batch: string; p_loser: string; p_winner: string }
         Returns: undefined
       }
+      merge_sales_threads: {
+        Args: { p_batch: string; p_loser: string; p_winner: string }
+        Returns: undefined
+      }
       normalize_identity_digits: { Args: { _value: string }; Returns: string }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
       populate_communication_endpoints_from_v2_senders: {
@@ -13907,6 +13911,7 @@ export type Database = {
         Args: { p_job_id: string; p_payload: Json }
         Returns: undefined
       }
+      sales_thread_status_rank: { Args: { p_status: string }; Returns: number }
       search_knowledge: {
         Args: {
           agent_id_filter?: string
