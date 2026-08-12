@@ -16,20 +16,22 @@ Estado atual verificado (read-only): flag `is_enabled = false`, `organization_id
 
 Falha em qualquer condição ⇒ caminho legado byte-a-byte: lookup atual por `primary_endpoint_id`, criação atual, sem reopen, sem rotação canônica, sem reuso por org+contact. Atendimento nunca passa pela condição 1.
 
-## Diff lógico
+## Diff lógico do gate
 
-Novo helper em `supabase/functions/_shared/sales-thread.ts` (mesma unidade, sem duplicar nos webhooks):
+Novo módulo `supabase/functions/_shared/sales-canonical-gate.ts` (gate único, sem lógica duplicada nos webhooks):
 
 ```ts
+export const SALES_CANONICAL_FLAG = "conv_route_resolver_v2";
+
 export type SalesCanonicalGateReason =
-  | "not_sales_endpoint" | "no_route_v2" | "flag_off" | "allowed";
+  | "missing_input" | "not_sales_endpoint" | "no_route_v2" | "flag_off" | "allowed";
 
 export async function salesCanonicalPathEnabled(
-  service, { organizationId, endpointId }
+  service, { organizationId, endpointId, channel = "whatsapp" }
 ): Promise<{ allowed: boolean; reason: SalesCanonicalGateReason; lineId: string | null }>
 ```
 
-Ordem de avaliação (mais barata/decisiva primeiro): purpose → route V2 → flag. Loga uma linha `[sales-thread] canonical_gate` com `reason`, org, endpoint e `line_id` — permitindo medir na Etapa B quantos inbounds *entrariam* no caminho novo sem que nada mude.
+Ordem de avaliação: input → `isSalesEndpoint` → Route V2 → flag. `allowed` só é `true` com as três condições verdadeiras; qualquer negativa devolve o controle ao caminho legado. Log `[sales-gate] canonical_gate` quando liberado, e logs de erro em falha de lookup (fail-closed: erro ⇒ legado).
 
 Cada webhook troca exatamente uma condição:
 
@@ -40,31 +42,43 @@ Cada webhook troca exatamente uma condição:
 + if (gate.allowed) {
 ```
 
-Call sites a alterar (todos já mapeados):
-- `meta-whatsapp-webhook/index.ts` (~linha 842, passo 6)
-- `twilio-whatsapp-webhook/index.ts` (~linha 875, bloco `canonicalHandled`)
-- `evolution-webhook/index.ts` (~linha 644, `findOrCreateThread`)
+Call sites a alterar (mapeados):
+- `meta-whatsapp-webhook/index.ts` (~842, passo 6)
+- `twilio-whatsapp-webhook/index.ts` (~875, bloco `canonicalHandled`)
+- `evolution-webhook/index.ts` (~644, `findOrCreateThread`)
 
-`isSalesEndpoint` permanece exportada e passa a ser usada internamente pelo gate. Nenhuma alteração em envio/outbound, `dispatch-whatsapp-send`, templates ou frontend.
+`isSalesEndpoint` deixa de ser chamada diretamente pelos webhooks (passa a ser interna ao gate). `resolveSalesWhatsappThread` e todo o restante de `_shared/sales-thread.ts` ficam inalterados. Nada em outbound/dispatcher/templates/frontend é tocado.
 
-## Onde a flag é consultada
+## Como a flag por organização é consultada
 
-Somente dentro de `salesCanonicalPathEnabled`, via leitura direta de `feature_flags` (mesma semântica já usada por `_shared/route-resolver.ts` e `_shared/telephony/feature-flag.ts`: `is_enabled` + `organization_ids` vazio = global). Nenhum webhook lê a flag diretamente.
+Somente dentro do gate: `feature_flags` where `name = 'conv_route_resolver_v2'`, exigindo `is_enabled = true` e (`organization_ids` vazio = global **ou** contém a org). Mesma semântica de `_shared/route-resolver.ts` e `_shared/telephony/feature-flag.ts`. Estado real hoje (leitura já feita): `is_enabled = false`, `organization_ids = []` → **0 organizações habilitadas**, logo o gate reprova 100% dos inbounds mesmo após o deploy.
 
-## Testes (controlados, sem deploy)
+## Como a Route V2 é validada
 
-`deno check` nos três webhooks + `rg` de call sites (garantir zero chamada direta a `resolveSalesWhatsappThread` fora do gate).
+Nunca por `purpose`. Duas leituras:
+1. `messaging_line_endpoints` where `endpoint_id = <endpoint> AND is_active = true` → `line_id`s.
+2. `messaging_lines` where `id IN (...) AND organization_id = <org> AND channel = <canal> AND inbox_key = 'sales' AND is_active = true AND active_endpoint_id IS NOT NULL`.
 
-Bateria em transação com **ROLLBACK** (dados sintéticos), avaliando o gate por consulta ao mesmo predicado SQL e simulando o inbound:
+Sem linha válida ⇒ `no_route_v2` ⇒ legado.
 
-- **a)** flag OFF (estado real de produção) ⇒ `reason = flag_off`, caminho legado.
-- **b)** flag ON para org sintética (`organization_ids = [orgSint]`) + endpoint sales com Route V2 ⇒ `reason = allowed`, caminho canônico (reuso/reopen/rotação).
-- **c)** endpoint `customer_service` com flag ON ⇒ `reason = not_sales_endpoint`, legado.
-- **d)** endpoint sales sem vínculo ativo em `messaging_line_endpoints` (ou line inativa) com flag ON ⇒ `reason = no_route_v2`, legado.
-- **e)** nenhuma tabela/coluna de outbound tocada — prova por inspeção do diff (0 chamadas a funções de envio) e por ausência de escrita em `messages` outbound na bateria.
+## Testes T1–T10 (controlados, sem deploy)
 
-Ao final: ROLLBACK, zero dado sintético persistido, flag restaurada a `is_enabled = false, organization_ids = []`.
+Suíte Deno (`_shared/sales-canonical-gate.test.ts` + `sales-thread.test.ts`) com stub de banco em memória — nenhuma escrita em produção:
+
+- **T1** Comercial + Route V2 + flag OFF ⇒ `flag_off`, legado.
+- **T2** Comercial + Route V2 + flag ON para org controlada ⇒ `allowed`, canônico.
+- **T3** Comercial sem Route V2 (sem vínculo ativo / line inativa / sem `active_endpoint_id`) + flag ON ⇒ `no_route_v2`, legado.
+- **T4** endpoint Atendimento + flag ON ⇒ `not_sales_endpoint`, legado.
+- **T5** `purpose` NULL ⇒ `not_sales_endpoint`, legado.
+- **T6** thread sales canônica existente + flag ON ⇒ reutiliza a viva mais antiga; losers com `merged_into_thread_id` jamais selecionados.
+- **T7** thread `resolved`/`closed` + flag ON ⇒ reopen (`status='open'`, `resolved_at=NULL`) + log `SALES_THREAD_REOPENED`.
+- **T8** inbound por outro endpoint da mesma Route + flag ON ⇒ mesma thread + rotação de `primary_endpoint_id` + log `SALES_THREAD_ENDPOINT_ROTATED`.
+- **T9** flag OFF ⇒ zero `SALES_THREAD_REOPENED`, zero `SALES_THREAD_ENDPOINT_ROTATED`, zero reuso/criação canônica; `resolveSalesWhatsappThread` não é invocada.
+- **T10** Atendimento idêntico nos três providers (o gate reprova antes de qualquer desvio; verificação por asserção de que o helper canônico não é chamado).
+
+Validação de código: `deno check` nos três webhooks; `rg` de todos os call sites de `resolveSalesWhatsappThread` e de `salesCanonicalPathEnabled` provando que não existe chamada ao helper canônico fora do gate; `rg` confirmando zero alteração em dispatchers/outbound.
 
 ## Fora de escopo nesta etapa
 
-Sem deploy, sem trigger `trg_zz_guard_sales_thread_canonical`, sem índice unique parcial, sem ligar `conv_route_resolver_v2`, sem Fase 3.
+Sem deploy, sem trigger, sem índice unique, sem ligar a flag, sem habilitar organização, sem merge, sem Fase 3, sem alteração de outbound ou de banco.
+
