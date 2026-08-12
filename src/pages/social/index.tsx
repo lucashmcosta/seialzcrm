@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { InstagramLogo, MessengerLogo, PaperPlaneTilt, ChatsCircle, WarningCircle, ArrowSquareOut, FileArrow, SealCheck, Users } from '@phosphor-icons/react';
+import { InstagramLogo, MessengerLogo, PaperPlaneTilt, ChatsCircle, WarningCircle, ArrowSquareOut, Paperclip, SealCheck, Users } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -57,7 +57,7 @@ function AttachmentView({ att, fromPage }: { att: SocialAttachment; fromPage: bo
   return (
     <a href={att.url} target="_blank" rel="noreferrer"
       className={cn('inline-flex items-center gap-1.5 text-xs underline underline-offset-2', fromPage ? 'text-primary-foreground' : 'text-foreground')}>
-      {att.type === 'share' ? <ArrowSquareOut className="h-3.5 w-3.5" /> : <FileArrow className="h-3.5 w-3.5" />}
+      {att.type === 'share' ? <ArrowSquareOut className="h-3.5 w-3.5" /> : <Paperclip className="h-3.5 w-3.5" />}
       {att.name || (att.type === 'share' ? 'Ver publicação' : 'Abrir anexo')}
     </a>
   );
