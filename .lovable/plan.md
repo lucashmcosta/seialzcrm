@@ -131,7 +131,47 @@ BEGIN
   VALUES (v_org, v_c, 'inbound', 'MSG_C', now() - interval '1 hour', now() - interval '1 hour')
   RETURNING id INTO v_mc;
 
-  -- 2) S0 (A, B, C antes de qualquer merge)
+  -- 1b) BASELINE EXPLICITA pos-triggers (neutraliza messages_smart_reopen e afins).
+  -- Preserva os last_message_* gerados pelas mensagens.
+  UPDATE public.message_threads SET
+    status = 'resolved',
+    assigned_user_id = v_u1,
+    original_owner_user_id = v_u1,
+    assigned_at = v_t0 - interval '30 min',
+    resolved_at = v_t0 - interval '20 min',
+    priority = 'normal',
+    needs_human_attention = false
+  WHERE id = v_a;
+
+  UPDATE public.message_threads SET
+    status = 'awaiting_client',
+    assigned_user_id = v_u2,
+    original_owner_user_id = v_u2,
+    assigned_at = v_t0 - interval '20 min',
+    resolved_at = NULL,
+    priority = 'high',
+    needs_human_attention = false
+  WHERE id = v_b;
+
+  UPDATE public.message_threads SET
+    status = 'open',
+    assigned_user_id = v_u3,
+    original_owner_user_id = v_u3,
+    assigned_at = v_t0 - interval '10 min',
+    resolved_at = NULL,
+    priority = 'normal',
+    needs_human_attention = true
+  WHERE id = v_c;
+
+  -- confirma que a baseline sobreviveu aos triggers de UPDATE
+  IF (SELECT status FROM public.message_threads WHERE id = v_a) <> 'resolved'
+     OR (SELECT status FROM public.message_threads WHERE id = v_b) <> 'awaiting_client'
+     OR (SELECT status FROM public.message_threads WHERE id = v_c) <> 'open' THEN
+    RAISE EXCEPTION 'SETUP_BASELINE_NOT_STABLE';
+  END IF;
+
+  -- 2) S0 (A, B, C baseline, antes de qualquer merge)
+
   SELECT to_jsonb(t) INTO s0 FROM (
     SELECT status, assigned_user_id, assigned_at, original_owner_user_id,
            last_message_id, last_message_at, last_message_content, last_message_direction,
