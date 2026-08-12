@@ -98,7 +98,6 @@ export default function SocialInboxPage() {
   // na hora com o Messenger e o Instagram entra quando chega.
   const msgrConvos = useSocialConversations(enabled ? orgId : undefined, 'messenger');
   const igConvos = useSocialConversations(enabled ? orgId : undefined, 'instagram');
-  const messages = useSocialMessages(orgId, selectedId);
   const send = useSendSocialMessage(orgId);
 
   const conversationsAll = useMemo<SocialConversation[]>(() => {
@@ -110,6 +109,7 @@ export default function SocialInboxPage() {
     () => conversationsAll.find((c) => c.id === selectedId) ?? null,
     [conversationsAll, selectedId],
   );
+  const messages = useSocialMessages(orgId, selected ? { id: selected.id, participant_id: selected.participant_id, platform: selected.platform } : null);
   const profile = useSocialProfile(orgId, selected?.participant_id, selected?.platform).data;
 
   if (!orgId || flagLoading) {

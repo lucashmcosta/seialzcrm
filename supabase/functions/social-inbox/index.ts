@@ -135,6 +135,59 @@ serve(async (req) => {
       });
     }
 
+    // ---- Store (stale-while-revalidate): serve do banco e atualiza por trás ----
+    const bg = (p: Promise<unknown>) => {
+      const rt = (globalThis as any).EdgeRuntime;
+      if (rt?.waitUntil) rt.waitUntil(p.catch(() => {})); else p.catch(() => {});
+    };
+    async function fetchAndEnrich(wanted: ("instagram" | "messenger")[]) {
+      const channels: Record<string, string | null> = {};
+      const perChannel = await Promise.all(wanted.map(async (platform) => {
+        try { const r = await listConversations(platform); channels[platform] = null; return r; }
+        catch (e) { channels[platform] = errMsg(e); return []; }
+      }));
+      const out = perChannel.flat();
+      out.sort((a, b) => String(b.updated_time).localeCompare(String(a.updated_time)));
+      const igToEnrich = out.filter((c) => c.platform === "instagram" && c.participant_id).slice(0, 20);
+      await Promise.all(igToEnrich.map(async (c) => {
+        try {
+          const p = await metaGraphGet(`/${c.participant_id}`, { fields: "name,username,profile_pic" }, { accessToken: pageToken, appSecret });
+          if (p?.profile_pic) c.avatar_url = p.profile_pic;
+          if (p?.name) c.name = p.name;
+          if (p?.username) c.username = p.username;
+        } catch { /* mantém fallback */ }
+      }));
+      return { out, channels };
+    }
+    async function upsertConversations(convs: any[]) {
+      const rows = convs.filter((c) => c.participant_id).map((c) => ({
+        organization_id, platform: c.platform, participant_id: String(c.participant_id),
+        conversation_id: c.id ?? null, name: c.name ?? null, username: c.username ?? null,
+        avatar_url: c.avatar_url ?? null, profile_link: c.profile_link ?? null,
+        last_message: c.last_message ?? "", updated_time: c.updated_time ?? null,
+        refreshed_at: new Date().toISOString(),
+      }));
+      if (rows.length) await admin.from("social_conversations").upsert(rows, { onConflict: "organization_id,platform,participant_id" });
+    }
+    async function liveFetchMessages(conversation_id: string) {
+      const r = await metaGraphGet(`/${conversation_id}`,
+        { fields: "messages.limit(30){id,message,from,created_time,attachments{id,mime_type,name,image_data,video_data,file_url},shares{link,name}}" },
+        { accessToken: pageToken, appSecret });
+      return (r?.messages?.data ?? []).map((m: any) => ({
+        id: m.id, text: m.message ?? "", from_page: selfIds.has(String(m.from?.id)),
+        from_name: m.from?.name || m.from?.username || "", created_time: m.created_time,
+        attachments: mapAttachments(m),
+      })).reverse();
+    }
+    async function upsertMessages(msgs: any[], participant_id: string, platform: string) {
+      const rows = msgs.filter((m) => m.id).map((m) => ({
+        organization_id, message_id: String(m.id), platform, participant_id: String(participant_id),
+        from_page: !!m.from_page, from_name: m.from_name ?? null, body: m.text ?? "",
+        attachments: m.attachments ?? [], created_time: m.created_time ?? null,
+      }));
+      if (rows.length) await admin.from("social_messages").upsert(rows, { onConflict: "organization_id,message_id" });
+    }
+
     if (action === "profile") {
       // Perfil do contato de uma conversa aberta (1 chamada, sob demanda).
       // Instagram (User Profile API): foto, followers, verificado, follow status.
@@ -169,50 +222,56 @@ serve(async (req) => {
     }
 
     if (action === "conversations") {
-      // O endpoint do Instagram é lento (~8s, latência da Meta) e o do Messenger é
-      // rápido (~1s). O front pede UM canal por vez (param `platform`) pra renderizar
-      // o Messenger na hora e o Instagram assim que chegar. Sem `platform`, busca os dois.
+      // DB-first: serve do store (instantâneo) e atualiza por trás com a Graph.
+      // O endpoint do Instagram é ~8s (latência da Meta); assim o usuário não espera.
       const only = String(body.platform ?? "");
       const wanted: ("instagram" | "messenger")[] = (only === "instagram" || only === "messenger")
         ? [only] : ["instagram", "messenger"];
-      const channels: Record<string, string | null> = {};
-      const perChannel = await Promise.all(wanted.map(async (platform) => {
-        try { const r = await listConversations(platform); channels[platform] = null; return r; }
-        catch (e) { channels[platform] = errMsg(e); return []; }
+      let q = admin.from("social_conversations").select("*").eq("organization_id", organization_id);
+      if (only === "instagram" || only === "messenger") q = q.eq("platform", only);
+      const { data: rows } = await q.order("updated_time", { ascending: false }).limit(60);
+      const fromDb = (rows ?? []).map((r: any) => ({
+        id: r.conversation_id || r.participant_id, platform: r.platform, participant_id: r.participant_id,
+        name: r.name || "Contato", username: r.username, avatar_url: r.avatar_url, profile_link: r.profile_link,
+        updated_time: r.updated_time, last_message: r.last_message ?? "",
       }));
-      const out: any[] = perChannel.flat();
-      out.sort((a, b) => String(b.updated_time).localeCompare(String(a.updated_time)));
-
-      // Enriquece conversas do Instagram com foto + nome real do contato
-      // (User Profile API, em paralelo, com teto). Messenger não tem foto via API
-      // sem a feature "Business Asset User Profile Access" — fica com nome+iniciais.
-      const igToEnrich = out.filter((c) => c.platform === "instagram" && c.participant_id).slice(0, 20);
-      await Promise.all(igToEnrich.map(async (c) => {
-        try {
-          const p = await metaGraphGet(`/${c.participant_id}`,
-            { fields: "name,username,profile_pic" }, { accessToken: pageToken, appSecret });
-          if (p?.profile_pic) c.avatar_url = p.profile_pic;
-          if (p?.name) c.name = p.name;        // nome real no lugar do username
-          if (p?.username) c.username = p.username;
-        } catch { /* mantém fallback (username/iniciais) */ }
-      }));
-
-      return json({ ok: true, conversations: out, channels });
+      if (fromDb.length > 0) {
+        bg(fetchAndEnrich(wanted).then(({ out }) => upsertConversations(out)));
+        return json({ ok: true, conversations: fromDb, channels: {}, source: "db" });
+      }
+      // Cold start (store vazio): busca ao vivo, persiste e devolve.
+      const { out, channels } = await fetchAndEnrich(wanted);
+      await upsertConversations(out);
+      return json({ ok: true, conversations: out, channels, source: "live" });
     }
 
     if (action === "messages") {
+      // DB-first pela thread (participant_id + platform). Faz backfill/refresh via
+      // conversation_id quando disponível.
+      const participant_id = String(body.participant_id ?? "");
+      const platform = String(body.platform ?? "");
       const conversation_id = String(body.conversation_id ?? "");
-      if (!conversation_id) return json({ error: "missing_conversation_id" }, 400);
+      if (!participant_id && !conversation_id) return json({ error: "missing_conversation_id" }, 400);
+
+      let dbMsgs: any[] = [];
+      if (participant_id && platform) {
+        const { data } = await admin.from("social_messages").select("*")
+          .eq("organization_id", organization_id).eq("platform", platform).eq("participant_id", participant_id)
+          .order("created_time", { ascending: true }).limit(60);
+        dbMsgs = (data ?? []).map((m: any) => ({
+          id: m.message_id, text: m.body ?? "", from_page: !!m.from_page,
+          from_name: m.from_name ?? "", created_time: m.created_time, attachments: m.attachments ?? [],
+        }));
+      }
+      if (dbMsgs.length > 0) {
+        if (conversation_id) bg(liveFetchMessages(conversation_id).then((live) => upsertMessages(live, participant_id, platform)));
+        return json({ ok: true, messages: dbMsgs, source: "db" });
+      }
+      if (!conversation_id) return json({ ok: true, messages: [] });
       try {
-        const r = await metaGraphGet(`/${conversation_id}`,
-          { fields: "messages.limit(30){id,message,from,created_time,attachments{id,mime_type,name,image_data,video_data,file_url},shares{link,name}}" },
-          { accessToken: pageToken, appSecret });
-        const msgs = (r?.messages?.data ?? []).map((m: any) => ({
-          id: m.id, text: m.message ?? "", from_page: selfIds.has(String(m.from?.id)),
-          from_name: m.from?.name || m.from?.username || "", created_time: m.created_time,
-          attachments: mapAttachments(m),
-        })).reverse();
-        return json({ ok: true, messages: msgs });
+        const live = await liveFetchMessages(conversation_id);
+        if (participant_id && platform) await upsertMessages(live, participant_id, platform);
+        return json({ ok: true, messages: live, source: "live" });
       } catch (e) { return json({ ok: false, error: errMsg(e) }, 502); }
     }
 
@@ -235,11 +294,25 @@ serve(async (req) => {
         return r?.message_id as string | undefined;
       };
       try {
-        const ids: (string | undefined)[] = [];
+        const now = new Date().toISOString();
+        const sent: any[] = [];
         // Anexo primeiro (a Meta manda texto e anexo em mensagens separadas).
-        if (attUrl) ids.push(await sendMessage({ attachment: { type: attType, payload: { url: attUrl, is_reusable: false } } }));
-        if (text) ids.push(await sendMessage({ text }));
-        return json({ ok: true, ids: ids.filter(Boolean), platform });
+        if (attUrl) {
+          const id = await sendMessage({ attachment: { type: attType, payload: { url: attUrl, is_reusable: false } } });
+          if (id) sent.push({ id, text: "", from_page: true, from_name: "", created_time: now, attachments: [{ type: attType, url: attUrl }] });
+        }
+        if (text) {
+          const id = await sendMessage({ text });
+          if (id) sent.push({ id, text, from_page: true, from_name: "", created_time: now, attachments: [] });
+        }
+        // Persiste no store (thread + lista ficam consistentes na hora).
+        try {
+          if (sent.length) await upsertMessages(sent, recipient_id, platform);
+          await admin.from("social_conversations").update({
+            last_message: text || "[mídia]", updated_time: now, refreshed_at: now,
+          }).eq("organization_id", organization_id).eq("platform", platform).eq("participant_id", recipient_id);
+        } catch { /* store é best-effort */ }
+        return json({ ok: true, ids: sent.map((s) => s.id), platform });
       } catch (e) { return json({ ok: false, error: errMsg(e) }, 502); }
     }
 

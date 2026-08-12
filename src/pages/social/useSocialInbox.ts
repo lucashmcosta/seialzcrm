@@ -53,14 +53,20 @@ export function useSocialConversations(orgId?: string, platform?: SocialPlatform
   });
 }
 
-export function useSocialMessages(orgId?: string, conversationId?: string | null) {
+export function useSocialMessages(
+  orgId?: string,
+  conv?: { id: string; participant_id: string; platform: SocialPlatform } | null,
+) {
   return useQuery({
-    queryKey: ['social-messages', orgId, conversationId],
-    enabled: !!orgId && !!conversationId,
+    queryKey: ['social-messages', orgId, conv?.id ?? null],
+    enabled: !!orgId && !!conv?.id,
     staleTime: 10_000,
     queryFn: async (): Promise<SocialMessage[]> => {
       const { data, error } = await supabase.functions.invoke('social-inbox', {
-        body: { organization_id: orgId, action: 'messages', conversation_id: conversationId },
+        body: {
+          organization_id: orgId, action: 'messages',
+          conversation_id: conv!.id, participant_id: conv!.participant_id, platform: conv!.platform,
+        },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || 'Falha ao carregar mensagens');
