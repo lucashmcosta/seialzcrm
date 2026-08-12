@@ -1,91 +1,140 @@
-# Unique Comercial × reversibilidade de merge — diagnóstico e desenho mínimo
+# Inbound canônico Comercial + guarda de duplicidade (Opção 1)
 
-Nada de DDL foi executado. A unique NÃO deve ser criada na forma proposta.
+Nada foi executado: sem trigger, sem DDL, sem alteração de webhook, flag OFF.
+Este documento fecha o gate técnico pedido antes da implementação.
 
-## A) Prova do conflito (read-only)
+## 1) Ordem real dos triggers de `message_threads`
 
-O conflito é real e universal, não teórico.
+Triggers ativos (nenhum `BEFORE INSERT OR UPDATE` além do de endpoint):
 
-1. `unmerge_message_thread` restaura o loser com:
-   `status = loser_prev_status`, `merged_into_thread_id = NULL`, `resolved_at = snapshot`.
-   O winner permanece com `merged_into_thread_id = NULL`.
-2. Consulta read-only sobre os merges SALES_V2 ativos hoje:
-   **91 de 91 pares** (89 do lote + 2 do batchZ) têm winner e loser com o mesmo
-   `organization_id + contact_id + channel='whatsapp' + business_context='sales'`.
-   Ou seja: com a unique parcial criada, **todo unmerge SALES_V2 falharia** com
-   violação de unicidade no momento de zerar `merged_into_thread_id` do loser.
+```text
+BEFORE INSERT          threads_round_robin                          -> trg_threads_round_robin
+BEFORE INSERT          trg_message_threads_autofill_business_context -> fn_message_threads_autofill_business_context
+BEFORE INSERT/UPDATE   trg_validate_thread_endpoint_org              -> fn_validate_thread_endpoint_org
+BEFORE UPDATE          update_message_threads_updated_at             -> update_updated_at_column
+AFTER  UPDATE          trg_handoff_notification, trg_log_thread_assignment_change
+```
 
-Conclusão: a unique proposta e o contrato de reversibilidade aprovado são
-mutuamente exclusivos como estão. Não é ajuste de predicado — é semântica.
+Ordem efetiva em `BEFORE INSERT` é alfabética pelo nome do trigger:
+`threads_round_robin` → `trg_message_threads_autofill_business_context` →
+`trg_validate_thread_endpoint_org`.
 
-## B) Segundo conflito encontrado (não previsto antes)
+O autofill só define `business_context` quando ele vem nulo **e**
+`primary_endpoint_id` está presente, derivando de
+`communication_endpoints.purpose` (`sales`/`commercial` → `sales`;
+`customer_service`/`support` → `customer_service`; outro valor → `other`;
+`purpose` nulo → **permanece NULL**), com uma exceção datada para o endpoint
+`c09bd713…`.
 
-A unique também colide com o **caminho de inbound atual**, que é o gerador das
-duplicidades:
+Consequência: uma guarda chamada, por exemplo,
+`trg_zz_guard_sales_thread_canonical` rodaria depois do autofill e veria
+`business_context` já preenchido. Mesmo assim, **não vamos depender de ordem
+implícita**: a guarda resolve o contexto internamente com a mesma regra
+(`NEW.business_context`, senão `purpose` do endpoint, incluindo a exceção
+datada) e só atua quando o resultado é `sales`. O nome com prefixo `zz_`
+continua sendo usado como defesa em profundidade.
 
-- Nos 91 pares consolidados, **91/91** tinham `primary_endpoint_id` diferentes
-  entre winner e loser. Zero pares com o mesmo endpoint.
-- `twilio-whatsapp-webhook` procura thread por
-  `(org, contact, channel, primary_endpoint_id)` e, não achando, **cria nova
-  thread** para aquele número. `evolution-webhook` reaproveita a thread mais
-  recente e migra o endpoint.
-- Nenhum dos dois webhooks filtra `merged_into_thread_id IS NULL` ao localizar a
-  thread — um inbound pode cair numa thread já consolidada (loser fechado).
+Efeito colateral relevante: quando `purpose` do endpoint é nulo, a thread nasce
+com `business_context` NULL — não é Comercial nem Atendimento, e fica fora da
+guarda e de qualquer unique. Isso é aceito nesta fase e vale monitorar.
 
-Com a unique ativa e o inbound inalterado, o primeiro inbound de um segundo
-número para um contato que já tem thread Comercial ativa **falha na inserção** e
-a mensagem é perdida (o webhook responde 200 e loga erro).
+## 2) Fluxo atual de criação/reuso por webhook
 
-## C) Opções de desenho
+| | Twilio | Meta Cloud | Evolution |
+|---|---|---|---|
+| Chave de lookup | `org + contact + channel + primary_endpoint_id`; fallback para thread com `primary_endpoint_id IS NULL` (e faz backfill) | `org + contact + channel + primary_endpoint_id`, ordenado por `last_message_at`, `limit(5)` (loga `duplicate_thread_detected`) | `org + contact + channel + primary_endpoint_id`; fallback: thread WhatsApp mais recente do contato, **migrando** `primary_endpoint_id` |
+| Filtra `merged_into_thread_id IS NULL` | **Não** | **Não** | **Não** |
+| Thread `resolved`/`closed` | não reabre; grava a mensagem e atualiza `last_inbound_at` | idem | idem |
+| Cria nova thread quando não acha | sim, com `primary_endpoint_id` do inbound | sim | sim |
+| Endpoint diferente | cria thread nova (thread por número) | cria thread nova | reaproveita e migra o endpoint (`THREAD_PROVIDER_MIGRATED`) |
 
-**Opção 1 — Canonicidade no ponto de nascimento (recomendada)**
-- Sem unique index. Trigger `BEFORE INSERT` em `message_threads`, restrita a
-  `business_context='sales' AND channel='whatsapp' AND contact_id IS NOT NULL`:
-  se já existir thread Comercial ativa para `(org, contact, 'whatsapp')`,
-  levanta `SALES_THREAD_DUPLICATE_BLOCKED` (erro explícito, sem heurística).
-- `UPDATE` fica fora da regra → unmerge continua funcionando integralmente.
-- Requer ajustar o inbound para resolver a thread canônica por
-  `(org, contact, channel)` com `merged_into_thread_id IS NULL`, em vez de
-  por endpoint — que é exatamente o modelo que a consolidação assumiu.
-- Atendimento intocado (predicado exige `sales`).
+Dois fatos confirmados por leitura:
 
-**Opção 2 — Unique + marcador de isenção**
-Coluna nova (ex. `dedup_exempt_at`) preenchida pelo unmerge e excluída do
-predicado. Mantém o índice, mas o próprio índice deixa de garantir "uma thread
-ativa por contato" justamente nos casos revertidos. Mais schema, menos garantia.
+- Nenhum dos três webhooks exclui threads consolidadas no lookup. Um inbound pode
+  cair num loser fechado (`merged_into_thread_id` preenchido), ressuscitando a
+  duplicidade e furando a contabilidade de unmerge.
+- **Não existe hoje regra de reopen.** Nenhum webhook muda `status`/`resolved_at`
+  da thread no inbound. Ou seja, "a regra aprovada de reopen" ainda não está
+  implementada e precisa ser definida aqui (proposta no item 3).
 
-**Opção 3 — Unique + unmerge fail-closed**
-O unmerge passaria a recusar quando o winner ainda estiver ativo. Elimina a
-reversibilidade que acabamos de validar. Rejeitada.
+Sobre isolamento do Atendimento: os webhooks **não leem** `purpose` nem
+`business_context` — os três seguem o mesmo código, e a separação
+Comercial/Atendimento acontece só no banco, via `purpose` do endpoint. Portanto o
+helper canônico não pode ser aplicado por webhook, e sim **condicionado ao
+`purpose` do endpoint do inbound**: `sales`/`commercial` → caminho canônico novo;
+qualquer outro valor ou nulo → caminho legado byte-a-byte igual ao atual.
 
-**Opção 4 — Adiar a constraint para a Fase 3**
-Sem barreira estrutural agora; apenas monitoramento de duplicidades. Não impede
-novas duplicidades.
+## 3) Contrato canônico proposto
 
-Recomendação: **Opção 1**, em duas etapas: primeiro o inbound canônico (com a
-trigger em modo bloqueante já ativo, pois o inbound corrigido nunca insere
-duplicata), depois avaliar a unique real na Fase 3, quando o roteamento por
-Route/`messaging_lines` estiver ligado e a reversibilidade puder ser expressa por
-uma coluna de ciclo de vida própria.
+Helper único em `supabase/functions/_shared/sales-thread.ts`, usado pelos três
+webhooks somente quando o endpoint do inbound é Comercial.
 
-## D) Sequência proposta
+Lookup: `organization_id + contact_id + channel='whatsapp' +
+business_context='sales' + merged_into_thread_id IS NULL`, ordenado por
+`created_at ASC` (thread canônica = a mais antiga, mesmo critério do merge).
+`primary_endpoint_id` **não** entra na identidade.
 
-1. Migração: trigger de canonicidade Comercial (bloqueante, só `INSERT`, só
-   `sales`+`whatsapp`+`contact_id` presente).
-2. Ajuste dos webhooks WhatsApp (Twilio, Evolution, Meta) para localizar a thread
-   canônica por `(org, contact, channel)` com `merged_into_thread_id IS NULL`,
-   fazendo backfill/migração de `primary_endpoint_id` quando o número muda, e
-   nunca gravando em thread consolidada.
-3. Ensaio transacional com `ROLLBACK`: merge → unmerge total e parcial com a
-   trigger ativa (deve passar), inbound de segundo número (deve reaproveitar a
-   thread canônica), tentativa de INSERT duplicado direto (deve falhar com
-   `SALES_THREAD_DUPLICATE_BLOCKED`), Atendimento inalterado (hash de controle).
-4. Só depois: testes de webhook/resolver com a flag OFF e validação de shadow.
-5. Flag da Viagi e Fase 3 permanecem fora deste escopo.
+Se encontrar:
+- reutiliza a thread;
+- se `status IN ('resolved','closed')` → reopen: `status='open'`,
+  `resolved_at=NULL`, `waiting_started_at=NULL`, mais `last_inbound_at` /
+  `whatsapp_last_inbound_at`, e log `SALES_THREAD_REOPENED`. Como não há regra
+  anterior, esta é a regra nova a aprovar.
+- `primary_endpoint_id`: adotamos a semântica **"endpoint de resposta corrente"**,
+  não identidade. Motivo verificado: `_shared/dispatch-whatsapp-send.ts` lê
+  `message_threads.primary_endpoint_id` para decidir por onde responder; congelar
+  o campo faria a resposta sair pelo número antigo. Então ele é atualizado quando
+  o inbound chega por outro endpoint, **com log explícito**
+  (`SALES_THREAD_ENDPOINT_ROTATED`, com endpoint anterior e novo). O histórico de
+  origem não se perde: cada mensagem carrega seu próprio `endpoint_id`, e a UI já
+  renderiza o divisor de troca de número.
+
+Se não encontrar: cria **uma** thread `sales` com o endpoint do inbound.
+
+Atendimento e endpoints sem `purpose` seguem exatamente o fluxo atual.
+
+## 4) Ordem de implantação (fail-safe, como você pediu)
+
+```text
+A) Deploy do helper + webhooks (Twilio, Meta, Evolution) já usando a thread
+   canônica no Comercial. Sem trigger. Flag OFF. Atendimento intocado.
+B) Observação com flag OFF/shadow: logs de reuso, reopen, rotação de endpoint,
+   zero criação de segunda thread sales, zero gravação em thread consolidada.
+C) Só então a migração da trigger de proteção (BEFORE INSERT, bloqueante).
+D) Ensaio transacional com ROLLBACK: INSERT duplicado, merge, unmerge total e
+   parcial, Atendimento (hash de controle).
+E) Só depois discutir ligar conv_route_resolver_v2 por org (Viagi).
+```
+
+Sem unique index nesta fase; sem Fase 3.
+
+## 5) Testes obrigatórios
+
+Etapa B (com flag OFF, ambiente controlado):
+1. inbound pelo mesmo endpoint → mesma thread;
+2. inbound por outro endpoint da mesma Route → mesma thread, com
+   `SALES_THREAD_ENDPOINT_ROTATED`;
+3. inbound em thread `resolved` → mesma thread reaberta (`status='open'`,
+   `resolved_at=NULL`);
+4. loser consolidado nunca recebe mensagem nova (lookup exclui
+   `merged_into_thread_id IS NOT NULL`);
+5. inbound em endpoint de Atendimento → comportamento idêntico ao atual;
+6. flag OFF mantém o resolver em shadow, sem decidir envio.
+
+Etapa D (transação com ROLLBACK):
+7. INSERT direto de segunda thread sales/whatsapp para o mesmo org+contact →
+   `SALES_THREAD_DUPLICATE_BLOCKED`;
+8. `merge_sales_threads` + `unmerge_message_thread` (total e parcial) com a
+   trigger ativa → passam, pois a guarda só atua em `INSERT`;
+9. INSERT de thread `customer_service` para contato que já tem thread sales ativa
+   → permitido;
+10. INSERT com `business_context` NULL / endpoint sem `purpose` → permitido
+    (fora do escopo da guarda);
+11. hash de controle das threads de Atendimento inalterado.
 
 ## Detalhes técnicos
 
-SQL da trigger (para revisão, ainda não aplicado):
+### SQL final da trigger (etapa C, sem dependência de ordem)
 
 ```sql
 CREATE OR REPLACE FUNCTION public.fn_guard_sales_thread_canonical()
@@ -94,9 +143,25 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE v_existing uuid;
+DECLARE
+  v_ctx text := NEW.business_context;
+  v_purpose text;
+  v_existing uuid;
 BEGIN
-  IF COALESCE(NEW.business_context,'') <> 'sales'
+  -- resolucao propria do contexto (mesma regra do autofill), para nao depender
+  -- da ordem entre triggers BEFORE INSERT
+  IF v_ctx IS NULL AND NEW.primary_endpoint_id IS NOT NULL THEN
+    IF NEW.primary_endpoint_id = 'c09bd713-0225-4533-afe8-20ac07bd3a7c'::uuid THEN
+      v_ctx := CASE WHEN COALESCE(NEW.created_at, now()) < '2026-06-16 22:29:40+00'::timestamptz
+                    THEN 'sales' ELSE 'customer_service' END;
+    ELSE
+      SELECT purpose INTO v_purpose FROM public.communication_endpoints
+       WHERE id = NEW.primary_endpoint_id;
+      IF lower(COALESCE(v_purpose,'')) IN ('sales','commercial') THEN v_ctx := 'sales'; END IF;
+    END IF;
+  END IF;
+
+  IF COALESCE(v_ctx,'') <> 'sales'
      OR COALESCE(NEW.channel,'') <> 'whatsapp'
      OR NEW.contact_id IS NULL THEN
     RETURN NEW;
@@ -121,14 +186,46 @@ BEGIN
   RETURN NEW;
 END $$;
 
-CREATE TRIGGER trg_guard_sales_thread_canonical
+CREATE TRIGGER trg_zz_guard_sales_thread_canonical
 BEFORE INSERT ON public.message_threads
 FOR EACH ROW EXECUTE FUNCTION public.fn_guard_sales_thread_canonical();
 ```
 
-Observação de ordem: `business_context` é preenchido por
-`fn_message_threads_autofill_business_context`. É preciso confirmar se esse
-trigger é `BEFORE INSERT` e com qual nome, para garantir que a guarda rode
-**depois** do autofill (a ordem entre triggers de mesmo evento é alfabética pelo
-nome) — caso contrário a guarda veria `business_context` nulo e não atuaria.
-Isso será verificado antes da migração.
+### Helper `_shared/sales-thread.ts` (etapa A)
+
+Assinatura e responsabilidades:
+
+```ts
+export async function resolveSalesWhatsappThread(
+  service: SupabaseClient,
+  args: { organizationId: string; contactId: string; endpointId: string; inboundAt: string },
+): Promise<{ threadId: string | null; outcome: "reused" | "reopened" | "created"; endpointRotated: boolean }>
+```
+
+- 1 select canônico (org + contact + `channel='whatsapp'` +
+  `business_context='sales'` + `merged_into_thread_id IS NULL`, `created_at ASC`);
+- reuso + reopen condicional + rotação de `primary_endpoint_id` com log;
+- criação única quando não há canônica;
+- `isSalesEndpoint(service, endpointId)` lendo `communication_endpoints.purpose`
+  (com a exceção datada), para o webhook decidir entre caminho novo e legado.
+
+### Pontos de substituição nos webhooks (etapa A)
+
+- `supabase/functions/twilio-whatsapp-webhook/index.ts` — bloco "Find or create
+  message thread" (~linhas 864-940): mantém o fluxo atual quando o endpoint não é
+  Comercial; quando é, delega ao helper.
+- `supabase/functions/meta-whatsapp-webhook/index.ts` — passo 6 de `handleInbound`
+  (~linhas 836-900), incluindo o log `duplicate_thread_detected`.
+- `supabase/functions/evolution-webhook/index.ts` — `findOrCreateThread`
+  (~linhas 635-715): o atalho de "migração de provider" passa a ser a rotação de
+  endpoint do helper no caminho Comercial; caminho não-Comercial inalterado.
+
+Nenhum dos três altera contatos, oportunidades, IA ou Atendimento.
+
+## Decisões que preciso confirmar antes da etapa A
+
+1. Semântica de `primary_endpoint_id` = endpoint de resposta corrente
+   (atualizado com log), como descrito no item 3.
+2. Regra de reopen (`resolved`/`closed` → `open`, `resolved_at=NULL`), que hoje
+   não existe em nenhum webhook.
+3. Escopo restrito a `channel='whatsapp'` nesta fase.
