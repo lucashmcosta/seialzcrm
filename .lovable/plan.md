@@ -52,7 +52,7 @@ Impacto no faseamento: a Fase 7 passa a consolidar também os pares "aberta + re
 - `thread_business_context_review` — fila das 13 threads ambíguas (Fase 2), descartável após o NOT NULL.
 
 **Alteradas**
-- `message_threads`: `business_context` → NOT NULL (Fase 8); nova unique parcial `(organization_id, contact_id, channel, business_context)` para status abertos; uniques por endpoint removidas na mesma fase.
+- `message_threads`: `business_context` → NOT NULL (Fase 8); nova unique **total** `(organization_id, contact_id, business_context)`, sem `channel` e sem filtro de status; uniques por endpoint removidas na mesma fase. `channel` mantido como campo de compatibilidade/exibição, fora de lookup e de unique key.
 - `integration_inbound_events`: novo `process_status` para inbound sem Route.
 
 **Não criar:** `conversation_blocks`, `timeline_groups`, `message_sections`. Blocos por endpoint são apenas renderização.
