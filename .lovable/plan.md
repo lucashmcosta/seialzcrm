@@ -103,10 +103,19 @@ Escolhida a **Opção B**. Nenhum teste ou afirmação do plano coloca webchat n
 
 ## Fase 1 — Infraestrutura (nada muda para o usuário)
 
-- **Migration aditiva** (GRANTs + RLS `organization_id = ANY(current_user_org_ids())`):
-  - `messaging_lines` (Route): novas colunas `inbox_key` (CHECK `sales|customer_service`, backfill de `key`), `route_slug NOT NULL` (backfill de `key`), `owner_user_id uuid NULL` FK `users.id`, `is_active boolean NOT NULL DEFAULT true`. `key` mantida, nullable e sem CHECK, só para compatibilidade dos consumers legados.
+**Escopo fechado da Fase 1:** evolução segura de `messaging_lines`; `messaging_line_endpoints` **apenas para Comercial**; `owner_user_id`/`is_active`/`inbox_key`/`route_slug`; constraints novas; vínculos comerciais iniciais; RPC `rotate_messaging_line_endpoint` transacional; invariante `active_endpoint_id ↔ messaging_line_endpoints`; `route-resolver`; shadow mode; observabilidade mínima; testes desta fase. Nada além disso. `conv_route_resolver_v2` permanece **OFF**; nenhum webhook, merge, unique de `message_threads` ou timeline muda nesta fase.
+
+**Atendimento — terminologia e limite:** o Atendimento **não adota Route V2**, nem funcional nem conceitualmente. A linha `customer_service` em `messaging_lines` permanece **somente por compatibilidade do sistema atual** — ela não é uma Route. Na Fase 1: nenhuma Route de Atendimento criada, nenhum `messaging_line_endpoints` para Atendimento, Atendimento não passa pelo resolver V2, nenhum comportamento de Atendimento alterado.
+
+- **Migration aditiva em etapas seguras** (GRANTs + RLS `organization_id = ANY(current_user_org_ids())`). Ordem obrigatória, sem default implícito que possa classificar `customer_service` como `sales` nem por um instante:
+  1. `ADD COLUMN inbox_key text` — **nullable, sem default**; `ADD COLUMN route_slug text` — **nullable**; `ADD COLUMN owner_user_id uuid NULL` FK `users.id`; `ADD COLUMN is_active boolean NOT NULL DEFAULT true`.
+  2. Backfill explícito de `inbox_key`, linha por valor de `key`: `commercial`→`sales`, `evolution_pilot`→`sales`, `customer_service`→`customer_service`.
+  3. Backfill de `route_slug` = valor atual de `key`.
+  4. **Validação bloqueante:** falhar a migration se existir qualquer linha com `inbox_key IS NULL`, `route_slug IS NULL`, `inbox_key` fora de (`sales`,`customer_service`) ou `key` fora do conjunto conhecido (linha nova/inesperada ⇒ aborta em vez de classificar por default).
+  5. Só então `ALTER COLUMN inbox_key SET NOT NULL`, `ALTER COLUMN route_slug SET NOT NULL` e `ADD CHECK (inbox_key IN ('sales','customer_service'))`.
+  6. `key` mantida, nullable e sem CHECK, só para compatibilidade dos consumers legados.
   - Constraints: dropar `messaging_lines_key_check` e `messaging_lines_organization_id_key_channel_key`; criar índice único parcial `(organization_id, key, channel) WHERE key IS NOT NULL` e `UNIQUE (organization_id, channel, route_slug)`. Só depois disso o banco suporta N Routes comerciais na mesma org + canal.
-  - `messaging_line_endpoints` (única tabela nova): `line_id`, `endpoint_id`, `is_active`, `linked_at`, `unlinked_at`; índice único parcial garantindo um endpoint ativo em no máximo uma Route. É o mapa "número por onde o cliente escreveu → Route de resposta" — sem ele o resolver não tem entrada.
+  - `messaging_line_endpoints` (única tabela nova): `line_id`, `endpoint_id`, `is_active`, `linked_at`, `unlinked_at`; índice único parcial garantindo um endpoint ativo em no máximo uma Route. É o mapa "número por onde o cliente escreveu → Route de resposta" — sem ele o resolver não tem entrada. **Populada apenas com endpoints comerciais.**
   - `messaging_line_rotations`: inalterada (`line_id` já aponta para a Route); passa a ser gravada pela troca via UI (Fase 3).
   - Vínculos inbound iniciais das Routes comerciais criados a partir de `active_endpoint_id` + `purpose`, revisados à mão (poucos endpoints ativos). **Nenhuma Route de Atendimento é criada** — a linha `customer_service` existente permanece exatamente como está.
 
