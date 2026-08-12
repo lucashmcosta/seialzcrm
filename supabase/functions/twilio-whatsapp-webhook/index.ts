@@ -876,6 +876,7 @@ serve(async (req) => {
         const canonical = await resolveSalesWhatsappThread(supabase, {
           organizationId: orgId as string,
 
+
           contactId,
           endpointId,
           inboundAt: new Date().toISOString(),
