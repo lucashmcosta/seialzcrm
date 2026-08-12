@@ -1,198 +1,298 @@
-# IMPACT ASSESSMENT v2 — GMUD Conversas Multicanal (corrigido e complementado)
+# PLANO TÉCNICO DE IMPLEMENTAÇÃO — GMUD Conversas Multicanal
 
-Read-only. Nada implementado, nenhuma migration, nenhum código alterado. Números abaixo vêm de consultas ao banco de produção nesta sessão.
+Base: Impact Assessment v2 (aprovado). Nada implementado nesta etapa: sem migration, sem código, sem backfill, sem merge.
 
-## A. Arquitetura correta (correção aceita)
+---
 
-Identidade futura da thread = `organization_id + contact_id + Inbox`, onde Inbox hoje é materializada por `message_threads.business_context` (`sales` | `customer_service`). Comercial e Atendimento **permanecem separados**; a unificação ocorre apenas entre múltiplos endpoints/routes **dentro da mesma Inbox**.
+## 1. Arquitetura alvo
 
-**Compatível com o ADR-0009?** Sim. O ADR-0009 separa domínios de negócio (Inbox/atendimento vs Messages/comercial), não endpoints. A GMUD, nesta leitura, *reforça* o ADR: o `business_context` deixa de ser atributo derivado e passa a ser parte da chave de identidade. A afirmação anterior ("a GMUD assume unificação e contradiz o ADR-0009") está **retirada** — não é necessário novo ADR para revogar o 0009; é necessário apenas um ADR curto elevando `business_context` a componente de identidade.
+**Identidade da Thread:** `organization_id + contact_id + Inbox`. Inbox = `sales` | `customer_service`. Comercial e Atendimento permanecem separados (ADR-0009 preservado e reforçado).
 
-## B. Conflitos reais (recalculado pela identidade futura)
+**Route:** identidade operacional dentro de uma Inbox (`Comercial Principal`, `Comercial Secundária`, `João`, `Maria`). Uma Inbox tem N Routes.
 
-Threads abertas (`open`, `awaiting_client`, `in_progress`), agrupadas por `(organization_id, contact_id, business_context)`:
+**Inbound ≠ Outbound:**
+- Inbound: N endpoints por Route, via associação persistente `route_inbound_endpoints`. Um endpoint inbound ativo pertence a **uma** Route por vez.
+- Outbound: exatamente um `active_endpoint_id` por Route.
 
-| Inbox | Grupos | Contatos com conflito | Threads em conflito |
-|---|---|---|---|
-| sales | 11.140 | **53** | 106 |
-| customer_service | 31 | **0** | 0 |
-| other | 28 | 0 | 0 |
-| business_context NULL | 151 | 0 | 0 |
+**Fluxo inbound:** `webhook → endpoint recebido → route_inbound_endpoints → Route → Route.inbox → thread(contact+Inbox) → message.endpoint_id = endpoint real`. Sem Route válida ⇒ evento **não roteado** com erro explícito. Nunca fallback silencioso.
 
-Considerando **todos os status** (histórico completo):
+**Fluxo outbound:** `thread → última mensagem inbound → messages.endpoint_id → route_inbound_endpoints → Route → Route.active_endpoint_id → provider → envio`. Backend é a única autoridade; frontend apenas exibe.
 
-| Inbox | Grupos com >1 thread | Threads envolvidas | Grupos com endpoints diferentes |
-|---|---|---|---|
-| sales | 95 | 193 | 69 |
-| customer_service | 20 | 45 | 2 |
-| NULL | 1 | 3 | 0 |
+**`primary_endpoint_id`:** sai da resolução de envio; permanece como endpoint histórico/original. Depreciação planejada na Fase 13.
+**`purpose`:** não é fonte autoritativa do runtime novo; usado apenas para backfill/classificação histórica; deprecated após a Fase 4–6, não removido na primeira fase.
 
-Decomposição dos **695** pares `contato+canal` do relatório anterior:
-- **568 (81,7%) não são conflito** — são exatamente uma thread `sales` + uma `customer_service` (comportamento desejado pela GMUD).
-- 95 conflitos reais dentro de `sales`; 20 dentro de `customer_service`; 12 envolvem thread com `business_context NULL`; 2 envolvem `other`.
+---
 
-Distribuição dos conflitos por endpoint/provider/status/volume (principais):
-- CS · Meta `+551150287027` · resolved: 40 threads, 1.882 msgs, maior 545.
-- Sales · Meta `+551150287020`: 80 threads (33 awaiting, 27 open, 20 resolved), 2.038 msgs, maior 150.
-- Sales · Meta `+551150287067`: 67 threads, 1.308 msgs, maior 128.
-- Sales sem endpoint (`primary_endpoint_id NULL`): 21 threads, 288 msgs.
-- Sales · Twilio `+551150265098`: 10 threads · Meta `+551150262890`: 8 · Evolution `+5511936198439`: 1 (CS, 123 msgs).
+## 2. Schema conceitual (sem SQL)
 
-**Conclusão B:** o esforço de merge é de ordem de grandeza pequena (≈116 grupos / ≈238 threads), não 695. É tratável com script auditado e revisão manual dos casos com endpoints distintos (69 + 2).
+**Novas**
+- `messaging_routes` — substitui conceitualmente `messaging_lines`. Campos: org, `inbox` (`sales`/`customer_service`), `name`, `slug`, `channel`, `active_endpoint_id` (FK endpoint, nullable), `owner_user_id` (nullable, para "Route João"), `is_active`, `priority`, timestamps. Unicidade: `(org, channel, slug)`; **não** unicidade por inbox (N Routes por Inbox).
+- `route_inbound_endpoints` — `route_id`, `endpoint_id`, `is_active`, `linked_at`, `unlinked_at`. Índice único parcial garantindo **um endpoint ativo em no máximo uma Route** por org+channel.
+- `route_rotations` — sucessora auditável de `messaging_line_rotations` (de/para/quem/quando/motivo).
+- `thread_business_context_review` — fila temporária das 13 threads ambíguas (Fase 2), descartável após o NOT NULL.
+- `unrouted_inbound_events` — registro de inbound sem Route (pode ser materializado como um `process_status` novo em `integration_inbound_events`; decisão na Fase 1).
 
-## C. Threads com `business_context IS NULL`
+**Alteradas**
+- `message_threads`: `business_context` → NOT NULL (Fase 8); nova unique parcial por `(organization_id, contact_id, channel, business_context)` para status abertos; unique atual por endpoint removida na mesma fase.
+- `messaging_lines`: mantida em dual-read até a Fase 13 (sem novos writes após a Fase 3).
+- `communication_endpoints.purpose`: comentário de deprecação; sem mudança física.
 
-Total **159** — 137 `open`, 14 `awaiting_client`, 8 `resolved`.
+**Não criar:** `conversation_blocks`, `timeline_groups`, `message_sections`. Blocos por endpoint são apenas renderização.
 
-| Endpoint/purpose | Provider | lifecycle | Qtd | Classificação |
-|---|---|---|---|---|
-| commercial | twilio | lead/customer | 142 | **sales** (determinístico via `purpose`) |
-| commercial | meta_cloud_api | customer/lead | 2 | **sales** (determinístico) |
-| commercial | evolution_api | lead | 2 | **sales** (determinístico) |
-| sem endpoint | — | lead (7 open) | 7 | **ambígua** |
-| sem endpoint | — | customer (6 resolved) | 6 | **ambígua** |
+---
 
-146 de 159 (91,8%) classificáveis deterministicamente por `communication_endpoints.purpose` (regra já existente em `src/lib/endpointPurpose.ts`, não inventada). **13 são ambíguas** e precisam de decisão humana — não há dado suficiente para classificar (`lifecycle_stage` não é regra de Inbox; usá-lo seria inventar regra).
+## 3. Feature flags
 
-## D. Identidade futura — consumers e classificação
+Todas em `feature_flags` (por org, lidas por `fn_feature_flag_enabled` / `_shared/feature-flags.ts`, cache 60s, rollback ≤60s):
 
-| Consumer | Classificação |
+| Flag | Governa |
 |---|---|
-| Índices `message_threads_unique_open_per_contact_endpoint` / `..._legacy` | **ESTRUTURAL** (substituídos por chave com `business_context`) |
-| `business_context` hoje nullable + `trg_message_threads_autofill_business_context` | **ESTRUTURAL** (passa a NOT NULL / chave) |
-| `merge_message_threads` / `unmerge_message_thread` | **ESTRUTURAL** (ver item E — hoje recusa o caso da GMUD) |
-| `meta-whatsapp-webhook` (lookup por `primary_endpoint_id`) | **ESTRUTURAL** |
-| `twilio-whatsapp-webhook` (lookup + fallback legacy + backfill de endpoint) | **ESTRUTURAL** |
-| `evolution-webhook` (`findOrCreateThread` + `THREAD_PROVIDER_MIGRATED`) | **ESTRUTURAL** — porém já é o mais próximo do modelo alvo (reaproveita thread e troca endpoint) |
-| `promote_session_to_contact` (webchat) | **SIMPLES** (já busca por `business_context` derivado do purpose) |
-| `dispatchWhatsAppSend` (cliente) + `_shared/dispatch-whatsapp-send` (edge) | **ESTRUTURAL** (dois dispatchers divergentes; passam a resolver Route pela Inbox) |
-| Re-route hardcoded (`407ff93d-…`) e `complianceGuards.ts` (endpoint 7020, janela de 7 dias vencida) | **SIMPLES** (remoção) |
-| `rpc_list_message_threads` (2 overloads), `rpc_get_message_threads_by_ids` | **SIMPLES** (filtro por Inbox já existe implicitamente) |
-| `rpc_list_inbox_threads`, `rpc_inbox_queue_counts`, `inboxScope.ts` | **SIMPLES** |
-| `MessagesList.tsx`, `InboxPage/InboxThreadDetail`, `MobileMessagesList`, `MobileInbox` | **SIMPLES→ESTRUTURAL** (timeline unificada exige divisor "número mudou", já existente via `useEndpointNumbers`) |
-| `NewConversationDialog` + `composerEndpoint.ts` (`pickPreferredEndpoint`) | **ESTRUTURAL** (escolher Route, não endpoint) |
-| `useThreadSendEndpoint`, `useThreadEndpointMap`, `resolveComposerProvider` | **ESTRUTURAL** (viram leitura de Route; `resolveComposerProvider` deve morrer) |
-| `scheduled_messages` (`thread_id`) | **SIMPLES** (endpoint resolvido no envio) |
-| Templates (`whatsapp_templates` por WABA/endpoint) | **SIMPLES** — atenção: template é ligado à WABA; a Route define qual conjunto é válido |
-| IA (`ai-agent-respond`, `ai_agent_logs`, limite por thread) | **SIMPLES** — mas o limite por thread muda de semântica ao consolidar |
-| Realtime (`message_threads` INSERT/UPDATE; `messages` por thread) | **SIMPLES** (menos threads, mais eventos por thread) |
-| `messages.endpoint_id` | **SEM ALTERAÇÃO** (já é o endpoint real da mensagem — é o pilar do modelo novo) |
-| `message_thread_reads`, `thread_assignment_history`, `message_response_times` | **SEM ALTERAÇÃO** estrutural, afetados apenas no merge |
+| `conv_route_resolver_v2` | Resolver server-side único (inbound+outbound) |
+| `conv_inbound_v2_meta` | Meta inbound V2 |
+| `conv_inbound_v2_twilio` | Twilio inbound V2 |
+| `conv_inbound_v2_evolution` | Evolution inbound V2 |
+| `conv_thread_identity_v2` | Nova identidade da thread (lookup por Inbox) |
+| `conv_timeline_paginated` | Paginação/virtualização |
+| `conv_timeline_endpoint_blocks` | Blocos por endpoint |
+| `conv_composer_endpoint_display` | Composer exibindo endpoint efetivo |
+| `conv_routes_admin_ui` | UI de administração de Routes |
 
-## E. `merge_message_threads` **não** serve ao caso da GMUD
+---
 
-Verificado no corpo da função: ela **levanta exceção** quando `primary_endpoint_id` OU `business_context` divergem entre winner e loser (`merge_message_threads refused: grouping key mismatch`). O caso central da GMUD — mesmo contato, mesma Inbox, **endpoints diferentes** — é explicitamente recusado hoje.
+## 4. Fases
 
-O que ela já faz bem (reutilizável como base): move `messages` (com `merged_from_thread_id`), `message_thread_reads`, `thread_assignment_history`, `message_response_times`, `scheduled_messages`, `tasks`, `ai_agent_logs`, `ai_interaction_logs`; fecha o loser com `merged_into_thread_id`; recalcula `last_message_*`; grava `message_thread_merge_audit`; usa lock ordenado por id (evita deadlock) e é idempotente.
+### Fase 0 — Observabilidade, contratos e testes
+- **Objetivo:** medir o comportamento atual e travar contratos antes de mudar qualquer coisa.
+- **Arquivos:** `supabase/functions/_shared/` (novo módulo de logging estruturado de roteamento); `service-health`, `service-events`; testes Deno por webhook.
+- **Tabelas:** somente leitura + escrita em logs existentes.
+- **RPC/Edge/Hooks/Componentes:** nenhum alterado.
+- **Migration:** não.
+- **Flag:** nenhuma.
+- **Backward:** total.
+- **Rollout:** deploy direto.
+- **Observabilidade:** eventos `route_resolution_attempt` (endpoint, inbox inferida, route inferida, decisão) emitidos em **shadow**, sem alterar comportamento; contador de threads que *seriam* reutilizadas sob a regra nova.
+- **Testes:** golden tests de payload inbound por provider (Meta/Twilio/Evolution/Webchat) fixando o comportamento atual.
+- **Aceite:** shadow log cobre ≥99% do inbound por 72h; divergência esperada quantificada.
+- **Rollback:** remover logs.
+- **Dependências:** nenhuma. **Riscos:** baixo (volume de log).
 
-O que **não** trata e precisa de definição antes de qualquer plano:
-- qual `primary_endpoint_id` sobrevive (e se o campo deixa de ter significado de identidade);
-- conflito de `assigned_user_id` e de SLA (`first_response_at`, `resolved_at`, filas);
-- conflito de `opportunity_id` entre threads;
-- escolha de `status` do winner (open vs awaiting_client vs resolved);
-- `unmerge_message_thread` para um merge multi-endpoint (reversibilidade);
-- efeito em `message_response_times` já calculado (métricas de vendedor mudam retroativamente).
+### Fase 1 — Schema aditivo de Route e mapping inbound
+- **Objetivo:** criar `messaging_routes`, `route_inbound_endpoints`, `route_rotations` sem nenhum consumidor em produção.
+- **Tabelas:** as três novas (+ GRANTs + RLS por `organization_id = ANY(current_user_org_ids())`).
+- **Migration:** sim (aditiva, sem SQL nesta etapa).
+- **Flag:** nenhuma (tabelas ociosas).
+- **Backward:** total.
+- **Rollout:** migration + seed derivado de `messaging_lines` e `communication_endpoints.purpose` (uso legítimo de `purpose` como **backfill**, não runtime).
+- **Observabilidade:** relatório de endpoints ativos sem Route.
+- **Testes:** unicidade "um endpoint ativo → uma Route"; FK; RLS.
+- **Aceite:** 100% dos 20 endpoints ativos mapeados a exatamente uma Route; zero endpoint órfão.
+- **Rollback:** drop das tabelas novas.
+- **Dependências:** Fase 0. **Riscos:** seed incorreto (mitigado por revisão manual, são 20 endpoints).
 
-**Conclusão E:** a RPC não deve ser adotada automaticamente. Ela é ponto de partida, não solução.
+### Fase 2 — Backfill de `business_context`
+- **Objetivo:** eliminar `business_context NULL` sem inventar regra.
+- **Tabelas:** `message_threads`, `thread_business_context_review`.
+- **Migration:** sim (backfill em lote + tabela de revisão). **Não** aplicar NOT NULL nesta fase.
+- **Escopo:** 146 threads determinísticas (endpoint com `purpose` conhecido) + 13 ambíguas (sem endpoint) enfileiradas para decisão humana.
+- **Backward:** total.
+- **Rollout:** lotes pequenos com cron pausado (12 triggers em `messages`; ADR-0007). Backfill toca apenas `message_threads`, não `messages`.
+- **Observabilidade:** contagem de NULL por dia até zero.
+- **Testes:** nenhuma thread muda de Inbox de forma inesperada; 568 pares "1 sales + 1 CS" permanecem intactos.
+- **Aceite:** `business_context NULL` = 13 (fila de revisão) e depois 0.
+- **Rollback:** coluna de snapshot do valor anterior na tabela de revisão.
+- **Dependências:** Fase 1. **Riscos:** baixo.
 
-## F. 4.764 mensagens sem `endpoint_id`
+### Fase 3 — Resolver server-side único (`route-resolver`)
+- **Objetivo:** um único contrato de resolução inbound/outbound, em `_shared/`.
+- **Arquivos:** novo `supabase/functions/_shared/route-resolver.ts`; `_shared/dispatch-whatsapp-send.ts`; `src/lib/dispatchWhatsAppSend.ts` (passa a delegar, sem lógica própria).
+- **Edge:** `meta-whatsapp-send`, `twilio-whatsapp-send`, `evolution-whatsapp-send` (validação passa a exigir Route).
+- **Hooks:** `useThreadSendEndpoint` vira leitura do resolver (não recalcula regra).
+- **Migration:** não.
+- **Flag:** `conv_route_resolver_v2` (off → comportamento atual; on → resolver novo).
+- **Backward:** dual-path por flag.
+- **Rollout:** shadow primeiro (resolver calcula e loga divergência vs. caminho atual), depois flip por org.
+- **Observabilidade:** `route_resolution_divergence` (esperado vs. atual), taxa de `no_route`.
+- **Testes:** matriz da seção 6, itens de outbound.
+- **Aceite:** divergência 0 em shadow por 48h antes do flip.
+- **Rollback:** flag off.
+- **Dependências:** Fases 1–2. **Riscos:** alto se ligado sem shadow; mitigado pela flag por org.
+- **Nesta fase saem:** `REROUTE_ORG_ID`, `REROUTE_TARGET_ENDPOINT_ID`, `salesContextMismatch` client-only, default Twilio, "último endpoint" como fallback técnico, `resolveComposerProvider`.
 
-| Grupo | Qtd | Backfill |
+### Fases 4/5/6 — Inbound V2 por provider (Meta → Twilio → Evolution)
+Uma fase por provider, mesma estrutura (Opção B aprovada; sem refactor de ingest core).
+- **Objetivo:** trocar o predicado de lookup da thread de `primary_endpoint_id` para `business_context` derivado da Route; `messages.endpoint_id` continua sendo o endpoint real recebido.
+- **Arquivos:** `meta-whatsapp-webhook/index.ts` (F4), `twilio-whatsapp-webhook/index.ts` (F5), `evolution-webhook/index.ts` (F6).
+- **Tabelas:** `message_threads` (lookup/insert), `messages`, `integration_inbound_events`.
+- **Migration:** não.
+- **Flag:** `conv_inbound_v2_<provider>`.
+- **Backward:** caminho antigo intacto com a flag off.
+- **Rollout:** flag por org, começando pela org piloto de menor volume.
+- **Mudanças específicas:** Meta — remover filtro por endpoint no lookup; `duplicate_thread_detected` passa a significar conflito real. Twilio — remover os dois fallbacks (thread legada com endpoint nulo e lookup sem filtro); manter backfill de `messages.endpoint_id` nos status callbacks. Evolution — remover o passo de "migração de provider" (`THREAD_PROVIDER_MIGRATED`), que deixa de ser necessário; manter o evento de sistema como registro de troca de número.
+- **Observabilidade:** threads criadas/reutilizadas por provider; eventos `unrouted_inbound`.
+- **Testes:** golden tests da Fase 0 reexecutados + matriz da seção 6 por provider. Predicado de lookup textualmente idêntico nos três (teste de paridade).
+- **Aceite:** zero thread nova criada para contato+Inbox já existente; zero regressão nos golden tests.
+- **Rollback:** flag off por provider.
+- **Dependências:** Fase 3. **Riscos:** médio; blast radius limitado a um provider por vez.
+
+### Fase 7 — Política + consolidação de Threads
+- **Objetivo:** aprovar a Política de Consolidação (seção 5) e só então consolidar os ≈116 grupos / ≈238 threads.
+- **Tabelas:** `message_threads`, `messages`, `message_thread_reads`, `thread_assignment_history`, `message_response_times`, `scheduled_messages`, `tasks`, `ai_agent_logs`, `ai_interaction_logs`, `message_thread_merge_audit`.
+- **RPC:** nova `merge_threads_same_inbox_v1` (a `merge_message_threads` atual **recusa** endpoints diferentes; não será reaproveitada como está — herda apenas a mecânica de movimentação e auditoria).
+- **Migration:** sim (RPC nova + execução em lote controlado).
+- **Flag:** não (operação pontual auditada).
+- **Rollout:** dry-run com relatório por grupo → aprovação humana → execução em lotes com cron pausado.
+- **Observabilidade:** auditoria completa por merge; diff de métricas antes/depois (seção 7).
+- **Aceite:** zero grupo com >1 thread aberta por `(org, contact, inbox)`; auditoria reversível.
+- **Rollback:** `unmerge` equivalente, validado no dry-run **antes** do merge.
+- **Dependências:** Fases 2–6 e aprovação da política. **Riscos:** alto (dados históricos e métricas) — por isso é a fase mais tardia possível antes da unique key.
+
+### Fase 8 — Nova unique key da Thread
+- **Objetivo:** tornar a identidade nova estruturalmente garantida.
+- **Migration:** sim — `business_context` NOT NULL; nova unique parcial por `(org, contact, channel, business_context)` em status abertos; remoção das duas uniques por endpoint.
+- **Flag:** `conv_thread_identity_v2` já deve estar 100% ligada antes.
+- **Backward:** ponto de não retorno lógico (revertível por migration inversa, mas com custo).
+- **Aceite:** zero violação na criação do índice (garantida pela Fase 7).
+- **Rollback:** migration inversa restaurando as uniques antigas.
+- **Dependências:** Fase 7. **Riscos:** falha na criação do índice se a Fase 7 não zerar conflitos.
+
+### Fase 9 — Paginação, virtualização e realtime compatível
+- **Objetivo:** timeline suporta históricos consolidados.
+- **Arquivos:** `src/pages/messages/MessagesList.tsx`, `src/components/inbox/InboxConversationTimeline.tsx`, `src/hooks/inbox/useInboxThreadMessages.ts`, `src/components/mobile/MobileMessagesList.tsx`, `MobileInbox.tsx`; novo hook comum `useThreadMessagesPaged`.
+- **RPC:** nova RPC de mensagens por cursor (`sent_at, id`).
+- **Migration:** possivelmente índice de suporte; sem mudança de modelo.
+- **Flag:** `conv_timeline_paginated`.
+- **Escopo:** carregamento incremental (mais recentes primeiro), virtualização, memoização das linhas, realtime que insere sem invalidar a janela paginada, remoção do `.limit(500)` como comportamento final.
+- **Aceite:** thread de 545 msgs abre em <1s; scroll sem travar; realtime não duplica nem perde mensagem.
+- **Rollback:** flag off.
+- **Dependências:** independente das Fases 4–8 (pode ser antecipada se houver capacidade).
+
+### Fase 10 — Timeline agrupada por Endpoint
+- **Objetivo:** blocos visuais por endpoint dentro da thread única.
+- **Arquivos:** timelines desktop/mobile + `useEndpointNumbers`.
+- **Regras:** hierarquia `Dia → Bloco de Endpoint → Mensagens consecutivas`; retorno a um endpoint anterior cria **novo** bloco (1111→2222→7777→1111 = 4 blocos). Mensagens sem `endpoint_id` **não** herdam o endpoint anterior, **não** quebram bloco e são exibidas sem badge (ou com marca discreta de contexto legado). Notas internas sem endpoint por definição.
+- **Flag:** `conv_timeline_endpoint_blocks`.
+- **Aceite:** casos 1111→2222→7777→1111 e mensagens legadas renderizados conforme a regra.
+- **Dependências:** Fase 9.
+
+### Fase 11 — Composer exibindo o endpoint efetivo
+- **Objetivo:** "Respondendo por: WhatsApp João 7777", read-only.
+- **Arquivos:** `MessagesList.tsx`, `InboxComposer.tsx`, `MobileMessagesList.tsx`.
+- **Hooks:** `useThreadSendEndpoint` (já convertido na Fase 3) exposto nas 3 superfícies — hoje o InboxComposer não participa do mesmo caminho, o que causa template do provider errado.
+- **Flag:** `conv_composer_endpoint_display`.
+- **Aceite:** provider/capabilities/templates exibidos coincidem com o endpoint que o backend usará em 100% dos casos testados. Override manual fica para fase posterior.
+- **Dependências:** Fase 3.
+
+### Fase 12 — Administração de Routes e rotação
+- **Objetivo:** tirar a rotação do SQL manual.
+- **Arquivos:** novas telas em `src/pages/settings/`; Edge para rotação com auditoria.
+- **Regras:** trocar `active_endpoint_id` **não** desassocia o endpoint antigo do inbound da Route (ele passa a ser inbound-only) e **não** cria thread nem altera mensagens.
+- **Flag:** `conv_routes_admin_ui`.
+- **Aceite:** cenário de rotação da seção 6 reproduzível pela UI.
+- **Dependências:** Fases 1 e 3.
+
+### Fase 13 — Contract (remoção do legado)
+- **Objetivo:** remover o que ficou em dual-path.
+- **Escopo:** `messaging_lines` (após dual-read zerado), `primary_endpoint_id` renomeado para `origin_endpoint_id` (ou depreciado formalmente), `purpose` marcado deprecated, `complianceGuards.ts` hardcoded (janela de 7 dias vencida), `migrateThreadAndSend.ts` (sem call sites), overloads duplicados de `rpc_list_message_threads`, flags já 100% ligadas.
+- **Aceite:** nenhuma referência viva ao caminho antigo.
+- **Dependências:** todas as anteriores estáveis por ≥2 semanas.
+
+**Reordenação sugerida:** a Fase 9 pode rodar em paralelo às Fases 4–6 (não têm dependência entre si) e reduz o risco de UX na Fase 7. A Fase 11 depende só da Fase 3.
+
+---
+
+## 5. Política de Consolidação de Threads (a aprovar antes da Fase 7)
+
+Para cada campo, opções → impacto → recomendação → risco → reversibilidade.
+
+| Campo | Opções | Recomendação | Risco / Reversibilidade |
+|---|---|---|---|
+| `primary_endpoint_id` | (a) do winner; (b) do endpoint mais recente; (c) NULL | (b) — coerente com "endpoint de origem mais recente"; campo deixa de rotear | Baixo / reversível (snapshot no audit) |
+| `assigned_user_id` | (a) winner; (b) thread com atividade mais recente; (c) manter e sinalizar conflito | (b), com evento em `thread_assignment_history` — nunca silencioso | Médio (dono muda) / reversível |
+| `original_owner_user_id` | (a) o mais antigo entre as threads | (a) — preserva atribuição comercial original | Baixo / reversível |
+| `opportunity_id` | (a) winner; (b) oportunidade aberta; (c) mais recente; (d) conflito → revisão manual | (b), e (d) quando houver duas abertas | Alto (contamina pipeline) / reversível |
+| `status` | (a) mais "aberto" entre as threads; (b) do winner | (a) — nunca fechar conversa viva | Baixo / reversível |
+| `priority` | (a) máxima entre as threads | (a) | Baixo |
+| `first_response_at` | (a) mínimo; (b) do winner; (c) preservar por thread original | **(c)** — ver seção 7; não reescrever métrica | Alto se (a) / irreversível se sobrescrito sem snapshot |
+| `resolved_at` | (a) do winner; (b) NULL se o resultado é aberto | (b) | Médio |
+| SLA targets | (a) recalcular; (b) congelar histórico e valer só para o futuro | (b) | Alto se (a) |
+| `last_routing_decision` | (a) mais recente | (a) | Baixo |
+| `category` | (a) winner; (b) mais recente não-nula | (b) | Baixo |
+| `needs_human_attention` | (a) OR lógico | (a) | Baixo |
+
+**Tabelas movidas no merge:** `messages` (com `merged_from_thread_id`), `message_thread_reads` (dedupe por usuário — atenção: pode marcar como lido algo não lido), `thread_assignment_history` (append), `message_response_times` (**não** recalcular), `scheduled_messages` (repontar; revalidar endpoint no envio), `tasks`, `ai_agent_logs`/`ai_interaction_logs` (repontar — o limite de mensagens por agente/thread muda de semântica e precisa ser revisto), `message_thread_merge_audit` (snapshot completo winner+loser).
+
+---
+
+## 6. Matriz de testes
+
+| # | Cenário | Resultado esperado |
 |---|---|---|
-| Threads **sem** `primary_endpoint_id`, sales, inbound/outbound (04/2026–07/2026) | 3.545 | **Impossível determinar** sem outra fonte (só inferível por provider/período) |
-| Notas internas (`direction='internal'`) | 603 | **Não se aplica** — nota interna não tem endpoint por definição |
-| Threads **com** `primary_endpoint_id` (sales 480, CS 117, outros) | ~600 | **Determinístico** (herda o endpoint da thread) |
-| `business_context NULL`, inbound, sem endpoint | 3 | Impossível |
-| `channel='internal'` | 3 | Não se aplica |
+| 1 | 1 Inbox, 1 endpoint | 1 thread; envio pelo `active_endpoint` |
+| 2 | 1 Inbox, N endpoints | 1 thread; N badges na timeline |
+| 3 | Comercial Principal + Secundária | 1 thread comercial; resposta pela Route do último inbound |
+| 4 | Número pessoal do vendedor (Route João) | 1 thread; resposta por 7777 |
+| 5 | Meta + Twilio na mesma Inbox | 1 thread; provider correto por bloco |
+| 6 | Meta + Evolution na mesma Inbox | 1 thread; free-form respeitando `requires_template_outside_window` |
+| 7 | Endpoint rotacionado (1111→3333) | mesma Route, mesma thread, envio por 3333 |
+| 8 | Cliente volta pelo número antigo (1111) | mesma thread; sem thread nova; sem alterar mensagens antigas |
+| 9 | Cliente muda para outro número da mesma Inbox | mesma thread |
+| 10 | Cliente fala Comercial **e** Atendimento | **2 threads**, uma por Inbox |
+| 11 | Fora da janela 24h, endpoint exige template | composer bloqueia free-form |
+| 12 | Endpoint com `requires_template_outside_window=false` | free-form permitido |
+| 13 | Endpoint offline | erro explícito, sem fallback |
+| 14 | Route sem `active_endpoint_id` | envio recusado com erro claro |
+| 15 | Endpoint inbound sem Route | evento não roteado + alerta; nada gravado no domínio |
+| 16 | Realtime | mensagem nova aparece na thread única sem duplicar |
+| 17 | Mobile | paridade com desktop nos itens 1–10 |
+| 18 | IA | agente responde na thread única; limite por thread revisto |
+| 19 | Scheduled message | endpoint resolvido no momento do envio, não no agendamento |
+| 20 | Webchat | thread própria por Inbox derivada da Route |
 
-**É bloqueador da GMUD?** Não. `messages.endpoint_id` nulo só afeta a exibição do badge "via …" e o divisor de troca de número. A nova identidade da thread não depende de `messages.endpoint_id`.
+---
 
-**Como a Timeline deve exibir:** mensagens sem endpoint entram na sequência cronológica sem badge de número (e sem gerar divisor "número mudou"), herdando visualmente o bloco anterior. Notas internas seguem com estilo próprio. Nenhum backfill é pré-requisito.
+## 7. Métricas e SLA (avaliação explícita)
 
-## G. Inbound — regra futura por webhook
+Consolidar threads históricas **altera** métricas se recalculado: `message_response_times` já materializado passaria a ter outra thread de referência; `first_response_at`/`resolved_at` do winner mudariam de significado; métricas por vendedor (`seller_metrics_daily`) e por Inbox seriam afetadas retroativamente.
 
-Regra: `webhook → endpoint recebido → Route → Inbox → thread(contact+Inbox) → message com endpoint real`. Route determina **contexto**, não identidade.
+**Regra do plano:** o merge **move** o vínculo de `thread_id` mas **não recalcula** `message_response_times`, `first_response_at`, `resolved_at` nem rollups já fechados. Snapshot obrigatório no `merge_audit`. Relatórios históricos anteriores à data do merge devem ser lidos com a marcação de merge. Nenhuma métrica de negócio é reescrita silenciosamente.
 
-- **Meta** (`meta-whatsapp-webhook`): trocar o lookup de thread (hoje filtra `primary_endpoint_id=endpoint.id`) por filtro em `business_context` derivado do `purpose` do endpoint; manter `messages.endpoint_id`; o log `duplicate_thread_detected` passa a ser sinal de conflito real. O gate BR inline (próprio, diferente de Twilio/Evolution) é dívida separada.
-- **Twilio**: remover os dois fallbacks (thread legada com endpoint nulo e lookup sem filtro de endpoint) — eles deixam de existir porque a chave não usa endpoint; manter o backfill de `messages.endpoint_id` nos status callbacks.
-- **Evolution**: eliminar o passo 2 (migração de provider) — ele deixa de ser necessário, pois a thread já é a mesma; manter o evento de sistema como registro de troca de número.
-- **Webchat** (`promote_session_to_contact`): menor impacto; já deriva `business_context` do `purpose`. Ajuste: parar de criar oportunidade sem consultar `auto_create_opportunity` (divergência de negócio real, independente da GMUD).
+---
 
-## H. Outbound — contrato
+## 8. Observabilidade transversal
 
-Contrato desejado é implementável, com uma lacuna: **hoje não existe vínculo Route→endpoint reverso confiável**. `messaging_lines` só guarda `active_endpoint_id` (1 endpoint por `key`), então "dado o endpoint do último inbound, qual Route?" só é respondível quando esse endpoint ainda é o ativo. Endpoints rotacionados (ex.: 2890 → 8439) perdem a associação — não há histórico consultável além de `messaging_line_rotations` (log, não FK). Sem um vínculo persistente endpoint→Route, a resolução por "último inbound" degrada silenciosamente, exatamente o que se quer evitar. Quando não houver Route válida: erro explícito no envio (sem fallback silencioso, sem default Twilio — que hoje existe e deve ser removido).
+Eventos estruturados: `route_resolution_attempt`, `route_resolution_divergence`, `unrouted_inbound`, `thread_reused` / `thread_created`, `merge_executed`, `send_blocked_no_route`. Expostos em `service-health` (staleness e taxa de não roteados como métrica de saúde) e `service-events` (histórico). Alerta imediato para qualquer `unrouted_inbound` — nesse modelo, evento não roteado é incidente, não ruído.
 
-## I. `messaging_lines` — o que impede N Routes por Inbox
+---
 
-Colunas: `id`, `organization_id`, `key`, `name`, `channel`, `active_endpoint_id`, `created_at`, `updated_at`.
-Constraints: `UNIQUE (organization_id, key, channel)`; `CHECK key IN ('commercial','customer_service','evolution_pilot')`; FK `active_endpoint_id → communication_endpoints ON DELETE SET NULL`.
+## 9. Rollback
 
-Impedimentos para N Routes por Inbox: (1) o `UNIQUE` amarra 1 linha por `key`; (2) o `CHECK` fixa o vocabulário e mistura Inbox com piloto (`evolution_pilot`); (3) não há coluna de Inbox separada de `key`, nem prioridade/ordem, nem `is_active`, nem dono (`Route João`/`Route Maria` exigiria `owner_user_id`), nem vínculo N:1 endpoint→Route.
-Consumers: os dois dispatchers, `useThreadSendEndpoint`, e o log `messaging_line_rotations`. Nenhuma UI de administração de linhas foi encontrada — rotação é feita por SQL.
+Por fase: flags (3, 4, 5, 6, 9, 10, 11, 12) → off imediato, sem migration. Fases 1 e 2 → migration inversa aditiva. Fase 7 → `unmerge` validado em dry-run antes do merge. Fase 8 → migration inversa restaurando uniques (com custo, é o ponto crítico). Fase 13 → não reversível por design; só executar após estabilidade prolongada.
 
-## J. Performance da Timeline — números
+---
 
-Mensagens por thread:
+## 10. Riscos principais
 
-| Inbox | Threads | Média | p50 | p90 | p95 | p99 | Maior | >100 | >500 | >1.000 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| sales | 12.496 | 11,5 | 4 | 29 | 48 | 111 | 451 | 153 | 0 | 0 |
-| customer_service | 6.508 | 19,9 | 6 | 50 | 89 | 185 | 545 | 276 | 1 | 0 |
-| NULL/other | 189 | ~1 | 1 | 2 | 3 | 3 | 39 | 0 | 0 | 0 |
+1. Fase 8 sem a Fase 7 completa: criação do índice falha ou trava tabela quente.
+2. Merge alterando métricas históricas — mitigado pela seção 7.
+3. `conv_route_resolver_v2` ligado sem shadow — mitigado por 48h de divergência zero.
+4. Endpoint inbound sem Route após adicionar número novo — mitigado por alerta e checklist no provisionamento.
+5. Divergência entre os três predicados de lookup nas Fases 4–6 — mitigado por teste de paridade.
+6. Timeline consolidada antes da Fase 9 em contas com histórico grande (545 msgs hoje) — mitigado pela ordem das fases.
+7. `message_thread_reads` no merge marcando como lido algo não lido — decisão explícita na política.
 
-Nenhuma thread passa de 1.000 mensagens. Consolidando os grupos em conflito, o pior caso somado observado fica na casa de ~700 mensagens (grupo CS de 40 threads / 1.882 msgs está espalhado por vários contatos; o maior grupo individual soma centenas, não milhares).
+---
 
-**Veredito:** paginação e virtualização **não são bloqueadores da migration de dados** e não são bloqueadores de backend. São bloqueadores de qualidade para **ativar a nova UX** — e o limite fixo de `.limit(500)` no Inbox passa a ser um bug visível (276 threads já >100, 1 já >500). O risco anterior de "regressão perceptível" está **rebaixado de crítico para médio**.
+## 11. Itens classificados separadamente (fora do núcleo da GMUD)
 
-## K. Ingest core compartilhado — análise crítica (A vs B)
+- **Webchat `auto_create_opportunity`:** divergência de negócio real (webchat cria oportunidade sempre, ignorando a flag). Tratar como correção independente, fora da GMUD, para não aumentar o blast radius.
+- **Gate BR inline do Meta** (não usa `resolveContactIngressIdentity`): dívida separada.
+- **Backfill dos 4.764 `messages.endpoint_id`:** não é pré-requisito; 3.545 são indetermináveis; ~600 são determinísticos e podem ser feitos a qualquer momento.
+- **Ingest core compartilhado:** dívida técnica pós-GMUD.
 
-| Critério | Opção A (refatorar ingest primeiro) | Opção B (mudar identidade nos 3 webhooks, consolidar depois) |
-|---|---|---|
-| Blast radius | Todo o inbound dos 3 providers de uma vez | Um provider por vez |
-| Risco de regressão | Alto (mistura refactor + mudança de regra) | Menor (mudança pontual: 1 filtro de lookup por webhook) |
-| Rollback | Difícil (revert de refactor grande com tráfego vivo) | Simples por provider |
-| Complexidade | Alta | Baixa por passo, alta soma total |
-| Tempo até valor | Longo | Curto |
-| Dívida | Resolve dívida antes | Mantém a dívida da tríplice duplicação |
+---
 
-**Conclusão:** a pré-condição anterior está **retirada**. A mudança concreta em cada webhook é pequena e equivalente (trocar o predicado do lookup de thread e remover fallbacks), e Evolution já opera perto do modelo alvo. **Opção B é a recomendada**, com uma exigência: os três predicados devem ser escritos idênticos e cobertos por teste, senão a divergência se agrava.
+## READY FOR IMPLEMENTATION: YES
 
-## L. Bloqueadores, separados por natureza
+**Primeira fase segura para execução: Fase 0 — Observabilidade, contratos e testes.** É puramente aditiva, sem migration, sem flag e sem mudança de comportamento, e produz exatamente o dado que valida as fases seguintes (divergência esperada entre o roteamento atual e o alvo).
 
-**Bloqueador para a migration de dados**
-1. Definir a política de merge (winner, endpoint sobrevivente, status, assignee, SLA, `opportunity_id`) — `merge_message_threads` hoje recusa o caso.
-2. Decidir as 13 threads `business_context NULL` ambíguas.
-3. `business_context` precisa virar NOT NULL antes de entrar na chave única.
-4. Merge/backfill em lote pequeno com cron pausado (12 triggers em `messages`, ADR-0007).
-
-**Bloqueador de backend**
-5. Vínculo persistente endpoint→Route (item H) e `messaging_lines` suportando N Routes (item I).
-6. Consolidar os dois dispatchers em um único contrato antes de mudar a chave de roteamento.
-7. Remover o default silencioso para Twilio e o re-route hardcoded.
-
-**Bloqueador para ativar a UX**
-8. Paginação da timeline (e remoção do `.limit(500)` do Inbox).
-9. Virtualização + memoização das timelines.
-10. Divisor "número mudou" na timeline consolidada e badge por mensagem.
-
-**Dívida técnica que pode ficar para depois**
-11. Ingest core compartilhado.
-12. `complianceGuards.ts` hardcoded (janela de 7 dias já vencida).
-13. Backfill dos 4.764 `messages.endpoint_id` (3.545 são indeterminados de todo modo).
-14. `migrateThreadAndSend.ts` sem call sites; `resolveComposerProvider` a remover.
-15. Overloads duplicados de `rpc_list_message_threads`.
-16. Webchat ignorando `auto_create_opportunity`.
-
-## M. Go / No-Go
-
-**Podemos gerar o Plano Técnico de Implementação? SIM.**
-
-Premissas suficientemente validadas para planejar:
-- Arquitetura alvo (`contact + Inbox`) é compatível com o ADR-0009 e mensurável no banco hoje.
-- Volume de conflito é pequeno e conhecido: 53 contatos abertos em `sales`, 0 em `customer_service`; 116 grupos considerando todo o histórico.
-- 91,8% das threads sem `business_context` são classificáveis deterministicamente; as 13 restantes estão isoladas e listadas.
-- Performance não bloqueia migration nem backend; bloqueia apenas a ativação da UX, com números conhecidos (nenhuma thread >1.000 msgs).
-- Os pontos de mudança inbound/outbound estão mapeados arquivo por arquivo.
-- Opção B (webhooks separados primeiro) tem risco/rollback aceitáveis.
-
-Duas decisões de produto precisam ser tomadas **dentro** do plano (não bloqueiam escrevê-lo): política de merge (item E) e modelo de Route (itens H/I).
+Duas aprovações continuam pendentes, mas **não bloqueiam a Fase 0**: a Política de Consolidação (seção 5, necessária antes da Fase 7) e a decisão humana sobre as 13 threads ambíguas (necessária antes da Fase 8).
