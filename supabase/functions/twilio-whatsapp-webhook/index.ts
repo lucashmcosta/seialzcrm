@@ -872,7 +872,12 @@ serve(async (req) => {
       let existingThread: { id: string; primary_endpoint_id: string | null } | null = null
       let canonicalHandled = false
 
-      if (endpointId && orgId && await isSalesEndpoint(supabase, endpointId)) {
+      const salesGate = await salesCanonicalPathEnabled(supabase, {
+        organizationId: orgId as string | null,
+        endpointId,
+      })
+
+      if (salesGate.allowed) {
         const canonical = await resolveSalesWhatsappThread(supabase, {
           organizationId: orgId as string,
 
