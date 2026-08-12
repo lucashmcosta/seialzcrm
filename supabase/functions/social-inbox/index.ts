@@ -124,6 +124,39 @@ serve(async (req) => {
       });
     }
 
+    if (action === "profile") {
+      // Perfil do contato de uma conversa aberta (1 chamada, sob demanda).
+      // Instagram (User Profile API): foto, followers, verificado, follow status.
+      // Messenger: foto/nome exigem a feature "Business Asset User Profile Access"
+      // (Advanced Access via App Review) — sem ela, retorna null sem quebrar.
+      const participant_id = String(body.participant_id ?? "");
+      const platform = String(body.platform ?? "");
+      if (!participant_id) return json({ error: "missing_participant_id" }, 400);
+      try {
+        if (platform === "instagram") {
+          const r = await metaGraphGet(`/${participant_id}`,
+            { fields: "name,username,profile_pic,follower_count,is_verified_user,is_user_follow_business,is_business_follow_user" },
+            { accessToken: pageToken, appSecret });
+          return json({ ok: true, profile: {
+            name: r?.name ?? null, username: r?.username ?? null, avatar_url: r?.profile_pic ?? null,
+            follower_count: r?.follower_count ?? null, is_verified: !!r?.is_verified_user,
+            follows_us: !!r?.is_user_follow_business, we_follow: !!r?.is_business_follow_user,
+            profile_link: r?.username ? `https://instagram.com/${r.username}` : null,
+          } });
+        }
+        // messenger
+        const r = await metaGraphGet(`/${participant_id}`,
+          { fields: "first_name,last_name,name,profile_pic" }, { accessToken: pageToken, appSecret });
+        return json({ ok: true, profile: {
+          name: r?.name || [r?.first_name, r?.last_name].filter(Boolean).join(" ") || null,
+          avatar_url: r?.profile_pic ?? null, profile_link: null,
+        } });
+      } catch (e) {
+        // perfil indisponível (ex.: feature não aprovada) não é erro fatal
+        return json({ ok: true, profile: null, note: errMsg(e) });
+      }
+    }
+
     if (action === "conversations") {
       const out: any[] = [];
       const channels: Record<string, string | null> = {};

@@ -64,6 +64,33 @@ export function useSocialMessages(orgId?: string, conversationId?: string | null
   });
 }
 
+export type SocialProfile = {
+  name: string | null;
+  username?: string | null;
+  avatar_url: string | null;
+  follower_count?: number | null;
+  is_verified?: boolean;
+  follows_us?: boolean;
+  we_follow?: boolean;
+  profile_link: string | null;
+};
+
+export function useSocialProfile(orgId?: string, participantId?: string | null, platform?: SocialPlatform) {
+  return useQuery({
+    queryKey: ['social-profile', orgId, participantId],
+    enabled: !!orgId && !!participantId,
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: async (): Promise<SocialProfile | null> => {
+      const { data, error } = await supabase.functions.invoke('social-inbox', {
+        body: { organization_id: orgId, action: 'profile', participant_id: participantId, platform },
+      });
+      if (error) throw error;
+      return (data?.profile ?? null) as SocialProfile | null;
+    },
+  });
+}
+
 export function useSendSocialMessage(orgId?: string) {
   const qc = useQueryClient();
   return useMutation({

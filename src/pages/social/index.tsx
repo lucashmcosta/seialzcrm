@@ -4,16 +4,16 @@ import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useMarketingPublishingFlag } from '@/hooks/useMarketingPublishingFlag';
 import {
-  useSocialConversations, useSocialMessages, useSendSocialMessage,
+  useSocialConversations, useSocialMessages, useSendSocialMessage, useSocialProfile,
   type SocialConversation, type SocialPlatform, type SocialAttachment, type SocialMessage,
 } from './useSocialInbox';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { InstagramLogo, MessengerLogo, PaperPlaneTilt, ChatsCircle, WarningCircle, ArrowSquareOut, FileArrow } from '@phosphor-icons/react';
+import { InstagramLogo, MessengerLogo, PaperPlaneTilt, ChatsCircle, WarningCircle, ArrowSquareOut, FileArrow, SealCheck, Users } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -98,6 +98,7 @@ export default function SocialInboxPage() {
     () => convos.data?.conversations.find((c) => c.id === selectedId) ?? null,
     [convos.data, selectedId],
   );
+  const profile = useSocialProfile(orgId, selected?.participant_id, selected?.platform).data;
 
   if (!orgId || flagLoading) {
     return <Layout><div className="p-6"><Skeleton className="h-[70vh] w-full" /></div></Layout>;
@@ -186,16 +187,34 @@ export default function SocialInboxPage() {
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-                  <PlatformIcon platform={selected.platform} className="h-4 w-4" />
-                  <p className="text-sm font-semibold">{selected.name}</p>
-                  <Badge variant="secondary" className="text-[10px] capitalize">{selected.platform}</Badge>
-                  {selected.profile_link && (
-                    <a href={selected.profile_link} target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                      @{selected.username} <ArrowSquareOut className="h-3 w-3" />
-                    </a>
-                  )}
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+                  <div className="relative shrink-0">
+                    <Avatar className="h-9 w-9">
+                      {profile?.avatar_url && <AvatarImage src={profile.avatar_url} alt={selected.name} />}
+                      <AvatarFallback className="text-xs">{initials(selected.name)}</AvatarFallback>
+                    </Avatar>
+                    <PlatformIcon platform={selected.platform} className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-background p-[1px]" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold truncate">{selected.name}</p>
+                      {profile?.is_verified && <SealCheck className="h-4 w-4 text-blue-500 shrink-0" weight="fill" />}
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      {(selected.profile_link || profile?.profile_link) && (
+                        <a href={(selected.profile_link || profile?.profile_link)!} target="_blank" rel="noreferrer"
+                          className="inline-flex items-center gap-0.5 text-primary hover:underline">
+                          @{selected.username || profile?.username} <ArrowSquareOut className="h-3 w-3" />
+                        </a>
+                      )}
+                      {typeof profile?.follower_count === 'number' && (
+                        <span className="inline-flex items-center gap-0.5">
+                          <Users className="h-3 w-3" />{profile.follower_count.toLocaleString('pt-BR')}
+                        </span>
+                      )}
+                      {profile?.follows_us && <Badge variant="outline" className="h-4 px-1 text-[9px]">Segue você</Badge>}
+                    </div>
+                  </div>
                 </div>
 
                 <ScrollArea className="flex-1 px-4 py-3">
