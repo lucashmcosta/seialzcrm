@@ -105,10 +105,11 @@ Em `feature_flags` (por org, via `fn_feature_flag_enabled` / `_shared/feature-fl
 
 ### Fase 3 — Resolver server-side único (`route-resolver`)
 - **Objetivo:** um contrato único de resolução inbound/outbound.
+- **Contrato outbound:** entrada `threadId` → busca a **última mensagem inbound roteável** (`direction='inbound'`, `endpoint_id IS NOT NULL`, endpoint com associação ativa em `route_inbound_endpoints`, ordem `sent_at DESC, id DESC`) → Route → `active_endpoint_id` → provider. Saída é ou um endpoint resolvido ou o erro tipado **`REPLY_ROUTE_UNRESOLVED`**. Nenhum caminho alternativo existe no código: sem `primary_endpoint_id`, sem `purpose`, sem último outbound, sem provider default.
 - **Arquivos:** novo `supabase/functions/_shared/route-resolver.ts`; `_shared/dispatch-whatsapp-send.ts`; `src/lib/dispatchWhatsAppSend.ts` (passa a delegar); `meta-whatsapp-send`, `twilio-whatsapp-send`, `evolution-whatsapp-send`; `useThreadSendEndpoint` vira leitura do resolver.
 - **Migration:** não. **Flag:** `conv_route_resolver_v2`.
 - **Rollout:** shadow primeiro (resolver calcula e loga divergência vs. caminho atual), flip por org depois.
-- **Aceite:** divergência 0 em shadow por 48h antes do flip.
+- **Aceite:** divergência 0 em shadow por 48h antes do flip; toda ocorrência de `REPLY_ROUTE_UNRESOLVED` em shadow explicada antes do flip.
 - **Rollback:** flag off.
 - **Removidos nesta fase:** `REROUTE_ORG_ID`, `REROUTE_TARGET_ENDPOINT_ID`, `salesContextMismatch` client-only, default Twilio, "último endpoint" como fallback técnico, `resolveComposerProvider`.
 
