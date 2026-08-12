@@ -61,5 +61,6 @@ export async function mergeFilesToPdf(files: File[], outName = 'documento.pdf'):
   }
   if (pages === 0) throw new Error('Nenhuma página válida para mesclar (use imagens ou PDFs).');
   const bytes = await out.save();
-  return new File([bytes], outName, { type: 'application/pdf' });
+  const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' });
+  return new File([blob], outName, { type: 'application/pdf' });
 }
