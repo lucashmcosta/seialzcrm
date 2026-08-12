@@ -48,7 +48,9 @@ Hoje: **3.715 resolvem / 1.798 falhariam**.
 
 Evidência de que o 7020 é deterministicamente o comercial anterior da mesma Route: Meta, `purpose='commercial'`, 9.986 inbounds entre 11/03 e 13/07/2026, hoje inativo; o 7067 (ativo, `active_endpoint_id`) começa em 11/07/2026 — handover limpo, mesma org e canal. Vinculo como inbound histórico, sem reativar e sem trocar `active_endpoint_id`.
 
-**Ponto que sobra e não vou decidir sozinho:** as 2.953 (Viagi) + 613 (Central) threads sem nenhuma inbound com `endpoint_id` (threads antigas, muitas só com outbound ou com mensagens sem endpoint gravado). Pela regra normativa "sem fallback silencioso", elas dariam `REPLY_ROUTE_UNRESOLVED` no primeiro envio. Duas saídas possíveis, para decidir **antes de ligar a flag** (não bloqueia os passos 1–5 abaixo): (a) permitir, apenas quando não existe nenhuma inbound roteável, resolver pela **Route Comercial ativa única da org** — determinístico hoje, pois cada org tem exatamente uma; (b) manter o erro e exigir que o operador escolha a Route na UI (Fase 3). Recomendo (a), restrita a esse caso e registrada no log do resolver.
+**Threads sem inbound roteável — decidido:** as 2.953 (Viagi) + 613 (Central) threads sem nenhuma inbound com `endpoint_id` resolvem para **`REPLY_ROUTE_UNRESOLVED`**, sem exceção. Nenhuma heurística é permitida: nem Route única da org, nem `primary_endpoint_id`, `purpose`, último outbound ou provider default. Elas não bloqueiam construir e testar a Fase 2, mas ficam contabilizadas explicitamente no relatório antes de ligar a flag; a resolução operacional é UX explícita na Fase 3.
+
+**Separação mapping × estado técnico no resolver:** o mapping histórico serve **apenas** para descobrir a Route a partir do endpoint da última inbound, inclusive com `communication_endpoints.is_active = false`. O envio usa sempre `Route.active_endpoint_id`, que precisa apontar para endpoint tecnicamente válido — nunca se tenta enviar pelo endpoint histórico. Da mesma forma, mapping ativo **não** torna um endpoint técnico inativo apto a receber inbound novo: a aptidão para inbound continua vindo de `communication_endpoints`.
 
 ## 3. Mappings a criar (nenhum outro)
 
@@ -71,10 +73,10 @@ Não são tocados: `communication_endpoints.is_active`, `provider`, mensagens an
 5. Merge dos 7 grupos com assignee divergente pela **política A** (assignee = da thread com `last_message_at` mais recente): quando o assignee final difere do assignee do winner, gravar a transição em `thread_assignment_history` (thread winner, `from` = assignee do winner, `to` = assignee final, motivo `MERGE_SALES_V2`), preservando o histórico anterior e **sem sobrescrever** `original_owner_user_id`.
 6. Webhooks V2 (Meta, Twilio, Evolution) e outbound resolver, atrás da flag, com o caminho legado intacto quando desligada; Atendimento sem nenhum ramo alterado.
 7. Testes com flag OFF + shadow por org.
-8. Validação bloqueante `duplicidades sales = 0` e só então o índice unique parcial.
-9. Flag ligada apenas para a Viagi, ao fim de todos os gates.
+8. **Revisão obrigatória antes do merge destrutivo:** apresento a RPC final, os grupos recalculados após o backfill, a contagem final de winners/losers e qualquer conflito novo. O merge só roda depois dessa revisão.
+9. Sem unique, sem ligar flag, sem Fase 3 nesta etapa.
 
-Fase 3 não é iniciada. Org `0cc6e2a4` permanece fora.
+Ao terminar, paro e entrego: mappings históricos finais, resultado do backfill, dry-run recalculado dos merges, contrato final da `merge_sales_threads`, shadow do resolver por organização, `REPLY_ROUTE_UNRESOLVED` restante, testes Meta/Twilio/Evolution e regressão de Atendimento.
 
 ---
 
