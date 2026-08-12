@@ -638,6 +638,16 @@ async function findOrCreateThread(
   endpointId: string,
   inboundAt: string,
 ): Promise<string | null> {
+  // 0) Comercial → caminho CANÔNICO compartilhado (identidade sem endpoint).
+  if (await isSalesEndpoint(service as unknown as { from: (t: string) => any }, endpointId)) {
+    const canonical = await resolveSalesWhatsappThread(
+      service as unknown as { from: (t: string) => any },
+      { organizationId, contactId, endpointId, inboundAt },
+    );
+    return canonical.threadId;
+  }
+
+
   // 1) Match preferencial: thread já vinculada a este endpoint Evolution.
   const { data: sameEndpoint } = await service
     .from("message_threads")
