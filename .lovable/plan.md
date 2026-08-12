@@ -110,11 +110,16 @@ Escolhida a **Opção B**. Nenhum teste ou afirmação do plano coloca webchat n
   - `messaging_line_rotations`: inalterada (`line_id` já aponta para a Route); passa a ser gravada pela troca via UI (Fase 3).
   - Vínculos inbound iniciais das Routes comerciais criados a partir de `active_endpoint_id` + `purpose`, revisados à mão (poucos endpoints ativos). **Nenhuma Route de Atendimento é criada** — a linha `customer_service` existente permanece exatamente como está.
 
+- **Rotação atômica (server-side, entra na Fase 1):** RPC `rotate_messaging_line_endpoint(p_line_id, p_endpoint_id, p_reason)` — `SECURITY DEFINER`, `search_path = public`, uma única transação. Passos na mesma execução: (1) Route pertence a `current_user_org_ids()`; (2) endpoint da **mesma** org; (3) `channel` compatível com a Route; (4) endpoint `is_active` e apto; (5) endpoint não vinculado ativamente a outra Route; (6) garantir vínculo ativo em `messaging_line_endpoints` (`line_id`, `endpoint_id`); (7) `UPDATE messaging_lines.active_endpoint_id`; (8) endpoint anterior **permanece** vinculado para inbound (desvinculação só por ação administrativa explícita e separada); (9) `INSERT` obrigatório em `messaging_line_rotations` (`line_id`, `from_endpoint_id`, `to_endpoint_id`, `rotated_by_user_id = current_user_id()`, `reason`, `rotated_at`); (10) commit único. Qualquer falha ⇒ **rollback completo**, com erro tipado (`ROTATION_ENDPOINT_FOREIGN_ORG`, `ROTATION_CHANNEL_MISMATCH`, `ROTATION_ENDPOINT_INACTIVE`, `ROTATION_ENDPOINT_IN_USE`).
+- **Invariante do Comercial V2:** todo `messaging_lines.active_endpoint_id` não nulo tem associação **ativa** em `messaging_line_endpoints` para a mesma line (`active_endpoint_id ⊆ endpoints inbound da Route`). Garantido por trigger de validação em `messaging_lines` (BEFORE INS/UPD) — não por CHECK constraint —, no mesmo estilo de `fn_validate_thread_endpoint_org`.
+- **Sem UPDATE direto pelo frontend:** `GRANT UPDATE` de `messaging_lines.active_endpoint_id` não é concedido a `authenticated`; a única porta é a RPC. Nenhum código de UI escreve em `messaging_lines`.
+- **Testes da rotação (Fase 1):** (A) 1111→3333 bem-sucedida; (B) endpoint de outra org recusado; (C) endpoint já ativo em outra Route recusado; (D) falha ao gravar auditoria ⇒ rollback total (nada muda em `messaging_lines` nem no vínculo); (E) pós-rotação: inbound por 1111 e por 3333 resolvem a **mesma** Route e o outbound sai por 3333; (F) nenhuma thread ou mensagem histórica alterada (contagem e `endpoint_id` das mensagens idênticos antes/depois).
 - **Resolver** `supabase/functions/_shared/route-resolver.ts`: contrato acima, consumido por `_shared/dispatch-whatsapp-send.ts` e pelos três `*-whatsapp-send`. Frontend (`src/lib/dispatchWhatsAppSend.ts`, `useThreadSendEndpoint`) passa a apenas **ler** o resultado.
 - **Observabilidade mínima**, sobre `service-health`/`service-events` existentes: `route_resolution_divergence` (shadow), `unrouted_inbound` (alerta) e `reply_route_unresolved`. Sem tabela nova e sem novo `process_status`.
 - **Rollout:** flag off = comportamento atual; resolver roda em shadow logando divergência.
-- **Aceite:** todo endpoint comercial ativo vinculado a exatamente uma Route; divergência 0 por 48h antes de qualquer flip.
-- **Rollback:** flag off + migration inversa (colunas e tabela novas, ninguém depende).
+- **Aceite:** todo endpoint comercial ativo vinculado a exatamente uma Route; invariante `active_endpoint_id ⊆ vínculos ativos` verdadeira para 100% das Routes; testes A–F verdes; divergência 0 por 48h antes de qualquer flip.
+- **Rollback:** flag off + migration inversa (colunas, tabela, RPC e trigger novos, ninguém depende).
+
 
 ---
 
