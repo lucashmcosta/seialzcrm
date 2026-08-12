@@ -14,6 +14,28 @@ function json(body: unknown, status = 200): Response {
 const errMsg = (e: unknown): string =>
   e instanceof MetaGraphError ? (e.error?.message || `Meta error ${e.status}`) : (e as Error)?.message || "erro";
 
+// Normaliza os anexos de uma mensagem (imagem/vídeo/áudio/arquivo/compartilhamento)
+// num formato simples pro front: { type, url, name?, mime? }.
+type SocialAttachment = { type: "image" | "video" | "audio" | "file" | "share"; url: string; name?: string; mime?: string };
+function mapAttachments(m: any): SocialAttachment[] {
+  const out: SocialAttachment[] = [];
+  for (const a of m?.attachments?.data ?? []) {
+    const mime: string = a.mime_type || "";
+    const imgUrl = a.image_data?.url;
+    const vidUrl = a.video_data?.url;
+    if (imgUrl) out.push({ type: "image", url: imgUrl, name: a.name, mime });
+    else if (vidUrl) out.push({ type: "video", url: vidUrl, name: a.name, mime });
+    else if (a.file_url) {
+      const type = mime.startsWith("audio") ? "audio" : mime.startsWith("video") ? "video" : mime.startsWith("image") ? "image" : "file";
+      out.push({ type, url: a.file_url, name: a.name, mime });
+    }
+  }
+  for (const s of m?.shares?.data ?? []) {
+    if (s.link) out.push({ type: "share", url: s.link, name: s.name });
+  }
+  return out;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
@@ -87,10 +109,15 @@ serve(async (req) => {
         const parts = (cv.participants?.data ?? []).filter((p: any) => !selfIds.has(String(p.id)));
         const other = parts[0] ?? {};
         const last = (cv.messages?.data ?? [])[0];
+        const username = other.username as string | undefined;
         return {
           id: cv.id, platform,
           participant_id: other.id ?? "",
-          name: other.name || other.username || "Contato",
+          name: other.name || username || "Contato",
+          username: username ?? null,
+          // Instagram expõe link público por username; Facebook/Messenger não expõe
+          // URL pública por PSID, então fica null.
+          profile_link: platform === "instagram" && username ? `https://instagram.com/${username}` : null,
           updated_time: cv.updated_time,
           last_message: last?.message ?? "",
         };
@@ -113,11 +140,12 @@ serve(async (req) => {
       if (!conversation_id) return json({ error: "missing_conversation_id" }, 400);
       try {
         const r = await metaGraphGet(`/${conversation_id}`,
-          { fields: "messages.limit(30){id,message,from,created_time}" },
+          { fields: "messages.limit(30){id,message,from,created_time,attachments{id,mime_type,name,image_data,video_data,file_url},shares{link,name}}" },
           { accessToken: pageToken, appSecret });
         const msgs = (r?.messages?.data ?? []).map((m: any) => ({
           id: m.id, text: m.message ?? "", from_page: selfIds.has(String(m.from?.id)),
           from_name: m.from?.name || m.from?.username || "", created_time: m.created_time,
+          attachments: mapAttachments(m),
         })).reverse();
         return json({ ok: true, messages: msgs });
       } catch (e) { return json({ ok: false, error: errMsg(e) }, 502); }

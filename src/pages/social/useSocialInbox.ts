@@ -8,8 +8,17 @@ export type SocialConversation = {
   platform: SocialPlatform;
   participant_id: string;
   name: string;
+  username: string | null;
+  profile_link: string | null;
   updated_time: string;
   last_message: string;
+};
+
+export type SocialAttachment = {
+  type: 'image' | 'video' | 'audio' | 'file' | 'share';
+  url: string;
+  name?: string;
+  mime?: string;
 };
 
 export type SocialMessage = {
@@ -18,6 +27,7 @@ export type SocialMessage = {
   from_page: boolean;
   from_name: string;
   created_time: string;
+  attachments?: SocialAttachment[];
 };
 
 export function useSocialConversations(orgId?: string) {
