@@ -39,16 +39,22 @@ serve(async (req) => {
       if (!m) return json({ error: "forbidden_org" }, 403);
     }
 
-    const { data: c } = await admin.from("meta_connections").select("id")
+    // Pode haver mais de uma conexão 'connected' (ex.: re-auth incompleta sem
+    // assets). Escolhemos a conexão mais recente que TENHA uma página selecionada
+    // — não a mais recente em absoluto — para não cair numa conexão vazia.
+    const { data: conns } = await admin.from("meta_connections").select("id")
       .eq("organization_id", organization_id).eq("status", "connected")
-      .order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (!c) return json({ error: "no_connected_connection" }, 404);
-    const connection_id = c.id;
-    const { data: assets } = await admin.from("meta_assets")
-      .select("external_id, asset_type").eq("connection_id", connection_id).eq("selection_state", "selected")
-      .in("asset_type", ["page"]);
-    const pageId = assets?.find((a: any) => a.asset_type === "page")?.external_id as string | undefined;
-    if (!pageId) return json({ error: "no_page" }, 404);
+      .order("created_at", { ascending: false });
+    if (!conns?.length) return json({ error: "no_connected_connection" }, 404);
+    let connection_id: string | undefined;
+    let pageId: string | undefined;
+    for (const cand of conns) {
+      const { data: a } = await admin.from("meta_assets")
+        .select("external_id").eq("connection_id", cand.id).eq("selection_state", "selected")
+        .eq("asset_type", "page").limit(1).maybeSingle();
+      if (a?.external_id) { connection_id = cand.id; pageId = a.external_id; break; }
+    }
+    if (!connection_id || !pageId) return json({ error: "no_page" }, 404);
 
     const accessToken = await resolveConnectionToken(admin, connection_id);
     const appSecret = facebookAppSecret();
@@ -60,12 +66,13 @@ serve(async (req) => {
     if (!pageToken) return json({ error: "no_page_token" }, 400);
 
     // Lista conversas de um canal (instagram|messenger); erros por canal não derrubam o outro.
+    // O endpoint platform=instagram é bem mais sensível ao volume de dados que o
+    // Messenger: com fields pesados + limit alto retorna "reduce the amount of data".
+    // Por isso o IG usa fields enxutos e limit menor.
     async function listConversations(platform: "instagram" | "messenger") {
-      const params: Record<string, string | number> = {
-        fields: "id,updated_time,participants,messages.limit(1){message,from,created_time}",
-        limit: 25,
-      };
-      if (platform === "instagram") params.platform = "instagram";
+      const params: Record<string, string | number> = platform === "instagram"
+        ? { fields: "id,updated_time,participants,messages.limit(1){message}", platform: "instagram", limit: 10 }
+        : { fields: "id,updated_time,participants,messages.limit(1){message,from,created_time}", limit: 25 };
       const r = await metaGraphGet(`/${pageId}/conversations`, params, { accessToken: pageToken!, appSecret });
       return (r?.data ?? []).map((cv: any) => {
         const parts = (cv.participants?.data ?? []).filter((p: any) => String(p.id) !== String(pageId));
