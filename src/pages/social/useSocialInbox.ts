@@ -31,14 +31,17 @@ export type SocialMessage = {
   attachments?: SocialAttachment[];
 };
 
-export function useSocialConversations(orgId?: string) {
+// Busca conversas de UM canal (ou os dois). O Instagram é lento (~8s, latência da
+// Meta) e o Messenger é rápido (~1s), então a tela pede os dois separadamente e
+// renderiza o Messenger na hora, com o Instagram aparecendo quando chega.
+export function useSocialConversations(orgId?: string, platform?: SocialPlatform) {
   return useQuery({
-    queryKey: ['social-conversations', orgId],
+    queryKey: ['social-conversations', orgId, platform ?? 'all'],
     enabled: !!orgId,
     staleTime: 20_000,
     queryFn: async (): Promise<{ conversations: SocialConversation[]; channels: Record<string, string | null> }> => {
       const { data, error } = await supabase.functions.invoke('social-inbox', {
-        body: { organization_id: orgId, action: 'conversations' },
+        body: { organization_id: orgId, action: 'conversations', ...(platform ? { platform } : {}) },
       });
       if (error) throw error;
       return {

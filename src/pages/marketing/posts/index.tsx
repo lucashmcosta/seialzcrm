@@ -173,7 +173,7 @@ export default function MarketingPosts() {
             </div>
             {list.isLoading ? <div className="p-3"><Skeleton className="h-16 w-full" /></div>
               : (list.data?.instagram.length ?? 0) === 0 ? <p className="p-4 text-sm text-muted-foreground">Nenhum conteúdo recente.</p>
-              : list.data!.instagram.map((p) => <PostRow key={p.id} p={p} platform="instagram" />)}
+              : list.data!.instagram.map((p) => <PostRow key={p.id} p={p} platform="instagram" onDelete={() => onDeletePost(p, 'instagram')} deleting={deletingId === p.id} />)}
           </Card>
         </div>
       </div>
