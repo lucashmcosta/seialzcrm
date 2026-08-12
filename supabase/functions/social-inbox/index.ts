@@ -56,6 +56,15 @@ serve(async (req) => {
     }
     if (!connection_id || !pageId) return json({ error: "no_page" }, 404);
 
+    // Nas conversas do Instagram, "nós" somos identificados pelo id da CONTA do
+    // Instagram (não pelo id da Página do Facebook). Precisamos dele para (a) não
+    // nos escolhermos como destinatário e (b) marcar corretamente as nossas mensagens.
+    const { data: igAsset } = await admin.from("meta_assets")
+      .select("external_id").eq("connection_id", connection_id).eq("selection_state", "selected")
+      .eq("asset_type", "instagram_account").limit(1).maybeSingle();
+    const igId = igAsset?.external_id as string | undefined;
+    const selfIds = new Set([String(pageId), ...(igId ? [String(igId)] : [])]);
+
     const accessToken = await resolveConnectionToken(admin, connection_id);
     const appSecret = facebookAppSecret();
     let pageToken: string | undefined;
@@ -75,7 +84,7 @@ serve(async (req) => {
         : { fields: "id,updated_time,participants,messages.limit(1){message,from,created_time}", limit: 25 };
       const r = await metaGraphGet(`/${pageId}/conversations`, params, { accessToken: pageToken!, appSecret });
       return (r?.data ?? []).map((cv: any) => {
-        const parts = (cv.participants?.data ?? []).filter((p: any) => String(p.id) !== String(pageId));
+        const parts = (cv.participants?.data ?? []).filter((p: any) => !selfIds.has(String(p.id)));
         const other = parts[0] ?? {};
         const last = (cv.messages?.data ?? [])[0];
         return {
@@ -107,7 +116,7 @@ serve(async (req) => {
           { fields: "messages.limit(30){id,message,from,created_time}" },
           { accessToken: pageToken, appSecret });
         const msgs = (r?.messages?.data ?? []).map((m: any) => ({
-          id: m.id, text: m.message ?? "", from_page: String(m.from?.id) === String(pageId),
+          id: m.id, text: m.message ?? "", from_page: selfIds.has(String(m.from?.id)),
           from_name: m.from?.name || m.from?.username || "", created_time: m.created_time,
         })).reverse();
         return json({ ok: true, messages: msgs });
