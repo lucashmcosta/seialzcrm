@@ -1,14 +1,16 @@
 # Teste Sintético — Unmerge Parcial de Star Merge (bloco final, NÃO executado)
 
-Correções aplicadas conforme as 5 exigências:
+Correções aplicadas (rodada anterior + os 2 ajustes agora exigidos):
 
-1. **Setup completo**: `primary_endpoint_id` distinto em A/B/C, usando 3 `communication_endpoints` reais da MESMA org, `channel='whatsapp'`, apenas como FK (nenhum UPDATE neles). Se a org não tiver 3 endpoints compatíveis + 3 usuários → `SETUP_UNSUITABLE_ORG` e para.
-2. **S4 não rebaixado**: comparação explícita S4 vs S0 nos 12 campos, gerando `S4_DIFF_FROM_S0`. Nada é declarado "nota conhecida"; divergência é reportada como divergência (sem correção automática).
-3. **S3 com assertions reais** nos 12 campos, incluindo `assigned_at`, `last_message_at`, `last_message_content`, `last_message_direction`.
-4. **Relatório S4**: mensagens de A, restauração de B e C, zero auditorias ativas, e o diff campo a campo.
-5. **Limpeza**: sem `FUNCTION_PLACEHOLDER`, sem `CREATE TEMP TABLE _snap`. Tudo em uma única transação abortada de propósito (`RAISE EXCEPTION` final carrega o relatório JSON).
+1. **Setup completo**: `primary_endpoint_id` distinto em A/B/C, usando 3 `communication_endpoints` reais da MESMA org, `channel='whatsapp'`, apenas como FK (nenhum UPDATE neles). Sem org compatível → `SETUP_UNSUITABLE_ORG`/`SETUP_ENDPOINTS_INVALID` e para.
+2. **NOVO — baseline explícita pós-triggers**: depois de inserir MSG_A/MSG_B/MSG_C, as três threads recebem UPDATE explícito do estado operacional desejado (status, assigned_user_id, original_owner_user_id, assigned_at, resolved_at, priority, needs_human_attention), preservando os `last_message_*`. Isso neutraliza `messages_smart_reopen`. Guard `SETUP_BASELINE_NOT_STABLE` confirma que a baseline sobreviveu aos triggers. S0/B0/C0 só são capturados depois disso.
+3. **NOVO — seleção de usuários**: `DISTINCT user_id` primeiro, `row_number()` depois; validação de NOT NULL e distinção mútua com `SETUP_USERS_INVALID`.
+4. **S4 não rebaixado**: comparação explícita S4 vs S0 nos 12 campos → `S4_DIFF_FROM_S0`; divergência é reportada como divergência (sem correção automática) e marca `RESULT = FAIL`.
+5. **S3 com assertions reais** nos 12 campos, incluindo `assigned_at`, `last_message_at`, `last_message_content`, `last_message_direction`.
+6. **Limpeza**: sem `FUNCTION_PLACEHOLDER`, sem `CREATE TEMP TABLE _snap`; tudo em uma única transação abortada de propósito (`RAISE EXCEPTION` final carrega o relatório JSON).
 
-Dados confirmados em leitura read-only prévia: existem 2 orgs com ≥3 endpoints `whatsapp` (`40ae935c…a95f` com 10 e `b246ef6f…2896a` com 10) e ambas com ≥19 usuários; índices únicos legados exigem mesmo `primary_endpoint_id` distinto por thread aberta do mesmo contato; `merge_sales_threads(p_winner, p_loser, p_batch)` e `unmerge_message_thread(p_loser)`.
+Dados confirmados em leitura read-only prévia: 2 orgs com ≥3 endpoints `whatsapp` (`40ae935c…a95f` e `b246ef6f…2896a`, 10 cada) e ambas com ≥19 usuários; índices únicos legados exigem `primary_endpoint_id` distinto por thread aberta do mesmo contato; assinaturas `merge_sales_threads(p_winner, p_loser, p_batch)` e `unmerge_message_thread(p_loser)`.
+
 
 ## Bloco final
 
@@ -20,6 +22,8 @@ DECLARE
   v_contact uuid; v_a uuid; v_b uuid; v_c uuid;
   v_ma uuid; v_mb uuid; v_mc uuid;
   v_batch1 uuid := gen_random_uuid(); v_batch2 uuid := gen_random_uuid();
+  v_t0 timestamptz := now();
+
   s0 jsonb; s1 jsonb; s2 jsonb; s3 jsonb; s4 jsonb;
   b0 jsonb; c0 jsonb; b4 jsonb; c4 jsonb;
   diff jsonb := '{}'::jsonb;
@@ -65,15 +69,28 @@ BEGIN
    HAVING count(*) = 3;
   IF NOT FOUND THEN RAISE EXCEPTION 'SETUP_ENDPOINTS_ORG_MISMATCH'; END IF;
 
+  -- Usuarios: deduplicar PRIMEIRO, numerar DEPOIS
   SELECT u1,u2,u3 INTO v_u1, v_u2, v_u3
   FROM (
     SELECT max(CASE WHEN rn=1 THEN user_id END) u1,
            max(CASE WHEN rn=2 THEN user_id END) u2,
            max(CASE WHEN rn=3 THEN user_id END) u3
-    FROM (SELECT DISTINCT user_id, row_number() OVER (ORDER BY user_id) rn
-          FROM public.user_organizations WHERE organization_id = v_org) t
+    FROM (
+      SELECT user_id, row_number() OVER (ORDER BY user_id) rn
+      FROM (
+        SELECT DISTINCT user_id
+        FROM public.user_organizations
+        WHERE organization_id = v_org
+      ) d
+    ) x
     WHERE rn <= 3
   ) y;
+
+  IF v_u1 IS NULL OR v_u2 IS NULL OR v_u3 IS NULL
+     OR v_u1 = v_u2 OR v_u1 = v_u3 OR v_u2 = v_u3 THEN
+    RAISE EXCEPTION 'SETUP_USERS_INVALID';
+  END IF;
+
 
   -- 1) Dados sintéticos
   INSERT INTO public.contacts (organization_id, name)
@@ -118,7 +135,47 @@ BEGIN
   VALUES (v_org, v_c, 'inbound', 'MSG_C', now() - interval '1 hour', now() - interval '1 hour')
   RETURNING id INTO v_mc;
 
-  -- 2) S0 (A, B, C antes de qualquer merge)
+  -- 1b) BASELINE EXPLICITA pos-triggers (neutraliza messages_smart_reopen e afins).
+  -- Preserva os last_message_* gerados pelas mensagens.
+  UPDATE public.message_threads SET
+    status = 'resolved',
+    assigned_user_id = v_u1,
+    original_owner_user_id = v_u1,
+    assigned_at = v_t0 - interval '30 min',
+    resolved_at = v_t0 - interval '20 min',
+    priority = 'normal',
+    needs_human_attention = false
+  WHERE id = v_a;
+
+  UPDATE public.message_threads SET
+    status = 'awaiting_client',
+    assigned_user_id = v_u2,
+    original_owner_user_id = v_u2,
+    assigned_at = v_t0 - interval '20 min',
+    resolved_at = NULL,
+    priority = 'high',
+    needs_human_attention = false
+  WHERE id = v_b;
+
+  UPDATE public.message_threads SET
+    status = 'open',
+    assigned_user_id = v_u3,
+    original_owner_user_id = v_u3,
+    assigned_at = v_t0 - interval '10 min',
+    resolved_at = NULL,
+    priority = 'normal',
+    needs_human_attention = true
+  WHERE id = v_c;
+
+  -- confirma que a baseline sobreviveu aos triggers de UPDATE
+  IF (SELECT status FROM public.message_threads WHERE id = v_a) <> 'resolved'
+     OR (SELECT status FROM public.message_threads WHERE id = v_b) <> 'awaiting_client'
+     OR (SELECT status FROM public.message_threads WHERE id = v_c) <> 'open' THEN
+    RAISE EXCEPTION 'SETUP_BASELINE_NOT_STABLE';
+  END IF;
+
+  -- 2) S0 (A, B, C baseline, antes de qualquer merge)
+
   SELECT to_jsonb(t) INTO s0 FROM (
     SELECT status, assigned_user_id, assigned_at, original_owner_user_id,
            last_message_id, last_message_at, last_message_content, last_message_direction,
