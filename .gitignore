@@ -26,3 +26,9 @@ supabase/.temp/
 *.sln
 *.sw?
 supabase/.branches/
+
+# Vercel local metadata
+.vercel
+
+# Deno lockfile local (edge functions)
+deno.lock
