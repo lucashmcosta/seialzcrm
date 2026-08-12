@@ -104,10 +104,12 @@ Escolhida a **Opção B**. Nenhum teste ou afirmação do plano coloca webchat n
 ## Fase 1 — Infraestrutura (nada muda para o usuário)
 
 - **Migration aditiva** (GRANTs + RLS `organization_id = ANY(current_user_org_ids())`):
-  - `messaging_lines`: novas colunas `owner_user_id uuid NULL` (FK `users.id`) e `is_active boolean NOT NULL DEFAULT true`.
+  - `messaging_lines` (Route): novas colunas `inbox_key` (CHECK `sales|customer_service`, backfill de `key`), `route_slug NOT NULL` (backfill de `key`), `owner_user_id uuid NULL` FK `users.id`, `is_active boolean NOT NULL DEFAULT true`. `key` mantida, nullable e sem CHECK, só para compatibilidade dos consumers legados.
+  - Constraints: dropar `messaging_lines_key_check` e `messaging_lines_organization_id_key_channel_key`; criar índice único parcial `(organization_id, key, channel) WHERE key IS NOT NULL` e `UNIQUE (organization_id, channel, route_slug)`. Só depois disso o banco suporta N Routes comerciais na mesma org + canal.
   - `messaging_line_endpoints` (única tabela nova): `line_id`, `endpoint_id`, `is_active`, `linked_at`, `unlinked_at`; índice único parcial garantindo um endpoint ativo em no máximo uma Route. É o mapa "número por onde o cliente escreveu → Route de resposta" — sem ele o resolver não tem entrada.
-  - `messaging_line_rotations`: mantida como está; passa a ser preenchida pela troca via UI (Fase 3).
-  - Vínculos inbound iniciais das linhas comerciais criados a partir de `active_endpoint_id` + `purpose`, revisados à mão (poucos endpoints ativos). **Nenhuma Route de Atendimento é criada.**
+  - `messaging_line_rotations`: inalterada (`line_id` já aponta para a Route); passa a ser gravada pela troca via UI (Fase 3).
+  - Vínculos inbound iniciais das Routes comerciais criados a partir de `active_endpoint_id` + `purpose`, revisados à mão (poucos endpoints ativos). **Nenhuma Route de Atendimento é criada** — a linha `customer_service` existente permanece exatamente como está.
+
 - **Resolver** `supabase/functions/_shared/route-resolver.ts`: contrato acima, consumido por `_shared/dispatch-whatsapp-send.ts` e pelos três `*-whatsapp-send`. Frontend (`src/lib/dispatchWhatsAppSend.ts`, `useThreadSendEndpoint`) passa a apenas **ler** o resultado.
 - **Observabilidade mínima**, sobre `service-health`/`service-events` existentes: `route_resolution_divergence` (shadow), `unrouted_inbound` (alerta) e `reply_route_unresolved`. Sem tabela nova e sem novo `process_status`.
 - **Rollout:** flag off = comportamento atual; resolver roda em shadow logando divergência.
