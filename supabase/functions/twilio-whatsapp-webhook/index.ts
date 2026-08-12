@@ -872,9 +872,10 @@ serve(async (req) => {
       let existingThread: { id: string; primary_endpoint_id: string | null } | null = null
       let canonicalHandled = false
 
-      if (endpointId && await isSalesEndpoint(supabase, endpointId)) {
+      if (endpointId && orgId && await isSalesEndpoint(supabase, endpointId)) {
         const canonical = await resolveSalesWhatsappThread(supabase, {
-          organizationId: orgId,
+          organizationId: orgId as string,
+
           contactId,
           endpointId,
           inboundAt: new Date().toISOString(),
