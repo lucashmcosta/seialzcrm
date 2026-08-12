@@ -216,7 +216,11 @@ Uma fase por provider (Opção B aprovada).
 | 17 | Mobile | paridade com desktop nos itens 1–10 |
 | 18 | IA | agente responde na thread única; limite por thread revisto |
 | 19 | Scheduled message | endpoint resolvido no envio, não no agendamento |
-| 20 | Webchat | thread própria por Inbox derivada da Route |
+| 20 | Webchat | thread da mesma Inbox do contato, sem thread nova por canal |
+| 21 | Contato escreve, thread é resolvida, contato escreve de novo | mesma thread reaberta (`THREAD_REOPENED`); zero thread nova |
+| 22 | Thread sem nenhuma mensagem inbound roteável | envio recusado com `REPLY_ROUTE_UNRESOLVED`; nenhum fallback |
+| 23 | Última inbound com `endpoint_id` nulo, anterior roteável | resolve pela anterior roteável |
+| 24 | Contato com histórico WhatsApp e novo contato por webchat na mesma Inbox | uma única thread; canal exibido por mensagem |
 
 ---
 
