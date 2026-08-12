@@ -839,7 +839,12 @@ async function handleInbound(
   //    Atendimento / purpose ausente → caminho legado inalterado.
   let threadId: string | undefined;
 
-  if (await isSalesEndpoint(supabase, endpoint.id)) {
+  const salesGate = await salesCanonicalPathEnabled(supabase, {
+    organizationId: endpoint.organization_id,
+    endpointId: endpoint.id,
+  });
+
+  if (salesGate.allowed) {
     const canonical = await resolveSalesWhatsappThread(supabase, {
       organizationId: endpoint.organization_id,
       contactId,
