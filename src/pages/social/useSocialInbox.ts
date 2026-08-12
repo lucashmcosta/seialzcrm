@@ -8,8 +8,17 @@ export type SocialConversation = {
   platform: SocialPlatform;
   participant_id: string;
   name: string;
+  username: string | null;
+  profile_link: string | null;
   updated_time: string;
   last_message: string;
+};
+
+export type SocialAttachment = {
+  type: 'image' | 'video' | 'audio' | 'file' | 'share';
+  url: string;
+  name?: string;
+  mime?: string;
 };
 
 export type SocialMessage = {
@@ -18,6 +27,7 @@ export type SocialMessage = {
   from_page: boolean;
   from_name: string;
   created_time: string;
+  attachments?: SocialAttachment[];
 };
 
 export function useSocialConversations(orgId?: string) {
@@ -50,6 +60,33 @@ export function useSocialMessages(orgId?: string, conversationId?: string | null
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || 'Falha ao carregar mensagens');
       return (data?.messages ?? []) as SocialMessage[];
+    },
+  });
+}
+
+export type SocialProfile = {
+  name: string | null;
+  username?: string | null;
+  avatar_url: string | null;
+  follower_count?: number | null;
+  is_verified?: boolean;
+  follows_us?: boolean;
+  we_follow?: boolean;
+  profile_link: string | null;
+};
+
+export function useSocialProfile(orgId?: string, participantId?: string | null, platform?: SocialPlatform) {
+  return useQuery({
+    queryKey: ['social-profile', orgId, participantId],
+    enabled: !!orgId && !!participantId,
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: async (): Promise<SocialProfile | null> => {
+      const { data, error } = await supabase.functions.invoke('social-inbox', {
+        body: { organization_id: orgId, action: 'profile', participant_id: participantId, platform },
+      });
+      if (error) throw error;
+      return (data?.profile ?? null) as SocialProfile | null;
     },
   });
 }

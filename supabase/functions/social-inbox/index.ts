@@ -14,6 +14,28 @@ function json(body: unknown, status = 200): Response {
 const errMsg = (e: unknown): string =>
   e instanceof MetaGraphError ? (e.error?.message || `Meta error ${e.status}`) : (e as Error)?.message || "erro";
 
+// Normaliza os anexos de uma mensagem (imagem/vídeo/áudio/arquivo/compartilhamento)
+// num formato simples pro front: { type, url, name?, mime? }.
+type SocialAttachment = { type: "image" | "video" | "audio" | "file" | "share"; url: string; name?: string; mime?: string };
+function mapAttachments(m: any): SocialAttachment[] {
+  const out: SocialAttachment[] = [];
+  for (const a of m?.attachments?.data ?? []) {
+    const mime: string = a.mime_type || "";
+    const imgUrl = a.image_data?.url;
+    const vidUrl = a.video_data?.url;
+    if (imgUrl) out.push({ type: "image", url: imgUrl, name: a.name, mime });
+    else if (vidUrl) out.push({ type: "video", url: vidUrl, name: a.name, mime });
+    else if (a.file_url) {
+      const type = mime.startsWith("audio") ? "audio" : mime.startsWith("video") ? "video" : mime.startsWith("image") ? "image" : "file";
+      out.push({ type, url: a.file_url, name: a.name, mime });
+    }
+  }
+  for (const s of m?.shares?.data ?? []) {
+    if (s.link) out.push({ type: "share", url: s.link, name: s.name });
+  }
+  return out;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
@@ -39,16 +61,31 @@ serve(async (req) => {
       if (!m) return json({ error: "forbidden_org" }, 403);
     }
 
-    const { data: c } = await admin.from("meta_connections").select("id")
+    // Pode haver mais de uma conexão 'connected' (ex.: re-auth incompleta sem
+    // assets). Escolhemos a conexão mais recente que TENHA uma página selecionada
+    // — não a mais recente em absoluto — para não cair numa conexão vazia.
+    const { data: conns } = await admin.from("meta_connections").select("id")
       .eq("organization_id", organization_id).eq("status", "connected")
-      .order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (!c) return json({ error: "no_connected_connection" }, 404);
-    const connection_id = c.id;
-    const { data: assets } = await admin.from("meta_assets")
-      .select("external_id, asset_type").eq("connection_id", connection_id).eq("selection_state", "selected")
-      .in("asset_type", ["page"]);
-    const pageId = assets?.find((a: any) => a.asset_type === "page")?.external_id as string | undefined;
-    if (!pageId) return json({ error: "no_page" }, 404);
+      .order("created_at", { ascending: false });
+    if (!conns?.length) return json({ error: "no_connected_connection" }, 404);
+    let connection_id: string | undefined;
+    let pageId: string | undefined;
+    for (const cand of conns) {
+      const { data: a } = await admin.from("meta_assets")
+        .select("external_id").eq("connection_id", cand.id).eq("selection_state", "selected")
+        .eq("asset_type", "page").limit(1).maybeSingle();
+      if (a?.external_id) { connection_id = cand.id; pageId = a.external_id; break; }
+    }
+    if (!connection_id || !pageId) return json({ error: "no_page" }, 404);
+
+    // Nas conversas do Instagram, "nós" somos identificados pelo id da CONTA do
+    // Instagram (não pelo id da Página do Facebook). Precisamos dele para (a) não
+    // nos escolhermos como destinatário e (b) marcar corretamente as nossas mensagens.
+    const { data: igAsset } = await admin.from("meta_assets")
+      .select("external_id").eq("connection_id", connection_id).eq("selection_state", "selected")
+      .eq("asset_type", "instagram_account").limit(1).maybeSingle();
+    const igId = igAsset?.external_id as string | undefined;
+    const selfIds = new Set([String(pageId), ...(igId ? [String(igId)] : [])]);
 
     const accessToken = await resolveConnectionToken(admin, connection_id);
     const appSecret = facebookAppSecret();
@@ -60,25 +97,64 @@ serve(async (req) => {
     if (!pageToken) return json({ error: "no_page_token" }, 400);
 
     // Lista conversas de um canal (instagram|messenger); erros por canal não derrubam o outro.
+    // O endpoint platform=instagram é bem mais sensível ao volume de dados que o
+    // Messenger: com fields pesados + limit alto retorna "reduce the amount of data".
+    // Por isso o IG usa fields enxutos e limit menor.
     async function listConversations(platform: "instagram" | "messenger") {
-      const params: Record<string, string | number> = {
-        fields: "id,updated_time,participants,messages.limit(1){message,from,created_time}",
-        limit: 25,
-      };
-      if (platform === "instagram") params.platform = "instagram";
+      const params: Record<string, string | number> = platform === "instagram"
+        ? { fields: "id,updated_time,participants,messages.limit(1){message}", platform: "instagram", limit: 10 }
+        : { fields: "id,updated_time,participants,messages.limit(1){message,from,created_time}", limit: 25 };
       const r = await metaGraphGet(`/${pageId}/conversations`, params, { accessToken: pageToken!, appSecret });
       return (r?.data ?? []).map((cv: any) => {
-        const parts = (cv.participants?.data ?? []).filter((p: any) => String(p.id) !== String(pageId));
+        const parts = (cv.participants?.data ?? []).filter((p: any) => !selfIds.has(String(p.id)));
         const other = parts[0] ?? {};
         const last = (cv.messages?.data ?? [])[0];
+        const username = other.username as string | undefined;
         return {
           id: cv.id, platform,
           participant_id: other.id ?? "",
-          name: other.name || other.username || "Contato",
+          name: other.name || username || "Contato",
+          username: username ?? null,
+          // Instagram expõe link público por username; Facebook/Messenger não expõe
+          // URL pública por PSID, então fica null.
+          profile_link: platform === "instagram" && username ? `https://instagram.com/${username}` : null,
           updated_time: cv.updated_time,
           last_message: last?.message ?? "",
         };
       });
+    }
+
+    if (action === "profile") {
+      // Perfil do contato de uma conversa aberta (1 chamada, sob demanda).
+      // Instagram (User Profile API): foto, followers, verificado, follow status.
+      // Messenger: foto/nome exigem a feature "Business Asset User Profile Access"
+      // (Advanced Access via App Review) — sem ela, retorna null sem quebrar.
+      const participant_id = String(body.participant_id ?? "");
+      const platform = String(body.platform ?? "");
+      if (!participant_id) return json({ error: "missing_participant_id" }, 400);
+      try {
+        if (platform === "instagram") {
+          const r = await metaGraphGet(`/${participant_id}`,
+            { fields: "name,username,profile_pic,follower_count,is_verified_user,is_user_follow_business,is_business_follow_user" },
+            { accessToken: pageToken, appSecret });
+          return json({ ok: true, profile: {
+            name: r?.name ?? null, username: r?.username ?? null, avatar_url: r?.profile_pic ?? null,
+            follower_count: r?.follower_count ?? null, is_verified: !!r?.is_verified_user,
+            follows_us: !!r?.is_user_follow_business, we_follow: !!r?.is_business_follow_user,
+            profile_link: r?.username ? `https://instagram.com/${r.username}` : null,
+          } });
+        }
+        // messenger
+        const r = await metaGraphGet(`/${participant_id}`,
+          { fields: "first_name,last_name,name,profile_pic" }, { accessToken: pageToken, appSecret });
+        return json({ ok: true, profile: {
+          name: r?.name || [r?.first_name, r?.last_name].filter(Boolean).join(" ") || null,
+          avatar_url: r?.profile_pic ?? null, profile_link: null,
+        } });
+      } catch (e) {
+        // perfil indisponível (ex.: feature não aprovada) não é erro fatal
+        return json({ ok: true, profile: null, note: errMsg(e) });
+      }
     }
 
     if (action === "conversations") {
@@ -97,11 +173,12 @@ serve(async (req) => {
       if (!conversation_id) return json({ error: "missing_conversation_id" }, 400);
       try {
         const r = await metaGraphGet(`/${conversation_id}`,
-          { fields: "messages.limit(30){id,message,from,created_time}" },
+          { fields: "messages.limit(30){id,message,from,created_time,attachments{id,mime_type,name,image_data,video_data,file_url},shares{link,name}}" },
           { accessToken: pageToken, appSecret });
         const msgs = (r?.messages?.data ?? []).map((m: any) => ({
-          id: m.id, text: m.message ?? "", from_page: String(m.from?.id) === String(pageId),
+          id: m.id, text: m.message ?? "", from_page: selfIds.has(String(m.from?.id)),
           from_name: m.from?.name || m.from?.username || "", created_time: m.created_time,
+          attachments: mapAttachments(m),
         })).reverse();
         return json({ ok: true, messages: msgs });
       } catch (e) { return json({ ok: false, error: errMsg(e) }, 502); }
