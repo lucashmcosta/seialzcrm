@@ -640,8 +640,12 @@ async function findOrCreateThread(
   endpointId: string,
   inboundAt: string,
 ): Promise<string | null> {
-  // 0) Comercial → caminho CANÔNICO compartilhado (identidade sem endpoint).
-  if (await isSalesEndpoint(service as unknown as { from: (t: string) => any }, endpointId)) {
+  // 0) Comercial (gate: purpose + Route V2 + flag por org) → caminho CANÔNICO.
+  const salesGate = await salesCanonicalPathEnabled(
+    service as unknown as { from: (t: string) => any },
+    { organizationId, endpointId },
+  );
+  if (salesGate.allowed) {
     const canonical = await resolveSalesWhatsappThread(
       service as unknown as { from: (t: string) => any },
       { organizationId, contactId, endpointId, inboundAt },
