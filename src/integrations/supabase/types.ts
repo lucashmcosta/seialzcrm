@@ -6027,6 +6027,7 @@ export type Database = {
           loser_prev_status: string | null
           loser_snapshot: Json
           loser_thread_id: string
+          merge_seq: number
           moved_ai_agent_logs: number
           moved_ai_inter_logs: number
           moved_assign_hist: number
@@ -6050,6 +6051,7 @@ export type Database = {
           loser_prev_status?: string | null
           loser_snapshot: Json
           loser_thread_id: string
+          merge_seq?: number
           moved_ai_agent_logs?: number
           moved_ai_inter_logs?: number
           moved_assign_hist?: number
@@ -6073,6 +6075,7 @@ export type Database = {
           loser_prev_status?: string | null
           loser_snapshot?: Json
           loser_thread_id?: string
+          merge_seq?: number
           moved_ai_agent_logs?: number
           moved_ai_inter_logs?: number
           moved_assign_hist?: number
