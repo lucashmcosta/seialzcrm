@@ -25,15 +25,62 @@ Garante uma única Thread Comercial por contato sem exigir classificação de qu
 
 ### 2. Rotação: reaproveitar `messaging_line_rotations` — nada de tabela nova
 
-A tabela existente já entrega exatamente a garantia de domínio pedida: `organization_id`, `line_id`, `from_endpoint_id`, `to_endpoint_id`, `reason`, `rotated_by_user_id`, `rotated_at`. `route_rotations` está **removido do plano** — seria uma segunda trilha para o mesmo fato.
+A tabela existente já entrega a garantia de domínio pedida: `organization_id`, `line_id`, `from_endpoint_id`, `to_endpoint_id`, `reason`, `rotated_by_user_id`, `rotated_at`. `route_rotations` está **removido do plano**. `line_id` continua apontando para `messaging_lines.id` — a Route —, então a trilha sobrevive integralmente ao novo modelo sem nenhuma alteração de schema.
 
-Consequência maior: **`messaging_lines` já é a Route** (`organization_id`, `key`, `name`, `channel`, `active_endpoint_id`). Portanto **não existe `messaging_routes` neste plano**. Route = `messaging_lines` evoluída, com uma trilha única de auditoria em `messaging_line_rotations`. Isso elimina uma tabela nova, uma migração de dados e a remoção do legado na Fase 4.
+Consequência: **`messaging_lines` é a Route**; não existe `messaging_routes` neste plano.
+
+### 2b. Schema conceitual corrigido de `messaging_lines` (confrontado com o schema real)
+
+Constraints reais hoje:
+
+```
+UNIQUE (organization_id, key, channel)
+CHECK  (key IN ('commercial','customer_service','evolution_pilot'))
+```
+
+Dados reais: 5 linhas em 2 orgs (`commercial`, `customer_service`, `evolution_pilot`), todas `channel='whatsapp'`. Com isso, `key` significa hoje **Inbox e identidade da Route ao mesmo tempo** — incompatível com N Routes comerciais.
+
+Evolução mínima (aditiva, sem renomear nem apagar `key`):
+
+| Campo | Ação | Papel |
+|---|---|---|
+| `inbox_key text NOT NULL DEFAULT 'sales'` | novo, com CHECK `IN ('sales','customer_service')` | Inbox/contexto. Backfill: `commercial`→`sales`, `evolution_pilot`→`sales`, `customer_service`→`customer_service` |
+| `route_slug text NOT NULL` | novo | identidade individual estável da Route (`principal`, `secundaria`, `joao`, `maria`). Backfill: valor atual de `key` |
+| `name text` | já existe | apresentação apenas — nunca ownership, autorização ou filtro |
+| `owner_user_id uuid NULL` | novo, FK `users.id` | Route pessoal; nulo = compartilhada |
+| `is_active boolean NOT NULL DEFAULT true` | novo | desativar Route sem apagar histórico |
+| `key text` | **mantido, CHECK removido, passa a ser nullable** | compatibilidade legada: só a Route default de cada Inbox mantém `commercial`/`customer_service`; Routes novas nascem com `key = NULL` |
+| `active_endpoint_id`, `channel`, `organization_id` | inalterados | envio, canal, tenant |
+
+Constraints:
+
+- `DROP CONSTRAINT messaging_lines_key_check` (bloqueia `route_slug` livre e novas linhas legadas).
+- `DROP CONSTRAINT messaging_lines_organization_id_key_channel_key`, substituída por índice único **parcial** `(organization_id, key, channel) WHERE key IS NOT NULL` — preserva a garantia "uma linha default por Inbox/canal" que os consumers legados assumem.
+- Nova constraint que impede duas Routes com a mesma identidade na org: `UNIQUE (organization_id, channel, route_slug)`.
+
+### 2c. Consumers de `messaging_lines.key` (confrontados no código)
+
+Todos leem exatamente o mesmo predicado `organization_id + key + channel` e esperam `commercial` ou `customer_service`, derivados do `purpose`/`business_context`:
+
+- `src/hooks/useThreadSendEndpoint.ts` (composer)
+- `src/lib/dispatchWhatsAppSend.ts` (dispatcher frontend)
+- `supabase/functions/_shared/dispatch-whatsapp-send.ts`
+- `supabase/functions/meta-whatsapp-send/index.ts`
+- `supabase/functions/twilio-whatsapp-send/index.ts`
+- `supabase/functions/evolution-whatsapp-send/index.ts`
+
+**Impacto nos dispatchers:** zero na Fase 1. Como a Route default de cada Inbox conserva `key`, todas essas consultas continuam retornando exatamente uma linha. Na Fase 2, com a flag ligada, esses seis pontos passam a ler o resolver (que consulta Route por `messaging_line_endpoints`) e param de usar `key`; na Fase 4 `key` é removida.
+
+**Impacto em `messaging_line_rotations`:** nenhum — referencia `line_id`, não `key`.
+
+**`evolution_pilot`:** vira `inbox_key='sales'`, `route_slug='evolution_pilot'`, `key=NULL` (nenhum consumer consulta esse valor).
 
 ### 3. Ownership pessoal: vive na Route (`messaging_lines.owner_user_id`) — Opção B
 
 `communication_endpoints.assigned_user_id` descreve quem opera **aquele número físico**. Não serve como ownership da Route: quando "Route João" troca de Evolution 7777 para Meta 8888, o ownership teria de ser reescrito em cada troca, e no intervalo a Route ficaria sem dono. A identidade "João" é estável; o endpoint é substituível.
 
-Decisão: `messaging_lines.owner_user_id uuid NULL` (FK `users.id`) — nulo = Route compartilhada. `assigned_user_id` do endpoint permanece como é, sem duplicar semântica: é operação do número, não propriedade da linha. **`route.name`/`messaging_lines.name` nunca é fonte de ownership, autorização ou filtro** — é apresentação.
+Decisão: `messaging_lines.owner_user_id uuid NULL` (FK `users.id`) — nulo = Route compartilhada. `assigned_user_id` do endpoint permanece como é. **`name` nunca é fonte de ownership, autorização ou filtro.**
+
 
 ### 4. `channel` permanece na identidade — Opção B
 
@@ -57,10 +104,12 @@ Escolhida a **Opção B**. Nenhum teste ou afirmação do plano coloca webchat n
 ## Fase 1 — Infraestrutura (nada muda para o usuário)
 
 - **Migration aditiva** (GRANTs + RLS `organization_id = ANY(current_user_org_ids())`):
-  - `messaging_lines`: novas colunas `owner_user_id uuid NULL` (FK `users.id`) e `is_active boolean NOT NULL DEFAULT true`.
+  - `messaging_lines` (Route): novas colunas `inbox_key` (CHECK `sales|customer_service`, backfill de `key`), `route_slug NOT NULL` (backfill de `key`), `owner_user_id uuid NULL` FK `users.id`, `is_active boolean NOT NULL DEFAULT true`. `key` mantida, nullable e sem CHECK, só para compatibilidade dos consumers legados.
+  - Constraints: dropar `messaging_lines_key_check` e `messaging_lines_organization_id_key_channel_key`; criar índice único parcial `(organization_id, key, channel) WHERE key IS NOT NULL` e `UNIQUE (organization_id, channel, route_slug)`. Só depois disso o banco suporta N Routes comerciais na mesma org + canal.
   - `messaging_line_endpoints` (única tabela nova): `line_id`, `endpoint_id`, `is_active`, `linked_at`, `unlinked_at`; índice único parcial garantindo um endpoint ativo em no máximo uma Route. É o mapa "número por onde o cliente escreveu → Route de resposta" — sem ele o resolver não tem entrada.
-  - `messaging_line_rotations`: mantida como está; passa a ser preenchida pela troca via UI (Fase 3).
-  - Vínculos inbound iniciais das linhas comerciais criados a partir de `active_endpoint_id` + `purpose`, revisados à mão (poucos endpoints ativos). **Nenhuma Route de Atendimento é criada.**
+  - `messaging_line_rotations`: inalterada (`line_id` já aponta para a Route); passa a ser gravada pela troca via UI (Fase 3).
+  - Vínculos inbound iniciais das Routes comerciais criados a partir de `active_endpoint_id` + `purpose`, revisados à mão (poucos endpoints ativos). **Nenhuma Route de Atendimento é criada** — a linha `customer_service` existente permanece exatamente como está.
+
 - **Resolver** `supabase/functions/_shared/route-resolver.ts`: contrato acima, consumido por `_shared/dispatch-whatsapp-send.ts` e pelos três `*-whatsapp-send`. Frontend (`src/lib/dispatchWhatsAppSend.ts`, `useThreadSendEndpoint`) passa a apenas **ler** o resultado.
 - **Observabilidade mínima**, sobre `service-health`/`service-events` existentes: `route_resolution_divergence` (shadow), `unrouted_inbound` (alerta) e `reply_route_unresolved`. Sem tabela nova e sem novo `process_status`.
 - **Rollout:** flag off = comportamento atual; resolver roda em shadow logando divergência.
@@ -75,7 +124,7 @@ Escolhida a **Opção B**. Nenhum teste ou afirmação do plano coloca webchat n
 - **Outbound:** flip da flag por org (piloto de menor volume primeiro); resolver passa a ser autoritativo.
 - **Backfill de `business_context`:** apenas as threads determinísticas via `purpose` que entram no Comercial V2 (146 candidatas). As 13 ambíguas ficam como legado, sem classificação inventada.
 - **Merge Comercial:** RPC `merge_threads_sales_v1` (a `merge_message_threads` atual recusa endpoints/contextos diferentes; herda só movimentação + auditoria). Escopo: duplicadas por `(org, contact, channel, 'sales')` em qualquer status (53 conflitos de abertas + grupos com resolvidas; volume final no dry-run). Repontar `messages` (`merged_from_thread_id`), `message_thread_reads`, `thread_assignment_history`, `scheduled_messages`, `tasks`, `ai_agent_logs`, `ai_interaction_logs`, com snapshot em `message_thread_merge_audit`. Métricas históricas e rollups **não** são recalculados.
-- **Política de merge:** `primary_endpoint_id` = mais recente; `assigned_user_id` = da thread com atividade mais recente (evento em `thread_assignment_history`); `opportunity_id` = a aberta (duas abertas ⇒ revisão manual); `status` = o mais aberto; `priority` = máximo; `category` = mais recente não-nula; `needs_human_attention` = OR; `message_thread_reads` deduplicado por usuário.
+- **Política de merge (corrigida):** `primary_endpoint_id` = o da thread **mais antiga** do grupo (menor `created_at`; empate ⇒ menor `sent_at` da primeira mensagem), coerente com a semântica de **endpoint de origem** — nunca o mais recente. Quando a thread mais antiga tem `primary_endpoint_id` nulo, preserva-se o valor do winner escolhido pelo critério de antiguidade e a limitação é registrada em `message_thread_merge_audit` (legado sem origem confiável); não se inventa origem. `primary_endpoint_id` **nunca** resolve outbound; as transições reais de número continuam visíveis em `messages.endpoint_id`. Demais campos: `assigned_user_id` = da thread com atividade mais recente (evento em `thread_assignment_history`); `opportunity_id` = a aberta (duas abertas ⇒ revisão manual); `status` = o mais aberto; `priority` = máximo; `category` = mais recente não-nula; `needs_human_attention` = OR; `message_thread_reads` deduplicado por usuário.
 - **Identidade final:** criar o índice único parcial `(organization_id, contact_id, channel) WHERE business_context = 'sales'` como último passo da fase; uniques por endpoint removidas. Garantias do Atendimento preservadas; nenhum `NOT NULL` global.
 - **Aceite:** zero thread nova para contato comercial existente no mesmo canal (inclusive resolvida); zero grupo duplicado em `sales`; índice criado sem violação; Atendimento sem regressão (fila, SLA, reopen, assignment).
 - **Rollback:** flag off; `unmerge` validado no dry-run antes do merge; migration inversa das uniques.
