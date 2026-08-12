@@ -128,6 +128,7 @@ Escolhida a **Opção B**. Nenhum teste ou afirmação do plano coloca webchat n
 - **Rollout:** flag off = comportamento atual; resolver roda em shadow logando divergência.
 - **Aceite:** todo endpoint comercial ativo vinculado a exatamente uma Route; invariante `active_endpoint_id ⊆ vínculos ativos` verdadeira para 100% das Routes; testes A–F verdes; divergência 0 por 48h antes de qualquer flip.
 - **Rollback:** flag off + migration inversa (colunas, tabela, RPC e trigger novos, ninguém depende).
+- **Encerramento obrigatório da Fase 1 (PARE aqui):** relatório com (1) migrations criadas; (2) arquivos alterados; (3) schema final efetivo; (4) Routes comerciais criadas; (5) endpoints vinculados por Route; (6) resultado dos testes de rotação A–F; (7) resultado dos testes de RLS/cross-org; (8) resultado do shadow resolver; (9) divergências encontradas; (10) ajustes necessários no plano antes da Fase 2. Flag permanece OFF até nova aprovação.
 
 
 ---
