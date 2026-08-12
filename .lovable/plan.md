@@ -6,7 +6,9 @@ Base: Impact Assessment v2 (aprovado). Nada implementado nesta etapa: sem migrat
 
 ## 1. Arquitetura alvo
 
-**Identidade da Thread:** `organization_id + contact_id + Inbox`. Inbox = `sales` | `customer_service`. Comercial e Atendimento permanecem separados (ADR-0009).
+**Identidade canônica da Thread:** `organization_id + contact_id + Inbox`. Inbox = `sales` | `customer_service`. Comercial e Atendimento permanecem separados (ADR-0009).
+
+`channel` **não** faz parte da identidade. Verificação feita no banco: hoje existem 0 contatos com threads em mais de um canal dentro da mesma Inbox (19.190 threads; 1 webchat, 2 `internal`, resto WhatsApp), portanto nenhum requisito real obriga dividir a conversa por canal. `channel` permanece na tabela como campo de compatibilidade/exibição (badge de canal na timeline, junto ao endpoint), sem participar de lookup nem de unique key. Canal `internal` são notas, não conversa.
 
 **Route:** identidade operacional dentro de uma Inbox (`Comercial Principal`, `Comercial Secundária`, `João`, `Maria`). Uma Inbox tem N Routes.
 
@@ -14,12 +16,30 @@ Base: Impact Assessment v2 (aprovado). Nada implementado nesta etapa: sem migrat
 - Inbound: N endpoints por Route, via associação persistente `route_inbound_endpoints`. Um endpoint inbound ativo pertence a uma Route por vez.
 - Outbound: exatamente um `active_endpoint_id` por Route.
 
-**Fluxo inbound:** `webhook → endpoint recebido → route_inbound_endpoints → Route → Route.inbox → thread(contact+Inbox) → message.endpoint_id = endpoint real`. Sem Route válida ⇒ evento não roteado com erro explícito. Nunca fallback silencioso.
+**Fluxo inbound:** `webhook → endpoint recebido → route_inbound_endpoints → Route → Route.inbox → thread(org+contact+Inbox, qualquer status) → message.endpoint_id = endpoint real`. Sem Route válida ⇒ evento não roteado com erro explícito. Nunca fallback silencioso.
 
-**Fluxo outbound:** `thread → última mensagem inbound → messages.endpoint_id → route_inbound_endpoints → Route → Route.active_endpoint_id → provider → envio`. Backend é a única autoridade; frontend apenas exibe.
+**Fluxo outbound:** `thread → última mensagem inbound roteável → messages.endpoint_id → route_inbound_endpoints → Route → Route.active_endpoint_id → provider → envio`. Backend é a única autoridade; frontend apenas exibe.
+
+**Última mensagem inbound roteável** (definição normativa): `direction = 'inbound'` **e** `endpoint_id IS NOT NULL` **e** o endpoint possui associação válida (`is_active`) em `route_inbound_endpoints`. Ordenação por `sent_at DESC, id DESC`.
+
+Não havendo nenhuma mensagem inbound roteável, o resolver retorna erro explícito **`REPLY_ROUTE_UNRESOLVED`** e o envio é recusado. Proibido, sem exceção: usar `primary_endpoint_id`, usar `purpose`, usar o último outbound, usar provider default, ou qualquer outro fallback silencioso. A UI mostra ação corretiva ("Esta conversa não tem número de origem roteável. Associe o endpoint a uma Route.").
 
 **`primary_endpoint_id`:** sai da resolução de envio; permanece como endpoint de origem (histórico).
 **`purpose`:** usado apenas como insumo de backfill/classificação histórica, nunca como fonte do runtime novo.
+
+### 1.1 Ciclo de vida da Thread — decisão explícita
+
+**Uma conversa por Contato + Inbox, para sempre — Thread única inclusive através de resolve/reopen.** Não é "uma aberta por vez".
+
+Consequências normativas:
+- Inbound procura a Thread por `org + contact + Inbox` **independentemente do status**.
+- Thread `resolved`/`closed` é **reaberta** (`status → open`, `resolved_at → NULL`, evento de sistema `THREAD_REOPENED`), nunca duplicada.
+- Criação de Thread só ocorre quando **nunca** existiu Thread para aquele `org + contact + Inbox`.
+- A unique key da Fase 8 é **total**, não parcial por status: `UNIQUE (organization_id, contact_id, business_context)` — o que também elimina o acúmulo de threads históricas (hoje: 6.477 `customer_service` resolvidas e 1.302 `sales` resolvidas convivendo com abertas do mesmo contato).
+- Multiplicidade de casos/tickets no Atendimento, **se** vier a ser um requisito, será uma entidade de caso separada apontando para a Thread única. A conversa não é duplicada para representar caso.
+
+Impacto no faseamento: a Fase 7 passa a consolidar também os pares "aberta + resolvida" do mesmo `contact + Inbox`, não só os conflitos de abertas — o volume real de grupos a consolidar deve ser recontado no dry-run da Fase 7 (os ≈116 grupos medidos consideravam apenas threads abertas).
+
 
 ---
 
