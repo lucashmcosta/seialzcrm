@@ -1,134 +1,98 @@
-# PLANO TÉCNICO — GMUD Conversas Multicanal (4 fases)
+# PLANO TÉCNICO — GMUD Conversas Multicanal (versão enxuta)
 
-Base: Impact Assessment v2 e as auditorias já realizadas. Arquitetura alvo inalterada. Nada implementado nesta etapa.
+Revisão de redução de escopo. Nada foi adicionado; itens sem requisito real hoje foram removidos e estão listados em "Cortes".
 
-**Escopo real:** o problema é **Comercial** — múltiplos números, números compartilhados, números pessoais de vendedor, múltiplos providers, tudo na mesma conversa e na mesma Inbox Comercial. O Atendimento entra apenas para ficar compatível com o novo modelo de Route; **seu comportamento operacional não muda** (um número, SLA, fila, assignment, reopen e lifecycle atuais preservados).
+**Objetivo único:** Comercial com múltiplos números (compartilhados e pessoais de vendedor), múltiplos providers, **uma conversa por contato**, resposta sempre pelo número certo, troca de número simples, UX estilo Kommo.
 
-**Flags (apenas 2):** `conv_route_resolver_v2` (roteamento inbound+outbound) e `conv_timeline_v2` (timeline paginada + blocos por endpoint + composer). Nada mais.
+**Atendimento: não participa.** Continua com 1 Inbox, 1 endpoint, fila, SLA, assignment e lifecycle atuais. Não ganha Route, não ganha thread eterna, não é consolidado, não muda de identidade. Recebe apenas compatibilidade passiva: quando o endpoint da thread não pertence ao Comercial, o resolver devolve o endpoint atual da thread — exatamente o comportamento de hoje.
 
----
-
-## Modelo (recap normativo)
-
-- **Thread** = `organization_id + contact_id + Inbox`. `Inbox ∈ {sales, customer_service}`. Comercial e Atendimento permanecem separados (ADR-0009).
-- **`channel` não faz parte da identidade** — verificado no banco: 0 contatos com threads em mais de um canal na mesma Inbox. Fica como campo de exibição/compatibilidade.
-- **Route** = identidade operacional dentro de uma Inbox (Comercial Principal, Comercial Secundária, João, Maria). N Routes por Inbox. Inbound: N endpoints por Route (`route_inbound_endpoints`), um endpoint ativo em uma Route por vez. Outbound: um `active_endpoint_id` por Route.
-- **Outbound:** `thread → última mensagem inbound roteável → Route → Route.active_endpoint_id → provider`. *Inbound roteável* = `direction='inbound'` **e** `endpoint_id IS NOT NULL` **e** endpoint com associação ativa em `route_inbound_endpoints`, ordem `sent_at DESC, id DESC`. Sem isso ⇒ erro tipado **`REPLY_ROUTE_UNRESOLVED`**. Proibido: `primary_endpoint_id`, `purpose`, último outbound, provider default, qualquer fallback silencioso.
-- **Lifecycle por Inbox (correção importante):**
-  - **`sales`** — conversa única e perene: lookup por `org + contact + Inbox` **independente do status**; thread resolvida é **reaberta** (`THREAD_REOPENED`), nunca duplicada. Unique **total** `(organization_id, contact_id, business_context)` restrita a `business_context='sales'`.
-  - **`customer_service`** — lifecycle atual **preservado**: fila, SLA, reopen e assignment como hoje; nada de thread eterna. Ganha só a capacidade estrutural de ter N endpoints inbound por Route.
-- `primary_endpoint_id` deixa de rotear e passa a significar endpoint de origem. `purpose` só serve como insumo de backfill.
+**Flag: uma só.** `conv_route_resolver_v2` (shadow → flip por org) cobre resolver + inbound. A UX da Fase 3 não recebe flag: é render, com rollback por revert.
 
 ---
 
-## Fase 1 — Schema de Route + Resolver único + backfill de contexto
+## Modelo normativo (mínimo)
 
-Entrega única: as tabelas nascem já sendo usadas pelo resolver, atrás de flag.
-
-**Schema (migration aditiva, com GRANTs e RLS por `organization_id = ANY(current_user_org_ids())`):**
-- `messaging_routes` — org, `inbox`, `name`, `slug`, `channel`, `active_endpoint_id`, `owner_user_id` (número pessoal de vendedor), `is_active`, `priority`. Unique `(org, channel, slug)`; sem unicidade por inbox.
-- `route_inbound_endpoints` — `route_id`, `endpoint_id`, `is_active`, `linked_at`, `unlinked_at`; índice único parcial garantindo um endpoint ativo em no máximo uma Route.
-- `route_rotations` — auditoria de troca de `active_endpoint_id`.
-- `integration_inbound_events`: novo `process_status` para inbound sem Route.
-- Seed das Routes derivado de `messaging_lines` + `purpose`, revisado à mão (20 endpoints ativos).
-
-**Resolver (`supabase/functions/_shared/route-resolver.ts`):** contrato único inbound/outbound descrito acima; consumido por `_shared/dispatch-whatsapp-send.ts`, `meta-whatsapp-send`, `twilio-whatsapp-send`, `evolution-whatsapp-send`; `src/lib/dispatchWhatsAppSend.ts` e `useThreadSendEndpoint` passam a apenas ler o resultado. Removidos aqui: `REROUTE_ORG_ID`, `REROUTE_TARGET_ENDPOINT_ID`, `salesContextMismatch` client-only, default Twilio, "último endpoint" como fallback, `resolveComposerProvider`.
-
-**Backfill de `business_context`:** 146 threads determinísticas via `purpose`; 13 ambíguas em fila de revisão humana. Lotes pequenos com cron pausado (12 triggers em `messages`; ADR-0007). `NOT NULL` fica para a Fase 2.
-
-**Observabilidade:** eventos `route_resolution_attempt`, `route_resolution_divergence`, `unrouted_inbound`, `reply_route_unresolved`, `thread_created`/`thread_reused`/`thread_reopened`, expostos em `service-health` e `service-events`. Alerta imediato para `unrouted_inbound`.
-
-**Rollout:** flag `conv_route_resolver_v2` off = comportamento atual; o resolver roda em **shadow** logando divergência. Flip por org só com divergência 0 por 48h e toda ocorrência de `REPLY_ROUTE_UNRESOLVED` explicada.
-**Aceite:** 100% dos endpoints ativos em exatamente uma Route; `business_context NULL` → 13 → 0; divergência 0 em shadow.
-**Rollback:** flag off (código) e migration inversa aditiva (schema).
+- **Thread Comercial** = `organization_id + contact_id + business_context='sales'`, **independente de status e de canal** (verificado: 0 contatos com threads em mais de um canal na mesma Inbox). Inbound em thread resolvida **reabre** (`THREAD_REOPENED`), nunca duplica.
+- **Thread de Atendimento**: identidade e lifecycle inalterados.
+- **Route** = identidade de envio dentro do Comercial (Comercial Principal, Comercial Secundária, WhatsApp João). N endpoints inbound por Route; 1 `active_endpoint_id` para envio.
+- **Outbound Comercial:** `thread → última mensagem inbound roteável → Route → Route.active_endpoint_id → provider`. *Inbound roteável* = `direction='inbound'` **e** `endpoint_id IS NOT NULL` **e** endpoint vinculado ativo a uma Route, ordem `sent_at DESC, id DESC`. Sem resolução ⇒ erro tipado **`REPLY_ROUTE_UNRESOLVED`**. Proibido fallback silencioso (`primary_endpoint_id`, `purpose`, último outbound, provider default).
+- `primary_endpoint_id` passa a significar endpoint de origem; `purpose` só serve como insumo de backfill.
 
 ---
 
-## Fase 2 — Inbound unificado + consolidação do Comercial + identidade final
+## Fase 1 — Infraestrutura (nada muda para o usuário)
 
-Os três webhooks mudam na **mesma entrega** (não há dependência técnica entre providers) e o predicado de lookup passa a ser idêntico nos três, garantido por teste de paridade.
-
-**Inbound (`meta-whatsapp-webhook`, `twilio-whatsapp-webhook`, `evolution-webhook`):** lookup por `org + contact + business_context` derivado da Route, sem filtro de canal. Em `sales`, sem filtro de status, com reopen. Em `customer_service`, o comportamento de status/fila/SLA atual é mantido. `messages.endpoint_id` continua sendo o endpoint real recebido. Remoções: filtro por endpoint no lookup (Meta), os dois fallbacks de thread legada (Twilio), o passo de migração de provider da thread (Evolution — o evento de sistema de troca de número permanece).
-
-**Consolidação (Comercial):** RPC nova `merge_threads_sales_v1` (a `merge_message_threads` atual recusa endpoints/contextos diferentes; herda só a mecânica de movimentação e auditoria). Escopo: duplicadas por `(org, contact, 'sales')` em qualquer status — os 53 conflitos de abertas mais os grupos com resolvidas, volume final apurado no dry-run. Tabelas repontadas: `messages` (`merged_from_thread_id`), `message_thread_reads`, `thread_assignment_history`, `scheduled_messages`, `tasks`, `ai_agent_logs`, `ai_interaction_logs`, com snapshot em `message_thread_merge_audit`. `message_response_times`, `first_response_at`, `resolved_at` e rollups fechados (`seller_metrics_daily`) **não** são recalculados. Atendimento não é consolidado.
-
-**Política de consolidação (aprovar antes de executar o merge):** `primary_endpoint_id` = mais recente; `assigned_user_id` = da thread com atividade mais recente, com evento em `thread_assignment_history`; `original_owner_user_id` = mais antigo; `opportunity_id` = a aberta, duas abertas ⇒ revisão manual; `status` = o mais aberto; `priority` = máximo; `first_response_at` preservado por thread original; `category` = mais recente não-nula; `needs_human_attention` = OR. `message_thread_reads` deduplicado por usuário (pode marcar como lido algo não lido — decisão explícita).
-
-**Identidade final (fecha a fase):** `business_context` → NOT NULL; unique total `(organization_id, contact_id, business_context)` restrita a `sales`; uniques por endpoint removidas; Atendimento mantém sua garantia atual.
-
-**Rollout:** mesma flag `conv_route_resolver_v2`, por org, começando pela org piloto de menor volume. Merge: dry-run com relatório por grupo → aprovação humana → lotes com cron pausado.
-**Aceite:** zero thread nova para contato+Inbox existente (inclusive quando resolvida, em `sales`); zero grupo duplicado em `sales`; índice criado sem violação; nenhuma regressão no Atendimento (SLA, fila, reopen, assignment).
-**Rollback:** flag off; `unmerge` validado no dry-run antes do merge; migration inversa restaurando as uniques antigas.
+- **Migration aditiva** (GRANTs + RLS `organization_id = ANY(current_user_org_ids())`):
+  - `messaging_routes`: `organization_id`, `name`, `slug`, `channel`, `active_endpoint_id`, `is_active`. Unique `(org, channel, slug)`. **Só Comercial** — nenhuma Route de Atendimento é criada.
+  - `route_inbound_endpoints`: `route_id`, `endpoint_id`, `is_active`; índice único parcial: um endpoint ativo em no máximo uma Route.
+  - Seed manual das Routes comerciais a partir de `messaging_lines` + `purpose` (poucos endpoints ativos — revisão à mão).
+- **Resolver** `supabase/functions/_shared/route-resolver.ts`: contrato acima, consumido por `_shared/dispatch-whatsapp-send.ts` e pelos três `*-whatsapp-send`. Frontend (`src/lib/dispatchWhatsAppSend.ts`, `useThreadSendEndpoint`) passa a apenas **ler** o resultado.
+- **Observabilidade mínima**: `route_resolution_divergence` (shadow), `unrouted_inbound` (alerta) e `reply_route_unresolved`. Sem dashboard novo — reaproveita `service-health`/`service-events`.
+- **Rollout:** flag off = comportamento atual; resolver roda em shadow logando divergência.
+- **Aceite:** todo endpoint comercial ativo em exatamente uma Route; divergência 0 por 48h antes de qualquer flip.
+- **Rollback:** flag off + migration inversa (tabelas novas, ninguém depende).
 
 ---
 
-## Fase 3 — Timeline, blocos por endpoint, composer e administração de Routes
+## Fase 2 — Migração Comercial (toda a lógica nova)
 
-Uma entrega de UX completa atrás de `conv_timeline_v2`, porque a conversa consolidada só é usável com paginação e identificação de número.
-
-- **Timeline paginada e virtualizada:** RPC de mensagens por cursor (`sent_at, id`); fim do `.limit(500)`; carregamento incremental, memoização das linhas, realtime que insere sem invalidar a janela. Arquivos: `src/pages/messages/MessagesList.tsx`, `src/components/inbox/InboxConversationTimeline.tsx`, `src/hooks/inbox/useInboxThreadMessages.ts`, `src/components/mobile/MobileMessagesList.tsx`, `MobileInbox.tsx`, novo `useThreadMessagesPaged`.
-- **Blocos por endpoint (estilo Kommo):** `Dia → Bloco de Endpoint → Mensagens consecutivas`. Voltar a um endpoint anterior cria novo bloco (1111→2222→7777→1111 = 4 blocos). Mensagens sem `endpoint_id` não herdam endpoint, não quebram bloco e vão sem badge. Notas internas sem endpoint. Blocos são **render**, não tabela — nada de `conversation_blocks`/`timeline_groups`.
-- **Composer:** "Respondendo por: WhatsApp João 7777", read-only, lendo o resolver nas três superfícies (`MessagesList`, `InboxComposer`, `MobileMessagesList`) — hoje o InboxComposer segue caminho próprio e escolhe template do provider errado. Gate de janela/template pelo `requires_template_outside_window` do endpoint efetivo.
-- **Administração de Routes:** telas em `src/pages/settings/` + Edge de rotação com auditoria em `route_rotations`. Trocar `active_endpoint_id` não desassocia o endpoint antigo do inbound (fica inbound-only), não cria thread e não altera mensagens. Fim da rotação por SQL manual.
-
-**Aceite:** thread de 545 msgs abre em <1s; provider/templates exibidos coincidem 100% com o que o backend usará; rotação reproduzível pela UI; paridade mobile.
-**Rollback:** flag off (UI volta ao render atual; backend já é o novo).
-
----
-
-## Fase 4 — Estabilização e remoção do legado
-
-Após ≥2 semanas com as flags 100% ligadas e sem incidentes.
-
-- Remover `messaging_lines` e `messaging_line_rotations` (sucedidos por `messaging_routes`/`route_rotations`).
-- `primary_endpoint_id` → `origin_endpoint_id`; `purpose` marcado deprecated.
-- Remover `complianceGuards.ts` hardcoded (janela de 7 dias vencida), `migrateThreadAndSend.ts` (sem call sites), overloads duplicados de `rpc_list_message_threads`, `endpoint-migration-note.ts` transicional.
-- Remover as duas flags e os caminhos duplos.
-- Documentação: atualizar `docs/modules/messages/`, `docs/modules/inbox/`, `docs/plans/2026-07-endpoint-lines-rotation.md` e registrar ADR de Route + identidade da Thread.
-
-**Aceite:** nenhuma referência viva ao caminho antigo; métricas comerciais e SLA de atendimento estáveis vs. baseline pré-GMUD.
+- **Inbound** (`meta-whatsapp-webhook`, `twilio-whatsapp-webhook`, `evolution-webhook`, mesma entrega, teste de paridade): quando o endpoint pertence a uma Route comercial, lookup por `org + contact + 'sales'`, sem filtro de canal e sem filtro de status, com reopen. Endpoint de Atendimento: caminho atual intocado. `messages.endpoint_id` segue sendo o endpoint real. Remoções: filtro por endpoint no lookup (Meta), os dois fallbacks de thread legada (Twilio), o passo de migração de provider da thread (Evolution — o evento de sistema permanece).
+- **Outbound:** flip da flag por org (piloto de menor volume primeiro); resolver passa a ser autoritativo.
+- **Backfill de `business_context`:** 146 threads determinísticas via `purpose`; 13 ambíguas para decisão humana. Lotes pequenos, cron pausado (12 triggers em `messages`).
+- **Merge Comercial:** RPC `merge_threads_sales_v1` (a `merge_message_threads` atual recusa endpoints/contextos diferentes; herda só movimentação + auditoria). Escopo: duplicadas por `(org, contact, 'sales')` em qualquer status (53 conflitos de abertas + grupos com resolvidas; volume final no dry-run). Repontar `messages` (`merged_from_thread_id`), `message_thread_reads`, `thread_assignment_history`, `scheduled_messages`, `tasks`, `ai_agent_logs`, `ai_interaction_logs`, com snapshot em `message_thread_merge_audit`. Métricas históricas e rollups **não** são recalculados.
+- **Política de merge:** `primary_endpoint_id` = mais recente; `assigned_user_id` = da thread com atividade mais recente (com evento em `thread_assignment_history`); `opportunity_id` = a aberta (duas abertas ⇒ revisão manual); `status` = o mais aberto; `priority` = máximo; `category` = mais recente não-nula; `needs_human_attention` = OR; `message_thread_reads` deduplicado por usuário.
+- **Identidade final:** `business_context` → NOT NULL; unique parcial `(organization_id, contact_id, business_context)` **restrita a `sales`**; uniques por endpoint removidas. Garantias do Atendimento preservadas.
+- **Aceite:** zero thread nova para contato comercial existente (inclusive resolvida); zero grupo duplicado em `sales`; Atendimento sem regressão (fila, SLA, reopen, assignment).
+- **Rollback:** flag off; `unmerge` validado no dry-run antes do merge; migration inversa das uniques.
 
 ---
 
-## Matriz de testes (vale para as Fases 1–3)
+## Fase 3 — Nova experiência (UX)
 
-| # | Cenário | Esperado |
-|---|---|---|
-| 1 | Comercial com 1 endpoint | 1 thread; envio pelo `active_endpoint` |
-| 2 | Comercial com N endpoints | 1 thread; N blocos/badges |
-| 3 | Comercial Principal + Secundária | resposta pela Route do último inbound roteável |
-| 4 | Número pessoal do vendedor (Route João) | resposta por 7777 |
-| 5 | Meta + Twilio na mesma Inbox | 1 thread; provider correto por bloco |
-| 6 | Meta + Evolution na mesma Inbox | free-form conforme `requires_template_outside_window` |
-| 7 | Rotação 1111→3333 | mesma Route, mesma thread, envio por 3333 |
-| 8 | Cliente volta pelo número antigo | mesma thread; mensagens antigas intactas |
-| 9 | Comercial resolvido e cliente escreve de novo | mesma thread reaberta; zero thread nova |
-| 10 | Contato fala Comercial e Atendimento | 2 threads, uma por Inbox |
-| 11 | Sem inbound roteável | `REPLY_ROUTE_UNRESOLVED`; nenhum fallback |
-| 12 | Última inbound com `endpoint_id` nulo | resolve pela anterior roteável |
-| 13 | Endpoint inbound sem Route | evento não roteado + alerta; nada gravado no domínio |
-| 14 | Route sem `active_endpoint_id` | envio recusado com erro claro |
-| 15 | Atendimento (regressão) | fila, SLA, reopen e assignment idênticos ao baseline |
-| 16 | Realtime | mensagem nova sem duplicar na thread única |
-| 17 | Scheduled message | endpoint resolvido no envio, não no agendamento |
-| 18 | IA | responde na thread única; limite por thread revisto |
-| 19 | Mobile | paridade nos itens 1–10 |
+- **Timeline paginada/virtualizada:** RPC por cursor (`sent_at, id`); fim do `.limit(500)`; realtime insere sem invalidar a janela. `src/pages/messages/MessagesList.tsx`, `src/components/mobile/MobileMessagesList.tsx` e o hook novo `useThreadMessagesPaged`. **Somente Comercial** — Inbox de Atendimento fica como está.
+- **Blocos por número (Kommo):** `Dia → Bloco de Endpoint → Mensagens consecutivas`; voltar a um endpoint anterior cria novo bloco. Mensagens sem `endpoint_id` não herdam endpoint, não quebram bloco e vão sem badge. Blocos são **render**, não tabela.
+- **Composer:** "Respondendo por: WhatsApp João 7777", read-only, lendo o resolver; gate de janela/template pelo `requires_template_outside_window` do endpoint efetivo.
+- **Administração de Routes:** tela em `src/pages/settings/` para criar Route, vincular endpoints inbound e trocar `active_endpoint_id`. Trocar o número ativo não desvincula o antigo do inbound, não cria thread e não altera mensagens. Fim da rotação por SQL manual.
+- **Aceite:** thread grande abre em <1s; provider/template exibidos = o que o backend usa; rotação reproduzível pela UI; paridade mobile.
 
 ---
 
-## Riscos
+## Fase 4 — Limpeza
 
-1. Unique key da Fase 2 antes de a consolidação zerar duplicadas em `sales` → índice não cria. Mitigação: unique é o último passo da fase.
-2. Resolver ligado sem shadow → roteamento errado em massa. Mitigação: 48h de divergência 0 por org.
-3. Merge tocando métricas históricas. Mitigação: nada é recalculado; snapshot em auditoria.
-4. Endpoint novo sem Route → `unrouted_inbound`. Mitigação: alerta imediato + checklist de provisionamento.
-5. Timeline consolidada antes da Fase 3 em contas com histórico grande. Mitigação: Fase 3 pode ser antecipada/paralelizada — não depende da Fase 2.
-6. Regressão silenciosa no Atendimento. Mitigação: teste 15 como gate de aceite de cada fase.
+- Remover `messaging_lines` / `messaging_line_rotations` (sucedidos), `complianceGuards.ts` (janela vencida), `migrateThreadAndSend.ts` (sem call sites), overloads duplicados de `rpc_list_message_threads`, `endpoint-migration-note.ts`.
+- `primary_endpoint_id` → `origin_endpoint_id`; `purpose` deprecated.
+- Remover a flag e o caminho duplo.
+- Atualizar `docs/modules/messages/` e registrar ADR de Route + identidade da Thread Comercial.
+- **Aceite:** nenhuma referência viva ao caminho antigo; métricas comerciais e SLA de atendimento estáveis vs. baseline.
 
 ---
+
+## Cortes desta revisão (e por quê)
+
+| Item removido | Motivo |
+|---|---|
+| Routes no Atendimento | 1 Inbox + 1 endpoint hoje; nenhum requisito atual. Comercial funciona sem isso. |
+| Thread eterna / reopen novo no Atendimento | Lifecycle atual funciona; mudar só cria risco de regressão de SLA. |
+| Consolidação (merge) de threads de Atendimento | Não há duplicidade a resolver no escopo aprovado. |
+| Timeline v2 na Inbox de Atendimento | Volume por thread é pequeno; problema de performance é do Comercial consolidado. |
+| Tabela `route_rotations` | Troca de `active_endpoint_id` já é auditável pelos logs de integração/admin existentes; tabela nova não altera comportamento. |
+| `owner_user_id` e `priority` em `messaging_routes` | Número pessoal do vendedor é resolvido pelo nome da Route; nenhuma regra de roteamento usa esses campos hoje. |
+| Flag `conv_timeline_v2` | UX é render puro; rollback por revert. Uma flag basta. |
+| `process_status` novo em `integration_inbound_events` | O evento `unrouted_inbound` + alerta já entregam o diagnóstico sem mudar contrato de tabela crítica. |
+| Fila persistida de revisão das 13 threads ambíguas | 13 registros: decisão humana em query/planilha, sem estrutura nova. |
+| Tabelas `conversation_blocks` / `timeline_groups` | Agrupamento é derivável em render. |
+| Recalcular `message_response_times`, `first_response_at`, rollups no merge | Nenhum requisito pede recomputar histórico; recomputar é o maior risco do merge. |
+
+## Justificativa das estruturas que ficaram
+
+- **`messaging_routes`** — sem ela não existe "responder pelo número certo" com número compartilhado + rotação: é o único lugar que separa identidade de envio do endpoint físico. Remover quebra o Comercial.
+- **`route_inbound_endpoints`** — é o mapa que liga o número por onde o cliente escreveu à Route de resposta. Sem isso o resolver não tem entrada.
+- **Resolver** — requisito "backend autoritativo"; hoje a decisão está espalhada entre frontend e backend e divergem.
+- **Merge** — requisito "uma conversa por contato" sobre dados já duplicados; sem ele a unique key não cria.
+- **Timeline + blocos + composer** — requisito "UX Kommo" e "histórico preservado"; conversa consolidada é inusável sem paginação e sem identificação do número.
+- **Admin de Routes** — requisito "troca rápida de endpoint"; hoje é SQL manual.
+- **1 flag** — requisito de rollout seguro em produção multi-tenant.
 
 ## READY FOR IMPLEMENTATION: YES
 
-Primeira entrega executável: **Fase 1**, com o resolver em shadow (nenhuma mudança de comportamento até o flip).
-
-Pendências que não bloqueiam o início: aprovação da Política de Consolidação (necessária antes do merge, dentro da Fase 2) e decisão humana sobre as 13 threads ambíguas (necessária antes do `NOT NULL`, também na Fase 2).
+Primeira entrega: **Fase 1** com resolver em shadow (zero mudança de comportamento). Pendências que não bloqueiam o início: aprovação da política de merge e decisão sobre as 13 threads ambíguas, ambas dentro da Fase 2.
