@@ -68,6 +68,49 @@ export async function metaGraphGet(
   return json;
 }
 
+export async function metaGraphPost(
+  path: string,
+  params: Record<string, string | number | boolean | undefined>,
+  opts: MetaCallOpts,
+): Promise<any> {
+  const body = new URLSearchParams();
+  body.set("access_token", opts.accessToken);
+  if (opts.appSecret && opts.appSecret.length > 0) {
+    body.set("appsecret_proof", await hmacSha256Hex(opts.appSecret, opts.accessToken));
+  }
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") {
+      body.set(k, String(v));
+    }
+  }
+  const url = `${BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json.error) {
+    throw new MetaGraphError(res.status, json.error || { message: `HTTP ${res.status}` });
+  }
+  return json;
+}
+
+export async function metaGraphDelete(path: string, opts: MetaCallOpts): Promise<any> {
+  const search = new URLSearchParams();
+  search.set("access_token", opts.accessToken);
+  if (opts.appSecret && opts.appSecret.length > 0) {
+    search.set("appsecret_proof", await hmacSha256Hex(opts.appSecret, opts.accessToken));
+  }
+  const url = `${BASE_URL}${path.startsWith("/") ? "" : "/"}${path}?${search.toString()}`;
+  const res = await fetch(url, { method: "DELETE" });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json.error) {
+    throw new MetaGraphError(res.status, json.error || { message: `HTTP ${res.status}` });
+  }
+  return json;
+}
+
 const TOKEN_ERROR_CODES = new Set([190, 460, 463, 467, 102]);
 
 export function isTokenError(err: unknown): boolean {
