@@ -6,7 +6,9 @@ Base: Impact Assessment v2 (aprovado). Nada implementado nesta etapa: sem migrat
 
 ## 1. Arquitetura alvo
 
-**Identidade da Thread:** `organization_id + contact_id + Inbox`. Inbox = `sales` | `customer_service`. Comercial e Atendimento permanecem separados (ADR-0009).
+**Identidade canônica da Thread:** `organization_id + contact_id + Inbox`. Inbox = `sales` | `customer_service`. Comercial e Atendimento permanecem separados (ADR-0009).
+
+`channel` **não** faz parte da identidade. Verificação feita no banco: hoje existem 0 contatos com threads em mais de um canal dentro da mesma Inbox (19.190 threads; 1 webchat, 2 `internal`, resto WhatsApp), portanto nenhum requisito real obriga dividir a conversa por canal. `channel` permanece na tabela como campo de compatibilidade/exibição (badge de canal na timeline, junto ao endpoint), sem participar de lookup nem de unique key. Canal `internal` são notas, não conversa.
 
 **Route:** identidade operacional dentro de uma Inbox (`Comercial Principal`, `Comercial Secundária`, `João`, `Maria`). Uma Inbox tem N Routes.
 
@@ -14,12 +16,30 @@ Base: Impact Assessment v2 (aprovado). Nada implementado nesta etapa: sem migrat
 - Inbound: N endpoints por Route, via associação persistente `route_inbound_endpoints`. Um endpoint inbound ativo pertence a uma Route por vez.
 - Outbound: exatamente um `active_endpoint_id` por Route.
 
-**Fluxo inbound:** `webhook → endpoint recebido → route_inbound_endpoints → Route → Route.inbox → thread(contact+Inbox) → message.endpoint_id = endpoint real`. Sem Route válida ⇒ evento não roteado com erro explícito. Nunca fallback silencioso.
+**Fluxo inbound:** `webhook → endpoint recebido → route_inbound_endpoints → Route → Route.inbox → thread(org+contact+Inbox, qualquer status) → message.endpoint_id = endpoint real`. Sem Route válida ⇒ evento não roteado com erro explícito. Nunca fallback silencioso.
 
-**Fluxo outbound:** `thread → última mensagem inbound → messages.endpoint_id → route_inbound_endpoints → Route → Route.active_endpoint_id → provider → envio`. Backend é a única autoridade; frontend apenas exibe.
+**Fluxo outbound:** `thread → última mensagem inbound roteável → messages.endpoint_id → route_inbound_endpoints → Route → Route.active_endpoint_id → provider → envio`. Backend é a única autoridade; frontend apenas exibe.
+
+**Última mensagem inbound roteável** (definição normativa): `direction = 'inbound'` **e** `endpoint_id IS NOT NULL` **e** o endpoint possui associação válida (`is_active`) em `route_inbound_endpoints`. Ordenação por `sent_at DESC, id DESC`.
+
+Não havendo nenhuma mensagem inbound roteável, o resolver retorna erro explícito **`REPLY_ROUTE_UNRESOLVED`** e o envio é recusado. Proibido, sem exceção: usar `primary_endpoint_id`, usar `purpose`, usar o último outbound, usar provider default, ou qualquer outro fallback silencioso. A UI mostra ação corretiva ("Esta conversa não tem número de origem roteável. Associe o endpoint a uma Route.").
 
 **`primary_endpoint_id`:** sai da resolução de envio; permanece como endpoint de origem (histórico).
 **`purpose`:** usado apenas como insumo de backfill/classificação histórica, nunca como fonte do runtime novo.
+
+### 1.1 Ciclo de vida da Thread — decisão explícita
+
+**Uma conversa por Contato + Inbox, para sempre — Thread única inclusive através de resolve/reopen.** Não é "uma aberta por vez".
+
+Consequências normativas:
+- Inbound procura a Thread por `org + contact + Inbox` **independentemente do status**.
+- Thread `resolved`/`closed` é **reaberta** (`status → open`, `resolved_at → NULL`, evento de sistema `THREAD_REOPENED`), nunca duplicada.
+- Criação de Thread só ocorre quando **nunca** existiu Thread para aquele `org + contact + Inbox`.
+- A unique key da Fase 8 é **total**, não parcial por status: `UNIQUE (organization_id, contact_id, business_context)` — o que também elimina o acúmulo de threads históricas (hoje: 6.477 `customer_service` resolvidas e 1.302 `sales` resolvidas convivendo com abertas do mesmo contato).
+- Multiplicidade de casos/tickets no Atendimento, **se** vier a ser um requisito, será uma entidade de caso separada apontando para a Thread única. A conversa não é duplicada para representar caso.
+
+Impacto no faseamento: a Fase 7 passa a consolidar também os pares "aberta + resolvida" do mesmo `contact + Inbox`, não só os conflitos de abertas — o volume real de grupos a consolidar deve ser recontado no dry-run da Fase 7 (os ≈116 grupos medidos consideravam apenas threads abertas).
+
 
 ---
 
@@ -32,7 +52,7 @@ Base: Impact Assessment v2 (aprovado). Nada implementado nesta etapa: sem migrat
 - `thread_business_context_review` — fila das 13 threads ambíguas (Fase 2), descartável após o NOT NULL.
 
 **Alteradas**
-- `message_threads`: `business_context` → NOT NULL (Fase 8); nova unique parcial `(organization_id, contact_id, channel, business_context)` para status abertos; uniques por endpoint removidas na mesma fase.
+- `message_threads`: `business_context` → NOT NULL (Fase 8); nova unique **total** `(organization_id, contact_id, business_context)`, sem `channel` e sem filtro de status; uniques por endpoint removidas na mesma fase. `channel` mantido como campo de compatibilidade/exibição, fora de lookup e de unique key.
 - `integration_inbound_events`: novo `process_status` para inbound sem Route.
 
 **Não criar:** `conversation_blocks`, `timeline_groups`, `message_sections`. Blocos por endpoint são apenas renderização.
@@ -85,36 +105,38 @@ Em `feature_flags` (por org, via `fn_feature_flag_enabled` / `_shared/feature-fl
 
 ### Fase 3 — Resolver server-side único (`route-resolver`)
 - **Objetivo:** um contrato único de resolução inbound/outbound.
+- **Contrato outbound:** entrada `threadId` → busca a **última mensagem inbound roteável** (`direction='inbound'`, `endpoint_id IS NOT NULL`, endpoint com associação ativa em `route_inbound_endpoints`, ordem `sent_at DESC, id DESC`) → Route → `active_endpoint_id` → provider. Saída é ou um endpoint resolvido ou o erro tipado **`REPLY_ROUTE_UNRESOLVED`**. Nenhum caminho alternativo existe no código: sem `primary_endpoint_id`, sem `purpose`, sem último outbound, sem provider default.
 - **Arquivos:** novo `supabase/functions/_shared/route-resolver.ts`; `_shared/dispatch-whatsapp-send.ts`; `src/lib/dispatchWhatsAppSend.ts` (passa a delegar); `meta-whatsapp-send`, `twilio-whatsapp-send`, `evolution-whatsapp-send`; `useThreadSendEndpoint` vira leitura do resolver.
 - **Migration:** não. **Flag:** `conv_route_resolver_v2`.
 - **Rollout:** shadow primeiro (resolver calcula e loga divergência vs. caminho atual), flip por org depois.
-- **Aceite:** divergência 0 em shadow por 48h antes do flip.
+- **Aceite:** divergência 0 em shadow por 48h antes do flip; toda ocorrência de `REPLY_ROUTE_UNRESOLVED` em shadow explicada antes do flip.
 - **Rollback:** flag off.
 - **Removidos nesta fase:** `REROUTE_ORG_ID`, `REROUTE_TARGET_ENDPOINT_ID`, `salesContextMismatch` client-only, default Twilio, "último endpoint" como fallback técnico, `resolveComposerProvider`.
 
 ### Fases 4/5/6 — Inbound V2 por provider (Meta → Twilio → Evolution)
 Uma fase por provider (Opção B aprovada).
-- **Objetivo:** trocar o predicado de lookup da thread de `primary_endpoint_id` para `business_context` derivado da Route; `messages.endpoint_id` continua sendo o endpoint real recebido.
+- **Objetivo:** trocar o predicado de lookup da thread de `primary_endpoint_id` para `org + contact + business_context` derivado da Route, **sem filtro de status e sem filtro de canal**; `messages.endpoint_id` continua sendo o endpoint real recebido.
 - **Arquivos:** `meta-whatsapp-webhook/index.ts` (F4), `twilio-whatsapp-webhook/index.ts` (F5), `evolution-webhook/index.ts` (F6).
 - **Migration:** não. **Flag:** `conv_inbound_v2_<provider>`, por org, começando pela org piloto de menor volume.
+- **Reopen:** thread encontrada em `resolved`/`closed` é reaberta (`status → open`, `resolved_at → NULL`, evento `THREAD_REOPENED`), nunca duplicada.
 - **Mudanças específicas:** Meta — remover filtro por endpoint no lookup; `duplicate_thread_detected` passa a significar conflito real. Twilio — remover os dois fallbacks (thread legada com endpoint nulo e lookup sem filtro); manter backfill de `messages.endpoint_id` nos status callbacks. Evolution — remover o passo de migração de provider da thread; manter o evento de sistema de troca de número.
-- **Testes:** golden tests da Fase 0 + matriz da seção 6; teste de paridade garantindo predicado de lookup idêntico nos três.
-- **Aceite:** zero thread nova para contato+Inbox já existente; zero regressão nos golden tests.
+- **Testes:** golden tests da Fase 0 + matriz da seção 6; teste de paridade garantindo predicado de lookup idêntico nos três, incluindo o caminho de reopen.
+- **Aceite:** zero thread nova para contato+Inbox já existente, **inclusive quando a existente está resolvida**; zero regressão nos golden tests.
 - **Rollback:** flag off por provider.
 
 ### Fase 7 — Política + consolidação de Threads
-- **Objetivo:** aprovar a Política de Consolidação (seção 5) e consolidar ≈116 grupos / ≈238 threads.
+- **Objetivo:** aprovar a Política de Consolidação (seção 5) e consolidar **todas** as threads duplicadas por `(org, contact, business_context)`, independentemente do status — não só as abertas. Os ≈116 grupos / ≈238 threads medidos consideravam apenas threads abertas; o número final (incluindo pares aberta+resolvida e múltiplas resolvidas) é apurado no dry-run desta fase.
 - **Tabelas afetadas:** `message_threads`, `messages`, `message_thread_reads`, `thread_assignment_history`, `message_response_times`, `scheduled_messages`, `tasks`, `ai_agent_logs`, `ai_interaction_logs`, `message_thread_merge_audit`.
-- **RPC:** nova `merge_threads_same_inbox_v1` (a `merge_message_threads` atual recusa endpoints diferentes; herda apenas a mecânica de movimentação e auditoria).
+- **RPC:** nova `merge_threads_same_inbox_v1` (a `merge_message_threads` atual recusa endpoints diferentes; herda apenas a mecânica de movimentação e auditoria). Ignora `channel` como critério de bloqueio.
 - **Migration:** sim (RPC nova + execução em lote).
-- **Rollout:** dry-run com relatório por grupo → aprovação humana → execução em lotes com cron pausado.
-- **Aceite:** zero grupo com >1 thread aberta por `(org, contact, inbox)`; auditoria reversível.
+- **Rollout:** dry-run com relatório por grupo → aprovação humana → execução em lotes com cron pausado. Ordem sugerida: primeiro os conflitos de abertas (53 contatos em `sales`), depois os grupos com resolvidas, que são maioria em volume.
+- **Aceite:** zero grupo com mais de uma thread por `(org, contact, business_context)` em qualquer status; auditoria reversível.
 - **Rollback:** `unmerge` equivalente, validado no dry-run antes do merge.
 
 ### Fase 8 — Nova unique key da Thread
 - **Objetivo:** identidade nova garantida estruturalmente.
-- **Migration:** sim — `business_context` NOT NULL; nova unique parcial `(org, contact, channel, business_context)` em status abertos; remoção das uniques por endpoint.
-- **Pré-requisito:** `conv_thread_identity_v2` 100% ligada e Fase 7 concluída.
+- **Migration:** sim — `business_context` NOT NULL; nova unique **total** `(organization_id, contact_id, business_context)`, **sem `channel` e sem filtro de status**; remoção das uniques por endpoint.
+- **Pré-requisito:** `conv_thread_identity_v2` 100% ligada e Fase 7 concluída em todos os status (não só abertas) — sem isso o índice não é criável.
 - **Aceite:** zero violação na criação do índice.
 - **Rollback:** migration inversa restaurando as uniques antigas.
 
@@ -195,7 +217,11 @@ Uma fase por provider (Opção B aprovada).
 | 17 | Mobile | paridade com desktop nos itens 1–10 |
 | 18 | IA | agente responde na thread única; limite por thread revisto |
 | 19 | Scheduled message | endpoint resolvido no envio, não no agendamento |
-| 20 | Webchat | thread própria por Inbox derivada da Route |
+| 20 | Webchat | thread da mesma Inbox do contato, sem thread nova por canal |
+| 21 | Contato escreve, thread é resolvida, contato escreve de novo | mesma thread reaberta (`THREAD_REOPENED`); zero thread nova |
+| 22 | Thread sem nenhuma mensagem inbound roteável | envio recusado com `REPLY_ROUTE_UNRESOLVED`; nenhum fallback |
+| 23 | Última inbound com `endpoint_id` nulo, anterior roteável | resolve pela anterior roteável |
+| 24 | Contato com histórico WhatsApp e novo contato por webchat na mesma Inbox | uma única thread; canal exibido por mensagem |
 
 ---
 
@@ -207,7 +233,7 @@ O merge move o vínculo de `thread_id` mas não recalcula `message_response_time
 
 ## 8. Observabilidade transversal
 
-Eventos estruturados: `route_resolution_attempt`, `route_resolution_divergence`, `unrouted_inbound`, `thread_reused`/`thread_created`, `merge_executed`, `send_blocked_no_route`. Expostos em `service-health` (taxa de não roteados como métrica de saúde) e `service-events`. Alerta imediato para qualquer `unrouted_inbound` — nesse modelo, evento não roteado é incidente.
+Eventos estruturados: `route_resolution_attempt`, `route_resolution_divergence`, `unrouted_inbound`, `thread_reused`/`thread_created`/`thread_reopened`, `merge_executed`, `reply_route_unresolved`. Expostos em `service-health` (taxa de não roteados e de `reply_route_unresolved` como métricas de saúde) e `service-events`. Alerta imediato para qualquer `unrouted_inbound` — nesse modelo, evento não roteado é incidente. `reply_route_unresolved` é sinal de endpoint sem Route, não de conversa inválida.
 
 ---
 
