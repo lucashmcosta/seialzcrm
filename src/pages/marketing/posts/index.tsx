@@ -64,7 +64,8 @@ export default function MarketingPosts() {
   const publish = usePublishPost(orgId);
   const del = useDeletePost(orgId);
 
-  if (flagLoading) {
+  // Não redireciona enquanto a org/flag ainda carregam (evita corrida no acesso direto).
+  if (!orgId || flagLoading) {
     return <MarketingLayout title="Publicações"><Skeleton className="h-40 w-full" /></MarketingLayout>;
   }
   if (!enabled) return <Navigate to="/marketing" replace />;

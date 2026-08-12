@@ -210,6 +210,7 @@ const MarketingAdDetail = lazyWithRetry("MarketingAdDetail", () => import("./pag
 const MarketingFunnel = lazyWithRetry("MarketingFunnel", () => import("./pages/marketing/funnel"));
 const MarketingTimeline = lazyWithRetry("MarketingTimeline", () => import("./pages/marketing/timeline"));
 const MarketingPosts = lazyWithRetry("MarketingPosts", () => import("./pages/marketing/posts/index"));
+const MarketingComments = lazyWithRetry("MarketingComments", () => import("./pages/marketing/comments/index"));
 // Settings layout + grid (replaces old Settings page)
 const SettingsLayout = lazyWithRetry("SettingsLayout", () => import("./components/settings/SettingsLayout"), "SettingsLayout");
 const SettingsGrid = lazyWithRetry("SettingsGrid", () => import("./components/settings/SettingsGrid"), "SettingsGrid");
@@ -669,6 +670,7 @@ const App = () => (
           <Route path="/marketing/funnel" element={<ProtectedRoute><MarketingFunnel /></ProtectedRoute>} />
           <Route path="/marketing/timeline" element={<ProtectedRoute><MarketingTimeline /></ProtectedRoute>} />
           <Route path="/marketing/posts" element={<ProtectedRoute><MarketingPosts /></ProtectedRoute>} />
+          <Route path="/marketing/comments" element={<ProtectedRoute><MarketingComments /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
             <Route index element={<SettingsGrid />} />
             <Route path="general" element={<GeneralSettings />} />
