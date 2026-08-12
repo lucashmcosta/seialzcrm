@@ -974,6 +974,9 @@ serve(async (req) => {
           })
         }
       }
+      }
+
+
 
 
       // Resolve reply_to_message_id from OriginalRepliedMessageSid (if customer replied to a message)
