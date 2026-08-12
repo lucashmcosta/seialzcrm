@@ -13077,6 +13077,10 @@ export type Database = {
         Args: { p_ghost_days?: number; p_organization_id: string }
         Returns: number
       }
+      fn_replay_sales_merge_state: {
+        Args: { p_audit_ids: string[]; p_baseline: Json }
+        Returns: Record<string, unknown>
+      }
       fn_resolve_marketing_campaign_id: {
         Args: {
           _org_id: string
