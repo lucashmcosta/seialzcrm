@@ -1,14 +1,16 @@
 # Teste Sintético — Unmerge Parcial de Star Merge (bloco final, NÃO executado)
 
-Correções aplicadas conforme as 5 exigências:
+Correções aplicadas (rodada anterior + os 2 ajustes agora exigidos):
 
-1. **Setup completo**: `primary_endpoint_id` distinto em A/B/C, usando 3 `communication_endpoints` reais da MESMA org, `channel='whatsapp'`, apenas como FK (nenhum UPDATE neles). Se a org não tiver 3 endpoints compatíveis + 3 usuários → `SETUP_UNSUITABLE_ORG` e para.
-2. **S4 não rebaixado**: comparação explícita S4 vs S0 nos 12 campos, gerando `S4_DIFF_FROM_S0`. Nada é declarado "nota conhecida"; divergência é reportada como divergência (sem correção automática).
-3. **S3 com assertions reais** nos 12 campos, incluindo `assigned_at`, `last_message_at`, `last_message_content`, `last_message_direction`.
-4. **Relatório S4**: mensagens de A, restauração de B e C, zero auditorias ativas, e o diff campo a campo.
-5. **Limpeza**: sem `FUNCTION_PLACEHOLDER`, sem `CREATE TEMP TABLE _snap`. Tudo em uma única transação abortada de propósito (`RAISE EXCEPTION` final carrega o relatório JSON).
+1. **Setup completo**: `primary_endpoint_id` distinto em A/B/C, usando 3 `communication_endpoints` reais da MESMA org, `channel='whatsapp'`, apenas como FK (nenhum UPDATE neles). Sem org compatível → `SETUP_UNSUITABLE_ORG`/`SETUP_ENDPOINTS_INVALID` e para.
+2. **NOVO — baseline explícita pós-triggers**: depois de inserir MSG_A/MSG_B/MSG_C, as três threads recebem UPDATE explícito do estado operacional desejado (status, assigned_user_id, original_owner_user_id, assigned_at, resolved_at, priority, needs_human_attention), preservando os `last_message_*`. Isso neutraliza `messages_smart_reopen`. Guard `SETUP_BASELINE_NOT_STABLE` confirma que a baseline sobreviveu aos triggers. S0/B0/C0 só são capturados depois disso.
+3. **NOVO — seleção de usuários**: `DISTINCT user_id` primeiro, `row_number()` depois; validação de NOT NULL e distinção mútua com `SETUP_USERS_INVALID`.
+4. **S4 não rebaixado**: comparação explícita S4 vs S0 nos 12 campos → `S4_DIFF_FROM_S0`; divergência é reportada como divergência (sem correção automática) e marca `RESULT = FAIL`.
+5. **S3 com assertions reais** nos 12 campos, incluindo `assigned_at`, `last_message_at`, `last_message_content`, `last_message_direction`.
+6. **Limpeza**: sem `FUNCTION_PLACEHOLDER`, sem `CREATE TEMP TABLE _snap`; tudo em uma única transação abortada de propósito (`RAISE EXCEPTION` final carrega o relatório JSON).
 
-Dados confirmados em leitura read-only prévia: existem 2 orgs com ≥3 endpoints `whatsapp` (`40ae935c…a95f` com 10 e `b246ef6f…2896a` com 10) e ambas com ≥19 usuários; índices únicos legados exigem mesmo `primary_endpoint_id` distinto por thread aberta do mesmo contato; `merge_sales_threads(p_winner, p_loser, p_batch)` e `unmerge_message_thread(p_loser)`.
+Dados confirmados em leitura read-only prévia: 2 orgs com ≥3 endpoints `whatsapp` (`40ae935c…a95f` e `b246ef6f…2896a`, 10 cada) e ambas com ≥19 usuários; índices únicos legados exigem `primary_endpoint_id` distinto por thread aberta do mesmo contato; assinaturas `merge_sales_threads(p_winner, p_loser, p_batch)` e `unmerge_message_thread(p_loser)`.
+
 
 ## Bloco final
 
