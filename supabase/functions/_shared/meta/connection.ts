@@ -148,6 +148,38 @@ export async function resolveConnectionToken(
   return await decryptSecret(data.token_encrypted);
 }
 
+// Resolve a conexão CANÔNICA a ser usada para operar sobre um ativo (página, conta de
+// anúncios, etc.). Pode haver mais de uma conexão `connected` (ex.: re-auth incompleta
+// que fica `connected` porém SEM ativos selecionados). Não usamos "a mais recente" e sim
+// a mais recente que TENHA o ativo requerido selecionado — evitando cair numa conexão vazia.
+// Retorna o connection_id + um mapa {asset_type: external_id} dos ativos selecionados
+// daquela conexão (primeiro de cada tipo). null se nenhuma conexão tem o ativo requerido.
+export async function resolveConnectionWithAsset(
+  admin: any,
+  organizationId: string,
+  requiredAssetType: "page" | "ad_account" | "instagram_account" | "business",
+): Promise<{ connection_id: string; assets: Record<string, string> } | null> {
+  const { data: conns } = await admin
+    .from("meta_connections")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("status", "connected")
+    .order("created_at", { ascending: false });
+  for (const c of conns ?? []) {
+    const { data: rows } = await admin
+      .from("meta_assets")
+      .select("external_id, asset_type")
+      .eq("connection_id", c.id)
+      .eq("selection_state", "selected");
+    const assets: Record<string, string> = {};
+    for (const r of rows ?? []) {
+      if (!assets[r.asset_type]) assets[r.asset_type] = r.external_id;
+    }
+    if (assets[requiredAssetType]) return { connection_id: c.id, assets };
+  }
+  return null;
+}
+
 // Classificação de erro do Graph p/ backoff e persistência.
 export type ErrorClass = "auth" | "rate_limit" | "transient" | "permanent";
 export function classifyMetaError(err: unknown): ErrorClass {

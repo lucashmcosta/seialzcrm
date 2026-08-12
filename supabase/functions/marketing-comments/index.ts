@@ -5,7 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { facebookAppSecret, resolveConnectionToken } from "../_shared/meta/connection.ts";
+import { facebookAppSecret, resolveConnectionToken, resolveConnectionWithAsset } from "../_shared/meta/connection.ts";
 import { metaGraphGet, metaGraphPost, metaGraphDelete, MetaGraphError } from "../_shared/meta-graph.ts";
 
 function json(body: unknown, status = 200): Response {
@@ -39,16 +39,11 @@ serve(async (req) => {
       if (!m) return json({ error: "forbidden_org" }, 403);
     }
 
-    const { data: c } = await admin.from("meta_connections").select("id")
-      .eq("organization_id", organization_id).eq("status", "connected")
-      .order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (!c) return json({ error: "no_connected_connection" }, 404);
-    const connection_id = c.id;
-    const { data: assets } = await admin.from("meta_assets")
-      .select("external_id, asset_type").eq("connection_id", connection_id).eq("selection_state", "selected")
-      .in("asset_type", ["page", "instagram_account"]);
-    const pageId = assets?.find((a: any) => a.asset_type === "page")?.external_id as string | undefined;
-    const igId = assets?.find((a: any) => a.asset_type === "instagram_account")?.external_id as string | undefined;
+    const resolved = await resolveConnectionWithAsset(admin, organization_id, "page");
+    if (!resolved) return json({ error: "no_page" }, 404);
+    const connection_id = resolved.connection_id;
+    const pageId = resolved.assets["page"] as string | undefined;
+    const igId = resolved.assets["instagram_account"] as string | undefined;
 
     const accessToken = await resolveConnectionToken(admin, connection_id);
     const appSecret = facebookAppSecret();
