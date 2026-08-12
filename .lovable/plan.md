@@ -44,8 +44,8 @@ Evolução mínima (aditiva, sem renomear nem apagar `key`):
 
 | Campo | Ação | Papel |
 |---|---|---|
-| `inbox_key text NOT NULL DEFAULT 'sales'` | novo, com CHECK `IN ('sales','customer_service')` | Inbox/contexto. Backfill: `commercial`→`sales`, `evolution_pilot`→`sales`, `customer_service`→`customer_service` |
-| `route_slug text NOT NULL` | novo | identidade individual estável da Route (`principal`, `secundaria`, `joao`, `maria`). Backfill: valor atual de `key` |
+| `inbox_key text` | novo, criado **nullable e sem default**; `NOT NULL` + CHECK `IN ('sales','customer_service')` só após backfill validado | Inbox/contexto. Backfill explícito: `commercial`→`sales`, `evolution_pilot`→`sales`, `customer_service`→`customer_service` |
+| `route_slug text` | novo, criado **nullable**; `NOT NULL` só após backfill validado | identidade individual estável da Route (`principal`, `secundaria`, `joao`, `maria`). Backfill: valor atual de `key` |
 | `name text` | já existe | apresentação apenas — nunca ownership, autorização ou filtro |
 | `owner_user_id uuid NULL` | novo, FK `users.id` | Route pessoal; nulo = compartilhada |
 | `is_active boolean NOT NULL DEFAULT true` | novo | desativar Route sem apagar histórico |
