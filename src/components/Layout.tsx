@@ -15,6 +15,7 @@ import {
   ChartLineUp,
   ChartBar,
   Headset,
+  ChatsCircle,
 } from '@phosphor-icons/react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,7 @@ import { SidebarNavigationSimple } from '@/components/application/app-navigation
 import { FeaturedCardProgressBar } from '@/components/application/app-navigation/base-components/featured-cards';
 import type { NavItemType } from '@/components/application/app-navigation/config';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
+import { useMarketingPublishingFlag } from '@/hooks/useMarketingPublishingFlag';
 import { useTheme } from '@/contexts/ThemeContext';
 import { SeialzSidebar, type SeialzNavGroup } from '@/components/seialz/SeialzSidebar';
 
@@ -43,6 +45,7 @@ export function Layout({ children }: LayoutProps) {
   const { permissions } = usePermissions();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { hasWhatsApp } = useWhatsAppIntegration();
+  const { enabled: socialEnabled } = useMarketingPublishingFlag(organization?.id);
   const { themePreset } = useTheme();
 
   // ═══════════════════════════════════════
@@ -80,6 +83,9 @@ export function Layout({ children }: LayoutProps) {
     const commItems: SeialzNavGroup['items'] = [];
     if (hasWhatsApp) {
       commItems.push({ label: t('nav.commercial'), href: '/commercial', icon: ChatCircleText });
+    }
+    if (socialEnabled) {
+      commItems.push({ label: 'Social', href: '/social', icon: ChatsCircle });
     }
     if (commItems.length > 0) {
       groups.push({ label: 'COMUNICAÇÃO', items: commItems });
@@ -153,11 +159,15 @@ export function Layout({ children }: LayoutProps) {
 
   // Add Messages menu if WhatsApp is enabled
   if (hasWhatsApp) {
-    navItems.push({ 
-      label: t('nav.commercial'), 
-      href: '/commercial', 
-      icon: ChatCircleText 
+    navItems.push({
+      label: t('nav.commercial'),
+      href: '/commercial',
+      icon: ChatCircleText
     });
+  }
+
+  if (socialEnabled) {
+    navItems.push({ label: 'Social', href: '/social', icon: ChatsCircle });
   }
 
   // Atendimento (módulo independente — pós-venda / jurídico)
