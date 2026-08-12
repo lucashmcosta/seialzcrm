@@ -2,6 +2,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
+import { isSalesEndpoint, resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -862,8 +864,37 @@ serve(async (req) => {
       //   2. fallback de compatibilidade: thread legada com primary_endpoint_id IS NULL (faz backfill)
       //   3. cria nova thread com primary_endpoint_id = endpointId
       // Sem endpointId resolvido, mantém o comportamento legado: match único por (org, contact, channel).
+      // Comercial (endpoint purpose sales/commercial) → caminho CANÔNICO:
+      // identidade = org + contact + whatsapp + business_context='sales'
+      // + não consolidada. primary_endpoint_id não é identidade.
+      // Atendimento / purpose ausente → caminho legado abaixo, inalterado.
       let threadId: string | null = null
       let existingThread: { id: string; primary_endpoint_id: string | null } | null = null
+      let canonicalHandled = false
+
+      if (endpointId && orgId && await isSalesEndpoint(supabase, endpointId)) {
+        const canonical = await resolveSalesWhatsappThread(supabase, {
+          organizationId: orgId as string,
+
+
+          contactId,
+          endpointId,
+          inboundAt: new Date().toISOString(),
+          externalId: waId,
+        })
+        threadId = canonical.threadId
+        canonicalHandled = true
+        if (!threadId) {
+          console.error('[wa-inbound] canonical_sales_thread_unresolved', { contactId, endpointId })
+          return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'text/xml' }
+          })
+        }
+      }
+
+      if (!canonicalHandled) {
+
 
       if (endpointId) {
         const { data: matched } = await supabase
@@ -947,6 +978,9 @@ serve(async (req) => {
           })
         }
       }
+      }
+
+
 
 
       // Resolve reply_to_message_id from OriginalRepliedMessageSid (if customer replied to a message)
