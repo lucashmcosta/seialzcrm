@@ -114,12 +114,13 @@ Em `feature_flags` (por org, via `fn_feature_flag_enabled` / `_shared/feature-fl
 
 ### Fases 4/5/6 — Inbound V2 por provider (Meta → Twilio → Evolution)
 Uma fase por provider (Opção B aprovada).
-- **Objetivo:** trocar o predicado de lookup da thread de `primary_endpoint_id` para `business_context` derivado da Route; `messages.endpoint_id` continua sendo o endpoint real recebido.
+- **Objetivo:** trocar o predicado de lookup da thread de `primary_endpoint_id` para `org + contact + business_context` derivado da Route, **sem filtro de status e sem filtro de canal**; `messages.endpoint_id` continua sendo o endpoint real recebido.
 - **Arquivos:** `meta-whatsapp-webhook/index.ts` (F4), `twilio-whatsapp-webhook/index.ts` (F5), `evolution-webhook/index.ts` (F6).
 - **Migration:** não. **Flag:** `conv_inbound_v2_<provider>`, por org, começando pela org piloto de menor volume.
+- **Reopen:** thread encontrada em `resolved`/`closed` é reaberta (`status → open`, `resolved_at → NULL`, evento `THREAD_REOPENED`), nunca duplicada.
 - **Mudanças específicas:** Meta — remover filtro por endpoint no lookup; `duplicate_thread_detected` passa a significar conflito real. Twilio — remover os dois fallbacks (thread legada com endpoint nulo e lookup sem filtro); manter backfill de `messages.endpoint_id` nos status callbacks. Evolution — remover o passo de migração de provider da thread; manter o evento de sistema de troca de número.
-- **Testes:** golden tests da Fase 0 + matriz da seção 6; teste de paridade garantindo predicado de lookup idêntico nos três.
-- **Aceite:** zero thread nova para contato+Inbox já existente; zero regressão nos golden tests.
+- **Testes:** golden tests da Fase 0 + matriz da seção 6; teste de paridade garantindo predicado de lookup idêntico nos três, incluindo o caminho de reopen.
+- **Aceite:** zero thread nova para contato+Inbox já existente, **inclusive quando a existente está resolvida**; zero regressão nos golden tests.
 - **Rollback:** flag off por provider.
 
 ### Fase 7 — Política + consolidação de Threads
