@@ -658,6 +658,23 @@ function DesktopMessagesList() {
   const hookedThreadBusinessContext = useThreadBusinessContext(selectedThreadId);
   const selectedThreadBusinessContext: ThreadBusinessContext =
     hookedThreadBusinessContext ?? 'sales';
+
+  // ---------------------------------------------------------------------------
+  // Fase 2.5 — Route Comercial da thread selecionada (SOMENTE LEITURA).
+  // Reusa o resolver V2 do cliente; nenhum backend foi alterado.
+  // ---------------------------------------------------------------------------
+  const { route: salesRoute } = useSalesRoute({
+    threadId: selectedThreadId,
+    organizationId: organization?.id,
+    businessContext: selectedThreadBusinessContext,
+    channel: 'whatsapp',
+  });
+  const { history: threadEndpointHistory } = useThreadEndpointHistory(selectedThreadId);
+  const { flag: routeResolverFlag } = useRouteResolverFlag(organization?.id);
+  const salesRouteEndpointState: 'online' | 'offline' | 'no_route' = salesRoute.resolved
+    ? salesRoute.activeEndpoint?.is_active === true ? 'online' : 'offline'
+    : 'no_route';
+  const [routeDetailsOpen, setRouteDetailsOpen] = useState(false);
   const salesEndpoints = useMemo(
     () => filterEndpointsByIntent(orgEndpoints, 'sales'),
     [orgEndpoints],
