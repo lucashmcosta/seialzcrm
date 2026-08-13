@@ -19,14 +19,15 @@ Linha 3  [Comercial] [Meta|Evolution|Twilio] [8439] [● Online|Offline]  [janel
 - O trilho "Histórico de endpoints utilizados" sai do cabeçalho e permanece apenas no painel/modal de detalhes.
 
 `RouteBadge` em `src/components/messages/route/RouteIndicators.tsx` ganha variantes de composição para não repetir informação:
-- `variant="compact"` (lista): só o número + marcador do provider (`[M]`/`[E]`/`[T]`) com cor.
-- `variant="split"` (cabeçalho): renderiza badges separados — Comercial, Provider, Número, Online/Offline.
+- `variant="compact"` (somente lista): `Evolution • 8439` / `Meta • 2890`. Sem siglas tipo `[E]`/`[M]`.
+- `variant="split"` (somente cabeçalho): badges separados — Comercial, Provider, Número, Online/Offline.
 
 ## 2. Linguagem do resolver
 
-- Tela principal: nunca "Route Resolver V2". Passa a exibir "Roteamento automático" quando a flag está ON e "Modo legado" quando OFF.
-- O termo técnico `Route Resolver V2` / `conv_route_resolver_v2` continua apenas dentro do `SalesRouteDetailsDialog` e do `SalesRoutePanel`.
-- Ajuste em `useSalesRouteView` (`SalesRoutePanel.tsx`): expor dois rótulos — `resolverLabelPublic` ("Roteamento automático"/"Modo legado") e `resolverLabel` (técnico, usado no modal). Nenhuma query alterada.
+- Tela principal: nunca "Route Resolver V2". Exibe "Rota Comercial" quando a flag está ON e "Modo legado" quando OFF.
+- O termo técnico `Route Resolver V2` / `conv_route_resolver_v2` fica restrito a `SalesRoutePanel` e `SalesRouteDetailsDialog`.
+- Ajuste em `useSalesRouteView` (`SalesRoutePanel.tsx`): expor dois rótulos — `resolverLabelPublic` ("Rota Comercial"/"Modo legado") e `resolverLabel` (técnico, usado no painel/modal). Nenhuma query alterada.
+
 
 ## 3. Botão "Detalhes da rota"
 
