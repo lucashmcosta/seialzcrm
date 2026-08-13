@@ -1849,81 +1849,47 @@ function DesktopMessagesList() {
               <>
                 {/* Chat Header */}
                 <div className="border-b border-border px-6 py-3">
-                  <div className="flex items-center justify-between gap-4">
-                    {/* Contact info — flex-1 with min-w-0 so name truncates instead of wrapping */}
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-4">
+                    {/* Fase 2.5.1 — L1: nome + status | L2: telefone • responsável | L3: badges */}
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
                       <Avatar fallbackText={selectedThread.contact_name} size="md" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <Link
                             to={`/contacts/${selectedThread.contact_id}`}
-                            className="font-semibold text-foreground truncate hover:text-primary hover:underline transition-colors"
+                            className="text-[15px] font-semibold text-foreground truncate hover:text-primary hover:underline transition-colors"
                             title={locale === 'pt-BR' ? 'Ver perfil do contato' : 'View contact profile'}
                           >
                             {selectedThread.contact_name}
                           </Link>
-                          {/* Fase 2.5 — Route Comercial (identidade da conversa) */}
-                          <RouteBadge
-                            address={salesRoute.activeEndpoint?.external_address ?? selectedThreadEndpoint?.external_address ?? null}
-                            provider={salesRoute.activeEndpoint?.provider ?? selectedThreadEndpoint?.provider ?? null}
-                            state={salesRouteEndpointState}
-                            size="lg"
-                          />
-                          <WhatsAppWindowChip
-                            channel="whatsapp"
-                            lastInboundAt={composerLastInboundAt}
-                            contactId={selectedThread.contact_id}
-                          />
-
                           {selectedThread.status && statusConfig[selectedThread.status] && (
                             <span className={cn('text-xs font-medium shrink-0', statusConfig[selectedThread.status].color)}>
                               {locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn}
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {selectedThread.contact_phone}
-                          {selectedThread.assigned_user_name && (
-                            <span> · {locale === 'pt-BR' ? 'Atribuída a' : 'Assigned to'} {selectedThread.assigned_user_name}</span>
-                          )}
-                        </p>
 
-                        {/* Route Comercial · número ativo · provider · status */}
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <span className="text-[11px] text-muted-foreground">
-                            {salesRoute.line?.name ?? salesRoute.line?.route_slug ?? 'Sem Route'}
-                            {' · '}
-                            <span className="font-data text-foreground">
-                              {salesRoute.activeEndpoint?.external_address
-                                ?? selectedThreadEndpoint?.external_address
-                                ?? 'Sem número'}
-                            </span>
-                            {' · '}
-                            {providerLabel(salesRoute.activeEndpoint?.provider ?? selectedThreadEndpoint?.provider)}
-                          </span>
-                          <EndpointStatusChip state={salesRouteEndpointState} />
-                          <span className="text-[10px] text-muted-foreground">
-                            {routeResolverFlag.enabledForOrg ? 'Route Resolver V2' : 'Modo legado'}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setRouteDetailsOpen(true)}
-                            className="text-[10px] font-semibold text-primary hover:underline"
-                          >
-                            Detalhes
-                          </button>
-                        </div>
-
-                        {threadEndpointHistory.length > 1 && (
-                          <div className="mt-1 flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] text-muted-foreground">
-                              Histórico de endpoints utilizados
-                            </span>
-                            <EndpointHistoryTrail items={threadEndpointHistory} />
-                          </div>
-                        )}
+                        <SalesConversationMeta
+                          contactPhone={selectedThread.contact_phone}
+                          assigneeName={selectedThread.assigned_user_name ?? null}
+                          address={
+                            salesRoute.activeEndpoint?.external_address
+                              ?? selectedThreadEndpoint?.external_address
+                              ?? null
+                          }
+                          provider={salesRoute.activeEndpoint?.provider ?? selectedThreadEndpoint?.provider ?? null}
+                          endpointState={salesRouteEndpointState}
+                          windowChips={
+                            <WhatsAppWindowChip
+                              channel="whatsapp"
+                              lastInboundAt={composerLastInboundAt}
+                              contactId={selectedThread.contact_id}
+                            />
+                          }
+                        />
                       </div>
                     </div>
+
 
                     <SalesRouteDetailsDialog
                       open={routeDetailsOpen}
