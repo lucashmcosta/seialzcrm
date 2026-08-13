@@ -204,10 +204,12 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   endpointAddress?: string | null;
   endpointPurpose?: string | null;
   endpointProvider?: string | null;
+  /** Estado real do endpoint de resposta (ativo/inativo). */
+  endpointIsActive?: boolean | null;
   officialNumbers?: Set<string>;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, officialNumbers, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
