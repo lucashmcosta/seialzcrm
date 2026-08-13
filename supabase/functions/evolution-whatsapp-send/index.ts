@@ -222,6 +222,29 @@ serve(async (req) => {
     return json(403, { error: "feature_disabled", flag: FLAG });
   }
 
+  // Switch "Responder por" — override manual apenas da escolha de endpoint.
+  const manualReply = await resolveManualReplyEndpoint(supabase, {
+    organizationId,
+    threadId: typeof threadId === "string" ? threadId : null,
+    userId: typeof userId === "string" ? userId : null,
+    manualReplyEndpointId: typeof manualReplyEndpointId === "string" ? manualReplyEndpointId : null,
+  });
+  if (manualReply.mode === "error") {
+    return json(400, { error: manualReply.code, message: manualReply.message });
+  }
+  if (manualReply.mode === "manual") {
+    if (manualReply.provider !== "evolution_api") {
+      return json(400, {
+        error: "MANUAL_REPLY_ENDPOINT_INACTIVE",
+        message: "O número escolhido não é Evolution.",
+      });
+    }
+    explicitEndpointId = manualReply.endpointId;
+  }
+  const replyChoiceMeta = replyChoiceMetadata(manualReply);
+
+
+
   const evo = readEvo();
   if (!evo) return json(503, { error: "evolution_env_missing" });
 
