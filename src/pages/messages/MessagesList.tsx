@@ -1794,12 +1794,13 @@ function DesktopMessagesList() {
                         locale={locale as 'pt-BR' | 'en-US'}
                         onHide={handleHideThread}
                         endpointAddress={
-                          hasMultipleEndpoints
-                            ? endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.external_address ?? null
-                            : null
+                          endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.external_address ?? null
                         }
                         endpointPurpose={
                           endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.purpose ?? null
+                        }
+                        endpointProvider={
+                          endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.provider ?? null
                         }
                         officialNumbers={officialNumbers}
                       />
