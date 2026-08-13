@@ -235,8 +235,13 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
-            {/* Fase 2.5.1 — badge compacto: apenas número de resposta */}
-            <RouteBadge address={endpointAddress ?? null} provider={endpointProvider ?? null} state={endpointAddress ? 'online' : 'no_route'} variant="compact" />
+            {/* Fase Final — badge compacto com estado REAL do endpoint */}
+            <RouteBadge
+              address={endpointAddress ?? null}
+              provider={endpointProvider ?? null}
+              state={!endpointAddress ? 'no_route' : endpointIsActive === false ? 'offline' : 'online'}
+              variant="compact"
+            />
 
             {(value.unread) && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
