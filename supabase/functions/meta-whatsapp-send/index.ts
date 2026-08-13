@@ -14,6 +14,8 @@ import { resolveMetaCredentials, MetaCredentialsError } from "../_shared/meta-wh
 import { ensureEndpointMigrationNote } from "../_shared/endpoint-migration-note.ts";
 import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
 import { getServiceWindow, type ContactCtwaInputs } from "../_shared/service-window.ts";
+import { resolveManualReplyEndpoint, replyChoiceMetadata } from "../_shared/manual-reply-endpoint.ts";
+
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   if (status >= 400) {
