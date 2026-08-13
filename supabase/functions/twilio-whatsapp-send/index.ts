@@ -505,6 +505,39 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // Switch "Responder por" — override manual apenas da escolha de endpoint.
+    // Fail-closed; nenhuma outra regra do pipeline é dispensada.
+    const manualReply = await resolveManualReplyEndpoint(supabase, {
+      organizationId,
+      threadId: typeof threadId === 'string' ? threadId : null,
+      userId: typeof userId === 'string' ? userId : null,
+      manualReplyEndpointId:
+        typeof (body as any).manualReplyEndpointId === 'string'
+          ? (body as any).manualReplyEndpointId
+          : null,
+    })
+    if (manualReply.mode === 'error') {
+      return new Response(
+        JSON.stringify({ error: manualReply.code, message: manualReply.message }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    if (manualReply.mode === 'manual') {
+      if (manualReply.provider !== 'twilio') {
+        return new Response(
+          JSON.stringify({
+            error: 'MANUAL_REPLY_ENDPOINT_INACTIVE',
+            message: 'O número escolhido não é Twilio.',
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      messagesEndpointIdInput = manualReply.endpointId
+    }
+    const replyChoiceMeta = replyChoiceMetadata(manualReply)
+
+
+
     // ============================================================
     // Roteamento por LINHA (restaurado):
     // Se o dispatcher injetou `endpointId` explícito no payload
