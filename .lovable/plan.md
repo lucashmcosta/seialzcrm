@@ -56,9 +56,10 @@ Sem linguagem técnica ("24h fechada", "Sem Route", "REPLY_ROUTE_UNRESOLVED"). A
 
 Cliente > Responsável > Status > Número. Nome semibold em `foreground`; telefone e responsável em `muted-foreground`; badges em `text-xs`/`text-[10px]` com fundo neutro. O número nunca supera o cliente em destaque.
 
-## 9. Painel lateral / modal
+## 9. Painel lateral / modal — "CRM Card"
 
-`SalesRoutePanel` mantém todos os campos técnicos (Thread ID, Route, Linha, Provider, Endpoint ativo, Histórico de endpoints, Última inbound roteável, Resolver, Feature Flag, Business Context, Status, Assignee, Canal, Motivo da resolução) e recebe o bloco "Histórico de endpoints utilizados" removido do cabeçalho.
+`SalesRoutePanel` é reorganizado visualmente (mesmos dados, mesmas fontes) em uma leitura tipo card, nesta ordem: Rota Comercial · Número ativo · Provider · Status · Resolver · Histórico de endpoints (trilha `2890 ↓ 5098 ↓ 8439`) · Última inbound · Responsável · Thread ID · Business Context · Canal · Linha · Feature Flag · Motivo da resolução. Recebe o bloco "Histórico de endpoints utilizados" removido do cabeçalho. Termos técnicos (incluindo `Route Resolver V2` / `conv_route_resolver_v2` / `REPLY_ROUTE_UNRESOLVED`) continuam visíveis apenas aqui e no modal.
+
 
 ## 10. Timeline
 
