@@ -13,7 +13,17 @@ Migração única criando:
 Regras exatas (idênticas ao ensaio aprovado):
 
 - Só atua quando `NEW.business_context = 'sales'` **e** `NEW.channel = 'whatsapp'` **e** `NEW.contact_id IS NOT NULL`. Qualquer outro caso: `RETURN NEW` imediato.
-- Bloqueia se já existir thread ativa canônica do mesmo `organization_id + contact_id` em `sales/whatsapp` com `merged_into_thread_id IS NULL` (ignorando a própria linha e linhas de outra transação em curso).
+- **Lock transacional do contato antes da verificação** (fecha a race condition de dois inserts concorrentes):
+  ```sql
+  PERFORM 1
+  FROM public.contacts
+  WHERE id = NEW.contact_id
+    AND organization_id = NEW.organization_id
+  FOR UPDATE;
+  ```
+  Isso serializa inserts do mesmo `org + contact` até o fim da transação.
+- Somente depois do lock, bloqueia se já existir thread ativa canônica do mesmo `organization_id + contact_id` em `sales/whatsapp` com `merged_into_thread_id IS NULL` (ignorando a própria linha).
+
 - Erro: `RAISE EXCEPTION 'SALES_THREAD_DUPLICATE_BLOCKED ...'` com `organization_id`, `contact_id` e `existing_thread_id` na mensagem.
 - `BEFORE INSERT` apenas — nenhum `UPDATE` é interceptado, preservando merge/unmerge, rotação de endpoint e alterações operacionais.
 - Nome com prefixo `zz_` para ordenar depois das triggers de autofill de `business_context`.
