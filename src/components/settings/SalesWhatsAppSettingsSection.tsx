@@ -15,8 +15,8 @@ import { ChatCircle } from '@phosphor-icons/react';
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 border-b border-border/60 last:border-0">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <div className="text-xs text-foreground text-right">{children}</div>
+      <span className="text-[11px] text-muted-foreground shrink-0">{label}</span>
+      <div className="text-[11px] text-foreground text-right min-w-0 break-words">{children}</div>
     </div>
   );
 }
