@@ -25,8 +25,8 @@ Ou seja: infraestrutura pronta, fluxo de conexão ausente **nesta tela**. Esta f
 2. **Estado real legível** por instância: `Conectado`, `Conectando…`, `QR necessário`, `Desconectado`.
 3. **Botão "Conectar WhatsApp"** quando não há sessão ativa (estado ≠ conectado).
 4. **Modal de QR** com a imagem do QR, instruções, contador de expiração e botão "Atualizar QR".
-5. **Transição automática para "Conectado"**: enquanto o modal estiver aberto, o status é verificado periodicamente; ao conectar, o modal fecha, a identidade é gravada e a lista atualiza.
-6. **Gate de identidade**: "Tornar ativo" só habilitado quando o endpoint tem identidade confirmada (Evolution: `owner_number_digits` batendo com o endpoint; Meta/Twilio: mantém o comportamento atual).
+5. **Transição automática para "Conectado" só com identidade validada**: enquanto o modal estiver aberto, o estado real é verificado periodicamente. Ao detectar `open`, o servidor sincroniza `owner_jid` + `owner_number_digits` e compara com o número esperado do endpoint. Somente com correspondência o modal fecha como sucesso e a UI passa a "Conectado". Mismatch ou identidade desconhecida: o modal **não** fecha como sucesso, exibe erro explícito (`número conectado diverge do número do endpoint` / `identidade não confirmada`) e "Tornar ativo" continua bloqueado.
+6. **Gate duplo em "Tornar ativo" (Evolution)**: exige **simultaneamente** identidade confirmada (`owner_number_digits` compatível com o endpoint) **e** estado real atual da instância = conectado (`open`). Se a sessão cair depois, o endpoint deixa de ser elegível automaticamente (o estado real vem do status, não de memória da UI). Meta/Twilio mantêm o comportamento atual.
 
 ## Fora do escopo
 
