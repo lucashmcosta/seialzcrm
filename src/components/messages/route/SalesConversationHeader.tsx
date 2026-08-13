@@ -27,7 +27,7 @@ export function SalesConversationHeader(props: Props) {
   const { route, endpointState } = useSalesRouteView(props);
 
   return (
-    <div className="border-b border-border px-6 py-3">
+    <div className="border-b border-border px-6 py-3.5">
       <div className="flex items-start gap-3">
         <Avatar fallbackText={props.contactName ?? ''} size="md" />
 
@@ -35,7 +35,7 @@ export function SalesConversationHeader(props: Props) {
           <div className="flex items-center gap-2 min-w-0">
             <Link
               to={`/contacts/${props.contactId}`}
-              className="text-[15px] font-semibold text-foreground truncate hover:text-primary hover:underline transition-colors"
+              className="text-base font-semibold leading-tight text-foreground truncate hover:text-primary hover:underline transition-colors"
               title="Ver perfil do contato"
             >
               {props.contactName}
@@ -47,7 +47,7 @@ export function SalesConversationHeader(props: Props) {
             )}
             <div className="ml-auto flex items-center gap-2 shrink-0">
               {props.onOpenDetails && (
-                <Button variant="outline" size="sm" onClick={props.onOpenDetails}>
+                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={props.onOpenDetails}>
                   <Info size={14} className="xl:mr-1" />
                   <span className="hidden xl:inline">Detalhes da rota</span>
                 </Button>

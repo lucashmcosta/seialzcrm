@@ -1,10 +1,11 @@
 // ============================================================================
-// Fase 2.5.1 — avisos do composer Comercial (apresentacional).
+// Fase 2.5.1 / 2.5.2 — avisos do composer Comercial (apresentacional).
 // Nenhuma lógica de gate aqui: os booleanos vêm de quem renderiza.
 // Nunca exibir linguagem técnica (Sem Route, REPLY_ROUTE_UNRESOLVED, 24h).
 // ============================================================================
 
 import { Warning } from '@phosphor-icons/react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { NO_ROUTE_TITLE, NO_ROUTE_TOOLTIP } from './RouteIndicators';
 
 interface Props {
@@ -17,13 +18,13 @@ interface Props {
 function Notice({ title, subtitle, tooltip }: { title: string; subtitle: string; tooltip?: string }) {
   return (
     <div className="px-1 pb-1.5" title={tooltip}>
-      <div className="flex items-start gap-1.5">
-        <Warning size={13} weight="bold" className="mt-[1px] shrink-0 text-amber-500" />
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">{title}</p>
-          <p className="text-[11px] text-muted-foreground">{subtitle}</p>
-        </div>
-      </div>
+      <Alert className="border-amber-500/30 bg-amber-500/10 px-3 py-2 [&>svg]:left-3 [&>svg]:top-2.5 [&>svg]:text-amber-500">
+        <Warning size={14} weight="bold" />
+        <AlertTitle className="mb-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+          {title}
+        </AlertTitle>
+        <AlertDescription className="text-[11px] text-muted-foreground">{subtitle}</AlertDescription>
+      </Alert>
     </div>
   );
 }
@@ -40,7 +41,9 @@ export function SalesComposerStatus({ noRoute, noRecentInbound }: Props) {
   }
 
   if (noRecentInbound) {
-    return <Notice title="Sem inbound recente" subtitle="Somente template disponível." />;
+    return (
+      <Notice title="Sem inbound recente" subtitle="Somente mensagens de template estão disponíveis." />
+    );
   }
 
   return null;

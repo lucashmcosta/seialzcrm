@@ -1850,7 +1850,7 @@ function DesktopMessagesList() {
             {selectedThread ? (
               <>
                 {/* Chat Header */}
-                <div className="border-b border-border px-6 py-3">
+                <div className="border-b border-border px-6 py-3.5">
                   <div className="flex items-start justify-between gap-4">
                     {/* Fase 2.5.1 — L1: nome + status | L2: telefone • responsável | L3: badges */}
                     <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -1859,7 +1859,7 @@ function DesktopMessagesList() {
                         <div className="flex items-center gap-2 min-w-0">
                           <Link
                             to={`/contacts/${selectedThread.contact_id}`}
-                            className="text-[15px] font-semibold text-foreground truncate hover:text-primary hover:underline transition-colors"
+                            className="text-base font-semibold leading-tight text-foreground truncate hover:text-primary hover:underline transition-colors"
                             title={locale === 'pt-BR' ? 'Ver perfil do contato' : 'View contact profile'}
                           >
                             {selectedThread.contact_name}
@@ -1886,6 +1886,7 @@ function DesktopMessagesList() {
                               channel="whatsapp"
                               lastInboundAt={composerLastInboundAt}
                               contactId={selectedThread.contact_id}
+                              tone="soft"
                             />
                           }
                         />
@@ -1914,10 +1915,11 @@ function DesktopMessagesList() {
                     {/* Actions — botão de detalhes da rota + menu único de ações */}
                     <div className="flex items-center gap-2 shrink-0">
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         onClick={() => setRouteDetailsOpen(true)}
                         title="Detalhes da rota"
+                        className="text-xs text-muted-foreground"
                       >
                         <Info className="w-4 h-4 xl:mr-1" />
                         <span className="hidden xl:inline">Detalhes da rota</span>
