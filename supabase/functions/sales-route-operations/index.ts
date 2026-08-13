@@ -139,10 +139,19 @@ serve(async (req) => {
 
   const evolutionEnabled = await featureFlagEnabled(service, EVOLUTION_FLAG, orgId);
 
+  // Discriminador seguro de EvolutionError: alguns retornos legítimos
+  // (EvolutionQrCode) também têm a chave `code`.
+  function isEvolutionError(v: unknown): v is { code: string; message: string; status: number } {
+    if (!v || typeof v !== "object") return false;
+    const o = v as Record<string, unknown>;
+    return typeof o.code === "string" && typeof o.message === "string" &&
+      typeof o.status === "number";
+  }
+
   // Provider Evolution só é instanciado quando realmente necessário.
   const evolution = () => {
     const env = readEvolutionEnv();
-    if ("code" in env) return env;
+    if (isEvolutionError(env)) return env;
     return makeEvolutionProvider(env, requestId);
   };
 
