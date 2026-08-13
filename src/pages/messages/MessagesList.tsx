@@ -1784,11 +1784,28 @@ function DesktopMessagesList() {
                     </div>
                   ))}
                 </div>
-              ) : visibleThreadsWithSelected?.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-8 text-muted-foreground">
-                  <p className="text-sm">
-                    {locale === 'pt-BR' ? 'Nenhuma conversa' : 'No conversations'}
+              ) : threadsError ? (
+                <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
+                  <Warning size={20} className="text-amber-500" weight="bold" />
+                  <p className="text-sm text-foreground">
+                    {locale === 'pt-BR' ? 'Não foi possível carregar as conversas.' : 'Could not load conversations.'}
                   </p>
+                  <Button variant="outline" size="sm" onClick={() => refetchThreads()}>
+                    {locale === 'pt-BR' ? 'Tentar novamente' : 'Try again'}
+                  </Button>
+                </div>
+              ) : visibleThreadsWithSelected?.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {hasActiveListFilters
+                      ? (locale === 'pt-BR' ? 'Nenhuma conversa encontrada.' : 'No conversations found.')
+                      : (locale === 'pt-BR' ? 'Nenhuma conversa.' : 'No conversations.')}
+                  </p>
+                  {hasActiveListFilters && (
+                    <Button variant="outline" size="sm" onClick={clearListFilters}>
+                      {locale === 'pt-BR' ? 'Limpar filtros' : 'Clear filters'}
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <>
