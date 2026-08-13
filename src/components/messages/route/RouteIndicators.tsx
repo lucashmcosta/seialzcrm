@@ -1,7 +1,9 @@
 // ============================================================================
-// Fase 2.5 — indicadores visuais da Route Comercial. Puramente apresentacional.
+// Fase 2.5 / 2.5.1 — indicadores visuais da Route Comercial.
+// Puramente apresentacional. Nenhuma lógica de negócio aqui.
 // ============================================================================
 
+import { Phone, Warning } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 export function providerLabel(provider: string | null | undefined): string {
@@ -24,6 +26,10 @@ export function last4(address: string | null | undefined): string {
 }
 
 const CHIP = 'inline-flex items-center gap-1 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold';
+
+export const NO_ROUTE_TOOLTIP = 'Esta conversa ainda não possui uma mensagem inbound roteável.';
+export const NO_ROUTE_TITLE = 'Conversa legada';
+export const NO_ROUTE_SUBTEXT = 'Sem inbound para determinar o número de resposta.';
 
 export function ProviderChip({ provider, className }: { provider: string | null | undefined; className?: string }) {
   return (
@@ -48,7 +54,7 @@ export function EndpointStatusChip({ state, className }: { state: EndpointState;
       dot: 'bg-amber-500',
     },
     no_route: {
-      label: 'Sem Route',
+      label: 'Sem rota',
       cls: 'border-border bg-muted/60 text-muted-foreground',
       dot: 'bg-muted-foreground',
     },
@@ -62,50 +68,93 @@ export function EndpointStatusChip({ state, className }: { state: EndpointState;
   );
 }
 
+/** Selo âmbar de conversa legada (sem inbound roteável). */
+export function LegacyRouteBadge({ className }: { className?: string }) {
+  return (
+    <span
+      title={NO_ROUTE_TOOLTIP}
+      className={cn(
+        CHIP,
+        'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+        className,
+      )}
+    >
+      <Warning size={11} weight="bold" />
+      {NO_ROUTE_TITLE}
+    </span>
+  );
+}
+
+/** Ícone discreto de alerta (usado na lista lateral). */
+export function LegacyRouteIcon({ className }: { className?: string }) {
+  return (
+    <Warning
+      size={13}
+      weight="bold"
+      title={NO_ROUTE_TOOLTIP}
+      className={cn('shrink-0 text-amber-500', className)}
+    />
+  );
+}
+
 /**
- * Badge de identidade da conversa Comercial. O número NUNCA representa a
- * identidade da conversa — apenas a rota atual de envio.
+ * Identidade visual da conversa Comercial.
+ *
+ * - `variant="compact"` (lista lateral): apenas 📱 + últimos 4 dígitos.
+ *   Provider aparece somente no tooltip.
+ * - `variant="split"` (cabeçalho): badges separados — Comercial · número · status.
+ *
+ * O número NUNCA representa a identidade da conversa — apenas a rota atual.
  */
 export function RouteBadge({
   address,
   provider,
   state,
-  size = 'sm',
+  variant = 'compact',
   className,
 }: {
   address: string | null | undefined;
   provider?: string | null;
   state?: EndpointState;
-  size?: 'sm' | 'lg';
+  variant?: 'compact' | 'split';
   className?: string;
 }) {
   const noRoute = state === 'no_route' || !address;
+
+  if (variant === 'compact') {
+    if (noRoute) return <LegacyRouteIcon className={className} />;
+    return (
+      <span
+        title={`Número de resposta ${address} · ${providerLabel(provider)}`}
+        className={cn(
+          CHIP,
+          'border-border bg-muted/50 text-muted-foreground font-medium',
+          className,
+        )}
+      >
+        <Phone size={11} weight="fill" className="opacity-70" />
+        <span className="font-data">{last4(address)}</span>
+      </span>
+    );
+  }
+
+  // variant="split"
+  if (noRoute) return <LegacyRouteBadge className={className} />;
+
   return (
-    <span
-      title={
-        noRoute
-          ? 'Route Comercial não resolvida para esta conversa'
-          : `Route Comercial · ${address} · ${providerLabel(provider)}`
-      }
-      className={cn(
-        'inline-flex items-center gap-1 shrink-0 rounded-full border font-semibold',
-        noRoute
-          ? 'border-border bg-muted/60 text-muted-foreground'
-          : 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
-        size === 'lg' ? 'px-2 py-0.5 text-[11px]' : 'px-1.5 py-0 text-[10px] leading-[16px]',
-        className,
-      )}
-    >
-      <span>Comercial</span>
-      <span className="opacity-60">·</span>
-      <span className="font-data">{noRoute ? 'Sem Route' : last4(address)}</span>
-      {!noRoute && provider && (
-        <>
-          <span className="opacity-60">·</span>
-          <span>{providerLabel(provider)}</span>
-        </>
-      )}
-    </span>
+    <>
+      <span className={cn(CHIP, 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400', className)}>
+        Comercial
+      </span>
+      <span
+        title={`Número de resposta ${address}`}
+        className={cn(CHIP, 'border-border bg-muted/50 text-muted-foreground font-medium')}
+      >
+        <Phone size={11} weight="fill" className="opacity-70" />
+        <span className="font-data">{last4(address)}</span>
+      </span>
+      <EndpointStatusChip state={state ?? 'online'} />
+    </>
   );
 }
 
