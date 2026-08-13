@@ -383,15 +383,21 @@ serve(async (req) => {
         if (row.organization_id !== orgId) return json(403, { error: "INSTANCE_FOREIGN_ORG" });
 
         const provider = evolution();
-        if ("code" in provider) return json(provider.status ?? 502, { error: provider.code });
+        if (isEvolutionError(provider)) return json(provider.status ?? 502, { error: provider.code });
 
         const out = await provider.connect(name);
-        if ("code" in out) return json(out.status ?? 502, { error: out.code, message: out.message });
+        // ATENÇÃO: EvolutionQrCode também possui `code` (string do QR). A detecção
+        // de erro precisa usar o discriminador completo, nunca só a chave `code`.
+        if (isEvolutionError(out)) {
+          return json(out.status ?? 502, { error: out.code, message: out.message });
+        }
 
         const sync = await syncEvolutionIdentity(name);
         return json(200, {
           restarted: true,
-          pairing: "code" in (out as Record<string, unknown>) ? null : out,
+          pairing: out
+            ? { pairingCode: out.pairingCode ?? null, hasQrCode: !!(out.code || out.base64) }
+            : null,
           state: "error" in sync ? null : sync.state,
         });
       }
