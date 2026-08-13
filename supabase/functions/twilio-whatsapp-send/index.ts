@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
 import { getServiceWindow, type ContactCtwaInputs } from "../_shared/service-window.ts";
+import { resolveManualReplyEndpoint, replyChoiceMetadata } from "../_shared/manual-reply-endpoint.ts";
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -505,6 +507,39 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // Switch "Responder por" — override manual apenas da escolha de endpoint.
+    // Fail-closed; nenhuma outra regra do pipeline é dispensada.
+    const manualReply = await resolveManualReplyEndpoint(supabase, {
+      organizationId,
+      threadId: typeof threadId === 'string' ? threadId : null,
+      userId: typeof userId === 'string' ? userId : null,
+      manualReplyEndpointId:
+        typeof (body as any).manualReplyEndpointId === 'string'
+          ? (body as any).manualReplyEndpointId
+          : null,
+    })
+    if (manualReply.mode === 'error') {
+      return new Response(
+        JSON.stringify({ error: manualReply.code, message: manualReply.message }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    if (manualReply.mode === 'manual') {
+      if (manualReply.provider !== 'twilio') {
+        return new Response(
+          JSON.stringify({
+            error: 'MANUAL_REPLY_ENDPOINT_INACTIVE',
+            message: 'O número escolhido não é Twilio.',
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      messagesEndpointIdInput = manualReply.endpointId
+    }
+    const replyChoiceMeta = replyChoiceMetadata(manualReply)
+
+
+
     // ============================================================
     // Roteamento por LINHA (restaurado):
     // Se o dispatcher injetou `endpointId` explícito no payload
@@ -924,7 +959,7 @@ serve(async (req) => {
         sender_name: resolvedSenderName,
         sender_agent_id: isAgentMessage && agentId ? agentId : null,
         endpoint_id: endpointId,
-        metadata: { twilio: twilioMetadata },
+        metadata: { twilio: twilioMetadata, ...replyChoiceMeta },
       })
       .select('id')
       .single()

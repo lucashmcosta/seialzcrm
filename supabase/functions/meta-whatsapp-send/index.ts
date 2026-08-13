@@ -14,6 +14,8 @@ import { resolveMetaCredentials, MetaCredentialsError } from "../_shared/meta-wh
 import { ensureEndpointMigrationNote } from "../_shared/endpoint-migration-note.ts";
 import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
 import { getServiceWindow, type ContactCtwaInputs } from "../_shared/service-window.ts";
+import { resolveManualReplyEndpoint, replyChoiceMetadata } from "../_shared/manual-reply-endpoint.ts";
+
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   if (status >= 400) {
@@ -127,13 +129,16 @@ serve(async (req) => {
       organizationId, contactId, threadId, message,
       mediaUrl, mediaUrls, mediaType, mimeType: payloadMime, filename: payloadFilename,
       userId, replyToMessageId, isAgentMessage, agentId, senderName,
-      endpointId: explicitEndpointId,
+      endpointId: explicitEndpointIdRaw,
+      manualReplyEndpointId,
       templateId, templateVariables,
       type: payloadType, templateName: directTemplateName,
       languageCode: directLanguageCode, components: directComponents,
       migrationContext,
       senderContext,
     } = body as Record<string, any>;
+    let explicitEndpointId = explicitEndpointIdRaw;
+
 
     threadIdForLog = typeof threadId === "string" ? threadId : null;
     contactIdForLog = typeof contactId === "string" ? contactId : null;
@@ -212,6 +217,34 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+
+    // Switch "Responder por": override manual apenas da ESCOLHA de endpoint.
+    // Fail-closed e barreira server-side da flag. Nenhuma outra regra é pulada.
+    const manualReply = await resolveManualReplyEndpoint(supabase, {
+      organizationId,
+      threadId: typeof threadId === "string" ? threadId : null,
+      userId: typeof userId === "string" ? userId : null,
+      manualReplyEndpointId: typeof manualReplyEndpointId === "string" ? manualReplyEndpointId : null,
+    });
+    if (manualReply.mode === "error") {
+      return errorResponse(400, { error: manualReply.code, message: manualReply.message }, {
+        branch: manualReply.code,
+        reason: manualReply.message,
+      });
+    }
+    if (manualReply.mode === "manual") {
+      if (manualReply.provider !== "meta_cloud_api") {
+        return errorResponse(400, {
+          error: "MANUAL_REPLY_ENDPOINT_INACTIVE",
+          message: "O número escolhido não é Meta Cloud.",
+        }, { branch: "manual_reply_provider_mismatch", reason: "provider != meta_cloud_api" });
+      }
+      explicitEndpointId = manualReply.endpointId;
+      endpointIdForLog = manualReply.endpointId;
+    }
+    const replyChoiceMeta = replyChoiceMetadata(manualReply);
+
+
 
     // Resolve endpoint.
     //
@@ -772,7 +805,7 @@ serve(async (req) => {
         media_urls: hasMedia ? mediaUrlsArr : null,
         media_type: hasMedia ? kind : null,
         template_id: templateRow?.id ?? null,
-        metadata: { meta_cloud: baseMeta },
+        metadata: { meta_cloud: baseMeta, ...replyChoiceMeta },
       })
       .select("id")
       .single();

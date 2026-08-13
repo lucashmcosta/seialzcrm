@@ -21,6 +21,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
+import { resolveManualReplyEndpoint, replyChoiceMetadata } from "../_shared/manual-reply-endpoint.ts";
+
 import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
 import { logEvolution, newRequestId } from "../_shared/evolution/logger.ts";
 import { callerKey, rateLimit } from "../_shared/evolution/rate-limit.ts";
@@ -182,11 +184,14 @@ serve(async (req) => {
     organizationId, contactId, threadId, message,
     mediaUrl, mediaUrls, mediaType, mimeType: payloadMime, filename: payloadFilename,
     userId, replyToMessageId, isAgentMessage, agentId, senderName,
-    endpointId: explicitEndpointId,
+    endpointId: explicitEndpointIdRaw,
+    manualReplyEndpointId,
     templateId,
     senderContext,
     allowExplicitEndpointMigration,
   } = body as Record<string, any>;
+  let explicitEndpointId = explicitEndpointIdRaw;
+
 
   if (!organizationId) return json(400, { error: "missing_organization" });
   if (!contactId) return json(400, { error: "missing_contact" });
@@ -218,6 +223,29 @@ serve(async (req) => {
   if (!flagOn) {
     return json(403, { error: "feature_disabled", flag: FLAG });
   }
+
+  // Switch "Responder por" — override manual apenas da escolha de endpoint.
+  const manualReply = await resolveManualReplyEndpoint(supabase, {
+    organizationId,
+    threadId: typeof threadId === "string" ? threadId : null,
+    userId: typeof userId === "string" ? userId : null,
+    manualReplyEndpointId: typeof manualReplyEndpointId === "string" ? manualReplyEndpointId : null,
+  });
+  if (manualReply.mode === "error") {
+    return json(400, { error: manualReply.code, message: manualReply.message });
+  }
+  if (manualReply.mode === "manual") {
+    if (manualReply.provider !== "evolution_api") {
+      return json(400, {
+        error: "MANUAL_REPLY_ENDPOINT_INACTIVE",
+        message: "O número escolhido não é Evolution.",
+      });
+    }
+    explicitEndpointId = manualReply.endpointId;
+  }
+  const replyChoiceMeta = replyChoiceMetadata(manualReply);
+
+
 
   const evo = readEvo();
   if (!evo) return json(503, { error: "evolution_env_missing" });
@@ -428,7 +456,9 @@ serve(async (req) => {
       endpoint_id: endpoint.id,
       to,
     },
+    ...replyChoiceMeta,
   };
+
 
   // Insere mensagem outbound com whatsapp_status='sending'.
   const { data: insertedMsg, error: insErr } = await supabase
