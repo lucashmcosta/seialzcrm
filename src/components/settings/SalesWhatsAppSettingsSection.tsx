@@ -23,7 +23,8 @@ import {
 import { useOrganization } from '@/hooks/useOrganization';
 import {
   useSalesRouteManager, useCanManageIntegrations,
-  type ActivationBlockedReason, type ManagerInstance, type SalesProvider,
+  type ActivationBlockedReason, type EndpointTechnicalStatus,
+  type ManagerInstance, type SalesProvider,
 } from '@/hooks/settings/useSalesRouteManager';
 import { SalesWhatsAppConnectDialog } from '@/components/settings/SalesWhatsAppConnectDialog';
 import { ProviderChip } from '@/components/messages/route/RouteIndicators';
