@@ -85,6 +85,9 @@ export async function resolveSalesWhatsappThread(
     endpointId: string;
     inboundAt?: string;
     externalId?: string | null;
+    /** Uso interno: evita loop na recuperação de corrida da trigger canônica. */
+    __retriedAfterGuard?: boolean;
+
   },
 ): Promise<SalesThreadResult> {
   const { organizationId, contactId, endpointId } = args;
@@ -199,13 +202,36 @@ export async function resolveSalesWhatsappThread(
     .single();
 
   if (insErr || !created) {
+    const insMsg = `${(insErr as { message?: string } | null)?.message ?? ""} ${(insErr as { details?: string } | null)?.details ?? ""}`;
+    const blockedByGuard = /SALES_THREAD_DUPLICATE_BLOCKED/i.test(insMsg);
+
+    // HOTFIX: recuperação de corrida. A trigger global de canonicidade pode ter
+    // bloqueado este INSERT porque outra transação acabou de criar a thread
+    // canônica (ou porque ela existe com primary_endpoint_id divergente).
+    // Refaz o lookup canônico UMA única vez antes de falhar.
+    if (blockedByGuard && !args.__retriedAfterGuard) {
+      console.warn("[sales-thread] SALES_THREAD_GUARD_RACE_RECOVERY", JSON.stringify({
+        organization_id: organizationId,
+        contact_id: contactId,
+        endpoint_id: endpointId,
+      }));
+      return await resolveSalesWhatsappThread(service, { ...args, __retriedAfterGuard: true });
+    }
+
     console.error("[sales-thread] canonical_insert_error", {
       organization_id: organizationId,
       contact_id: contactId,
+      blocked_by_guard: blockedByGuard,
       error: insErr,
     });
-    return { threadId: null, outcome: null, endpointRotated: false, error: "canonical_insert_error" };
+    return {
+      threadId: null,
+      outcome: null,
+      endpointRotated: false,
+      error: blockedByGuard ? "canonical_guard_blocked" : "canonical_insert_error",
+    };
   }
+
 
   console.log("[sales-thread] canonical_thread_created", JSON.stringify({
     thread_id: (created as { id: string }).id,
