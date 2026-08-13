@@ -39,7 +39,14 @@ export function ProviderChip({ provider, className }: { provider: string | null 
   );
 }
 
-type EndpointState = 'online' | 'offline' | 'no_route';
+/**
+ * Estado da rota de resposta — derivado EXCLUSIVAMENTE do resolver.
+ *  - online/offline: rota resolvida (endpoint ativo/inativo)
+ *  - unresolved: resolver retornou REPLY_ROUTE_UNRESOLVED (conversa legada)
+ *  - unknown: indeterminado (carregando, resolver desligado, fora do escopo)
+ * Somente `unresolved` autoriza a linguagem de "Conversa legada".
+ */
+export type EndpointState = 'online' | 'offline' | 'unresolved' | 'unknown';
 
 export function EndpointStatusChip({ state, className }: { state: EndpointState; className?: string }) {
   const map: Record<EndpointState, { label: string; cls: string; dot: string }> = {
@@ -53,10 +60,15 @@ export function EndpointStatusChip({ state, className }: { state: EndpointState;
       cls: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
       dot: 'bg-amber-500',
     },
-    no_route: {
+    unresolved: {
       label: 'Sem rota',
       cls: 'border-border bg-muted/60 text-muted-foreground',
       dot: 'bg-muted-foreground',
+    },
+    unknown: {
+      label: '—',
+      cls: 'border-border bg-muted/40 text-muted-foreground',
+      dot: 'bg-muted-foreground/50',
     },
   };
   const cfg = map[state];
@@ -67,6 +79,7 @@ export function EndpointStatusChip({ state, className }: { state: EndpointState;
     </span>
   );
 }
+
 
 /** Selo âmbar de conversa legada (sem inbound roteável). */
 export function LegacyRouteBadge({ className }: { className?: string }) {
