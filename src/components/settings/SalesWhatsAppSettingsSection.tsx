@@ -40,9 +40,9 @@ export function SalesWhatsAppSettingsSection() {
         </div>
         {/* Status informativo do resolver — sem toggle (flag é gerenciada pelo admin) */}
         <div className="text-right shrink-0">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Resolver Comercial</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Modo de roteamento</div>
           <div className="text-xs font-semibold text-foreground">
-            {flag.enabledForOrg ? 'Route Resolver V2' : 'Modo legado'}
+            {flag.enabledForOrg ? 'Rota Comercial' : 'Modo legado'}
           </div>
           <div className="font-data text-[10px] text-muted-foreground">
             conv_route_resolver_v2 · {flag.enabledForOrg ? 'ON' : 'OFF'}
