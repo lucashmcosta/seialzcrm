@@ -1142,6 +1142,7 @@ async function recordInboundEvent(
           from: params.fromE164,
           endpoint_id: params.endpointId,
           thread_id: params.threadId ?? null,
+          context_id: params.contextId ?? null,
           ...params.rawHeaders,
         },
         http_method: "POST",
@@ -1152,10 +1153,10 @@ async function recordInboundEvent(
         signature_algo: "sha256",
         aggregate_type: params.kind === "status" ? "message_status" : "whatsapp_message",
         aggregate_id: params.threadId ?? null,
-        correlation_id: params.contextId ?? null,
+        correlation_id: null,
         handler_key: "meta-whatsapp-webhook",
         parser_function: "meta-whatsapp-webhook",
-        parser_version: "v1",
+        parser_version: 1,
       })
       .select("id")
       .single();
