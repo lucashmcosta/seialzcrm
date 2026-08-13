@@ -162,64 +162,88 @@ export function SalesWhatsAppSettingsSection() {
         <section className="space-y-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Integração</div>
           <div className="flex flex-wrap items-center gap-2">
-            <StateChip ok={evolutionOn} label={`Evolution · ${evolutionOn ? 'habilitada' : 'desabilitada'}`} />
             <StateChip ok label="Meta / Twilio · via integrações da organização" />
           </div>
 
-          {instances.length === 0 ? (
+          {evolutionOn && instances.length === 0 && (
             <p className="text-xs text-muted-foreground">
-              Nenhuma instância Evolution registrada nesta organização.
+              Nenhuma sessão de WhatsApp registrada nesta organização.
             </p>
-          ) : (
+          )}
+
+          {evolutionOn && instances.length > 0 && (
             <ul className="space-y-1">
-              {instances.map((i) => (
-                <li
-                  key={i.instanceName}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
-                >
-                  <span className="font-data text-xs">{i.instanceName}</span>
-                  <span className="flex flex-wrap items-center gap-2 text-[10px]">
-                    <StateChip ok={i.connected} label={i.connected ? 'conectada' : i.technicalState} />
-                    {!i.identityKnown && (
-                      <span className="text-muted-foreground">identidade não confirmada</span>
-                    )}
-                    {i.identityMatchesEndpoint === false && (
-                      <span className="text-destructive">número divergente do endpoint</span>
-                    )}
-                    {i.identityMatchesEndpoint === true && (
-                      <CheckCircle className="h-3.5 w-3.5 text-primary" weight="fill" />
-                    )}
-                    {canManage && (
-                      <>
-                        <Button
-                          size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
-                          disabled={refreshEvolutionIdentity.isPending}
-                          onClick={() =>
-                            refreshEvolutionIdentity.mutateAsync({ instanceName: i.instanceName })
-                              .then(() => toast.success('Estado real atualizado'))
-                              .catch((e) => toast.error(e instanceof Error ? e.message : 'Falha'))}
-                        >
-                          Verificar
-                        </Button>
-                        <Button
-                          size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
-                          disabled={restartInstance.isPending}
-                          onClick={() =>
-                            restartInstance.mutateAsync({ instanceName: i.instanceName })
-                              .then(() => toast.success('Sessão reiniciada'))
-                              .catch((e) => toast.error(e instanceof Error ? e.message : 'Falha'))}
-                        >
-                          Reiniciar
-                        </Button>
-                      </>
-                    )}
-                  </span>
-                </li>
-              ))}
+              {instances.map((i) => {
+                const st = humanState(i);
+                return (
+                  <li
+                    key={i.instanceName}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
+                  >
+                    <span className="font-data text-xs">{i.instanceName}</span>
+                    <span className="flex flex-wrap items-center gap-2 text-[10px]">
+                      <StateChip ok={st.ok} label={st.label} />
+                      {i.connected && !i.identityKnown && (
+                        <span className="text-muted-foreground">identidade não confirmada</span>
+                      )}
+                      {i.identityMatchesEndpoint === false && (
+                        <span className="text-destructive">número conectado divergente</span>
+                      )}
+                      {i.identityMatchesEndpoint === true && (
+                        <CheckCircle className="h-3.5 w-3.5 text-primary" weight="fill" />
+                      )}
+                      {canManage && (
+                        <>
+                          {!i.connected && (
+                            <Button
+                              size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                              onClick={() => setConnectTarget({
+                                instanceName: i.instanceName,
+                                endpointId: i.endpointId,
+                              })}
+                            >
+                              <QrCode className="h-3 w-3 mr-1" /> Conectar WhatsApp
+                            </Button>
+                          )}
+                          <Button
+                            size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
+                            disabled={refreshEvolutionIdentity.isPending}
+                            onClick={() =>
+                              refreshEvolutionIdentity.mutateAsync({ instanceName: i.instanceName })
+                                .then(() => toast.success('Estado real atualizado'))
+                                .catch((e) => toast.error(e instanceof Error ? e.message : 'Falha'))}
+                          >
+                            Verificar
+                          </Button>
+                          <Button
+                            size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
+                            disabled={restartInstance.isPending}
+                            onClick={() =>
+                              restartInstance.mutateAsync({ instanceName: i.instanceName })
+                                .then(() => toast.success('Sessão reiniciada'))
+                                .catch((e) => toast.error(e instanceof Error ? e.message : 'Falha'))}
+                          >
+                            Reiniciar
+                          </Button>
+                        </>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
       )}
+
+      <SalesWhatsAppConnectDialog
+        open={!!connectTarget}
+        onOpenChange={(o) => { if (!o) setConnectTarget(null); }}
+        organizationId={orgId}
+        instanceName={connectTarget?.instanceName ?? null}
+        endpointId={connectTarget?.endpointId ?? null}
+        onConnected={() => toast.success('WhatsApp conectado e identidade confirmada')}
+      />
 
       {/* ------------------------------------------ CONFIGURAÇÃO + REGRA */}
       {!isLoading && !error && routes.length === 0 && (
