@@ -1,12 +1,13 @@
 // ============================================================================
-// Fase 2.5 — painel "Informações da conversa" (SOMENTE LEITURA).
-// Todos os dados vêm de APIs/tabelas existentes.
+// Fase 2.5 / 2.5.1 — painel "Detalhes da rota" (SOMENTE LEITURA), estilo CRM Card.
+// Todos os dados vêm de APIs/tabelas existentes. Nenhuma query nova.
+// Este é o único lugar (com o modal) onde termos técnicos podem aparecer.
 // ============================================================================
 
 import { useSalesRoute } from '@/hooks/messages/useSalesRoute';
 import { useThreadEndpointHistory } from '@/hooks/messages/useThreadEndpointHistory';
 import { useRouteResolverFlag } from '@/hooks/messages/useRouteResolverFlag';
-import { EndpointHistoryTrail, EndpointStatusChip, ProviderChip, last4, providerLabel } from './RouteIndicators';
+import { EndpointStatusChip, ProviderChip, last4, providerLabel } from './RouteIndicators';
 
 export interface SalesRouteContextProps {
   threadId: string;
@@ -44,6 +45,9 @@ export function useSalesRouteView(props: SalesRouteContextProps) {
       : 'offline'
     : 'no_route';
 
+  /** Rótulo público (tela principal): sem jargão técnico. */
+  const resolverLabelPublic = flag.enabledForOrg ? 'Rota Comercial' : 'Modo legado';
+  /** Rótulo técnico: exclusivo do painel/modal. */
   const resolverLabel = flag.enabledForOrg ? 'Route Resolver V2' : 'Modo legado';
 
   const reasonLabel = route.resolved
@@ -56,42 +60,101 @@ export function useSalesRouteView(props: SalesRouteContextProps) {
           ? 'Fora do escopo Comercial/WhatsApp'
           : '—';
 
-  return { route, isLoading, history, flag, endpointState, resolverLabel, reasonLabel };
+  return { route, isLoading, history, flag, endpointState, resolverLabel, resolverLabelPublic, reasonLabel };
+}
+
+function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function SalesRoutePanel(props: SalesRouteContextProps) {
-  const { route, history, endpointState, resolverLabel, reasonLabel } = useSalesRouteView(props);
+  const { route, history, endpointState, resolverLabel, resolverLabelPublic, reasonLabel } = useSalesRouteView(props);
+
+  const lastInbound = history.length > 0 ? history[history.length - 1] : null;
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-1.5 flex-wrap pb-2">
-        <EndpointStatusChip state={endpointState} />
-        <ProviderChip provider={route.activeEndpoint?.provider ?? null} />
-        <span className="text-[10px] text-muted-foreground">{resolverLabel}</span>
+    <div className="space-y-3">
+      {/* Cabeçalho do card: rota, número ativo e estado */}
+      <div className="rounded-md border border-border bg-muted/30 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Rota Comercial</p>
+            <p className="text-sm font-semibold text-foreground truncate">
+              {route.line?.name ?? route.line?.route_slug ?? 'Sem rota'}
+            </p>
+            <p className="mt-0.5 font-data text-xs text-foreground">
+              {route.activeEndpoint?.external_address ?? '—'}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <EndpointStatusChip state={endpointState} />
+            <ProviderChip provider={route.activeEndpoint?.provider ?? null} />
+          </div>
+        </div>
       </div>
 
-      <Row label="Thread ID"><span className="font-data">{props.threadId}</span></Row>
-      <Row label="Route">{route.line?.name ?? route.line?.route_slug ?? 'Sem Route'}</Row>
-      <Row label="Linha"><span className="font-data">{route.line?.key ?? route.line?.id ?? '—'}</span></Row>
-      <Row label="Provider">{providerLabel(route.activeEndpoint?.provider)}</Row>
-      <Row label="Endpoint ativo">
-        <span className="font-data">{route.activeEndpoint?.external_address ?? '—'}</span>
-      </Row>
-      <Row label="Endpoints históricos">
-        {history.length > 0 ? <EndpointHistoryTrail items={history} className="justify-end" /> : '—'}
-      </Row>
-      <Row label="Última inbound roteável">
-        <span className="font-data">
-          {route.discoveredByEndpoint?.external_address
-            ? `${last4(route.discoveredByEndpoint.external_address)} · ${providerLabel(route.discoveredByEndpoint.provider)}`
-            : '—'}
-        </span>
-      </Row>
-      <Row label="Assignee">{props.assigneeName ?? 'Sem responsável'}</Row>
-      <Row label="Status">{props.statusLabel ?? '—'}</Row>
-      <Row label="Canal">{props.channel ?? 'whatsapp'}</Row>
-      <Row label="Business Context">{props.businessContext ?? 'sales'}</Row>
-      <Row label="Resolução">{reasonLabel}</Row>
+      {/* Histórico de endpoints utilizados */}
+      <div className="rounded-md border border-border p-3">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          Histórico de endpoints utilizados
+        </p>
+        {history.length > 0 ? (
+          <div className="mt-1.5 space-y-1">
+            {history.map((h, i) => (
+              <div key={h.endpointId} className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-1.5 text-[11px]">
+                  {i > 0 && <span className="text-muted-foreground">↓</span>}
+                  <span className="font-data text-foreground" title={h.address ?? undefined}>
+                    {last4(h.address)}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">{providerLabel(h.provider)}</span>
+                </span>
+                <span className="font-data text-[10px] text-muted-foreground">
+                  {formatDateTime(h.firstSeenAt)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-1 text-[11px] text-muted-foreground">—</p>
+        )}
+      </div>
+
+      {/* Detalhes técnicos */}
+      <div className="space-y-0.5">
+        <Row label="Provider">{providerLabel(route.activeEndpoint?.provider)}</Row>
+        <Row label="Endpoint ativo">
+          <span className="font-data">{route.activeEndpoint?.external_address ?? '—'}</span>
+        </Row>
+        <Row label="Status do endpoint">
+          {endpointState === 'online' ? 'Online' : endpointState === 'offline' ? 'Offline' : 'Sem rota'}
+        </Row>
+        <Row label="Roteamento">{resolverLabelPublic}</Row>
+        <Row label="Resolver">{resolverLabel}</Row>
+        <Row label="Última inbound roteável">
+          <span className="font-data">
+            {route.discoveredByEndpoint?.external_address
+              ? `${last4(route.discoveredByEndpoint.external_address)} · ${providerLabel(route.discoveredByEndpoint.provider)}`
+              : lastInbound
+                ? `${last4(lastInbound.address)} · ${formatDateTime(lastInbound.lastSeenAt)}`
+                : '—'}
+          </span>
+        </Row>
+        <Row label="Responsável">{props.assigneeName ?? 'Sem responsável'}</Row>
+        <Row label="Status">{props.statusLabel ?? '—'}</Row>
+        <Row label="Thread ID"><span className="font-data">{props.threadId}</span></Row>
+        <Row label="Business Context">{props.businessContext ?? 'sales'}</Row>
+        <Row label="Canal">{props.channel ?? 'whatsapp'}</Row>
+        <Row label="Linha"><span className="font-data">{route.line?.key ?? route.line?.id ?? '—'}</span></Row>
+        <Row label="Motivo da resolução">{reasonLabel}</Row>
+      </div>
     </div>
   );
 }
