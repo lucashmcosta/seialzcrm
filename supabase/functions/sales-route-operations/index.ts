@@ -175,7 +175,9 @@ serve(async (req) => {
     if (row.organization_id !== orgId) return { error: "INSTANCE_FOREIGN_ORG" } as const;
 
     const provider = evolution();
-    if ("code" in provider) return { error: provider.code, message: provider.message } as const;
+    if (isEvolutionError(provider)) {
+      return { error: provider.code, message: provider.message } as const;
+    }
 
     const state = await provider.connectionState(instanceName);
     if (typeof state !== "string") {
