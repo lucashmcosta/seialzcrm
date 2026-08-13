@@ -75,7 +75,8 @@ A data/hora vem do `sent_at` da própria mensagem que inaugura o novo endpoint (
 
 ## 10. Separação Comercial × Atendimento
 
-Confirmação por inspeção: `EndpointBadge` é usado apenas por `src/components/inbox/InboxThreadList.tsx` e telas de Atendimento; `RouteBadge` apenas pelo Comercial (`MessagesList.tsx` + `route/*`). Nada de Atendimento será editado.
+Confirmação por inspeção: `EndpointBadge` é usado apenas por `src/components/inbox/InboxThreadList.tsx` e telas de Atendimento; `RouteBadge` apenas pelo Comercial (`MessagesList.tsx` + `route/*`). Nada em `src/components/inbox/`, `MobileInbox` ou mobile será editado.
+
 
 ## 11. Validação
 
