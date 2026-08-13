@@ -74,6 +74,8 @@ export function SalesRouteDetailsDialog({ open, onOpenChange, ...ctx }: Props) {
             <span className="font-data">conv_route_resolver_v2 · {flag.enabledForOrg ? 'ON' : 'OFF'}</span>
           </Row>
         </div>
+        </div>
+
       </DialogContent>
     </Dialog>
   );
