@@ -1,0 +1,56 @@
+# Fase 3.1 — Fluxo de conexão WhatsApp (QR) dentro do WhatsApp Comercial
+
+## Resposta direta à sua dúvida
+
+O QR Code **já existe implementado**, mas **não no manager Comercial**.
+
+Estado verificado no código:
+
+- `supabase/functions/evolution-instance-manager/index.ts` — op `connect` já retorna `pairingCode`, `base64` e `count`, e grava `last_known_state = 'connecting'` + `last_qr_expires_at`.
+- `src/components/integrations/evolution-whatsapp/EvolutionWhatsAppDialog.tsx` — já tem botão "Gerar QR Code", renderiza a imagem do QR, mostra status e permite desconectar. É usado em `IntegrationsSettings.tsx`.
+- `src/hooks/useEvolutionInstances.ts` — já faz polling de 5s lendo `evolution_instances` (state + validade do QR).
+
+O que **não** existe no manager novo (`SalesWhatsAppSettingsSection.tsx`):
+
+- nenhum botão "Conectar WhatsApp";
+- `sales-route-operations` não tem op de `connect` que devolva QR — a op `restartInstance` chama `connect` e **descarta** o QR de propósito (retorna só `pairingCode` e `hasQrCode`);
+- o chip mostra o estado técnico bruto (`close`, `connecting`) e o texto "Evolution · habilitada";
+- "Tornar ativo" não exige identidade confirmada.
+
+Ou seja: infraestrutura pronta, fluxo de conexão ausente **nesta tela**. Esta fase liga as duas pontas — sem reimplementar QR.
+
+## O que será entregue
+
+1. **Remover jargão técnico**: nada de `close`/`open`/`connecting` na tela e remoção do chip "Evolution · habilitada" (a habilitação passa a ser implícita: se não estiver habilitada, a área Evolution simplesmente não é oferecida).
+2. **Estado real legível** por instância: `Conectado`, `Conectando…`, `QR necessário`, `Desconectado`.
+3. **Botão "Conectar WhatsApp"** quando não há sessão ativa (estado ≠ conectado).
+4. **Modal de QR** com a imagem do QR, instruções, contador de expiração e botão "Atualizar QR".
+5. **Transição automática para "Conectado"**: enquanto o modal estiver aberto, o status é verificado periodicamente; ao conectar, o modal fecha, a identidade é gravada e a lista atualiza.
+6. **Gate de identidade**: "Tornar ativo" só habilitado quando o endpoint tem identidade confirmada (Evolution: `owner_number_digits` batendo com o endpoint; Meta/Twilio: mantém o comportamento atual).
+
+## Fora do escopo
+
+- Nada de SQL, migração, trigger, `provision_sales_endpoint`, resolver V2 ou feature flags.
+- Atendimento, Mobile e o dialog Evolution já existente permanecem intactos.
+- Sem criar/excluir instâncias por esta tela (provisionamento continua sendo do suporte/admin).
+
+## Detalhes técnicos
+
+**Backend (`supabase/functions/sales-route-operations/index.ts`) — aditivo:**
+
+- Nova op `connectInstance`: valida admin de integrações (`can_manage_integrations_in_org`), flag `evolution_api_enabled`, instância da própria org; chama `provider.connect(name)`; grava `last_known_state = 'connecting'` e `last_qr_expires_at`; retorna `{ pairingCode, qrBase64, count }`.
+- Nova op `instanceState` (leve): retorna `state` real + `identityKnown` sem forçar o `fetchInstances` completo; ao detectar `open`, reaproveita `syncEvolutionIdentity` para persistir `owner_jid`/`owner_number_digits`.
+- `restartInstance` permanece como está (sem vazar QR).
+- Deploy da função ao final.
+
+**Frontend:**
+
+- `src/hooks/settings/useSalesRouteManager.ts`: adicionar `connectInstance` e `instanceState` (mutação + polling controlado, `refetchInterval` só enquanto o modal estiver aberto).
+- Novo `src/components/settings/SalesWhatsAppConnectDialog.tsx`: modal do QR (imagem `data:image/png;base64,...`, instruções, expiração, "Atualizar QR", fecha sozinho ao conectar e invalida o status do manager).
+- `SalesWhatsAppSettingsSection.tsx`:
+  - mapa `estado técnico → rótulo humano` (`open→Conectado`, `connecting→Conectando…`, `close`+QR válido→`QR necessário`, resto→`Desconectado`);
+  - remover o chip "Evolution · habilitada";
+  - botão "Conectar WhatsApp" (só admin, só quando não conectado) abrindo o modal;
+  - "Tornar ativo" desabilitado com tooltip quando a identidade do endpoint não estiver confirmada.
+
+**Validação:** typecheck, deploy da edge function e smoke manual na tela (`/settings/integrations`): estado legível, conectar → QR → conectado automático, "Tornar ativo" bloqueado sem identidade.
