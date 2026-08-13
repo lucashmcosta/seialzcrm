@@ -146,7 +146,13 @@ export function SalesRoutePanel(props: SalesRouteContextProps) {
           <span className="font-data">{route.activeEndpoint?.external_address ?? '—'}</span>
         </Row>
         <Row label="Status do endpoint">
-          {endpointState === 'online' ? 'Online' : endpointState === 'offline' ? 'Offline' : 'Sem rota'}
+          {endpointState === 'online'
+            ? 'Online'
+            : endpointState === 'offline'
+              ? 'Offline'
+              : endpointState === 'unresolved'
+                ? 'Sem rota'
+                : '—'}
         </Row>
         <Row label="Roteamento">{resolverLabelPublic}</Row>
         <Row label="Resolver">{resolverLabel}</Row>

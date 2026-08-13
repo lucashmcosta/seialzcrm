@@ -239,7 +239,9 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
             <RouteBadge
               address={endpointAddress ?? null}
               provider={endpointProvider ?? null}
-              state={!endpointAddress ? 'no_route' : endpointIsActive === false ? 'offline' : 'online'}
+              /* Estado nunca derivado de campo legado: sem dado de endpoint o
+                 badge fica indeterminado (não renderiza aviso de legado). */
+              state={!endpointAddress ? 'unknown' : endpointIsActive === false ? 'offline' : 'online'}
               variant="compact"
             />
 
