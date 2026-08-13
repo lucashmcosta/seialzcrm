@@ -72,7 +72,50 @@ export function useSalesRouteView(props: SalesRouteContextProps) {
           ? 'Fora do escopo Comercial/WhatsApp'
           : '—';
 
-  return { route, isLoading, history, flag, endpointState, resolverLabel, resolverLabelPublic, reasonLabel };
+  // Endpoint efetivo: resolver → última inbound roteável → último do histórico.
+  // "Ativo" só quando veio do resolver (destino de envio validado).
+  const lastHistory = history.length > 0 ? history[history.length - 1] : null;
+  const effectiveEndpointSource: 'resolver' | 'inbound' | 'history' | 'none' =
+    route.activeEndpoint
+      ? 'resolver'
+      : route.discoveredByEndpoint
+        ? 'inbound'
+        : lastHistory
+          ? 'history'
+          : 'none';
+
+  const effectiveEndpoint =
+    effectiveEndpointSource === 'resolver'
+      ? { address: route.activeEndpoint?.external_address ?? null, provider: route.activeEndpoint?.provider ?? null }
+      : effectiveEndpointSource === 'inbound'
+        ? {
+            address: route.discoveredByEndpoint?.external_address ?? null,
+            provider: route.discoveredByEndpoint?.provider ?? null,
+          }
+        : effectiveEndpointSource === 'history'
+          ? { address: lastHistory?.address ?? null, provider: lastHistory?.provider ?? null }
+          : { address: null, provider: null };
+
+  const effectiveEndpointLabel =
+    effectiveEndpointSource === 'inbound'
+      ? 'Endpoint efetivo'
+      : effectiveEndpointSource === 'history'
+        ? 'Último endpoint conhecido'
+        : 'Endpoint ativo';
+
+  return {
+    route,
+    isLoading,
+    history,
+    flag,
+    endpointState,
+    resolverLabel,
+    resolverLabelPublic,
+    reasonLabel,
+    effectiveEndpoint,
+    effectiveEndpointSource,
+    effectiveEndpointLabel,
+  };
 }
 
 function formatDateTime(iso: string | null | undefined): string {
