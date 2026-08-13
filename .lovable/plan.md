@@ -33,6 +33,36 @@ Corrigir apenas inconsistências visuais identificadas durante o QA (alinhamento
 `tsgo --noEmit`, build, suíte de testes e QA manual via Playwright no preview autenticado, registrando PASS/FAIL para: abertura do Comercial, lista, pesquisa, filtros, seleção de conversa, cabeçalho, badges, RouteBadge, modal "Detalhes da rota", composer, templates, estados (loading/vazio/erro/sem rota/template-only), mensagens, timeline, Configurações, console do navegador e erros React.
 - Durante o QA corrigir apenas bugs funcionais, regressões e inconsistências visuais evidentes; melhorias não bloqueantes só são registradas.
 
+## 7.1 QA funcional do Comercial
+
+Executar o fluxo completo como operador:
+
+✓ abrir lista Comercial
+
+✓ abrir conversa
+
+✓ responder mensagem
+
+✓ enviar template
+
+✓ reabrir conversa
+
+✓ trocar responsável
+
+✓ alterar status
+
+✓ abrir Detalhes da rota
+
+✓ navegar entre várias conversas
+
+✓ atualizar página
+
+✓ confirmar que a conversa permanece selecionada
+
+✓ confirmar ausência de erros no console
+
+✓ confirmar ausência de requisições falhadas
+
 ## Notas técnicas
 - Arquivos alvo: `src/pages/messages/MessagesList.tsx`, `src/components/messages/route/{SalesConversationHeader,SalesConversationMeta,RouteIndicators,SalesRouteDetailsDialog,SalesRoutePanel,SalesComposerStatus}.tsx`, `src/components/settings/SalesWhatsAppSettingsSection.tsx`.
 - Nenhuma alteração em `useSalesRoute`, `useThreadEndpointHistory`, `useRouteResolverFlag`, `useSalesRouteConfig`, `useConsolidatedThreadIds`.
