@@ -22,14 +22,15 @@ Se essas três interpretações estiverem OK, o resto da UI é implementável 10
 ### Componentes novos (`src/components/messages/route/`)
 - `RouteBadge` — "Comercial · 8439 · Evolution" (substitui o uso de `Novo · XXXX` no Comercial).
 - `ProviderChip`, `EndpointStatusChip` (Online/Offline/Sem Route).
-- `SalesConversationHeader` — nome, contato, responsável, status, "Respondendo por +55 11 93619-8439 / Evolution API", histórico informativo.
+- `SalesConversationHeader` — nome, contato, responsável, status, "Respondendo por +55 11 93619-8439 / Evolution API" e "Histórico de endpoints utilizados" (informativo).
 - `EndpointSwitchDivider` — divisor na timeline "Número alterado 2890 → 8439".
 - `SalesRoutePanel` — painel lateral read-only: Thread ID, Route, Linha, Provider, Endpoint ativo, Endpoints históricos, Última inbound roteável, Assignee, Status, Canal, Business Context.
 - `SalesRouteDetailsDialog` — modal com os mesmos dados + último outbound, feature flag ativa e resolver utilizado (V2 vs legado).
-- `SalesWhatsAppSettingsSection` — seção "WhatsApp Comercial" em Configurações > Integrações: Route, Inbox, Canal, número ativo, provider, status, endpoints vinculados e o indicador do Resolver V2 (read-only, item 1 acima).
+- `SalesWhatsAppSettingsSection` — seção "WhatsApp Comercial" em Configurações > Integrações: Route, Inbox, Canal, número ativo, provider, status, endpoints vinculados e o status informativo do Resolver V2 (item 1 acima, sem toggle).
 
 ### Páginas/arquivos alterados
-- `src/pages/messages/MessagesList.tsx` (`/commercial`): lista filtrada por `merged_into_thread_id IS NULL` (uma conversa por contato), card com nome/status/responsável/última mensagem/última atividade + `RouteBadge`; header substituído por `SalesConversationHeader`; divisores de troca de endpoint na timeline; botão que abre o modal e o painel de detalhes.
+- `src/pages/messages/MessagesList.tsx` (`/commercial`): a query da lista **não é reescrita** — toda a lógica atual (filtros, paginação, override de thread selecionada, realtime) é preservada; apenas adicionamos um filtro de exibição que oculta threads consolidadas (`merged_into_thread_id` não nulo) na renderização da lista do Comercial. Card com nome/status/responsável/última mensagem/última atividade + `RouteBadge`; header substituído por `SalesConversationHeader`; divisores de troca de endpoint na timeline; botão que abre o modal e o painel de detalhes.
+
 - `src/components/settings/IntegrationsSettings.tsx`: monta a nova seção "WhatsApp Comercial" na categoria WhatsApp.
 - `EndpointBadge` permanece intacto e continua usado pelo Atendimento (`InboxThreadList`); o Comercial passa a usar `RouteBadge`. Nenhum componente do Atendimento é modificado.
 
