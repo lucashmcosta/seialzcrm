@@ -34,7 +34,7 @@ export function SalesConversationMeta({
         {assigneeName && <span> • {assigneeName}</span>}
       </p>
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         <RouteBadge address={address} provider={provider} state={endpointState} variant="split" />
         {windowChips}
       </div>

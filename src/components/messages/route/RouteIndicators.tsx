@@ -3,7 +3,7 @@
 // Puramente apresentacional. Nenhuma lógica de negócio aqui.
 // ============================================================================
 
-import { Phone, Warning } from '@phosphor-icons/react';
+import { WhatsappLogo, Warning } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 export function providerLabel(provider: string | null | undefined): string {
@@ -130,7 +130,7 @@ export function RouteBadge({
           className,
         )}
       >
-        <Phone size={11} weight="fill" className="opacity-70" />
+        <WhatsappLogo size={11} weight="fill" className="opacity-70" />
         <span className="font-data">{last4(address)}</span>
       </span>
     );
@@ -148,7 +148,7 @@ export function RouteBadge({
         title={`Número de resposta ${address}`}
         className={cn(CHIP, 'border-border bg-muted/50 text-muted-foreground font-medium')}
       >
-        <Phone size={11} weight="fill" className="opacity-70" />
+        <WhatsappLogo size={11} weight="fill" className="opacity-70" />
         <span className="font-data">{last4(address)}</span>
       </span>
       <EndpointStatusChip state={state ?? 'online'} />
