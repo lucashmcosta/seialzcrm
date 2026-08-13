@@ -23,10 +23,8 @@ Frontend/apresentação apenas. Nada de SQL, banco, Edge Functions, triggers, re
 - Estado de erro com mensagem e botão "Tentar novamente" ligado ao refetch já existente.
 - Vazio contextual: sem filtros/busca → "Nenhuma conversa."; com busca ou filtro ativo → "Nenhuma conversa encontrada." + botão "Limpar filtros" (reseta busca e filtro para o padrão).
 
-## 5. Polimento visual
-- Ajustes de espaçamento, alinhamento, tipografia, pesos (máx. 600), badges, chips, tooltips e cores por tokens semânticos, mantendo `font-data` em números.
-- Hierarquia: cliente → responsável → status → número → informações técnicas.
-- Sem novos componentes grandes; sem painel lateral, drawer ou sidebar.
+## 5. Polimento visual (somente correções de inconsistência)
+Corrigir apenas inconsistências visuais identificadas durante o QA (alinhamentos, espaçamentos, tipografia, cores e badges). Não introduzir novos estilos, novas hierarquias visuais, novos componentes ou redesign. O objetivo é estabilizar a interface para produção.
 
 ## 6. Configurações → Integrações → WhatsApp Comercial
 - Somente layout: alinhar `Field` com o padrão de `Row`, revisar densidade, chips e apresentação de Route, número ativo, provider, status, endpoints vinculados e modo de roteamento. Continua somente leitura, sem toggle.
