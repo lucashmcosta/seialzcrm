@@ -32,7 +32,7 @@ function useLastOutbound(threadId: string) {
 }
 
 export function SalesRouteDetailsDialog({ open, onOpenChange, ...ctx }: Props) {
-  const { route, history, endpointState, resolverLabel, reasonLabel, flag } = useSalesRouteView(ctx);
+  const { history, flag } = useSalesRouteView(ctx);
   const { data: lastOutbound } = useLastOutbound(ctx.threadId);
 
   const lastOutboundEndpoint = lastOutbound?.endpoint_id
@@ -43,13 +43,13 @@ export function SalesRouteDetailsDialog({ open, onOpenChange, ...ctx }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Detalhes da conversa</DialogTitle>
+          <DialogTitle>Detalhes da rota</DialogTitle>
           <DialogDescription>
-            Informações da Route Comercial. Somente leitura.
+            Informações técnicas da Rota Comercial. Somente leitura.
           </DialogDescription>
         </DialogHeader>
 
-        {/* Painel de leitura completo (Route, linha, provider, endpoints, assignee) */}
+        {/* Painel de leitura completo (Rota, número, provider, endpoints, assignee) */}
         <SalesRoutePanel {...ctx} />
 
         <div className="space-y-0.5">
@@ -71,10 +71,9 @@ export function SalesRouteDetailsDialog({ open, onOpenChange, ...ctx }: Props) {
           <Row label="Feature flag ativa">
             <span className="font-data">conv_route_resolver_v2 · {flag.enabledForOrg ? 'ON' : 'OFF'}</span>
           </Row>
-          <Row label="Resolver utilizado">{resolverLabel}</Row>
-          <Row label="Resolução">{reasonLabel}</Row>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+
