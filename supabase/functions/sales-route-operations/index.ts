@@ -310,6 +310,17 @@ serve(async (req) => {
           };
         });
 
+        const instanceByEndpoint = new Map(
+          ((instances ?? []) as {
+            instance_name: string;
+            endpoint_id: string | null;
+            last_known_state: string | null;
+            owner_number_digits: string | null;
+          }[])
+            .filter((i) => !!i.endpoint_id)
+            .map((i) => [i.endpoint_id as string, i]),
+        );
+
         return json(200, {
           organizationId: orgId,
           rules: {
@@ -333,9 +344,37 @@ serve(async (req) => {
                 const ep = ((eps ?? []) as Record<string, unknown>[])
                   .find((e) => e.id === k.endpoint_id) ?? null;
                 const logical = providerFromEndpoint(ep?.provider as string | null);
+                const linkActive = k.is_active === true;
+
+                // activationEligible é APENAS apresentação para a UI. A proteção
+                // real acontece server-side em `setActiveEndpoint`, no clique.
+                let activationEligible = linkActive;
+                let activationBlockedReason: string | null = linkActive
+                  ? null
+                  : "LINK_INACTIVE";
+
+                if (linkActive && logical === "evolution") {
+                  const inst = instanceByEndpoint.get(k.endpoint_id) ?? null;
+                  const epDigits = digitsOf(ep?.external_address as string | null);
+                  const ownerDigits = digitsOf(inst?.owner_number_digits ?? "");
+                  if (!inst) {
+                    activationEligible = false;
+                    activationBlockedReason = "INSTANCE_NOT_LINKED";
+                  } else if (inst.last_known_state !== "open") {
+                    activationEligible = false;
+                    activationBlockedReason = "NOT_CONNECTED";
+                  } else if (ownerDigits.length < 8) {
+                    activationEligible = false;
+                    activationBlockedReason = "IDENTITY_UNKNOWN";
+                  } else if (!epDigits || ownerDigits !== epDigits) {
+                    activationEligible = false;
+                    activationBlockedReason = "IDENTITY_MISMATCH";
+                  }
+                }
+
                 return {
                   endpointId: k.endpoint_id,
-                  linkActive: k.is_active === true,
+                  linkActive,
                   isRouteActive: l.active_endpoint_id === k.endpoint_id,
                   addressMasked: mask(ep?.external_address as string | null),
                   displayName: (ep?.display_name as string | null) ?? null,
@@ -343,6 +382,11 @@ serve(async (req) => {
                   providerRaw: (ep?.provider as string | null) ?? null,
                   technicalStatus: (ep?.status as string | null) ?? "unknown",
                   enabled: ep?.is_active === true,
+                  instanceName: logical === "evolution"
+                    ? (instanceByEndpoint.get(k.endpoint_id)?.instance_name ?? null)
+                    : null,
+                  activationEligible,
+                  activationBlockedReason,
                 };
               }),
           })),
