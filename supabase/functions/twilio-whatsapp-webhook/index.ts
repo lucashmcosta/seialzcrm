@@ -988,12 +988,34 @@ serve(async (req) => {
           threadId = newThread.id
           console.log('Created new thread:', threadId, 'endpoint:', endpointId)
         } else if (threadError) {
-          console.error('Error creating thread:', threadError)
-          return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {
-            status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'text/xml' }
-          })
+          // HOTFIX: bloqueio pela trigger global de canonicidade → recuperar canônica.
+          if (/SALES_THREAD_DUPLICATE_BLOCKED/i.test(
+            `${threadError.message ?? ''} ${(threadError as any)?.details ?? ''}`,
+          ) && orgId && endpointId) {
+            const recovered = await resolveSalesWhatsappThread(supabase, {
+              organizationId: orgId as string,
+              contactId,
+              endpointId: endpointId as string,
+              inboundAt: new Date().toISOString(),
+              externalId: waId,
+            })
+            threadId = recovered.threadId
+          }
+          if (!threadId) {
+            console.error('Error creating thread:', threadError)
+            if (insertedEventId) {
+              await supabase
+                .from('integration_inbound_events')
+                .update({ process_status: 'failed', process_error: 'thread_insert_error' })
+                .eq('id', insertedEventId)
+            }
+            return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'text/xml' }
+            })
+          }
         }
+
       }
       }
 
