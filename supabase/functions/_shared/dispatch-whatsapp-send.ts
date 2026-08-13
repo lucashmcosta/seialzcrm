@@ -10,6 +10,8 @@
 //   4. Só então cai no DEFAULT `twilio` (compat. com threads legadas Twilio puras).
 
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { resolveSalesReplyRoute } from "./route-resolver.ts";
+
 
 // === Re-rota Comercial → Meta 7020 (Central Trabalhista) ===
 const REROUTE_ORG_ID = "40ae935c-a7f7-4ad7-8ea4-91be6404a95f";
