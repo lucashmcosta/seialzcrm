@@ -288,16 +288,38 @@ export function SalesWhatsAppSettingsSection() {
                       {ep.isRouteActive ? (
                         <span className="text-[10px] font-semibold text-primary">ativo para envio</span>
                       ) : canManage && ep.linkActive ? (
-                        <Button
-                          size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
-                          disabled={setActiveEndpoint.isPending}
-                          onClick={() =>
-                            setActiveEndpoint.mutateAsync({ lineId: route.lineId, endpointId: ep.endpointId })
-                              .then(() => toast.success('Número ativo atualizado'))
-                              .catch((e) => toast.error(e instanceof Error ? e.message : 'Falha'))}
-                        >
-                          Tornar ativo
-                        </Button>
+                        <>
+                          {ep.provider === 'evolution' && !ep.activationEligible && ep.activationBlockedReason && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {BLOCKED_LABEL[ep.activationBlockedReason]}
+                            </span>
+                          )}
+                          {ep.provider === 'evolution'
+                            && !ep.activationEligible
+                            && ep.instanceName
+                            && (ep.activationBlockedReason === 'NOT_CONNECTED'
+                              || ep.activationBlockedReason === 'IDENTITY_UNKNOWN') && (
+                            <Button
+                              size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                              onClick={() => setConnectTarget({
+                                instanceName: ep.instanceName as string,
+                                endpointId: ep.endpointId,
+                              })}
+                            >
+                              <QrCode className="h-3 w-3 mr-1" /> Conectar WhatsApp
+                            </Button>
+                          )}
+                          <Button
+                            size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
+                            disabled={setActiveEndpoint.isPending}
+                            onClick={() =>
+                              setActiveEndpoint.mutateAsync({ lineId: route.lineId, endpointId: ep.endpointId })
+                                .then(() => toast.success('Número ativo atualizado'))
+                                .catch((e) => toast.error(e instanceof Error ? e.message : 'Falha'))}
+                          >
+                            Tornar ativo
+                          </Button>
+                        </>
                       ) : null}
                     </span>
                   </li>
