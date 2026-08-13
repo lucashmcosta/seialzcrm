@@ -298,7 +298,10 @@ export function SalesWhatsAppSettingsSection() {
                     <span className="font-data">{ep.addressMasked ?? '—'}</span>
                     <span className="flex flex-wrap items-center gap-2">
                       <ProviderChip provider={ep.providerRaw} />
-                      <span className="text-[10px] text-muted-foreground">{ep.technicalStatus}</span>
+                      <StateChip
+                        ok={(ENDPOINT_STATUS_LABEL[ep.technicalStatus] ?? ENDPOINT_STATUS_LABEL.DISCONNECTED).ok}
+                        label={(ENDPOINT_STATUS_LABEL[ep.technicalStatus] ?? ENDPOINT_STATUS_LABEL.DISCONNECTED).label}
+                      />
                       {!ep.linkActive && (
                         <span className="text-[10px] text-muted-foreground">vínculo inativo</span>
                       )}
