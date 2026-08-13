@@ -11,6 +11,13 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type SalesProvider = 'meta' | 'twilio' | 'evolution';
 
+export type ActivationBlockedReason =
+  | 'LINK_INACTIVE'
+  | 'INSTANCE_NOT_LINKED'
+  | 'NOT_CONNECTED'
+  | 'IDENTITY_UNKNOWN'
+  | 'IDENTITY_MISMATCH';
+
 export interface ManagerEndpoint {
   endpointId: string;
   linkActive: boolean;
@@ -21,6 +28,30 @@ export interface ManagerEndpoint {
   providerRaw: string | null;
   technicalStatus: string;
   enabled: boolean;
+  instanceName: string | null;
+  /** Apenas UX. A proteção real é revalidada server-side no clique. */
+  activationEligible: boolean;
+  activationBlockedReason: ActivationBlockedReason | null;
+}
+
+export interface InstanceStateResult {
+  instanceName?: string;
+  state?: string;
+  connected?: boolean;
+  identityKnown?: boolean;
+  identityMatchesEndpoint?: boolean | null;
+  expectedMasked?: string | null;
+  ownerMasked?: string | null;
+  error?: string;
+  message?: string;
+}
+
+export interface ConnectInstanceResult {
+  instanceName: string;
+  pairingCode: string | null;
+  qrBase64: string | null;
+  count: number;
+  expiresAt: string;
 }
 
 export interface ManagerRoute {
