@@ -202,9 +202,9 @@ export function SalesRoutePanel(props: SalesRouteContextProps) {
 
       {/* Detalhes técnicos */}
       <div className="space-y-0.5">
-        <Row label="Provider">{providerLabel(route.activeEndpoint?.provider)}</Row>
-        <Row label="Endpoint ativo">
-          <span className="font-data">{route.activeEndpoint?.external_address ?? '—'}</span>
+        <Row label="Provider">{providerLabel(effectiveEndpoint.provider)}</Row>
+        <Row label={effectiveEndpointLabel}>
+          <span className="font-data">{effectiveEndpoint.address ?? '—'}</span>
         </Row>
         <Row label="Status do endpoint">
           {endpointState === 'online'
