@@ -372,6 +372,37 @@ serve(async (req) => {
                   }
                 }
 
+                // ------------------------------------------------------------
+                // Status técnico do endpoint.
+                //
+                // NUNCA derivado de `communication_endpoints.status` /
+                // `is_active` nem de qualquer estado persistido do endpoint.
+                // Para Evolution vem exclusivamente do estado real da sessão
+                // (`evolution_instances.last_known_state` + identidade
+                // confirmada, atualizados por webhook / health check).
+                // Para Meta/Twilio não existe sessão a sondar → PROVIDER_MANAGED.
+                // ------------------------------------------------------------
+                let technicalStatus = "PROVIDER_MANAGED";
+                if (logical === "evolution") {
+                  const inst = instanceByEndpoint.get(k.endpoint_id) ?? null;
+                  const epDigits = digitsOf(ep?.external_address as string | null);
+                  const ownerDigits = digitsOf(inst?.owner_number_digits ?? "");
+                  if (!inst) {
+                    technicalStatus = "NOT_LINKED";
+                  } else if (inst.last_known_state === "open") {
+                    if (ownerDigits.length < 8) technicalStatus = "IDENTITY_UNCONFIRMED";
+                    else if (!epDigits || ownerDigits !== epDigits) {
+                      technicalStatus = "IDENTITY_MISMATCH";
+                    } else technicalStatus = "CONNECTED";
+                  } else if (inst.last_known_state === "connecting") {
+                    technicalStatus = "CONNECTING";
+                  } else if (inst.last_known_state === "close") {
+                    technicalStatus = "QR_REQUIRED";
+                  } else {
+                    technicalStatus = "DISCONNECTED";
+                  }
+                }
+
                 return {
                   endpointId: k.endpoint_id,
                   linkActive,
@@ -380,8 +411,7 @@ serve(async (req) => {
                   displayName: (ep?.display_name as string | null) ?? null,
                   provider: logical,
                   providerRaw: (ep?.provider as string | null) ?? null,
-                  technicalStatus: (ep?.status as string | null) ?? "unknown",
-                  enabled: ep?.is_active === true,
+                  technicalStatus,
                   instanceName: logical === "evolution"
                     ? (instanceByEndpoint.get(k.endpoint_id)?.instance_name ?? null)
                     : null,
