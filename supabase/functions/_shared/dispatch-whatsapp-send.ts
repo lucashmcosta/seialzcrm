@@ -11,6 +11,8 @@
 
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { resolveSalesReplyRoute } from "./route-resolver.ts";
+import { resolveManualReplyEndpoint } from "./manual-reply-endpoint.ts";
+
 
 
 // === Re-rota Comercial → Meta 7020 (Central Trabalhista) ===
@@ -47,8 +49,14 @@ export interface WhatsAppSendPayload {
   senderContext?: "inbox" | "messages" | string;
   dryRun?: boolean;
   endpointId?: string;
+  /**
+   * Switch "Responder por" (Comercial). Quando presente e válido, substitui
+   * SOMENTE o endpoint e o provider correspondente. Ausente ⇒ short-circuit.
+   */
+  manualReplyEndpointId?: string;
   migrationContext?: MigrationContext;
 }
+
 
 export interface WhatsAppSendResult {
   data: any;
@@ -57,11 +65,22 @@ export interface WhatsAppSendResult {
 
 type Provider = "twilio" | "meta_cloud_api" | "evolution_api";
 type ResolveSource =
+  | "manual_reply_override"
   | "canonical_route_v2"
   | "endpoint_explicit"
   | "thread_primary_endpoint"
   | "thread_last_message_endpoint"
   | "default";
+
+/** Mapa provider → edge function de envio. Única fonte desse mapeamento. */
+export function providerFunctionName(provider: Provider): string {
+  return provider === "meta_cloud_api"
+    ? "meta-whatsapp-send"
+    : provider === "evolution_api"
+      ? "evolution-whatsapp-send"
+      : "twilio-whatsapp-send";
+}
+
 
 class DispatchResolveError extends Error {
   code: string;
@@ -102,13 +121,40 @@ async function loadEndpointProvider(
   );
 }
 
-async function resolveProvider(
+export async function resolveProvider(
   supabase: SupabaseClient,
   payload: WhatsAppSendPayload,
 ): Promise<{ provider: Provider; source: ResolveSource }> {
+  // ── Override manual ("Responder por") — PRECEDE tudo, inclusive V2 ──
+  // Campo ausente ⇒ short-circuit dentro de resolveManualReplyEndpoint
+  // (nenhuma query nova, fluxo atual byte-a-byte).
+  if (payload.manualReplyEndpointId) {
+    const manual = await resolveManualReplyEndpoint(supabase, {
+      organizationId: payload.organizationId,
+      threadId: payload.threadId ?? null,
+      userId: payload.userId ?? null,
+      manualReplyEndpointId: payload.manualReplyEndpointId,
+    });
+    if (manual.mode === "error") {
+      throw new DispatchResolveError(manual.code, manual.message);
+    }
+    if (manual.mode === "manual") {
+      // Substitui SOMENTE endpoint + provider. Todo o resto do pipeline do
+      // provider escolhido continua sendo executado normalmente.
+      payload.endpointId = manual.endpointId;
+      console.log("[dispatch-wa] manual_reply_override (server)", {
+        threadId: payload.threadId ?? null,
+        endpointId: manual.endpointId,
+        provider: manual.provider,
+      });
+      return { provider: manual.provider, source: "manual_reply_override" };
+    }
+  }
+
   // ── Caminho canônico Comercial V2 (atrás da flag conv_route_resolver_v2) ──
   // Precede QUALQUER outra resolução: quando aplicável, a resposta sai
   // obrigatoriamente pelo active_endpoint_id da Route Comercial.
+
   if (payload.threadId) {
     const route = await resolveSalesReplyRoute(supabase, {
       organizationId: payload.organizationId,
@@ -250,13 +296,16 @@ export async function dispatchWhatsAppSend(
     return { data: null, error: { message: err.message, name: err.code } };
   }
 
-  // Re-rota lazy Comercial → Meta 7020 (Central Trabalhista)
+  // Re-rota lazy Comercial → Meta 7020 (Central Trabalhista).
+  // Nunca sobrepõe uma escolha manual explícita do operador.
   const shouldReroute =
+    resolved.source !== "manual_reply_override" &&
     payload.senderContext === "messages" &&
     payload.organizationId === REROUTE_ORG_ID &&
     (resolved.provider === "twilio" || resolved.source === "default") &&
     payload.endpointId !== REROUTE_TARGET_ENDPOINT_ID &&
     !!payload.threadId;
+
 
   if (shouldReroute) {
     console.log("[dispatch-wa] re-route commercial → meta 7020", {
@@ -277,11 +326,8 @@ export async function dispatchWhatsAppSend(
     resolved = { provider: "meta_cloud_api", source: "endpoint_explicit" };
   }
 
-  const fnName = resolved.provider === "meta_cloud_api"
-    ? "meta-whatsapp-send"
-    : resolved.provider === "evolution_api"
-      ? "evolution-whatsapp-send"
-      : "twilio-whatsapp-send";
+  const fnName = providerFunctionName(resolved.provider);
+
 
   console.log("[dispatch-wa] route", {
     provider: resolved.provider,

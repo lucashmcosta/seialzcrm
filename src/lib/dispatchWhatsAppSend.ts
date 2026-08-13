@@ -13,6 +13,8 @@ import { isSalesPurpose } from "./endpointPurpose";
 import { assertTemplateAllowedForEndpoint } from "./complianceGuards";
 import { logComplianceBlock } from "./complianceLog";
 import { resolveSalesReplyRoute } from "./salesReplyRoute";
+import { resolveManualReplyEndpoint } from "./manualReplyEndpoint";
+
 
 
 const SUPABASE_FUNCTIONS_URL = "https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1";
@@ -61,8 +63,14 @@ export interface WhatsAppSendPayload {
   businessContext?: "sales" | "customer_service" | "other" | null;
   dryRun?: boolean;
   endpointId?: string;
+  /**
+   * Switch "Responder por" (Comercial). Presente ⇒ substitui SOMENTE endpoint
+   * + provider, após validação server-side. Ausente ⇒ short-circuit total.
+   */
+  manualReplyEndpointId?: string;
   migrationContext?: MigrationContext;
 }
+
 
 type Provider = "twilio" | "meta_cloud_api" | "evolution_api";
 type ResolveSource =
@@ -276,9 +284,37 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
   //   (c) senão: cair no primary_endpoint_id se ainda ativo.
   //   (d) senão: resolveProvider legado (fallbacks).
   // ============================================================
+  // ── Override manual "Responder por" — PRECEDE TUDO ──
+  // Substitui SOMENTE o endpoint e o provider correspondente; o provider
+  // escolhido segue executando todo o seu pipeline (24h, template, auth,
+  // rate limit, integração) e revalida o override server-side.
+  // Campo ausente ⇒ short-circuit sem nenhuma query nova.
+  let manualOverrideProvider: Provider | null = null;
+  if (payload.manualReplyEndpointId) {
+    const manual = await resolveManualReplyEndpoint({
+      organizationId: payload.organizationId,
+      threadId: payload.threadId ?? null,
+      userId: payload.userId ?? null,
+      manualReplyEndpointId: payload.manualReplyEndpointId,
+    });
+    if (manual.mode === "error") {
+      return { data: null, error: { name: manual.code, message: manual.message } as any };
+    }
+    if (manual.mode === "manual") {
+      payload = { ...payload, endpointId: manual.endpointId };
+      manualOverrideProvider = manual.provider;
+      console.log("[dispatch-wa] manual_reply_override", {
+        threadId: payload.threadId ?? null,
+        endpointId: manual.endpointId,
+        provider: manual.provider,
+      });
+    }
+  }
+
   // ── Caminho canônico Comercial V2 (flag conv_route_resolver_v2) ──
-  // Precede QUALQUER outra resolução, inclusive endpointId explícito do caller.
-  if (payload.threadId) {
+  // Precede QUALQUER outra resolução, inclusive endpointId explícito do caller,
+  // MAS não sobrepõe uma escolha manual válida do operador.
+  if (payload.threadId && !manualOverrideProvider) {
     const canonical = await resolveSalesReplyRoute({
       organizationId: payload.organizationId,
       threadId: payload.threadId,
@@ -300,6 +336,7 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
       };
     }
   }
+
 
   let threadPrimaryEndpointId: string | null = null;
   let threadBusinessContext: string | null = payload.businessContext ?? null;
@@ -375,18 +412,24 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
   }
 
   let resolved: { provider: Provider; purpose: string | null; source: ResolveSource };
-  try {
-    resolved = await resolveProvider(payload);
-  } catch (e) {
-    const err = e as DispatchResolveError;
-    console.error("[dispatch-wa] resolve failed", {
-      code: err.code,
-      message: err.message,
-      endpointId: payload.endpointId ?? null,
-      threadId: payload.threadId ?? null,
-    });
-    return { data: null, error: { message: err.message, name: err.code } as any };
+  if (manualOverrideProvider) {
+    // Provider do endpoint manual tem precedência absoluta sobre V2/legado.
+    resolved = { provider: manualOverrideProvider, purpose: null, source: "endpoint_explicit" };
+  } else {
+    try {
+      resolved = await resolveProvider(payload);
+    } catch (e) {
+      const err = e as DispatchResolveError;
+      console.error("[dispatch-wa] resolve failed", {
+        code: err.code,
+        message: err.message,
+        endpointId: payload.endpointId ?? null,
+        threadId: payload.threadId ?? null,
+      });
+      return { data: null, error: { message: err.message, name: err.code } as any };
+    }
   }
+
 
 
   // Re-rota lazy Comercial → Meta 7020. SOMENTE quando a thread NÃO tem
@@ -394,6 +437,7 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
   // Em reply a thread existente com primary_endpoint_id, jamais re-rotamos.
   let alreadyMigratedThread = false;
   if (
+    !manualOverrideProvider &&
     !threadPrimaryEndpointId &&
     payload.senderContext === "messages" &&
     payload.organizationId === REROUTE_ORG_ID &&
@@ -401,6 +445,7 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     payload.endpointId !== REROUTE_TARGET_ENDPOINT_ID &&
     resolved.provider !== "meta_cloud_api"
   ) {
+
     const { data: noteRow } = await supabase
       .from("messages")
       .select("id")
@@ -425,10 +470,12 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     (resolved.provider === "twilio" || resolved.source === "default" || alreadyMigratedThread);
 
   const shouldReroute =
+    !manualOverrideProvider &&
     !threadPrimaryEndpointId &&
     !!payload.threadId &&
     payload.endpointId !== REROUTE_TARGET_ENDPOINT_ID &&
     (salesContextMismatch || legacyCentralTrabalhista);
+
 
   if (shouldReroute) {
     const reason = salesContextMismatch
