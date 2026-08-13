@@ -19,14 +19,15 @@ Linha 3  [Comercial] [Meta|Evolution|Twilio] [8439] [● Online|Offline]  [janel
 - O trilho "Histórico de endpoints utilizados" sai do cabeçalho e permanece apenas no painel/modal de detalhes.
 
 `RouteBadge` em `src/components/messages/route/RouteIndicators.tsx` ganha variantes de composição para não repetir informação:
-- `variant="compact"` (lista): só o número + marcador do provider (`[M]`/`[E]`/`[T]`) com cor.
-- `variant="split"` (cabeçalho): renderiza badges separados — Comercial, Provider, Número, Online/Offline.
+- `variant="compact"` (somente lista): `Evolution • 8439` / `Meta • 2890`. Sem siglas tipo `[E]`/`[M]`.
+- `variant="split"` (somente cabeçalho): badges separados — Comercial, Provider, Número, Online/Offline.
 
 ## 2. Linguagem do resolver
 
-- Tela principal: nunca "Route Resolver V2". Passa a exibir "Roteamento automático" quando a flag está ON e "Modo legado" quando OFF.
-- O termo técnico `Route Resolver V2` / `conv_route_resolver_v2` continua apenas dentro do `SalesRouteDetailsDialog` e do `SalesRoutePanel`.
-- Ajuste em `useSalesRouteView` (`SalesRoutePanel.tsx`): expor dois rótulos — `resolverLabelPublic` ("Roteamento automático"/"Modo legado") e `resolverLabel` (técnico, usado no modal). Nenhuma query alterada.
+- Tela principal: nunca "Route Resolver V2". Exibe "Rota Comercial" quando a flag está ON e "Modo legado" quando OFF.
+- O termo técnico `Route Resolver V2` / `conv_route_resolver_v2` fica restrito a `SalesRoutePanel` e `SalesRouteDetailsDialog`.
+- Ajuste em `useSalesRouteView` (`SalesRoutePanel.tsx`): expor dois rótulos — `resolverLabelPublic` ("Rota Comercial"/"Modo legado") e `resolverLabel` (técnico, usado no painel/modal). Nenhuma query alterada.
+
 
 ## 3. Botão "Detalhes da rota"
 
@@ -34,22 +35,23 @@ O link `Detalhes` de 10px vira botão real (`Button variant="outline" size="sm"`
 
 ## 4. Estado sem Route
 
-- Substituir "Sem Route" isolado por `⚠ Conversa legada — sem rota ativa` em tom de alerta (âmbar).
+- Substituir "Sem Route" isolado por `⚠ Sem rota disponível` em tom de alerta (âmbar).
 - Tooltip fixo: "Esta conversa ainda não possui uma mensagem inbound roteável."
-- Aplicado em `RouteBadge` (estado `no_route`) e no rótulo de Route do cabeçalho. No painel técnico o valor cru continua visível.
+- Aplicado em `RouteBadge` (estado `no_route`) e no rótulo de Route do cabeçalho. No painel técnico o estado bruto do resolver continua visível.
 
 ## 5. Badge da lista de conversas
 
-Em `ChatListItem` (`MessagesList.tsx` ~236), trocar o badge longo por `RouteBadge variant="compact"`: apenas marcador do provider + últimos 4 dígitos (ex.: `[E] 8439`), com `title` completo no hover. Sem rota: ícone de alerta discreto, sem texto.
+Em `ChatListItem` (`MessagesList.tsx` ~236), trocar o badge longo por `RouteBadge variant="compact"`: `Evolution • 8439` / `Meta • 2890`, com `title` completo no hover. Sem rota: apenas ícone de alerta discreto com tooltip explicativo, sem texto.
 
 ## 6. Rodapé / composer
 
-Substituir a frase "Sem inbound recente — envio livre pelo número ••••8439" por avisos com hierarquia clara (`MessagesList.tsx` ~2427):
+Substituir a frase "Sem inbound recente — envio livre pelo número ••••8439" por avisos com hierarquia clara (`MessagesList.tsx` ~2427), sem linguagem técnica como "24h fechada":
 
-- Janela fechada: `⚠ Sem inbound recente` + linha secundária "Envio permitido apenas por template."
-- Route indisponível (`no_route`): `⚠ Conversa sem rota ativa` + "Responder somente após nova mensagem do cliente."
+- Janela fechada: `⚠ Sem inbound recente` + linha secundária "Somente template disponível".
+- Sem rota (`no_route`): `⚠ Sem rota disponível` + "Responder somente após nova mensagem do cliente."
 
 Apenas texto/estilo — a lógica de gate (`outOfWindow`, `composerBypassesWindow`) permanece exatamente como está.
+
 
 ## 7. Hierarquia visual
 
@@ -73,7 +75,8 @@ A data/hora vem do `sent_at` da própria mensagem que inaugura o novo endpoint (
 
 ## 10. Separação Comercial × Atendimento
 
-Confirmação por inspeção: `EndpointBadge` é usado apenas por `src/components/inbox/InboxThreadList.tsx` e telas de Atendimento; `RouteBadge` apenas pelo Comercial (`MessagesList.tsx` + `route/*`). Nada de Atendimento será editado.
+Confirmação por inspeção: `EndpointBadge` é usado apenas por `src/components/inbox/InboxThreadList.tsx` e telas de Atendimento; `RouteBadge` apenas pelo Comercial (`MessagesList.tsx` + `route/*`). Nada em `src/components/inbox/`, `MobileInbox` ou mobile será editado.
+
 
 ## 11. Validação
 
