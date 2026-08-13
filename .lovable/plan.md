@@ -47,6 +47,8 @@ Smoke sintético em transação única com `ROLLBACK` no final:
 | c) thread com `business_context` NULL | permitida |
 | d) `merge_sales_threads` + `unmerge_message_thread` (SALES_V2) no mesmo ciclo/batch | funcionam, estado operacional restaurado |
 | e) 2ª thread `sales` de contato diferente | permitida |
+| f) serialização da guarda | validação explícita de que o `FOR UPDATE` em `public.contacts` está no corpo final da função (`pg_get_functiondef`), mais teste de concorrência com duas sessões: a segunda fica bloqueada e, ao liberar, recebe `SALES_THREAD_DUPLICATE_BLOCKED` |
+
 
 Encerra com `ROLLBACK` e prova de zero dado sintético persistido.
 
