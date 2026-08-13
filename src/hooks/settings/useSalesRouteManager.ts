@@ -18,6 +18,21 @@ export type ActivationBlockedReason =
   | 'IDENTITY_UNKNOWN'
   | 'IDENTITY_MISMATCH';
 
+/**
+ * Estado técnico do endpoint. Vem SEMPRE de `sales-route-operations/status`,
+ * derivado do estado real da sessão do provedor — nunca de
+ * `communication_endpoints.status` / `is_active`.
+ */
+export type EndpointTechnicalStatus =
+  | 'CONNECTED'
+  | 'CONNECTING'
+  | 'QR_REQUIRED'
+  | 'DISCONNECTED'
+  | 'IDENTITY_UNCONFIRMED'
+  | 'IDENTITY_MISMATCH'
+  | 'NOT_LINKED'
+  | 'PROVIDER_MANAGED';
+
 export interface ManagerEndpoint {
   endpointId: string;
   linkActive: boolean;
@@ -26,8 +41,7 @@ export interface ManagerEndpoint {
   displayName: string | null;
   provider: SalesProvider | null;
   providerRaw: string | null;
-  technicalStatus: string;
-  enabled: boolean;
+  technicalStatus: EndpointTechnicalStatus;
   instanceName: string | null;
   /** Apenas UX. A proteção real é revalidada server-side no clique. */
   activationEligible: boolean;
