@@ -45,7 +45,7 @@ import { RouteBadge } from '@/components/messages/route/RouteIndicators';
 import { SalesRouteDetailsDialog } from '@/components/messages/route/SalesRouteDetailsDialog';
 import { SalesConversationHeader } from '@/components/messages/route/SalesConversationHeader';
 import { SalesComposerStatus } from '@/components/messages/route/SalesComposerStatus';
-import { Info } from '@phosphor-icons/react';
+import { Warning } from '@phosphor-icons/react';
 import { useSalesRoute } from '@/hooks/messages/useSalesRoute';
 import { useConsolidatedThreadIds } from '@/hooks/messages/useConsolidatedThreadIds';
 
