@@ -41,18 +41,20 @@ export function SalesRouteDetailsDialog({ open, onOpenChange, ...ctx }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="max-w-lg flex max-h-[85dvh] flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Detalhes da rota</DialogTitle>
           <DialogDescription>
             Informações técnicas da Rota Comercial. Somente leitura.
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex-1 space-y-4 overflow-y-auto pr-1 scrollbar-hide">
         {/* Painel de leitura completo (Rota, número, provider, endpoints, assignee) */}
         <SalesRoutePanel {...ctx} />
 
         <div className="space-y-0.5">
+
           <Row label="Contato">
             {ctx.contactName ?? '—'}
             {ctx.contactPhone ? <span className="font-data"> · {ctx.contactPhone}</span> : null}
@@ -72,6 +74,8 @@ export function SalesRouteDetailsDialog({ open, onOpenChange, ...ctx }: Props) {
             <span className="font-data">conv_route_resolver_v2 · {flag.enabledForOrg ? 'ON' : 'OFF'}</span>
           </Row>
         </div>
+        </div>
+
       </DialogContent>
     </Dialog>
   );
