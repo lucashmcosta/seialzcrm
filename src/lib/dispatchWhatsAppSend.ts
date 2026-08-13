@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { isSalesPurpose } from "./endpointPurpose";
 import { assertTemplateAllowedForEndpoint } from "./complianceGuards";
 import { logComplianceBlock } from "./complianceLog";
+import { resolveSalesReplyRoute } from "./salesReplyRoute";
+
 
 const SUPABASE_FUNCTIONS_URL = "https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd" +
