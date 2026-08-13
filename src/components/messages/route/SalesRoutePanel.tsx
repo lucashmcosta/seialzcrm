@@ -130,27 +130,45 @@ function formatDateTime(iso: string | null | undefined): string {
 }
 
 export function SalesRoutePanel(props: SalesRouteContextProps) {
-  const { route, history, endpointState, resolverLabel, resolverLabelPublic, reasonLabel } = useSalesRouteView(props);
+  const {
+    route,
+    history,
+    endpointState,
+    resolverLabel,
+    resolverLabelPublic,
+    reasonLabel,
+    effectiveEndpoint,
+    effectiveEndpointSource,
+    effectiveEndpointLabel,
+  } = useSalesRouteView(props);
 
   const lastInbound = history.length > 0 ? history[history.length - 1] : null;
 
+  const routeTitle =
+    route.line?.name ??
+    route.line?.route_slug ??
+    (effectiveEndpointSource !== 'none' ? resolverLabelPublic : 'Sem rota');
+
   return (
     <div className="space-y-3">
-      {/* Cabeçalho do card: rota, número ativo e estado */}
+      {/* Cabeçalho do card: rota, número efetivo e estado */}
       <div className="rounded-md border border-border bg-muted/30 p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Rota Comercial</p>
-            <p className="text-sm font-semibold text-foreground truncate">
-              {route.line?.name ?? route.line?.route_slug ?? 'Sem rota'}
-            </p>
+            <p className="text-sm font-semibold text-foreground truncate">{routeTitle}</p>
             <p className="mt-0.5 font-data text-xs text-foreground">
-              {route.activeEndpoint?.external_address ?? '—'}
+              {effectiveEndpoint.address ?? '—'}
             </p>
+            {effectiveEndpointSource === 'inbound' || effectiveEndpointSource === 'history' ? (
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                {effectiveEndpointLabel} · roteamento pelo modo legado
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
             <EndpointStatusChip state={endpointState} />
-            <ProviderChip provider={route.activeEndpoint?.provider ?? null} />
+            <ProviderChip provider={effectiveEndpoint.provider} />
           </div>
         </div>
       </div>
