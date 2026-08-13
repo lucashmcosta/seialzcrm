@@ -45,6 +45,8 @@ import { RouteBadge, type EndpointState } from '@/components/messages/route/Rout
 import { SalesRouteDetailsDialog } from '@/components/messages/route/SalesRouteDetailsDialog';
 import { SalesConversationHeader } from '@/components/messages/route/SalesConversationHeader';
 import { SalesComposerStatus } from '@/components/messages/route/SalesComposerStatus';
+import { ManualReplySelector } from '@/components/messages/route/ManualReplySelector';
+import { useManualReplyEndpoint } from '@/hooks/messages/useManualReplyEndpoint';
 import { Warning } from '@phosphor-icons/react';
 import { useSalesRoute } from '@/hooks/messages/useSalesRoute';
 import { useConsolidatedThreadIds } from '@/hooks/messages/useConsolidatedThreadIds';
@@ -689,6 +691,19 @@ function DesktopMessagesList() {
     : !salesRouteLoading && salesRoute.reason === 'REPLY_ROUTE_UNRESOLVED'
       ? 'unresolved'
       : 'unknown';
+  // ---------------------------------------------------------------------------
+  // Switch "Responder por" (Comercial). Feature `sales_manual_reply_endpoint_v1`
+  // OFF ⇒ nenhuma query extra, nenhuma UI, comportamento atual intacto.
+  // ---------------------------------------------------------------------------
+  const manualReply = useManualReplyEndpoint({
+    organizationId: organization?.id,
+    threadId: selectedThreadId,
+    userId: userProfile?.id,
+    businessContext: selectedThreadBusinessContext,
+    channel: 'whatsapp',
+  });
+  const manualReplyEndpointId = manualReply.manualReplyEndpointId;
+
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false);
   const salesEndpoints = useMemo(
     () => filterEndpointsByIntent(orgEndpoints, 'sales'),
@@ -1238,6 +1253,7 @@ function DesktopMessagesList() {
           senderContext: 'messages',
           ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
           ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
+          ...(manualReplyEndpointId ? { manualReplyEndpointId } : {}),
         });
 
       if (error) throw error;
@@ -1379,6 +1395,7 @@ function DesktopMessagesList() {
           senderContext: 'messages',
           ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
           ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
+          ...(manualReplyEndpointId ? { manualReplyEndpointId } : {}),
         });
 
       if (error) throw error;
@@ -1491,6 +1508,7 @@ function DesktopMessagesList() {
           senderContext: 'messages',
           ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
           ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
+          ...(manualReplyEndpointId ? { manualReplyEndpointId } : {}),
         });
 
       if (error) throw error;
@@ -2429,6 +2447,9 @@ function DesktopMessagesList() {
                             noRoute={salesRouteEndpointState === 'unresolved'}
                             noRecentInbound={showNoInboundHint}
                           />
+
+                          {/* Switch "Responder por" — só existe com a feature ON */}
+                          <ManualReplySelector state={manualReply} />
 
                           {/* Note Mode Indicator */}
                           {!outOfWindow && isNoteMode && (
