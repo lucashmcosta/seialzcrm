@@ -959,7 +959,7 @@ serve(async (req) => {
         sender_name: resolvedSenderName,
         sender_agent_id: isAgentMessage && agentId ? agentId : null,
         endpoint_id: endpointId,
-        metadata: { twilio: twilioMetadata },
+        metadata: { twilio: twilioMetadata, ...replyChoiceMeta },
       })
       .select('id')
       .single()
