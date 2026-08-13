@@ -5,8 +5,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { EndpointHistoryTrail, EndpointStatusChip, ProviderChip, last4, providerLabel } from './RouteIndicators';
-import { Row, useSalesRouteView, type SalesRouteContextProps } from './SalesRoutePanel';
+import { last4 } from './RouteIndicators';
+import { Row, SalesRoutePanel, useSalesRouteView, type SalesRouteContextProps } from './SalesRoutePanel';
 
 interface Props extends SalesRouteContextProps {
   open: boolean;
