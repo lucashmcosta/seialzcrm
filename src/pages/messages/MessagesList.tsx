@@ -40,6 +40,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { useOrganization } from '@/hooks/useOrganization';
+// Fase 2.5 — UI Comercial (Route/número/provider). Somente leitura.
+import { RouteBadge } from '@/components/messages/route/RouteIndicators';
+import { SalesRouteDetailsDialog } from '@/components/messages/route/SalesRouteDetailsDialog';
+import { useSalesRoute } from '@/hooks/messages/useSalesRoute';
+import { useThreadEndpointHistory } from '@/hooks/messages/useThreadEndpointHistory';
+import { useRouteResolverFlag } from '@/hooks/messages/useRouteResolverFlag';
+import { useConsolidatedThreadIds } from '@/hooks/messages/useConsolidatedThreadIds';
+import { EndpointHistoryTrail, EndpointStatusChip, providerLabel } from '@/components/messages/route/RouteIndicators';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
