@@ -138,15 +138,22 @@ export function useSalesRouteManager(organizationId?: string | null) {
     onSuccess: invalidate,
   });
 
+  const connectInstance = useMutation({
+    mutationFn: (input: { instanceName: string }) =>
+      call<ConnectInstanceResult>({ op: 'connectInstance', organizationId, ...input }),
+  });
+
   return {
     status: status.data ?? null,
     isLoading: status.isLoading,
     error: status.error instanceof Error ? status.error.message : null,
     refetch: status.refetch,
+    invalidate,
     provisionEndpoint,
     setActiveEndpoint,
     refreshEvolutionIdentity,
     restartInstance,
+    connectInstance,
   };
 }
 
