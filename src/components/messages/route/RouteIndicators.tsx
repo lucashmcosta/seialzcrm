@@ -88,14 +88,12 @@ export function LegacyRouteBadge({ className }: { className?: string }) {
 /** Ícone discreto de alerta (usado na lista lateral). */
 export function LegacyRouteIcon({ className }: { className?: string }) {
   return (
-    <Warning
-      size={13}
-      weight="bold"
-      title={NO_ROUTE_TOOLTIP}
-      className={cn('shrink-0 text-amber-500', className)}
-    />
+    <span title={NO_ROUTE_TOOLTIP} className={cn('inline-flex shrink-0 text-amber-500', className)}>
+      <Warning size={13} weight="bold" />
+    </span>
   );
 }
+
 
 /**
  * Identidade visual da conversa Comercial.
