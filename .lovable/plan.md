@@ -1,94 +1,99 @@
 # Fase 2.5.1 — Refinamento visual da UI Comercial (UX only)
 
-Somente frontend/apresentação. Nenhuma alteração em SQL, Supabase, Edge Functions, triggers, feature flags, resolver, queries ou hooks de dados. Nenhum componente de Atendimento (`EndpointBadge`, `InboxThreadList`, `src/components/inbox/*`, `src/components/mobile/MobileInbox.tsx`) será tocado.
+Somente frontend/apresentação. Nenhuma alteração em SQL, Supabase, Edge Functions, triggers, feature flags, resolver, queries, hooks de dados, Atendimento, Mobile ou lógica de negócio. Nenhuma mudança de comportamento.
 
-## 1. Cabeçalho da conversa (3 linhas, sem duplicidade)
+## 1. Cabeçalho da conversa (3 linhas, zero duplicidade)
 
-Reescrever o bloco de cabeçalho em `src/pages/messages/MessagesList.tsx` (hoje entre as linhas ~1851 e 1926), onde a Route aparece duas vezes: uma no `RouteBadge` e outra na linha textual "Route · número · provider".
-
-Nova estrutura:
+Substituir o bloco de cabeçalho atual em `src/pages/messages/MessagesList.tsx` (~linhas 1851–1926), onde Route, provider, número e status de endpoint aparecem duas vezes (badge + linha textual).
 
 ```text
-Linha 1  [avatar] Nome do contato (semibold, maior)   • Status   [ⓘ Detalhes da rota] [Ações]
-Linha 2  telefone · Responsável: Nome
-Linha 3  [Comercial] [Meta|Evolution|Twilio] [8439] [● Online|Offline]  [janela 24h]
+Linha 1  [avatar]  Nome do contato (semibold, maior)   Status   [ⓘ Detalhes da rota]  [Ações]
+Linha 2  telefone  •  Responsável
+Linha 3  [Comercial]  [8439]  [● Online|Offline]  [Janela 24h]
 ```
 
-- A linha textual redundante e o `EndpointStatusChip` solto são removidos; provider, número e status de endpoint passam a existir só nos badges da Linha 3.
-- Nome do contato ganha `text-[15px]`/`font-semibold`; número usa `font-data text-[10px]` em badge neutro — nunca com mais peso visual que o nome.
-- O trilho "Histórico de endpoints utilizados" sai do cabeçalho e permanece apenas no painel/modal de detalhes.
+- Removidos: a linha textual "Route · número · provider", o `EndpointStatusChip` solto e o bloco "Histórico de endpoints utilizados" (que passa para o painel/modal).
+- Provider deixa de aparecer no cabeçalho: fica só no painel/modal técnico.
+- Nome do contato é o elemento de maior destaque (`text-[15px] font-semibold text-foreground`).
 
-`RouteBadge` em `src/components/messages/route/RouteIndicators.tsx` ganha variantes de composição para não repetir informação:
-- `variant="compact"` (somente lista): `Evolution • 8439` / `Meta • 2890`. Sem siglas tipo `[E]`/`[M]`.
-- `variant="split"` (somente cabeçalho): badges separados — Comercial, Provider, Número, Online/Offline.
+## 2. RouteBadge — duas variantes
 
-## 2. Linguagem do resolver
+Em `src/components/messages/route/RouteIndicators.tsx`:
 
-- Tela principal: nunca "Route Resolver V2". Exibe "Rota Comercial" quando a flag está ON e "Modo legado" quando OFF.
-- O termo técnico `Route Resolver V2` / `conv_route_resolver_v2` fica restrito a `SalesRoutePanel` e `SalesRouteDetailsDialog`.
-- Ajuste em `useSalesRouteView` (`SalesRoutePanel.tsx`): expor dois rótulos — `resolverLabelPublic` ("Rota Comercial"/"Modo legado") e `resolverLabel` (técnico, usado no painel/modal). Nenhuma query alterada.
+- `variant="compact"` (somente lista lateral): apenas ícone de telefone + últimos 4 dígitos (`📱 8439`). Provider apenas no `title`/tooltip. Sem siglas `[E]`/`[M]`/`[T]` e sem texto longo.
+- `variant="split"` (somente cabeçalho): badges separados — `Comercial`, `8439`, `Online`/`Offline`.
 
+## 3. Linguagem do resolver
 
-## 3. Botão "Detalhes da rota"
+- UI pública: "Rota Comercial" (flag ON) / "Modo legado" (flag OFF). Nunca "Route Resolver V2" nem `conv_route_resolver_v2`.
+- Termos técnicos ficam restritos a `SalesRoutePanel` e `SalesRouteDetailsDialog`.
+- `useSalesRouteView` (`SalesRoutePanel.tsx`) passa a expor `resolverLabelPublic` (público) e `resolverLabel` (técnico). Nenhuma query alterada.
 
-O link `Detalhes` de 10px vira botão real (`Button variant="outline" size="sm"` com ícone de informação), posicionado na Linha 1 ao lado de Ações. Continua abrindo o `SalesRouteDetailsDialog` existente.
+## 4. Botão "Detalhes da rota"
 
-## 4. Estado sem Route
+O link `Detalhes` de 10px vira `Button variant="outline" size="sm"` com ícone ⓘ e texto "Detalhes da rota", na Linha 1 ao lado de Ações. Abre o mesmo `SalesRouteDetailsDialog`.
 
-- Substituir "Sem Route" isolado por `⚠ Sem rota disponível` em tom de alerta (âmbar).
-- Tooltip fixo: "Esta conversa ainda não possui uma mensagem inbound roteável."
-- Aplicado em `RouteBadge` (estado `no_route`) e no rótulo de Route do cabeçalho. No painel técnico o estado bruto do resolver continua visível.
+## 5. Estado sem rota
 
-## 5. Badge da lista de conversas
+- Nunca "Sem Route" isolado. Passa a: `⚠ Conversa legada` + linha secundária "Sem inbound para determinar o número de resposta." em tom âmbar.
+- Tooltip: "Esta conversa ainda não possui uma mensagem inbound roteável."
+- No painel técnico o estado bruto do resolver (`REPLY_ROUTE_UNRESOLVED`, etc.) continua visível.
 
-Em `ChatListItem` (`MessagesList.tsx` ~236), trocar o badge longo por `RouteBadge variant="compact"`: `Evolution • 8439` / `Meta • 2890`, com `title` completo no hover. Sem rota: apenas ícone de alerta discreto com tooltip explicativo, sem texto.
+## 6. Badge da lista
 
-## 6. Rodapé / composer
+Em `ChatListItem` (`MessagesList.tsx` ~236): `RouteBadge variant="compact"` → `📱 8439`, sem provider no texto. Sem rota: apenas ícone de alerta discreto com tooltip. Lista fica visualmente limpa.
 
-Substituir a frase "Sem inbound recente — envio livre pelo número ••••8439" por avisos com hierarquia clara (`MessagesList.tsx` ~2427), sem linguagem técnica como "24h fechada":
+## 7. Composer
 
-- Janela fechada: `⚠ Sem inbound recente` + linha secundária "Somente template disponível".
-- Sem rota (`no_route`): `⚠ Sem rota disponível` + "Responder somente após nova mensagem do cliente."
+Novo componente `SalesComposerStatus` renderizado acima do input (substitui o texto em `MessagesList.tsx` ~2427):
 
-Apenas texto/estilo — a lógica de gate (`outOfWindow`, `composerBypassesWindow`) permanece exatamente como está.
+- Janela fechada: `⚠ Sem inbound recente` + "Somente template disponível."
+- Sem rota: `⚠ Conversa legada` + "Responder somente após nova mensagem do cliente."
 
+Sem linguagem técnica ("24h fechada", "Sem Route", "REPLY_ROUTE_UNRESOLVED"). A lógica de gate (`outOfWindow`, `composerBypassesWindow`, `serviceWindow`) permanece intacta; só o texto/estilo muda.
 
-## 7. Hierarquia visual
+## 8. Hierarquia visual
 
-Ordem de peso: Cliente > Responsável > Status > Provider > Número. Aplicado via tamanho/peso/cor: nome em `foreground` semibold, responsável e telefone em `muted-foreground`, badges técnicos em `text-[10px]` com fundo neutro.
+Cliente > Responsável > Status > Número. Nome semibold em `foreground`; telefone e responsável em `muted-foreground`; badges em `text-xs`/`text-[10px]` com fundo neutro. O número nunca supera o cliente em destaque.
 
-## 8. Painel lateral / modal
+## 9. Painel lateral / modal
 
-`SalesRoutePanel` mantém todos os campos técnicos atuais (Thread ID, Route, Linha, Provider, Endpoint ativo, Histórico, Última inbound roteável, Resolver, Feature flag, Business Context, Status, Assignee, Canal, Motivo) e recebe o trilho de histórico removido do cabeçalho.
+`SalesRoutePanel` mantém todos os campos técnicos (Thread ID, Route, Linha, Provider, Endpoint ativo, Histórico de endpoints, Última inbound roteável, Resolver, Feature Flag, Business Context, Status, Assignee, Canal, Motivo da resolução) e recebe o bloco "Histórico de endpoints utilizados" removido do cabeçalho.
 
-## 9. Timeline — divisor "Número alterado"
+## 10. Timeline
 
-Trocar o chip de uma linha por um divisor com réguas laterais e bloco central em duas linhas:
+Não alterada nesta etapa. O divisor "Número alterado" permanece exatamente como está; melhorias ficam adiadas para a Fase 2.5.2.
 
-```text
-──────────  Número alterado  ──────────
-        2890  ↓  8439
-        13/08 09:42
-```
+## 11. Organização do código
 
-A data/hora vem do `sent_at` da própria mensagem que inaugura o novo endpoint (já disponível no item da timeline) — sem nova consulta.
+Sem inflar `MessagesList.tsx`. A UI sai para componentes dedicados em `src/components/messages/route/`:
 
-## 10. Separação Comercial × Atendimento
+- `SalesConversationHeader.tsx` (já existe) — refatorado para a estrutura de 3 linhas e passa a ser usado pelo `MessagesList`, recebendo status, chips de janela e ações via props.
+- `SalesConversationMeta.tsx` (novo) — Linha 2 e Linha 3 (telefone/responsável e badges).
+- `SalesComposerStatus.tsx` (novo) — avisos do composer.
 
-Confirmação por inspeção: `EndpointBadge` é usado apenas por `src/components/inbox/InboxThreadList.tsx` e telas de Atendimento; `RouteBadge` apenas pelo Comercial (`MessagesList.tsx` + `route/*`). Nada em `src/components/inbox/`, `MobileInbox` ou mobile será editado.
+`MessagesList.tsx` fica responsável apenas pela composição, com remoção líquida de código do cabeçalho/rodapé.
 
+## 12. Comercial ≠ Atendimento
 
-## 11. Validação
+Confirmado por inspeção: `EndpointBadge` é usado apenas por `src/components/inbox/InboxThreadList.tsx` e telas de Atendimento; `RouteBadge` apenas pelo Comercial. Nenhum arquivo em `src/components/inbox/`, `src/components/mobile/` ou `MobileInbox` será tocado.
 
-- `tsgo --noEmit` (typecheck), lint e build.
-- Screenshots via Playwright no preview autenticado: lista Comercial, conversa aberta, modal Detalhes da rota, painel de detalhes e Configurações > Integrações > WhatsApp Comercial. Se a sessão não estiver injetada, informo e entrego as telas acessíveis.
+## 13. Validação
 
-## Arquivos que serão alterados
+- `tsgo --noEmit`, lint e build.
+- Screenshots via Playwright no preview: lista Comercial, conversa, modal "Detalhes da rota", painel de detalhes e Configurações > Integrações > WhatsApp Comercial, com comparação antes/depois. Caso a sessão autenticada não esteja disponível no preview, informo explicitamente e entrego as telas acessíveis.
 
-- `src/pages/messages/MessagesList.tsx` (cabeçalho, item da lista, rodapé, divisor da timeline)
-- `src/components/messages/route/RouteIndicators.tsx` (variantes do `RouteBadge`, estado sem rota, tooltip)
-- `src/components/messages/route/SalesConversationHeader.tsx` (mesma reorganização em 3 linhas)
-- `src/components/messages/route/SalesRoutePanel.tsx` (rótulo público vs técnico, histórico)
-- `src/components/messages/route/SalesRouteDetailsDialog.tsx` (mantém termos técnicos)
+## Arquivos previstos
 
-Nenhum arquivo em `supabase/`, `src/hooks/messages/*` (lógica de dados), `src/components/inbox/*` ou mobile de Atendimento será modificado.
+Alterados:
+- `src/pages/messages/MessagesList.tsx`
+- `src/components/messages/route/RouteIndicators.tsx`
+- `src/components/messages/route/SalesConversationHeader.tsx`
+- `src/components/messages/route/SalesRoutePanel.tsx`
+- `src/components/messages/route/SalesRouteDetailsDialog.tsx` (apenas rótulos técnicos)
+
+Novos:
+- `src/components/messages/route/SalesConversationMeta.tsx`
+- `src/components/messages/route/SalesComposerStatus.tsx`
+
+Nada em `supabase/`, hooks de dados, Atendimento ou Mobile.
