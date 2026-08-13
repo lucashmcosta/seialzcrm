@@ -40,6 +40,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { useOrganization } from '@/hooks/useOrganization';
+// Fase 2.5 — UI Comercial (Route/número/provider). Somente leitura.
+import { RouteBadge } from '@/components/messages/route/RouteIndicators';
+import { SalesRouteDetailsDialog } from '@/components/messages/route/SalesRouteDetailsDialog';
+import { useSalesRoute } from '@/hooks/messages/useSalesRoute';
+import { useThreadEndpointHistory } from '@/hooks/messages/useThreadEndpointHistory';
+import { useRouteResolverFlag } from '@/hooks/messages/useRouteResolverFlag';
+import { useConsolidatedThreadIds } from '@/hooks/messages/useConsolidatedThreadIds';
+import { EndpointHistoryTrail, EndpointStatusChip, providerLabel } from '@/components/messages/route/RouteIndicators';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
@@ -194,10 +202,11 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   onHide?: (threadId: string) => void;
   endpointAddress?: string | null;
   endpointPurpose?: string | null;
+  endpointProvider?: string | null;
   officialNumbers?: Set<string>;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, officialNumbers, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, officialNumbers, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -223,7 +232,8 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
-            {endpointAddress && <EndpointBadge externalAddress={endpointAddress} purpose={endpointPurpose ?? null} officialNumbers={endpointPurpose == null ? officialNumbers : undefined} />}
+            {/* Fase 2.5 — badge Comercial: Route + número atual + provider */}
+            <RouteBadge address={endpointAddress ?? null} provider={endpointProvider ?? null} state={endpointAddress ? 'online' : 'no_route'} />
             {(value.unread) && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
@@ -648,6 +658,23 @@ function DesktopMessagesList() {
   const hookedThreadBusinessContext = useThreadBusinessContext(selectedThreadId);
   const selectedThreadBusinessContext: ThreadBusinessContext =
     hookedThreadBusinessContext ?? 'sales';
+
+  // ---------------------------------------------------------------------------
+  // Fase 2.5 — Route Comercial da thread selecionada (SOMENTE LEITURA).
+  // Reusa o resolver V2 do cliente; nenhum backend foi alterado.
+  // ---------------------------------------------------------------------------
+  const { route: salesRoute } = useSalesRoute({
+    threadId: selectedThreadId,
+    organizationId: organization?.id,
+    businessContext: selectedThreadBusinessContext,
+    channel: 'whatsapp',
+  });
+  const { history: threadEndpointHistory } = useThreadEndpointHistory(selectedThreadId);
+  const { flag: routeResolverFlag } = useRouteResolverFlag(organization?.id);
+  const salesRouteEndpointState: 'online' | 'offline' | 'no_route' = salesRoute.resolved
+    ? salesRoute.activeEndpoint?.is_active === true ? 'online' : 'offline'
+    : 'no_route';
+  const [routeDetailsOpen, setRouteDetailsOpen] = useState(false);
   const salesEndpoints = useMemo(
     () => filterEndpointsByIntent(orgEndpoints, 'sales'),
     [orgEndpoints],
@@ -1548,8 +1575,14 @@ function DesktopMessagesList() {
 
   // Hidden threads (per-user, with 5s undo)
   const { hideThread, unhideThread, isHidden } = useHiddenThreads(userProfile?.id);
+  // Fase 2.5 — threads já consolidadas (merged) não aparecem no Comercial.
+  // A query/RPC de listagem permanece intacta: aqui apenas ocultamos da exibição.
+  const consolidatedThreadIds = useConsolidatedThreadIds(
+    (filteredThreads ?? []).map((t) => t.id),
+  );
   const visibleThreads = filteredThreads
-    ?.filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at))
+    ?.filter((t) => !consolidatedThreadIds.has(t.id))
+    .filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at))
     .filter((t) => endpointFilter === 'all' || threadEndpointMap[t.id] === endpointFilter);
 
   const visibleThreadsWithSelectedRaw = selectedThreadOverride
@@ -1778,12 +1811,13 @@ function DesktopMessagesList() {
                         locale={locale as 'pt-BR' | 'en-US'}
                         onHide={handleHideThread}
                         endpointAddress={
-                          hasMultipleEndpoints
-                            ? endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.external_address ?? null
-                            : null
+                          endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.external_address ?? null
                         }
                         endpointPurpose={
                           endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.purpose ?? null
+                        }
+                        endpointProvider={
+                          endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.provider ?? null
                         }
                         officialNumbers={officialNumbers}
                       />
@@ -1828,9 +1862,13 @@ function DesktopMessagesList() {
                           >
                             {selectedThread.contact_name}
                           </Link>
-                          {hasMultipleEndpoints && selectedThreadEndpoint && (
-                            <EndpointBadge externalAddress={selectedThreadEndpoint.external_address} purpose={selectedThreadEndpoint.purpose ?? null} size="lg" />
-                          )}
+                          {/* Fase 2.5 — Route Comercial (identidade da conversa) */}
+                          <RouteBadge
+                            address={salesRoute.activeEndpoint?.external_address ?? selectedThreadEndpoint?.external_address ?? null}
+                            provider={salesRoute.activeEndpoint?.provider ?? selectedThreadEndpoint?.provider ?? null}
+                            state={salesRouteEndpointState}
+                            size="lg"
+                          />
                           <WhatsAppWindowChip
                             channel="whatsapp"
                             lastInboundAt={composerLastInboundAt}
@@ -1845,15 +1883,65 @@ function DesktopMessagesList() {
                         </div>
                         <p className="text-xs text-muted-foreground truncate">
                           {selectedThread.contact_phone}
-                          {selectedEndpointIdentity && (
-                            <span> · {selectedEndpointIdentity}</span>
-                          )}
                           {selectedThread.assigned_user_name && (
                             <span> · {locale === 'pt-BR' ? 'Atribuída a' : 'Assigned to'} {selectedThread.assigned_user_name}</span>
                           )}
                         </p>
+
+                        {/* Route Comercial · número ativo · provider · status */}
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="text-[11px] text-muted-foreground">
+                            {salesRoute.line?.name ?? salesRoute.line?.route_slug ?? 'Sem Route'}
+                            {' · '}
+                            <span className="font-data text-foreground">
+                              {salesRoute.activeEndpoint?.external_address
+                                ?? selectedThreadEndpoint?.external_address
+                                ?? 'Sem número'}
+                            </span>
+                            {' · '}
+                            {providerLabel(salesRoute.activeEndpoint?.provider ?? selectedThreadEndpoint?.provider)}
+                          </span>
+                          <EndpointStatusChip state={salesRouteEndpointState} />
+                          <span className="text-[10px] text-muted-foreground">
+                            {routeResolverFlag.enabledForOrg ? 'Route Resolver V2' : 'Modo legado'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setRouteDetailsOpen(true)}
+                            className="text-[10px] font-semibold text-primary hover:underline"
+                          >
+                            Detalhes
+                          </button>
+                        </div>
+
+                        {threadEndpointHistory.length > 1 && (
+                          <div className="mt-1 flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] text-muted-foreground">
+                              Histórico de endpoints utilizados
+                            </span>
+                            <EndpointHistoryTrail items={threadEndpointHistory} />
+                          </div>
+                        )}
                       </div>
                     </div>
+
+                    <SalesRouteDetailsDialog
+                      open={routeDetailsOpen}
+                      onOpenChange={setRouteDetailsOpen}
+                      threadId={selectedThread.id}
+                      organizationId={organization?.id}
+                      businessContext={selectedThreadBusinessContext}
+                      channel="whatsapp"
+                      contactName={selectedThread.contact_name}
+                      contactPhone={selectedThread.contact_phone}
+                      assigneeName={selectedThread.assigned_user_name ?? null}
+                      statusLabel={
+                        selectedThread.status && statusConfig[selectedThread.status]
+                          ? (locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn)
+                          : null
+                      }
+                    />
+
 
                     {/* Actions — single "More" menu with all actions */}
                     <div className="flex items-center gap-2 shrink-0">

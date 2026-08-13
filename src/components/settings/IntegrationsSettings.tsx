@@ -20,6 +20,7 @@ import {
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
+import { SalesWhatsAppSettingsSection } from './SalesWhatsAppSettingsSection';
 import { TelephonyAvailabilitySettings } from './TelephonyAvailabilitySettings';
 import { KommoMigrationDialog } from './KommoMigrationDialog';
 import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaLeadAdsDialog';
@@ -444,6 +445,20 @@ export function IntegrationsSettings() {
             )}
           </section>
         )}
+
+        {/* Fase 2.5 — WhatsApp Comercial (Route/número ativo/endpoints) — somente leitura */}
+        {(selectedCategory === 'whatsapp' || selectedCategory === 'all') && (
+          <section id="whatsapp-comercial" className="scroll-mt-6 space-y-4">
+            <div>
+              <h3 className="text-base font-semibold">WhatsApp Comercial</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Route Comercial usada nas conversas de vendas e mapeamento de números.
+              </p>
+            </div>
+            <SalesWhatsAppSettingsSection />
+          </section>
+        )}
+
 
         {/* Integrations Grid */}
         {isLoading ? (
