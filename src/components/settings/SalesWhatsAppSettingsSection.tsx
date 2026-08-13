@@ -23,7 +23,8 @@ import {
 import { useOrganization } from '@/hooks/useOrganization';
 import {
   useSalesRouteManager, useCanManageIntegrations,
-  type ActivationBlockedReason, type ManagerInstance, type SalesProvider,
+  type ActivationBlockedReason, type EndpointTechnicalStatus,
+  type ManagerInstance, type SalesProvider,
 } from '@/hooks/settings/useSalesRouteManager';
 import { SalesWhatsAppConnectDialog } from '@/components/settings/SalesWhatsAppConnectDialog';
 import { ProviderChip } from '@/components/messages/route/RouteIndicators';
@@ -52,6 +53,22 @@ const BLOCKED_LABEL: Record<ActivationBlockedReason, string> = {
   NOT_CONNECTED: 'sessão desconectada',
   IDENTITY_UNKNOWN: 'identidade não confirmada',
   IDENTITY_MISMATCH: 'número conectado divergente',
+};
+
+/**
+ * Status técnico do endpoint → linguagem humana. A fonte é exclusivamente
+ * `technicalStatus` vindo de `sales-route-operations/status` (estado real da
+ * sessão do provedor). Nada de `close`/`ONLINE` nem estado persistido.
+ */
+const ENDPOINT_STATUS_LABEL: Record<EndpointTechnicalStatus, { label: string; ok: boolean }> = {
+  CONNECTED: { label: 'Conectado', ok: true },
+  CONNECTING: { label: 'Conectando…', ok: false },
+  QR_REQUIRED: { label: 'QR necessário', ok: false },
+  DISCONNECTED: { label: 'Desconectado', ok: false },
+  IDENTITY_UNCONFIRMED: { label: 'Identidade não confirmada', ok: false },
+  IDENTITY_MISMATCH: { label: 'Número conectado divergente', ok: false },
+  NOT_LINKED: { label: 'Sem sessão vinculada', ok: false },
+  PROVIDER_MANAGED: { label: 'Gerenciado pelo provedor', ok: false },
 };
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -281,7 +298,10 @@ export function SalesWhatsAppSettingsSection() {
                     <span className="font-data">{ep.addressMasked ?? '—'}</span>
                     <span className="flex flex-wrap items-center gap-2">
                       <ProviderChip provider={ep.providerRaw} />
-                      <span className="text-[10px] text-muted-foreground">{ep.technicalStatus}</span>
+                      <StateChip
+                        ok={(ENDPOINT_STATUS_LABEL[ep.technicalStatus] ?? ENDPOINT_STATUS_LABEL.DISCONNECTED).ok}
+                        label={(ENDPOINT_STATUS_LABEL[ep.technicalStatus] ?? ENDPOINT_STATUS_LABEL.DISCONNECTED).label}
+                      />
                       {!ep.linkActive && (
                         <span className="text-[10px] text-muted-foreground">vínculo inativo</span>
                       )}
