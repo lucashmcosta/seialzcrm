@@ -47,8 +47,6 @@ import { SalesConversationMeta } from '@/components/messages/route/SalesConversa
 import { SalesComposerStatus } from '@/components/messages/route/SalesComposerStatus';
 import { Info } from '@phosphor-icons/react';
 import { useSalesRoute } from '@/hooks/messages/useSalesRoute';
-import { useThreadEndpointHistory } from '@/hooks/messages/useThreadEndpointHistory';
-import { useRouteResolverFlag } from '@/hooks/messages/useRouteResolverFlag';
 import { useConsolidatedThreadIds } from '@/hooks/messages/useConsolidatedThreadIds';
 
 import { usePermissions } from '@/hooks/usePermissions';
