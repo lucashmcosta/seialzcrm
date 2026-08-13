@@ -127,13 +127,16 @@ serve(async (req) => {
       organizationId, contactId, threadId, message,
       mediaUrl, mediaUrls, mediaType, mimeType: payloadMime, filename: payloadFilename,
       userId, replyToMessageId, isAgentMessage, agentId, senderName,
-      endpointId: explicitEndpointId,
+      endpointId: explicitEndpointIdRaw,
+      manualReplyEndpointId,
       templateId, templateVariables,
       type: payloadType, templateName: directTemplateName,
       languageCode: directLanguageCode, components: directComponents,
       migrationContext,
       senderContext,
     } = body as Record<string, any>;
+    let explicitEndpointId = explicitEndpointIdRaw;
+
 
     threadIdForLog = typeof threadId === "string" ? threadId : null;
     contactIdForLog = typeof contactId === "string" ? contactId : null;
