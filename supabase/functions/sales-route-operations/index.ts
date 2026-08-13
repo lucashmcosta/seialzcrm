@@ -139,10 +139,19 @@ serve(async (req) => {
 
   const evolutionEnabled = await featureFlagEnabled(service, EVOLUTION_FLAG, orgId);
 
+  // Discriminador seguro de EvolutionError: alguns retornos legítimos
+  // (EvolutionQrCode) também têm a chave `code`.
+  function isEvolutionError(v: unknown): v is { code: string; message: string; status: number } {
+    if (!v || typeof v !== "object") return false;
+    const o = v as Record<string, unknown>;
+    return typeof o.code === "string" && typeof o.message === "string" &&
+      typeof o.status === "number";
+  }
+
   // Provider Evolution só é instanciado quando realmente necessário.
   const evolution = () => {
     const env = readEvolutionEnv();
-    if ("code" in env) return env;
+    if (isEvolutionError(env)) return env;
     return makeEvolutionProvider(env, requestId);
   };
 
@@ -166,7 +175,9 @@ serve(async (req) => {
     if (row.organization_id !== orgId) return { error: "INSTANCE_FOREIGN_ORG" } as const;
 
     const provider = evolution();
-    if ("code" in provider) return { error: provider.code, message: provider.message } as const;
+    if (isEvolutionError(provider)) {
+      return { error: provider.code, message: provider.message } as const;
+    }
 
     const state = await provider.connectionState(instanceName);
     if (typeof state !== "string") {
@@ -383,15 +394,21 @@ serve(async (req) => {
         if (row.organization_id !== orgId) return json(403, { error: "INSTANCE_FOREIGN_ORG" });
 
         const provider = evolution();
-        if ("code" in provider) return json(provider.status ?? 502, { error: provider.code });
+        if (isEvolutionError(provider)) return json(provider.status ?? 502, { error: provider.code });
 
         const out = await provider.connect(name);
-        if ("code" in out) return json(out.status ?? 502, { error: out.code, message: out.message });
+        // ATENÇÃO: EvolutionQrCode também possui `code` (string do QR). A detecção
+        // de erro precisa usar o discriminador completo, nunca só a chave `code`.
+        if (isEvolutionError(out)) {
+          return json(out.status ?? 502, { error: out.code, message: out.message });
+        }
 
         const sync = await syncEvolutionIdentity(name);
         return json(200, {
           restarted: true,
-          pairing: "code" in (out as Record<string, unknown>) ? null : out,
+          pairing: out
+            ? { pairingCode: out.pairingCode ?? null, hasQrCode: !!(out.code || out.base64) }
+            : null,
           state: "error" in sync ? null : sync.state,
         });
       }
