@@ -1558,8 +1558,14 @@ function DesktopMessagesList() {
 
   // Hidden threads (per-user, with 5s undo)
   const { hideThread, unhideThread, isHidden } = useHiddenThreads(userProfile?.id);
+  // Fase 2.5 — threads já consolidadas (merged) não aparecem no Comercial.
+  // A query/RPC de listagem permanece intacta: aqui apenas ocultamos da exibição.
+  const consolidatedThreadIds = useConsolidatedThreadIds(
+    (filteredThreads ?? []).map((t) => t.id),
+  );
   const visibleThreads = filteredThreads
-    ?.filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at))
+    ?.filter((t) => !consolidatedThreadIds.has(t.id))
+    .filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at))
     .filter((t) => endpointFilter === 'all' || threadEndpointMap[t.id] === endpointFilter);
 
   const visibleThreadsWithSelectedRaw = selectedThreadOverride
