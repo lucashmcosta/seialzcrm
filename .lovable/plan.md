@@ -39,15 +39,16 @@ Ou seja: infraestrutura pronta, fluxo de conexão ausente **nesta tela**. Esta f
 **Backend (`supabase/functions/sales-route-operations/index.ts`) — aditivo:**
 
 - Nova op `connectInstance`: valida admin de integrações (`can_manage_integrations_in_org`), flag `evolution_api_enabled`, instância da própria org; chama `provider.connect(name)`; grava `last_known_state = 'connecting'` e `last_qr_expires_at`; retorna `{ pairingCode, qrBase64, count }`.
-- Nova op `instanceState` (polling do modal): lê o estado real; ao detectar `open`, chama `syncEvolutionIdentity` (grava `owner_jid` + `owner_number_digits` só da resposta real do servidor) e devolve `{ state, connected, identityKnown, identityMatchesEndpoint, expectedMasked, ownerMasked }`. `connected: true` sozinho não é sucesso — o frontend exige `identityKnown && identityMatchesEndpoint !== false`.
-- `status` passa a devolver, por endpoint, `activationEligible` + `activationBlockedReason`, calculados no servidor: para Evolution exige instância vinculada com `last_known_state = 'open'` **e** `owner_number_digits` igual aos dígitos do endereço do endpoint; para Meta/Twilio mantém a regra atual (vínculo ativo).
+- Nova op `instanceState` (polling do modal): lê o estado real; ao detectar `open`, chama `syncEvolutionIdentity` (grava `owner_jid` + `owner_number_digits` só da resposta real do servidor) e devolve `{ state, connected, identityKnown, identityMatchesEndpoint, expectedMasked, ownerMasked }`, todos como booleanos explícitos (`true`/`false`) ou `null` quando indeterminado.
+- `status` passa a devolver, por endpoint, `activationEligible` + `activationBlockedReason` (apenas apresentação): para Evolution exige instância vinculada com `last_known_state = 'open'` **e** `owner_number_digits` igual aos dígitos do endereço do endpoint; para Meta/Twilio mantém a regra atual (vínculo ativo).
+- **`setActiveEndpoint` — revalidação server-side no clique (Evolution)**: imediatamente antes de chamar `rotate_messaging_line_endpoint`, localizar a instância vinculada, consultar o estado REAL na Evolution, exigir `open/connected`, ressincronizar `owner_jid` + `owner_number_digits` a partir da resposta real e exigir igualdade exata com o número normalizado do endpoint. Falhas abortam sem tocar `active_endpoint_id`, com erros: `ACTIVATE_EVOLUTION_NOT_CONNECTED` (desconectado), `ACTIVATE_EVOLUTION_IDENTITY_UNKNOWN` (identidade ausente), `ACTIVATE_EVOLUTION_IDENTITY_MISMATCH` (número divergente). Meta/Twilio preservam as validações já aprovadas.
 - `restartInstance` permanece como está (sem vazar QR).
 - Deploy da função ao final.
 
 **Frontend:**
 
 - `src/hooks/settings/useSalesRouteManager.ts`: adicionar `connectInstance` (mutação) e `instanceState` (query com `refetchInterval` ativo **somente** enquanto o modal estiver aberto).
-- Novo `src/components/settings/SalesWhatsAppConnectDialog.tsx`: modal do QR (imagem `data:image/png;base64,...`, instruções, expiração, "Atualizar QR"). Fecha como sucesso apenas quando `connected && identityKnown && identityMatchesEndpoint !== false`; em mismatch/identidade desconhecida mantém aberto com `Alert` destrutivo explicando o problema.
+- Novo `src/components/settings/SalesWhatsAppConnectDialog.tsx`: modal do QR (imagem `data:image/png;base64,...`, instruções, expiração, "Atualizar QR"). Fecha como sucesso **apenas** com `connected === true && identityKnown === true && identityMatchesEndpoint === true`; qualquer outro estado (inclusive `null`/`undefined`) mantém o modal aberto, e mismatch/identidade desconhecida exibe `Alert` destrutivo explicando o problema.
 - `SalesWhatsAppSettingsSection.tsx`:
   - mapa `estado técnico → rótulo humano` (`open→Conectado`, `connecting→Conectando…`, `close`+QR válido→`QR necessário`, resto→`Desconectado`);
   - remover o chip "Evolution · habilitada";
