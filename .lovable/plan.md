@@ -35,22 +35,23 @@ O link `Detalhes` de 10px vira botão real (`Button variant="outline" size="sm"`
 
 ## 4. Estado sem Route
 
-- Substituir "Sem Route" isolado por `⚠ Conversa legada — sem rota ativa` em tom de alerta (âmbar).
+- Substituir "Sem Route" isolado por `⚠ Sem rota disponível` em tom de alerta (âmbar).
 - Tooltip fixo: "Esta conversa ainda não possui uma mensagem inbound roteável."
-- Aplicado em `RouteBadge` (estado `no_route`) e no rótulo de Route do cabeçalho. No painel técnico o valor cru continua visível.
+- Aplicado em `RouteBadge` (estado `no_route`) e no rótulo de Route do cabeçalho. No painel técnico o estado bruto do resolver continua visível.
 
 ## 5. Badge da lista de conversas
 
-Em `ChatListItem` (`MessagesList.tsx` ~236), trocar o badge longo por `RouteBadge variant="compact"`: apenas marcador do provider + últimos 4 dígitos (ex.: `[E] 8439`), com `title` completo no hover. Sem rota: ícone de alerta discreto, sem texto.
+Em `ChatListItem` (`MessagesList.tsx` ~236), trocar o badge longo por `RouteBadge variant="compact"`: `Evolution • 8439` / `Meta • 2890`, com `title` completo no hover. Sem rota: apenas ícone de alerta discreto com tooltip explicativo, sem texto.
 
 ## 6. Rodapé / composer
 
-Substituir a frase "Sem inbound recente — envio livre pelo número ••••8439" por avisos com hierarquia clara (`MessagesList.tsx` ~2427):
+Substituir a frase "Sem inbound recente — envio livre pelo número ••••8439" por avisos com hierarquia clara (`MessagesList.tsx` ~2427), sem linguagem técnica como "24h fechada":
 
-- Janela fechada: `⚠ Sem inbound recente` + linha secundária "Envio permitido apenas por template."
-- Route indisponível (`no_route`): `⚠ Conversa sem rota ativa` + "Responder somente após nova mensagem do cliente."
+- Janela fechada: `⚠ Sem inbound recente` + linha secundária "Somente template disponível".
+- Sem rota (`no_route`): `⚠ Sem rota disponível` + "Responder somente após nova mensagem do cliente."
 
 Apenas texto/estilo — a lógica de gate (`outOfWindow`, `composerBypassesWindow`) permanece exatamente como está.
+
 
 ## 7. Hierarquia visual
 
