@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
 import { getServiceWindow, type ContactCtwaInputs } from "../_shared/service-window.ts";
+import { resolveManualReplyEndpoint, replyChoiceMetadata } from "../_shared/manual-reply-endpoint.ts";
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
