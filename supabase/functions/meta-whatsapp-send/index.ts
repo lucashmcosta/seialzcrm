@@ -805,7 +805,7 @@ serve(async (req) => {
         media_urls: hasMedia ? mediaUrlsArr : null,
         media_type: hasMedia ? kind : null,
         template_id: templateRow?.id ?? null,
-        metadata: { meta_cloud: baseMeta },
+        metadata: { meta_cloud: baseMeta, ...replyChoiceMeta },
       })
       .select("id")
       .single();
