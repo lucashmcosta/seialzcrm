@@ -1,55 +1,76 @@
-# Fase 3 — WhatsApp Comercial como camada operacional multi-provider
+# Fase 3 — WhatsApp Comercial multi-provider (revisado: autorização + atomicidade)
 
-Objetivo: uma única tela operacional (Configurações > Integrações > WhatsApp Comercial) para administrar os números Comerciais de Meta Cloud, Twilio e Evolution, mantendo a separação **Integração (credencial) ≠ Configuração (números/linhas) ≠ Regra (Route/resolver)** e sem duplicar nada que já existe.
+Plano anterior aprovado, com as duas correções arquiteturais exigidas resolvidas abaixo. Há **um ponto de parada**: o `provisionEndpoint` não tem hoje mecanismo transacional e precisa da sua autorização para uma migração mínima.
 
-## Mapa do que já existe (inspeção feita antes do plano)
+## Correção 1 — Autorização (reuso, sem sistema paralelo)
 
-Integração (credencial do provider) — permanece onde está:
-- Meta Cloud: `MetaWhatsAppCloudDialog` + `MetaWabasSection`, `AddMetaWabaDialog`, `AddMetaWhatsAppNumberDialog`, `MetaAdditionalEndpointsSection`, `MigrateEndpointDialog`; hooks `useMetaConnection`, `useMetaMultiWabaFlag`; functions `meta-whatsapp-connect/verify/disconnect/send/webhook/templates-*`.
-- Twilio: `TwilioNumberManagement`, `WhatsAppIntegrationStatus`, `WhatsAppInboundSettings`; functions `twilio-whatsapp-setup/send/webhook/templates`.
-- Evolution: `EvolutionWhatsAppDialog` (tenant) e `src/pages/admin/AdminEvolution.tsx` (plataforma); hook `useEvolutionInstances`; functions `evolution-instance-manager` (create/connect/logout/delete/connectionState/webhookFind/webhookSet), `evolution-webhook`, `evolution-whatsapp-send`, `evolution-health-check`; `_shared/evolution/*` (client + provider + state).
-- Endpoints/linhas: `AddWhatsAppEndpointDialog`, `AdditionalEndpointsSection`, `EndpointInboundSettings`, hooks `useOrgWhatsAppEndpoints`, `useEndpointNumbers`, `useActiveWhatsAppProviders`.
-- Regra: `useSalesRouteConfig` / `useSalesRoute` (leitura de Route), `salesReplyRoute.ts` + `dispatchWhatsAppSend.ts` (pipeline único de envio), resolver V2 no backend.
+Helpers de autorização **já existentes** no banco (verificados):
 
-Schema (verificado): `communication_endpoints`, `messaging_lines` (`active_endpoint_id`, `inbox_key`, `route_slug`), `messaging_line_endpoints` (`is_active`, `linked_at`, `unlinked_at`), `messaging_line_rotations` (`from_endpoint_id`, `to_endpoint_id`, `reason`, `rotated_by_user_id`, `rotated_at`) e `evolution_instances`. Flags `evolution_api_enabled` e `conv_route_resolver_v2` estão ON apenas para a Viagi.
+| Helper | Assinatura | Uso |
+|---|---|---|
+| `can_manage_integrations_in_org(_org_id)` | SECURITY DEFINER, STABLE | gate de todas as operações que mudam infraestrutura WhatsApp |
+| `user_has_org_permission(_org_id, _permission)` | idem, aceita `is_admin_user()` | alternativa genérica / admin de plataforma |
+| `is_org_admin(_org_id)` | idem | já exigido internamente pela rotação de Route |
+| `current_user_id()`, `current_user_org_ids()` | base das RLS | vínculo org do chamador |
 
-Conclusão: **nenhuma migração é necessária** — o histórico de troca de número já tem tabela própria e todos os vínculos existem.
+Política aplicada (nada novo é inventado):
 
-## O que será construído
+- **Mutações** — `provisionEndpoint`, `setActiveEndpoint`, vínculo/desvínculo com Route, `restart`, `reconnect` (connect/QR), `disconnect` (logout), `delete/remove`: exigem JWT de usuário **+** `can_manage_integrations_in_org(org)` = true, avaliado no servidor via RPC executada com o **JWT do usuário** (cliente anon com `Authorization` repassado, para que `current_user_id()` valha). Falha ⇒ `403 FORBIDDEN_INTEGRATIONS_ADMIN`.
+- **Leitura/status/diagnóstico/teste de conexão**: JWT + vínculo ativo na org (RLS já cobre); sem exigência de permissão administrativa.
+- `setActiveEndpoint` mantém, **além** disso, a checagem própria de `is_org_admin` que já existe dentro da RPC de rotação — não vou relaxá-la.
+- `evolution-instance-manager` hoje só valida "JWT presente". Será acrescentado o mesmo gate para `create/connect/logout/delete/restart` (mantendo rate limit, flag e validação de nome de instância). `connectionState`, `webhookFind` e `serverInfo` seguem como leitura.
+- A UI esconde ações de mutação quando `permissions.canManageIntegrations` é false (hook `usePermissions` existente) — o servidor continua sendo a autoridade.
 
-### 1. Camada de adapters (backend, provider-agnostic)
-Novo `_shared/whatsapp-provider/` com a interface `ProviderConnectionAdapter` e capacidades declaradas:
+## Correção 2 — Atomicidade real
+
+### `setActiveEndpoint` — resolvido por reuso, sem migração
+Já existe `public.rotate_messaging_line_endpoint(p_line_id, p_endpoint_id, p_reason)` — SECURITY DEFINER, e dentro de **uma única transação** ela: dá `SELECT ... FOR UPDATE` na linha, valida Route sales/org/canal/endpoint ativo/endpoint não em uso por outra Route, exige `is_org_admin`, garante o vínculo em `messaging_line_endpoints`, atualiza `messaging_lines.active_endpoint_id` e insere `messaging_line_rotations` com from/to/reason/autor/data. Qualquer `RAISE` desfaz tudo.
+⇒ A operação passa a ser **exclusivamente** essa RPC, chamada com o JWT do usuário. Nada de update + insert separados na Edge Function.
+
+### `provisionEndpoint` — PARADA: não existe mecanismo atômico
+Writes que precisam ser atômicos em um único provisionamento:
+1. `communication_endpoints` — insert (ou reuso/reativação do endpoint do mesmo org+canal+endereço);
+2. `messaging_line_endpoints` — insert/reativação do vínculo com a Route Comercial;
+3. `evolution_instances` — insert/atualização do mapeamento `instance_name → endpoint_id` (somente provider Evolution);
+4. nada além disso (Route/`active_endpoint_id` fica fora — é a etapa "tornar ativo", já atômica pela rotação).
+
+Hoje isso só é possível como 2–3 chamadas separadas do PostgREST/Edge Function, ou seja, estado parcial se uma etapa falhar (ex.: endpoint criado sem vínculo, ou instância Evolution órfã). Não existe RPC equivalente no projeto (só `resolve_communication_endpoint`, de leitura, e `populate_communication_endpoints_from_v2_senders`, backfill em massa).
+
+**Menor migração possível — aguardando sua autorização (não vou criar sem o seu OK):**
 
 ```text
-EvolutionAdapter  qr=true  restart=true  disconnect=true  reconnect=true
-MetaAdapter       qr=false restart=false verifyNumber=true verifyWebhook=true
-TwilioAdapter     qr=false restart=false verifyNumber=true verifyWebhook=true
+CREATE OR REPLACE FUNCTION public.provision_sales_endpoint(
+  p_organization_id uuid,
+  p_line_id         uuid,
+  p_provider        text,          -- 'meta' | 'twilio' | 'evolution'
+  p_address         text,          -- número/endereço já existente na integração
+  p_display_name    text,
+  p_instance_name   text DEFAULT NULL   -- apenas Evolution
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 ```
-Cada adapter apenas **delega** para a camada específica já existente do provider (Evolution client, Meta verify, Twilio setup). Nenhuma credencial nova, nenhum manager universal.
+Conteúdo (uma transação, sem tocar Route/regra):
+- exige `current_user_id() IS NOT NULL`, `p_organization_id = ANY(current_user_org_ids())` e `can_manage_integrations_in_org(p_organization_id)` — senão `PROVISION_FORBIDDEN`;
+- `SELECT ... FOR UPDATE` na `messaging_lines` alvo; valida `inbox_key='sales'`, mesma org, canal `whatsapp`;
+- upsert em `communication_endpoints` (org + canal + endereço), preservando row existente;
+- upsert do vínculo em `messaging_line_endpoints` (reativa se estava `unlinked`);
+- quando `p_provider='evolution'`: upsert em `evolution_instances` amarrando `instance_name` ao endpoint, com erro `PROVISION_INSTANCE_CONFLICT` se a instância já pertencer a outra org/endpoint;
+- retorna `jsonb` com `endpoint_id`, `line_id`, `created|reused`.
+Sem novas tabelas, sem novas colunas, sem GRANT novo além de `EXECUTE` para `authenticated`. Rollback = `DROP FUNCTION`.
 
-### 2. Nova Edge Function `sales-route-operations`
-JWT obrigatório + validação de `organization_id` em toda operação. Operações:
-- `status` — status real por endpoint, cruzando fonte técnica do provider com `communication_endpoints`/`evolution_instances`; retorna estado normalizado (Conectado / Conectando / QR necessário / Desconectado / Desconhecido) e a flag de **divergência**.
-- `provisionEndpoint` — cria/atualiza `communication_endpoints` e vincula em `messaging_line_endpoints` (Evolution: só depois de `Connected` real).
-- `setActiveEndpoint` — valida (org, pertence à Route, ativo, provider operacional, elegível para envio) e então atualiza somente `messaging_lines.active_endpoint_id`, registrando a troca em `messaging_line_rotations` (autor + motivo). Não cria Route, não apaga histórico.
-- `diagnose` — checklist PASS/FAIL: integração, credenciais, webhook, endpoint, status real, Route, vínculo, endpoint ativo, resolver, + info de última inbound/outbound.
-- `testConnection` — status/latência/versão/sessão do provider, sem enviar mensagem.
+Se você não autorizar essa RPC, a alternativa é o wizard não provisionar automaticamente: ele exibiria o passo "vincular número à Route" apontando para a tela existente `AddWhatsAppEndpointDialog` / `AdditionalEndpointsSection` — funcional, mas menos fluido.
 
-### 3. `evolution-instance-manager`: apenas `restart` e `serverInfo`
-Adições mínimas mantendo JWT, flag, rate limit e validação de nome de instância. Nada de lógica de Route dentro dele.
+## Restante do plano (inalterado e aprovado)
 
-### 4. Teste de envio
-Reutiliza o pipeline Comercial existente (`dispatchWhatsAppSend` → resolver/dispatcher). Mostra rota resolvida, endpoint usado, provider e o resultado (aceito/enviado/erro). Nunca chama o provider direto.
+- **Adapters provider-agnostic** em `_shared/whatsapp-provider/`, declarando capabilities (Evolution: QR/restart/reconnect/disconnect; Meta/Twilio: verificação de número e webhook), delegando para a camada específica já existente de cada provider.
+- **Edge Function `sales-route-operations`**: `status` (status REAL do provider cruzado com `communication_endpoints`/`evolution_instances`, com flag de divergência CRM × provider), `provisionEndpoint` (via RPC acima), `setActiveEndpoint` (via `rotate_messaging_line_endpoint`), `diagnose` (checklist PASS/FAIL), `testConnection` (sem enviar mensagem).
+- **`evolution-instance-manager`**: acrescenta apenas `restart` e `serverInfo` + o gate de permissão.
+- **Teste de envio** sempre pelo dispatcher/resolver Comercial real (`dispatchWhatsAppSend` → `salesReplyRoute`), mostrando Route, endpoint, provider e resultado.
+- **Tela WhatsApp Comercial**: Status geral (com divergência), tabela de números/endpoints com ações por capability, wizard de novo número (Evolution: create → QR → Connected real → provisionar/vincular → perguntar "tornar ativo?"; Meta/Twilio: reutilizar integração e números já configurados, com atalho para a tela de integração quando o provider não estiver configurado), operações e histórico de trocas lido de `messaging_line_rotations`.
+- **Separação mantida**: Integração (credenciais, telas atuais de Meta/Twilio/Evolution) ≠ Configuração (endpoints, números, vínculos) ≠ Regra (Route, `active_endpoint_id`, resolver, canonicidade). Sem duplicar credenciais, telas, fontes de verdade, endpoints, Routes ou managers.
+- **Intocados**: Atendimento, Mobile, Resolver V2, trigger de canonicidade, merge/unmerge, flag `conv_route_resolver_v2`.
 
-### 5. Tela WhatsApp Comercial (provider-agnostic)
-- **A. Status geral**: Route, número ativo, provider, conexão real, modo de roteamento, status geral, com aviso de divergência quando CRM e provider discordarem.
-- **B. Números/Endpoints**: tabela número · provider · status real · Route · ativo/histórico · ações (ações filtradas pelas capabilities do adapter).
-- **C. Novo número**: wizard começando pela escolha do provider. Se a integração do provider não estiver configurada, mostra "X ainda não configurado" + botão que abre a **tela de integração existente**. Evolution: cria instância → QR no CRM → aguarda Connected real → provisiona endpoint → vincula à Route → pergunta "tornar ativo?" Meta/Twilio: lista números já configurados, valida, provisiona endpoint, vincula, opcionalmente torna ativo — sem pedir credenciais de novo.
-- **D. Operações**: Reconectar/Restart/Disconnect (Evolution), Testar conexão, Testar envio, Executar diagnóstico, Tornar ativo, histórico de números (datas, autor, motivo) lido de `messaging_line_rotations`.
-- Refresh automático de estado; shadcn; linguagem de negócio (sem UUID, JSON ou termos internos); responsivo.
+## QA final
+Matriz PASS/FAIL por provider (Meta, Twilio, Evolution) × operação (status, diagnóstico, teste de conexão, provisionar, tornar ativo, reconectar, restart, desconectar, remover, teste de envio), mais os gates de permissão (usuário sem `can_manage_integrations` recebe 403) e de atomicidade (falha simulada não deixa estado parcial). Build/typecheck/console eu valido aqui; QR real, envio real e inbound real exigem seu clique no preview autenticado.
 
-## Não será tocado
-Atendimento, Mobile, resolver V2, trigger de canonicidade, merge/unmerge e a flag `conv_route_resolver_v2`. As telas de integração de Meta/Twilio/Evolution continuam sendo a única fonte de credencial — a nova tela apenas orquestra e faz o link para elas.
-
-## QA e limites do ambiente
-Ao final entrego: mapa do que existia, o que foi reutilizado, o que foi criado, arquivos alterados, APIs por provider, checklist QA PASS/FAIL e bugs corrigidos. Build/typecheck/console eu valido aqui. Já os passos que dependem de sessão autenticada e de escanear QR real (conectar WhatsApp, envio de teste, inbound) precisam do seu clique no preview logado — o sandbox não tem sessão neste projeto (Supabase externo).
+**Aguardo apenas o seu OK para a RPC `provision_sales_endpoint`** — com ele, sigo com a implementação completa em uma única entrega.
