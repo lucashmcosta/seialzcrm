@@ -49,33 +49,15 @@ export function SalesRouteDetailsDialog({ open, onOpenChange, ...ctx }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <EndpointStatusChip state={endpointState} />
-          <ProviderChip provider={route.activeEndpoint?.provider ?? null} />
-        </div>
+        {/* Painel de leitura completo (Route, linha, provider, endpoints, assignee) */}
+        <SalesRoutePanel {...ctx} />
 
         <div className="space-y-0.5">
-          <Row label="Thread"><span className="font-data">{ctx.threadId}</span></Row>
           <Row label="Contato">
             {ctx.contactName ?? '—'}
             {ctx.contactPhone ? <span className="font-data"> · {ctx.contactPhone}</span> : null}
           </Row>
-          <Row label="Route">{route.line?.name ?? route.line?.route_slug ?? 'Sem Route'}</Row>
-          <Row label="Messaging Line"><span className="font-data">{route.line?.key ?? route.line?.id ?? '—'}</span></Row>
-          <Row label="Endpoint ativo">
-            <span className="font-data">{route.activeEndpoint?.external_address ?? '—'}</span>
-          </Row>
-          <Row label="Provider">{providerLabel(route.activeEndpoint?.provider)}</Row>
-          <Row label="Histórico de endpoints utilizados">
-            {history.length > 0 ? <EndpointHistoryTrail items={history} className="justify-end" /> : '—'}
-          </Row>
-          <Row label="Última inbound roteável">
-            <span className="font-data">
-              {route.discoveredByEndpoint?.external_address
-                ? `${last4(route.discoveredByEndpoint.external_address)} · ${providerLabel(route.discoveredByEndpoint.provider)}`
-                : '—'}
-            </span>
-          </Row>
+
           <Row label="Último outbound">
             {lastOutbound?.created_at
               ? (
