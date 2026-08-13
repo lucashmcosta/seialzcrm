@@ -1909,8 +1909,18 @@ function DesktopMessagesList() {
                     />
 
 
-                    {/* Actions — single "More" menu with all actions */}
+                    {/* Actions — botão de detalhes da rota + menu único de ações */}
                     <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setRouteDetailsOpen(true)}
+                        title="Detalhes da rota"
+                      >
+                        <Info className="w-4 h-4 xl:mr-1" />
+                        <span className="hidden xl:inline">Detalhes da rota</span>
+                      </Button>
+
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="outline" size="sm" title={locale === 'pt-BR' ? 'Ações' : 'Actions'}>
