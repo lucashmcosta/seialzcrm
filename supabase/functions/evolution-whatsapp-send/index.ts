@@ -182,11 +182,14 @@ serve(async (req) => {
     organizationId, contactId, threadId, message,
     mediaUrl, mediaUrls, mediaType, mimeType: payloadMime, filename: payloadFilename,
     userId, replyToMessageId, isAgentMessage, agentId, senderName,
-    endpointId: explicitEndpointId,
+    endpointId: explicitEndpointIdRaw,
+    manualReplyEndpointId,
     templateId,
     senderContext,
     allowExplicitEndpointMigration,
   } = body as Record<string, any>;
+  let explicitEndpointId = explicitEndpointIdRaw;
+
 
   if (!organizationId) return json(400, { error: "missing_organization" });
   if (!contactId) return json(400, { error: "missing_contact" });
