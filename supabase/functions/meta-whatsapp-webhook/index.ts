@@ -840,10 +840,13 @@ async function handleInbound(
   //    Atendimento / purpose ausente → caminho legado inalterado.
   let threadId: string | undefined;
 
-  const salesGate = await salesCanonicalPathEnabled(supabase, {
+  // HOTFIX: o lookup canônico do inbound NÃO depende da feature flag — a trigger
+  // de canonicidade é global. A flag governa apenas o ENVIO (resolver V2).
+  const salesGate = await salesCanonicalInboundEnabled(supabase, {
     organizationId: endpoint.organization_id,
     endpointId: endpoint.id,
   });
+
 
   if (salesGate.allowed) {
     const canonical = await resolveSalesWhatsappThread(supabase, {
