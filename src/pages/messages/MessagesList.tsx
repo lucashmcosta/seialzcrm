@@ -194,10 +194,11 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   onHide?: (threadId: string) => void;
   endpointAddress?: string | null;
   endpointPurpose?: string | null;
+  endpointProvider?: string | null;
   officialNumbers?: Set<string>;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, officialNumbers, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, officialNumbers, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
