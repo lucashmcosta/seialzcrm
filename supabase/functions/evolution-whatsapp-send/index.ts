@@ -456,7 +456,9 @@ serve(async (req) => {
       endpoint_id: endpoint.id,
       to,
     },
+    ...replyChoiceMeta,
   };
+
 
   // Insere mensagem outbound com whatsapp_status='sending'.
   const { data: insertedMsg, error: insErr } = await supabase
