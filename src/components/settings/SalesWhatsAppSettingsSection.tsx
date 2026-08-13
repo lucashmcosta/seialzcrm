@@ -54,6 +54,22 @@ const BLOCKED_LABEL: Record<ActivationBlockedReason, string> = {
   IDENTITY_MISMATCH: 'número conectado divergente',
 };
 
+/**
+ * Status técnico do endpoint → linguagem humana. A fonte é exclusivamente
+ * `technicalStatus` vindo de `sales-route-operations/status` (estado real da
+ * sessão do provedor). Nada de `close`/`ONLINE` nem estado persistido.
+ */
+const ENDPOINT_STATUS_LABEL: Record<EndpointTechnicalStatus, { label: string; ok: boolean }> = {
+  CONNECTED: { label: 'Conectado', ok: true },
+  CONNECTING: { label: 'Conectando…', ok: false },
+  QR_REQUIRED: { label: 'QR necessário', ok: false },
+  DISCONNECTED: { label: 'Desconectado', ok: false },
+  IDENTITY_UNCONFIRMED: { label: 'Identidade não confirmada', ok: false },
+  IDENTITY_MISMATCH: { label: 'Número conectado divergente', ok: false },
+  NOT_LINKED: { label: 'Sem sessão vinculada', ok: false },
+  PROVIDER_MANAGED: { label: 'Gerenciado pelo provedor', ok: false },
+};
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 border-b border-border/60 last:border-0">
