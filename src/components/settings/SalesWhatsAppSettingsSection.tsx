@@ -85,6 +85,9 @@ export function SalesWhatsAppSettingsSection() {
   const [address, setAddress] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [instanceName, setInstanceName] = useState('');
+  const [connectTarget, setConnectTarget] = useState<
+    { instanceName: string; endpointId: string | null } | null
+  >(null);
 
   const routes = status?.routes ?? [];
   const instances = status?.evolutionInstances ?? [];
