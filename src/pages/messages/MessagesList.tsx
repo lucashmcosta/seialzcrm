@@ -674,7 +674,7 @@ function DesktopMessagesList() {
   // Fase 2.5 — Route Comercial da thread selecionada (SOMENTE LEITURA).
   // Reusa o resolver V2 do cliente; nenhum backend foi alterado.
   // ---------------------------------------------------------------------------
-  const { route: salesRoute } = useSalesRoute({
+  const { route: salesRoute, isLoading: salesRouteLoading } = useSalesRoute({
     threadId: selectedThreadId,
     organizationId: organization?.id,
     businessContext: selectedThreadBusinessContext,
@@ -682,9 +682,13 @@ function DesktopMessagesList() {
   });
   // Histórico de endpoints e status do resolver vivem no painel/modal de detalhes.
 
-  const salesRouteEndpointState: 'online' | 'offline' | 'no_route' = salesRoute.resolved
+  // Mesma derivação de `useSalesRouteView`: apenas REPLY_ROUTE_UNRESOLVED conta
+  // como conversa legada. Carregando / flag off / fora de escopo = indeterminado.
+  const salesRouteEndpointState: EndpointState = salesRoute.resolved
     ? salesRoute.activeEndpoint?.is_active === true ? 'online' : 'offline'
-    : 'no_route';
+    : !salesRouteLoading && salesRoute.reason === 'REPLY_ROUTE_UNRESOLVED'
+      ? 'unresolved'
+      : 'unknown';
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false);
   const salesEndpoints = useMemo(
     () => filterEndpointsByIntent(orgEndpoints, 'sales'),
@@ -2422,7 +2426,7 @@ function DesktopMessagesList() {
                           <>
                           {/* Fase 2.5.1 — avisos orientados ao operador (sem termos técnicos) */}
                           <SalesComposerStatus
-                            noRoute={salesRouteEndpointState === 'no_route'}
+                            noRoute={salesRouteEndpointState === 'unresolved'}
                             noRecentInbound={showNoInboundHint}
                           />
 
