@@ -38,7 +38,7 @@ for (const url of FILES) {
       );
     }
     // provider default: nenhum literal "twilio" fora de normalizeProvider
-    const twilioAssignments = code.match(/=\s*"twilio"/g) ?? [];
+    const twilioAssignments = code.match(/[^=!<>]=\s*"twilio"/g) ?? [];
     assert(
       twilioAssignments.length === 0,
       `Provider default "twilio" atribuído em ${url.pathname}`,
