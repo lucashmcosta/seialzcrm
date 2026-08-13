@@ -2018,9 +2018,9 @@ function DesktopMessagesList() {
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </div>
-                  </div>
-                </div>
+                    </>
+                  }
+                />
 
 
                 {/* Messages Area */}
