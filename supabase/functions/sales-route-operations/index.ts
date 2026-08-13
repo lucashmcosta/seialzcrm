@@ -541,6 +541,86 @@ serve(async (req) => {
         });
       }
 
+      // ------------------- INTEGRAÇÃO: conectar sessão (QR real) — Evolution
+      case "connectInstance": {
+        const name = typeof body.instanceName === "string" ? body.instanceName : "";
+        if (!INSTANCE_NAME_RE.test(name)) {
+          return json(400, { error: "INVALID_INPUT", message: "instanceName" });
+        }
+        if (!evolutionEnabled) {
+          return json(403, { error: "FEATURE_DISABLED", message: EVOLUTION_FLAG });
+        }
+
+        const { data: row } = await service
+          .from("evolution_instances")
+          .select("id, organization_id")
+          .eq("instance_name", name)
+          .maybeSingle();
+        if (!row) return json(404, { error: "INSTANCE_NOT_FOUND" });
+        if (row.organization_id !== orgId) return json(403, { error: "INSTANCE_FOREIGN_ORG" });
+
+        const provider = evolution();
+        if (isEvolutionError(provider)) {
+          return json(provider.status ?? 502, { error: provider.code, message: provider.message });
+        }
+
+        const out = await provider.connect(name);
+        if (isEvolutionError(out)) {
+          return json(out.status ?? 502, { error: out.code, message: out.message });
+        }
+
+        const expiresAt = new Date(Date.now() + 60_000).toISOString();
+        await service.from("evolution_instances").update({
+          last_known_state: "connecting",
+          last_state_checked_at: new Date().toISOString(),
+          last_qr_expires_at: expiresAt,
+          updated_at: new Date().toISOString(),
+        }).eq("id", row.id);
+
+        return json(200, {
+          instanceName: name,
+          pairingCode: out?.pairingCode ?? null,
+          qrBase64: out?.base64 ?? null,
+          count: out?.count ?? 0,
+          expiresAt,
+        });
+      }
+
+      // -------------------- INTEGRAÇÃO: estado real (polling do modal de QR)
+      //
+      // Ao detectar `open`, ressincroniza a identidade a partir da resposta
+      // REAL do servidor e compara com o endpoint esperado. Os campos são
+      // booleanos explícitos (ou null quando indeterminado) — o frontend só
+      // considera sucesso com os três `=== true`.
+      case "instanceState": {
+        const name = typeof body.instanceName === "string" ? body.instanceName : "";
+        const sync = await syncEvolutionIdentity(name);
+        if ("error" in sync) return json(200, { ...sync, connected: false });
+
+        const targetEndpointId = typeof body.endpointId === "string"
+          ? body.endpointId
+          : sync.endpointId;
+        const expectedDigits = targetEndpointId
+          ? (await endpointDigits(targetEndpointId)) ?? ""
+          : "";
+
+        let identityMatchesEndpoint: boolean | null = null;
+        if (sync.identityKnown && expectedDigits.length >= 8) {
+          identityMatchesEndpoint = sync.ownerDigits === expectedDigits;
+        }
+
+        return json(200, {
+          instanceName: sync.instanceName,
+          state: sync.state,
+          connected: sync.connected === true,
+          identityKnown: sync.identityKnown === true,
+          identityMatchesEndpoint,
+          expectedMasked: expectedDigits ? mask(expectedDigits) : null,
+          ownerMasked: sync.ownerIdentity.masked,
+        });
+      }
+
+
       default:
         return json(400, { error: "INVALID_INPUT", message: "unknown op" });
     }
