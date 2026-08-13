@@ -16,7 +16,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { metaWaGetMediaUrl, metaWaDownloadMedia, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
 import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
-import { salesCanonicalPathEnabled } from "../_shared/sales-canonical-gate.ts";
+import { salesCanonicalInboundEnabled } from "../_shared/sales-canonical-gate.ts";
 
 import {
   resolveVerifyTokenForOi,
@@ -905,6 +905,23 @@ async function handleInbound(
         .single();
       if (threadInsErr) console.error("[meta-wa-webhook] thread_insert_error", threadInsErr);
       threadId = createdThread?.id;
+      // HOTFIX: se a trigger global de canonicidade bloqueou este INSERT legado,
+      // resolve a thread canônica em vez de descartar o inbound.
+      if (!threadId && /SALES_THREAD_DUPLICATE_BLOCKED/i.test(
+        `${threadInsErr?.message ?? ""} ${(threadInsErr as any)?.details ?? ""}`,
+      )) {
+        console.warn("[meta-wa-webhook] legacy_insert_blocked_by_guard_recovering", {
+          contact_id: contactId, endpoint_id: endpoint.id,
+        });
+        const recovered = await resolveSalesWhatsappThread(supabase, {
+          organizationId: endpoint.organization_id,
+          contactId,
+          endpointId: endpoint.id,
+          inboundAt: new Date().toISOString(),
+        });
+        threadId = recovered.threadId ?? undefined;
+      }
+
       if (threadId) {
         console.log("[meta-wa-webhook] thread_created", JSON.stringify({
           thread_id: threadId, contact_id: contactId, endpoint_id: endpoint.id,
