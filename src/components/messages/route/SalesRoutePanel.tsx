@@ -4,7 +4,9 @@
 // Este é o único lugar (com o modal) onde termos técnicos podem aparecer.
 // ============================================================================
 
+import React from 'react';
 import { useSalesRoute } from '@/hooks/messages/useSalesRoute';
+
 import { useThreadEndpointHistory } from '@/hooks/messages/useThreadEndpointHistory';
 import { useRouteResolverFlag } from '@/hooks/messages/useRouteResolverFlag';
 import { EndpointStatusChip, ProviderChip, last4, providerLabel } from './RouteIndicators';
@@ -20,14 +22,18 @@ export interface SalesRouteContextProps {
   statusLabel?: string | null;
 }
 
-export function Row({ label, children }: { label: string; children: React.ReactNode }) {
+export const Row = React.forwardRef<
+  HTMLDivElement,
+  { label: string; children: React.ReactNode }
+>(function Row({ label, children }, ref) {
   return (
-    <div className="flex items-start justify-between gap-3 py-1.5 border-b border-border/60 last:border-0">
+    <div ref={ref} className="flex items-start justify-between gap-3 py-1.5 border-b border-border/60 last:border-0">
       <span className="text-[11px] text-muted-foreground shrink-0">{label}</span>
       <div className="text-[11px] text-foreground text-right min-w-0 break-words">{children}</div>
     </div>
   );
-}
+});
+
 
 export function useSalesRouteView(props: SalesRouteContextProps) {
   const { route, isLoading } = useSalesRoute({
