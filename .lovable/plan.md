@@ -1,99 +1,70 @@
-# Switch de número de resposta (Comercial) — auditoria + proposta mínima
+# Switch de número de resposta (Comercial) — contrato final antes da migração
 
-Produção está ativa. Nada nesta etapa altera o comportamento atual: a feature nasce OFF, fail-closed, e "Automático" reproduz exatamente o fluxo de hoje.
+Produção ativa. Nada aqui altera comportamento: feature nasce OFF, tabelas vazias, Atendimento intocado, "Automático" byte-a-byte igual ao fluxo atual.
 
-## PARTE A — Resultado da auditoria (read-only, já executada)
+## Estado da auditoria (read-only, já executada)
 
 ```text
-SWITCH_AUDIT=PASS
-PERMISSION_SOURCE=ausente
-PERSISTENCE_SOURCE=ausente
-BACKEND_OVERRIDE_READY=NAO
+PERMISSION_SOURCE=ausente  (communication_endpoints.assigned_user_id NULL em 25/25; messaging_lines.owner_user_id NULL; organization_phone_number_users é só voz)
+PERSISTENCE_SOURCE=ausente (message_threads não tem campo por-usuário)
+BACKEND_OVERRIDE_READY=NAO (Resolver V2 sobrescreve endpointId explícito no cliente e no servidor)
 SCHEMA_CHANGE_REQUIRED=SIM
 FEATURE_DEFAULT=OFF
-VIAGI_REGRESSION=n/a (nenhuma alteração feita ainda)
-CENTRAL_REGRESSION=n/a
-ATENDIMENTO_REGRESSION=n/a
-META / TWILIO / EVOLUTION=n/a
-BLOQUEADORES_SWITCH=1) sem fonte de permissão usuário↔endpoint; 2) sem persistência da escolha; 3) Resolver V2 sobrescreve endpoint explícito
 ```
 
-### Achados objetivos
+## Contrato ajustado (itens 1–10)
 
-**A) Permissão usuário ↔ endpoint: NÃO existe.**
-`communication_endpoints.assigned_user_id` existe como coluna mas está **NULL em 25/25 endpoints** e não é lida por nenhum código de mensageria (só telefonia usa `assigned_user_id` em outra tabela). `messaging_lines.owner_user_id` também está 100% NULL. `organization_phone_number_users` é exclusivo de **voz** (`can_receive_calls` / `can_originate_calls`), não de WhatsApp. Não há nenhuma outra relação usuário↔endpoint.
+**1. Consistência de org no banco.** Não existe unique natural em `users`/`communication_endpoints`/`message_threads` por `(id, organization_id)`, então composite FK exigiria uniques artificiais — descartado. A garantia vem de: (a) `organization_id` NOT NULL nas duas tabelas; (b) **zero privilégio de escrita para `authenticated`** — toda mutação passa por RPC `SECURITY DEFINER` que valida user↔org, endpoint↔org, `channel='whatsapp'`, thread↔org e elegibilidade Comercial; (c) uma única trigger de integridade por tabela (`BEFORE INSERT OR UPDATE`) revalidando as mesmas relações, para que nem `service_role` grave combinação cross-org. Sem triggers além dessas duas.
 
-**B) Endpoint associado a usuário: não.** `purpose` aceita `vendor_personal` no código, mas os dados atuais só têm `commercial`, `customer_service`, `other`.
+**2. Sem write direto no frontend.** `GRANT SELECT` apenas; nenhum `INSERT/UPDATE/DELETE` para `authenticated`. RPCs:
+- `grant_user_reply_endpoint(_org, _user, _endpoint)` / `revoke_user_reply_endpoint(...)` → exige `can_manage_integrations_in_org(_org)`.
+- `set_thread_reply_endpoint_pref(_thread, _endpoint)` → grava só para `current_user_id()`, após validador de elegibilidade.
+- `clear_thread_reply_endpoint_pref(_thread)` → DELETE da própria linha.
 
-**C) Dispatcher aceita endpoint explícito: SIM**, sem gambiarra — `endpointId` é campo de primeira classe em `src/lib/dispatchWhatsAppSend.ts` e em `_shared/dispatch-whatsapp-send.ts`, e o composer já envia `composerEndpointId`.
+**3. Leitura administrativa.** Policy de SELECT: `organization_id = ANY(current_user_org_ids()) AND (user_id = current_user_id() OR can_manage_integrations_in_org(organization_id))`. Nunca cross-org.
 
-**D) Resolver V2 sobrescreve endpoint explícito: SIM (confirmado no código).**
-Cliente (`dispatchWhatsAppSend.ts`) — comentário e código: *"Precede QUALQUER outra resolução, inclusive endpointId explícito do caller"*; faz `payload = { ...payload, endpointId: canonical.sendEndpointId }`.
-Servidor (`_shared/dispatch-whatsapp-send.ts`) — idem, `resolveProvider` chama `resolveSalesReplyRoute` antes de olhar `payload.endpointId`.
-Logo, hoje um número escolhido pelo operador em org com V2 ON seria **silenciosamente trocado** pelo `active_endpoint_id` da Route.
+**4. Elegibilidade Comercial obrigatória.** O endpoint precisa ter link `messaging_line_endpoints.is_active = true` para uma `messaging_lines` da mesma org com `channel='whatsapp'`, `inbox_key='sales'`, `is_active=true`. Endpoint de Atendimento, outro inbox ou outra Route é rejeitado — inclusive linhas pessoais futuras, que devem estar sob linha Comercial.
 
-**Persistência da escolha: não existe campo apropriado.** `message_threads` não tem nada por-usuário; reutilizar `primary_endpoint_id` ou `active_endpoint_id` é proibido pelo contrato.
+**5. Permissão ≠ Route.** Para aparecer no switch: `user_reply_endpoints` (usuário autorizado) **E** vínculo Comercial ativo do item 4. Nunca inferir por assignee, owner, `display_name` ou `primary_endpoint_id`.
 
-**Auditoria de envio: parcialmente pronta.** `messages` já grava `endpoint_id`, `sender_user_id`, `sent_at` e tem `metadata` jsonb — isso cobre thread/usuário/endpoint/provider/timestamp. Falta apenas o marcador **automático vs manual** (cabe em `metadata`, sem schema novo).
+**6. Manual não pula pipeline.** `manualReplyEndpointId` substitui **somente a escolha de endpoint** (precede o Resolver V2). Continuam valendo: janela 24h, template quando exigido, validações do provider, rate limits, integração válida, endpoint habilitado, Evolution conectada + identidade confirmada, e as demais regras atuais do dispatcher.
 
-**Feature flag: mecanismo existe** (`feature_flags` + `fn_feature_flag_enabled`), mas atenção: no resolver, `organization_ids = []` significa **GLOBAL**. Portanto a flag nova deve nascer `is_enabled = false` com `organization_ids = '{}'`.
+**7. Sem fallback silencioso.** Erros explícitos, nunca troca de número: `MANUAL_REPLY_ENDPOINT_FORBIDDEN`, `_NOT_SALES`, `_OFFLINE`, `_IDENTITY_UNKNOWN`, `_IDENTITY_MISMATCH`, `_INACTIVE`, `_CROSS_ORG`.
 
-## Conclusão da Parte A: PARO antes de migrar
+**8. Flag como barreira server-side.** `sales_manual_reply_endpoint_v1` com `is_enabled=false`, `organization_ids='{}'`. Semântica única escolhida: flag OFF + campo ausente ⇒ fluxo atual byte-a-byte; flag OFF + `manualReplyEndpointId` presente ⇒ `MANUAL_REPLY_FEATURE_DISABLED`. Validado no servidor, não só na UI.
 
-Como exige schema, não implemento agora. Migração mínima proposta (2 objetos, nada destrutivo):
+**9. Persistência por thread/usuário.** Sem linha ⇒ Automático. Com linha válida ⇒ endpoint manual. "Voltar para Automático" **remove** a linha (sem endpoint sentinela/NULL). Jamais toca `primary_endpoint_id`, `active_endpoint_id` ou `messaging_line_rotations`.
 
-```sql
--- 1) Fonte de permissão usuário ↔ endpoint (Comercial)
-create table public.user_reply_endpoints (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  user_id uuid not null references public.users(id) on delete cascade,
-  endpoint_id uuid not null references public.communication_endpoints(id) on delete cascade,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (organization_id, user_id, endpoint_id)
-);
-grant select on public.user_reply_endpoints to authenticated;
-grant all on public.user_reply_endpoints to service_role;
-alter table public.user_reply_endpoints enable row level security;
-create policy "own rows readable" on public.user_reply_endpoints
-  for select to authenticated
-  using (user_id = current_user_id() and organization_id = any(current_user_org_ids()));
--- escrita: apenas admin da org (política adicional) ou service_role
+**10. Auditoria.** `messages.endpoint_id` + `sender_user_id` + `metadata.reply_endpoint_choice = 'manual' | 'auto'`; quando manual, também `manual_reply_endpoint_id` e `chosen_by_user_id`. Nada sensível.
 
--- 2) Escolha por conversa + operador ("Responder por"), limpável
-create table public.thread_reply_endpoint_prefs (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null,
-  thread_id uuid not null references public.message_threads(id) on delete cascade,
-  user_id uuid not null references public.users(id) on delete cascade,
-  endpoint_id uuid not null references public.communication_endpoints(id) on delete cascade,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (thread_id, user_id)
-);
--- grants/RLS análogos (linha própria do usuário na própria org)
+## 11. Migração final (a apresentar para aprovação, ainda não executada)
 
--- 3) Flag nova, DESLIGADA e sem orgs
-insert into public.feature_flags (name, description, is_enabled, organization_ids)
-values ('sales_manual_reply_endpoint_v1','Switch Responder por (Comercial)',false,'{}')
-on conflict (name) do nothing;
-```
+Um único bloco, sem backfill, sem org habilitada, sem ativar o switch:
 
-Nenhum backfill. Tabelas vazias ⇒ com a flag OFF, comportamento idêntico ao atual.
+1. `create table public.user_reply_endpoints` — `organization_id`, `user_id`, `endpoint_id`, `granted_by_user_id`, timestamps, `unique(organization_id, user_id, endpoint_id)`.
+2. `create table public.thread_reply_endpoint_prefs` — `organization_id`, `thread_id`, `user_id`, `endpoint_id`, timestamps, `unique(thread_id, user_id)`.
+3. Grants: `GRANT SELECT ... TO authenticated`; `GRANT ALL ... TO service_role`; nenhum write para `authenticated`.
+4. `ENABLE ROW LEVEL SECURITY` + policies de SELECT do item 3 nas duas tabelas.
+5. Função `public.fn_is_sales_eligible_endpoint(_org, _endpoint) returns boolean` (STABLE, SECURITY DEFINER, `search_path=public`) com a regra do item 4 — fonte única usada por RPCs, triggers e leitura da UI.
+6. Duas triggers de integridade cross-org (uma por tabela) usando a função acima.
+7. Quatro RPCs `SECURITY DEFINER` do item 2, com `REVOKE EXECUTE FROM anon` e `GRANT EXECUTE TO authenticated`.
+8. Trigger `update_updated_at_column` nas duas tabelas.
+9. `insert into public.feature_flags (name, description, is_enabled, organization_ids) values ('sales_manual_reply_endpoint_v1', ..., false, '{}') on conflict do nothing`.
 
-### Implementação (somente após sua aprovação da migração)
+Rollback correspondente em `supabase/rollback/`.
 
-1. `_shared/manual-reply-endpoint.ts` — validador server-side único: usuário autenticado, mesma org, permissão em `user_reply_endpoints`, endpoint da org, `channel = whatsapp`, apto ao Comercial, `is_active`, provider elegível; Evolution ⇒ sessão conectada + identidade + `owner_number_digits`; Meta/Twilio ⇒ mecanismo de integração existente. Erros: `MANUAL_REPLY_ENDPOINT_FORBIDDEN`, `_OFFLINE`, `_IDENTITY_MISMATCH`. Sem fallback.
-2. Novo campo de payload `manualReplyEndpointId` (semântico, distinto de `endpointId`). Nos dois dispatchers: **se presente e flag ON**, valida e envia por ele, **antes** do Resolver V2 (V2 não sobrescreve). Se ausente ⇒ código atual roda byte-a-byte.
-3. Gravação: `messages.metadata.reply_endpoint_choice = 'manual' | 'auto'` + `chosen_by_user_id`. Nada de rotação: proibido tocar `active_endpoint_id`, `messaging_line_rotations`, `primary_endpoint_id`.
-4. UI (só Comercial, só com flag ON): `Responder por: [Automático ▾]` discreto no composer, opções = Comercial autorizado + endpoints do próprio usuário, com "Voltar para Automático" e os tooltips definidos. Header intocado. Atendimento intocado.
-5. Testes: T1–T8 (regressão com flag OFF, incluindo teste estático de que sem `manualReplyEndpointId` o caminho é idêntico) e T9–T20 em org controlada.
+## Implementação (depois da migração, com flag OFF)
+
+1. `supabase/functions/_shared/manual-reply-endpoint.ts` — validador único server-side: flag, org, permissão, elegibilidade Comercial, `is_active`, integração, Evolution conectada + identidade. Retorna endpoint ou erro tipado do item 7.
+2. Dispatchers (`src/lib/dispatchWhatsAppSend.ts` e `supabase/functions/_shared/dispatch-whatsapp-send.ts`): novo campo `manualReplyEndpointId`; quando presente e flag ON, valida e fixa o endpoint **antes** do Resolver V2, sem desligar nenhuma outra regra; quando ausente, caminho atual inalterado.
+3. Metadata de auditoria do item 10 nas functions de envio.
+4. UI só Comercial e só com flag ON: seletor discreto "Responder por: Automático ▾" no composer, listando apenas endpoints que satisfaçam permissão + elegibilidade, com "Voltar para Automático". Header e Atendimento intocados.
+5. Tela administrativa de concessão (Configurações) consumindo as RPCs — sem write direto.
+
+## 12. Regressão obrigatória com flag OFF (antes de qualquer ativação)
+
+`VIAGI_COMERCIAL`, `CENTRAL_COMERCIAL`, `ATENDIMENTO`, `META`, `TWILIO`, `EVOLUTION`, `INBOUND_CANONICAL`, `OUTBOUND_CURRENT_BEHAVIOR` — todos PASS, mais provas de: zero alteração de `active_endpoint_id`, zero linhas novas em `messaging_line_rotations`, zero mudança de `endpoint_id` em mensagens reais, e UI do switch invisível. Ativação por organização só depois, com sua autorização.
 
 ## PARTE B — Auditoria de Configurações (read-only, entrega seguinte)
 
-Depois de fechar/isolar o switch, entrego um documento de auditoria (sem tocar nada): navegação atual completa de `/settings/*`; mapa por provider (Meta, Twilio, Evolution) com onde vive cada credencial/número/webhook/template; mapa de criação de Contato, criação de Oportunidade, Round Robin, reabertura de thread/oportunidade; regra Comercial vs Atendimento (`purpose` / `business_context` / Route); duplicidades encontradas; classificação Integração / Configuração / Regra / Automação / Permissão; proposta da nova árvore (Organização, Usuários, Inbox/Canais, Automações, Integrações, IA); o que é só frontend, o que exige backend/schema, e risco de cada item. Nenhuma rota, tela ou regra é movida antes da sua aprovação.
-
-## Decisão que preciso de você
-
-Aprovar (ou ajustar) a migração mínima acima. Sem ela, o switch não pode existir sem heurística proibida.
+Documento sem nenhuma reorganização: mapa real de Meta, Twilio e Evolution (credenciais, números, webhooks, templates, onde cada um é configurado hoje); criação automática de Contato; criação de Oportunidade; Round Robin; reabertura de thread/oportunidade; fronteira Comercial vs Atendimento (`purpose`, `business_context`, Route/`inbox_key`); permissões; integrações duplicadas e configurações espalhadas. Proposta de árvore nova apenas como proposta, sem mover nada até sua aprovação.
