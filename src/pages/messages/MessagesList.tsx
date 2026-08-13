@@ -1983,6 +1983,26 @@ function DesktopMessagesList() {
                   }
                 />
 
+                {/* Modal técnico da rota — lazy mount: só monta (e consulta) quando aberto */}
+                {routeDetailsOpen && (
+                  <SalesRouteDetailsDialog
+                    open
+                    onOpenChange={setRouteDetailsOpen}
+                    threadId={selectedThread.id}
+                    organizationId={organization?.id}
+                    businessContext={selectedThreadBusinessContext}
+                    channel="whatsapp"
+                    contactName={selectedThread.contact_name}
+                    contactPhone={selectedThread.contact_phone}
+                    assigneeName={selectedThread.assigned_user_name ?? null}
+                    statusLabel={
+                      selectedThread.status && statusConfig[selectedThread.status]
+                        ? (locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn)
+                        : null
+                    }
+                  />
+                )}
+
 
                 {/* Messages Area */}
                 <LowQualityEndpointBanner endpointId={composerEndpointId} />
