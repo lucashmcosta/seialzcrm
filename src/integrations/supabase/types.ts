@@ -3429,6 +3429,8 @@ export type Database = {
           last_qr_expires_at: string | null
           last_state_checked_at: string | null
           organization_id: string
+          owner_jid: string | null
+          owner_number_digits: string | null
           updated_at: string
         }
         Insert: {
@@ -3442,6 +3444,8 @@ export type Database = {
           last_qr_expires_at?: string | null
           last_state_checked_at?: string | null
           organization_id: string
+          owner_jid?: string | null
+          owner_number_digits?: string | null
           updated_at?: string
         }
         Update: {
@@ -3455,6 +3459,8 @@ export type Database = {
           last_qr_expires_at?: string | null
           last_state_checked_at?: string | null
           organization_id?: string
+          owner_jid?: string | null
+          owner_number_digits?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -13439,6 +13445,17 @@ export type Database = {
       promote_session_to_contact: {
         Args: { p_session_id: string }
         Returns: string
+      }
+      provision_sales_endpoint: {
+        Args: {
+          p_address: string
+          p_display_name?: string
+          p_instance_name?: string
+          p_line_id: string
+          p_organization_id: string
+          p_provider: string
+        }
+        Returns: Json
       }
       prune_intelligence_worker_runs: { Args: never; Returns: undefined }
       reassign_thread: {

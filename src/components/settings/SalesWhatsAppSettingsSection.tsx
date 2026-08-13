@@ -1,18 +1,42 @@
 // ============================================================================
-// Fase 2.5 — Configurações > Integrações > WhatsApp Comercial.
-// SOMENTE LEITURA. O status do Resolver V2 reflete a feature flag existente
-// `conv_route_resolver_v2` (UPDATE só é permitido para admin de plataforma,
-// portanto aqui não existe toggle).
+// Fase 3 — Configurações > Integrações > WhatsApp Comercial (Manager).
+//
+// Separação obrigatória de conceitos na tela:
+//   INTEGRAÇÃO   → conexão técnica com o provedor (status real, instâncias).
+//   CONFIGURAÇÃO → números vinculados à Route Comercial.
+//   REGRA        → número ativo de envio e modo de roteamento (feature flag).
+//
+// Tela provider-agnostic (Meta / Twilio / Evolution). Nenhuma credencial é
+// exibida ou duplicada. Mutações só aparecem para admin de integrações e
+// sempre passam pela edge function `sales-route-operations` (RPCs atômicas).
 // ============================================================================
 
+import { useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { useOrganization } from '@/hooks/useOrganization';
-import { useSalesRouteConfig } from '@/hooks/messages/useSalesRouteConfig';
-import { useRouteResolverFlag } from '@/hooks/messages/useRouteResolverFlag';
-import { EndpointStatusChip, ProviderChip, last4, providerLabel } from '@/components/messages/route/RouteIndicators';
-import { ChatCircle } from '@phosphor-icons/react';
+import {
+  useSalesRouteManager, useCanManageIntegrations, type SalesProvider,
+} from '@/hooks/settings/useSalesRouteManager';
+import { ProviderChip } from '@/components/messages/route/RouteIndicators';
+import {
+  ChatCircle, ArrowsClockwise, WarningCircle, SpinnerGap, Plus, CheckCircle,
+} from '@phosphor-icons/react';
+import { toast } from 'sonner';
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+const PROVIDER_OPTIONS: { value: SalesProvider; label: string }[] = [
+  { value: 'meta', label: 'Meta Cloud API' },
+  { value: 'twilio', label: 'Twilio' },
+  { value: 'evolution', label: 'Evolution' },
+];
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 border-b border-border/60 last:border-0">
       <span className="text-[11px] text-muted-foreground shrink-0">{label}</span>
@@ -21,92 +45,293 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function StateChip({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <Badge variant="outline" className={ok ? 'border-primary/40 text-primary' : 'text-muted-foreground'}>
+      {label}
+    </Badge>
+  );
+}
+
 export function SalesWhatsAppSettingsSection() {
   const { organization } = useOrganization();
-  const { routes, isLoading } = useSalesRouteConfig(organization?.id);
-  const { flag } = useRouteResolverFlag(organization?.id);
+  const orgId = organization?.id ?? null;
+  const { canManage } = useCanManageIntegrations(orgId);
+  const {
+    status, isLoading, error, refetch,
+    provisionEndpoint, setActiveEndpoint, refreshEvolutionIdentity, restartInstance,
+  } = useSalesRouteManager(orgId);
+
+  const [formLine, setFormLine] = useState<string | null>(null);
+  const [provider, setProvider] = useState<SalesProvider>('meta');
+  const [address, setAddress] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [instanceName, setInstanceName] = useState('');
+
+  const routes = status?.routes ?? [];
+  const instances = status?.evolutionInstances ?? [];
+  const evolutionOn = status?.rules.evolutionIntegration === true;
+
+  const instanceOptions = useMemo(
+    () => instances.map((i) => i.instanceName),
+    [instances],
+  );
+
+  const submitProvision = async (lineId: string) => {
+    try {
+      await provisionEndpoint.mutateAsync({
+        lineId,
+        provider,
+        address: address.trim(),
+        displayName: displayName.trim() || null,
+        instanceName: provider === 'evolution' ? instanceName.trim() || null : null,
+      });
+      toast.success('Número vinculado à Route Comercial');
+      setFormLine(null);
+      setAddress(''); setDisplayName(''); setInstanceName('');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao vincular número');
+    }
+  };
 
   return (
-    <Card className="p-5 space-y-4">
+    <Card className="p-5 space-y-5">
+      {/* ---------------------------------------------------------- cabeçalho */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <ChatCircle className="h-5 w-5 text-primary" weight="duotone" />
           <div>
             <h3 className="text-sm font-semibold text-foreground">WhatsApp Comercial</h3>
             <p className="text-xs text-muted-foreground">
-              Route Comercial, número ativo e endpoints vinculados. Somente leitura.
+              Integração técnica, números da Route Comercial e número ativo de envio.
             </p>
           </div>
         </div>
-        {/* Status informativo do resolver — sem toggle (flag é gerenciada pelo admin) */}
-        <div className="text-right shrink-0">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Modo de roteamento</div>
-          <div className="text-xs font-semibold text-foreground">
-            {flag.enabledForOrg ? 'Rota Comercial' : 'Modo legado'}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="text-right">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Modo de roteamento</div>
+            <div className="text-xs font-semibold text-foreground">
+              {status?.rules.resolverV2 ? 'Rota Comercial' : 'Modo legado'}
+            </div>
+            <div className="font-data text-[10px] text-muted-foreground">
+              conv_route_resolver_v2 · {status?.rules.resolverV2 ? 'ON' : 'OFF'}
+            </div>
           </div>
-          <div className="font-data text-[10px] text-muted-foreground">
-            conv_route_resolver_v2 · {flag.enabledForOrg ? 'ON' : 'OFF'}
-          </div>
+          <Button variant="ghost" size="icon" onClick={() => refetch()} title="Atualizar status">
+            <ArrowsClockwise className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
-      {isLoading && <p className="text-xs text-muted-foreground">Carregando Route Comercial…</p>}
+      {isLoading && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <SpinnerGap className="h-4 w-4 animate-spin" /> Carregando status real…
+        </div>
+      )}
 
-      {!isLoading && routes.length === 0 && (
+      {error && (
+        <Alert variant="destructive">
+          <WarningCircle className="h-4 w-4" />
+          <AlertDescription className="text-xs">{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* -------------------------------------------------------- INTEGRAÇÃO */}
+      {!isLoading && !error && (
+        <section className="space-y-2">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Integração</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <StateChip ok={evolutionOn} label={`Evolution · ${evolutionOn ? 'habilitada' : 'desabilitada'}`} />
+            <StateChip ok label="Meta / Twilio · via integrações da organização" />
+          </div>
+
+          {instances.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nenhuma instância Evolution registrada nesta organização.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {instances.map((i) => (
+                <li
+                  key={i.instanceName}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
+                >
+                  <span className="font-data text-xs">{i.instanceName}</span>
+                  <span className="flex flex-wrap items-center gap-2 text-[10px]">
+                    <StateChip ok={i.connected} label={i.connected ? 'conectada' : i.technicalState} />
+                    {!i.identityKnown && (
+                      <span className="text-muted-foreground">identidade não confirmada</span>
+                    )}
+                    {i.identityMatchesEndpoint === false && (
+                      <span className="text-destructive">número divergente do endpoint</span>
+                    )}
+                    {i.identityMatchesEndpoint === true && (
+                      <CheckCircle className="h-3.5 w-3.5 text-primary" weight="fill" />
+                    )}
+                    {canManage && (
+                      <>
+                        <Button
+                          size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
+                          disabled={refreshEvolutionIdentity.isPending}
+                          onClick={() =>
+                            refreshEvolutionIdentity.mutateAsync({ instanceName: i.instanceName })
+                              .then(() => toast.success('Estado real atualizado'))
+                              .catch((e) => toast.error(e instanceof Error ? e.message : 'Falha'))}
+                        >
+                          Verificar
+                        </Button>
+                        <Button
+                          size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
+                          disabled={restartInstance.isPending}
+                          onClick={() =>
+                            restartInstance.mutateAsync({ instanceName: i.instanceName })
+                              .then(() => toast.success('Sessão reiniciada'))
+                              .catch((e) => toast.error(e instanceof Error ? e.message : 'Falha'))}
+                        >
+                          Reiniciar
+                        </Button>
+                      </>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {/* ------------------------------------------ CONFIGURAÇÃO + REGRA */}
+      {!isLoading && !error && routes.length === 0 && (
         <p className="text-xs text-muted-foreground">
-          Nenhuma Route Comercial (inbox <span className="font-data">sales</span>) configurada nesta organização.
+          Nenhuma Route Comercial (inbox <span className="font-data">sales</span>) configurada.
         </p>
       )}
 
-      {routes.map((route) => {
-        const state = route.activeEndpoint
-          ? route.activeEndpoint.is_active === true
-            ? 'online'
-            : 'offline'
-          : 'no_route';
-        return (
-          <div key={route.lineId} className="rounded-lg border border-border p-4 space-y-2">
-            <Field label="Route">{route.name ?? route.routeSlug ?? route.key ?? '—'}</Field>
-            <Field label="Inbox"><span className="font-data">{route.inboxKey ?? '—'}</span></Field>
-            <Field label="Canal">{route.channel === 'whatsapp' ? 'WhatsApp' : (route.channel ?? '—')}</Field>
-            <Field label="Número ativo">
-              <span className="font-data">{route.activeEndpoint?.external_address ?? '—'}</span>
-            </Field>
-            <Field label="Provider">{providerLabel(route.activeEndpoint?.provider)}</Field>
-            <Field label="Status">
-              <EndpointStatusChip state={state as 'online' | 'offline' | 'no_route'} />
-            </Field>
-
-            <div className="pt-2">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
-                Endpoints vinculados
+      {routes.map((route) => (
+        <section key={route.lineId} className="rounded-lg border border-border p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Configuração</div>
+              <div className="text-sm font-semibold text-foreground">
+                {route.name ?? route.routeSlug ?? 'Route Comercial'}
               </div>
-              {route.endpoints.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nenhum endpoint vinculado.</p>
-              ) : (
-                <ul className="space-y-1">
-                  {route.endpoints.map((ep) => (
-                    <li key={ep.id} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="font-data" title={ep.external_address ?? undefined}>
-                        {last4(ep.external_address)}
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <ProviderChip provider={ep.provider} />
-                        {ep.isRouteActive && (
-                          <span className="text-[10px] font-semibold text-primary">ativo</span>
-                        )}
-                        {!ep.linkActive && (
-                          <span className="text-[10px] text-muted-foreground">vínculo inativo</span>
-                        )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
+            {canManage && (
+              <Button
+                size="sm" variant="outline"
+                onClick={() => setFormLine(formLine === route.lineId ? null : route.lineId)}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" /> Vincular número
+              </Button>
+            )}
           </div>
-        );
-      })}
+
+          <div>
+            {route.endpoints.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhum número vinculado a esta Route.</p>
+            ) : (
+              <ul className="space-y-1">
+                {route.endpoints.map((ep) => (
+                  <li key={ep.endpointId} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="font-data">{ep.addressMasked ?? '—'}</span>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <ProviderChip provider={ep.providerRaw} />
+                      <span className="text-[10px] text-muted-foreground">{ep.technicalStatus}</span>
+                      {!ep.linkActive && (
+                        <span className="text-[10px] text-muted-foreground">vínculo inativo</span>
+                      )}
+                      {ep.isRouteActive ? (
+                        <span className="text-[10px] font-semibold text-primary">ativo para envio</span>
+                      ) : canManage && ep.linkActive ? (
+                        <Button
+                          size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
+                          disabled={setActiveEndpoint.isPending}
+                          onClick={() =>
+                            setActiveEndpoint.mutateAsync({ lineId: route.lineId, endpointId: ep.endpointId })
+                              .then(() => toast.success('Número ativo atualizado'))
+                              .catch((e) => toast.error(e instanceof Error ? e.message : 'Falha'))}
+                        >
+                          Tornar ativo
+                        </Button>
+                      ) : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {formLine === route.lineId && canManage && (
+            <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2">
+              <Row label="Provedor">
+                <Select value={provider} onValueChange={(v) => setProvider(v as SalesProvider)}>
+                  <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PROVIDER_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value} disabled={o.value === 'evolution' && !evolutionOn}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Row label="Número (E.164)">
+                <Input
+                  value={address} onChange={(e) => setAddress(e.target.value)}
+                  placeholder="+5511999999999" className="h-8 w-44 text-xs font-data"
+                />
+              </Row>
+              <Row label="Rótulo (opcional)">
+                <Input
+                  value={displayName} onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Comercial 01" className="h-8 w-44 text-xs"
+                />
+              </Row>
+              {provider === 'evolution' && (
+                <Row label="Instância">
+                  {instanceOptions.length > 0 ? (
+                    <Select value={instanceName} onValueChange={setInstanceName}>
+                      <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {instanceOptions.map((n) => (
+                          <SelectItem key={n} value={n}>{n}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className="text-muted-foreground">Nenhuma instância disponível</span>
+                  )}
+                </Row>
+              )}
+              <p className="text-[10px] text-muted-foreground">
+                O número precisa pertencer comprovadamente à integração da organização. Na Evolution, o
+                número real da instância é verificado no servidor antes do vínculo.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setFormLine(null)}>Cancelar</Button>
+                <Button
+                  size="sm"
+                  disabled={
+                    provisionEndpoint.isPending ||
+                    address.trim().length < 8 ||
+                    (provider === 'evolution' && !instanceName.trim())
+                  }
+                  onClick={() => submitProvision(route.lineId)}
+                >
+                  {provisionEndpoint.isPending && <SpinnerGap className="h-3.5 w-3.5 mr-1 animate-spin" />}
+                  Vincular
+                </Button>
+              </div>
+            </div>
+          )}
+        </section>
+      ))}
+
+      {!canManage && !isLoading && (
+        <p className="text-[10px] text-muted-foreground">
+          Somente administradores de integrações da organização podem alterar números e rotas.
+        </p>
+      )}
     </Card>
   );
 }
