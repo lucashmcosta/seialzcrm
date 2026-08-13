@@ -31,7 +31,7 @@ import { callerKey, rateLimit } from "../_shared/evolution/rate-limit.ts";
 import { normalizeEvolutionState } from "../_shared/evolution/state.ts";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
-import { salesCanonicalPathEnabled } from "../_shared/sales-canonical-gate.ts";
+import { salesCanonicalInboundEnabled } from "../_shared/sales-canonical-gate.ts";
 
 import {
   EVOLUTION_WEBHOOK_CONTRACT_VERSION,
@@ -641,11 +641,12 @@ async function findOrCreateThread(
   endpointId: string,
   inboundAt: string,
 ): Promise<string | null> {
-  // 0) Comercial (gate: purpose + Route V2 + flag por org) → caminho CANÔNICO.
-  const salesGate = await salesCanonicalPathEnabled(
+  // 0) Comercial (gate: purpose + Route V2; SEM flag — trigger é global) → canônico.
+  const salesGate = await salesCanonicalInboundEnabled(
     service as unknown as { from: (t: string) => any },
     { organizationId, endpointId },
   );
+
   if (salesGate.allowed) {
     const canonical = await resolveSalesWhatsappThread(
       service as unknown as { from: (t: string) => any },
@@ -713,7 +714,7 @@ async function findOrCreateThread(
   }
 
   // 3) Fallback: nenhuma thread WhatsApp existente — criar nova.
-  const { data: created } = await service
+  const { data: created, error: createErr } = await service
     .from("message_threads")
     .insert({
       organization_id: organizationId,
@@ -726,8 +727,25 @@ async function findOrCreateThread(
     })
     .select("id")
     .single();
-  return (created as { id: string } | null)?.id ?? null;
+
+  const createdId = (created as { id: string } | null)?.id ?? null;
+  if (createdId) return createdId;
+
+  // HOTFIX: INSERT legado bloqueado pela trigger global de canonicidade →
+  // resolve a thread canônica em vez de descartar o inbound.
+  if (/SALES_THREAD_DUPLICATE_BLOCKED/i.test(
+    `${(createErr as any)?.message ?? ""} ${(createErr as any)?.details ?? ""}`,
+  )) {
+    const recovered = await resolveSalesWhatsappThread(
+      service as unknown as { from: (t: string) => any },
+      { organizationId, contactId, endpointId, inboundAt },
+    );
+    return recovered.threadId;
+  }
+
+  return null;
 }
+
 
 async function resolveReplyToMessageId(
   service: SupabaseClient,
