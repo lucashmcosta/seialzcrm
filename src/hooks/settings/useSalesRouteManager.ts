@@ -157,6 +157,35 @@ export function useSalesRouteManager(organizationId?: string | null) {
   };
 }
 
+/**
+ * Estado real da instância — usado exclusivamente pelo modal de QR.
+ * O polling só roda enquanto `enabled` for true (modal aberto).
+ */
+export function useEvolutionInstanceState(params: {
+  organizationId?: string | null;
+  instanceName?: string | null;
+  endpointId?: string | null;
+  enabled: boolean;
+}) {
+  const { organizationId, instanceName, endpointId, enabled } = params;
+  return useQuery<InstanceStateResult>({
+    queryKey: ['evolution-instance-state', organizationId ?? null, instanceName ?? null, endpointId ?? null],
+    enabled: enabled && !!organizationId && !!instanceName,
+    refetchInterval: enabled ? 4000 : false,
+    refetchOnWindowFocus: false,
+    gcTime: 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('sales-route-operations', {
+        body: { op: 'instanceState', organizationId, instanceName, endpointId: endpointId ?? undefined },
+      });
+      if (error) return { error: 'STATE_UNAVAILABLE', message: error.message };
+      return (data ?? {}) as InstanceStateResult;
+    },
+  });
+}
+
+
+
 export function useCanManageIntegrations(organizationId?: string | null) {
   const query = useQuery<boolean>({
     queryKey: ['can-manage-integrations', organizationId ?? null],
