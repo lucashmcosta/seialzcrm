@@ -19,6 +19,11 @@ import { useCallback, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSalesFeatureFlags } from './useSalesFeatureFlags';
+import {
+  filterWhatsAppCandidates,
+  manualReplyPayloadValue,
+  toManualReplyOptions,
+} from '@/lib/manualReplySelection';
 
 export interface ManualReplyOption {
   endpointId: string;
@@ -121,9 +126,7 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
         } | null;
       }>;
 
-      const candidates = rows
-        .map((r) => r.communication_endpoints)
-        .filter((ep): ep is NonNullable<typeof ep> => !!ep && ep.channel === 'whatsapp');
+      const candidates = filterWhatsAppCandidates(rows.map((r) => r.communication_endpoints));
 
       // Elegibilidade Comercial é decidida no servidor, endpoint por endpoint.
       const eligibility = await Promise.all(
@@ -136,15 +139,7 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
         }),
       );
 
-      return candidates
-        .filter((_, i) => eligibility[i])
-        .map((ep) => ({
-          endpointId: ep.id,
-          address: ep.external_address,
-          displayName: ep.display_name,
-          provider: ep.provider,
-          available: ep.is_active === true,
-        }));
+      return toManualReplyOptions(candidates, eligibility);
     },
   });
 
@@ -215,7 +210,7 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
     selectedEndpointId,
     selectedOption,
     // Só envia o override quando a feature está ON e há preferência válida.
-    manualReplyEndpointId: enabled && selectedEndpointId ? selectedEndpointId : undefined,
+    manualReplyEndpointId: manualReplyPayloadValue(enabled, selectedEndpointId),
     isMutating: setMutation.isPending || clearMutation.isPending,
     errorMessage: readError
       ? humanizeManualReplyError(readError)
