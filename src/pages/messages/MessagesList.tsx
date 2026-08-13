@@ -1821,6 +1821,9 @@ function DesktopMessagesList() {
                         endpointProvider={
                           endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.provider ?? null
                         }
+                        endpointIsActive={
+                          endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.is_active ?? null
+                        }
                         officialNumbers={officialNumbers}
                       />
                     ))}
