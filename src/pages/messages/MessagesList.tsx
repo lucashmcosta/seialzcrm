@@ -1862,9 +1862,13 @@ function DesktopMessagesList() {
                           >
                             {selectedThread.contact_name}
                           </Link>
-                          {hasMultipleEndpoints && selectedThreadEndpoint && (
-                            <EndpointBadge externalAddress={selectedThreadEndpoint.external_address} purpose={selectedThreadEndpoint.purpose ?? null} size="lg" />
-                          )}
+                          {/* Fase 2.5 — Route Comercial (identidade da conversa) */}
+                          <RouteBadge
+                            address={salesRoute.activeEndpoint?.external_address ?? selectedThreadEndpoint?.external_address ?? null}
+                            provider={salesRoute.activeEndpoint?.provider ?? selectedThreadEndpoint?.provider ?? null}
+                            state={salesRouteEndpointState}
+                            size="lg"
+                          />
                           <WhatsAppWindowChip
                             channel="whatsapp"
                             lastInboundAt={composerLastInboundAt}
@@ -1879,15 +1883,65 @@ function DesktopMessagesList() {
                         </div>
                         <p className="text-xs text-muted-foreground truncate">
                           {selectedThread.contact_phone}
-                          {selectedEndpointIdentity && (
-                            <span> · {selectedEndpointIdentity}</span>
-                          )}
                           {selectedThread.assigned_user_name && (
                             <span> · {locale === 'pt-BR' ? 'Atribuída a' : 'Assigned to'} {selectedThread.assigned_user_name}</span>
                           )}
                         </p>
+
+                        {/* Route Comercial · número ativo · provider · status */}
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="text-[11px] text-muted-foreground">
+                            {salesRoute.line?.name ?? salesRoute.line?.route_slug ?? 'Sem Route'}
+                            {' · '}
+                            <span className="font-data text-foreground">
+                              {salesRoute.activeEndpoint?.external_address
+                                ?? selectedThreadEndpoint?.external_address
+                                ?? 'Sem número'}
+                            </span>
+                            {' · '}
+                            {providerLabel(salesRoute.activeEndpoint?.provider ?? selectedThreadEndpoint?.provider)}
+                          </span>
+                          <EndpointStatusChip state={salesRouteEndpointState} />
+                          <span className="text-[10px] text-muted-foreground">
+                            {routeResolverFlag.enabledForOrg ? 'Route Resolver V2' : 'Modo legado'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setRouteDetailsOpen(true)}
+                            className="text-[10px] font-semibold text-primary hover:underline"
+                          >
+                            Detalhes
+                          </button>
+                        </div>
+
+                        {threadEndpointHistory.length > 1 && (
+                          <div className="mt-1 flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] text-muted-foreground">
+                              Histórico de endpoints utilizados
+                            </span>
+                            <EndpointHistoryTrail items={threadEndpointHistory} />
+                          </div>
+                        )}
                       </div>
                     </div>
+
+                    <SalesRouteDetailsDialog
+                      open={routeDetailsOpen}
+                      onOpenChange={setRouteDetailsOpen}
+                      threadId={selectedThread.id}
+                      organizationId={organization?.id}
+                      businessContext={selectedThreadBusinessContext}
+                      channel="whatsapp"
+                      contactName={selectedThread.contact_name}
+                      contactPhone={selectedThread.contact_phone}
+                      assigneeName={selectedThread.assigned_user_name ?? null}
+                      statusLabel={
+                        selectedThread.status && statusConfig[selectedThread.status]
+                          ? (locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn)
+                          : null
+                      }
+                    />
+
 
                     {/* Actions — single "More" menu with all actions */}
                     <div className="flex items-center gap-2 shrink-0">
