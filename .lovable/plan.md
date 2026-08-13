@@ -4,8 +4,9 @@ Backend congelado. Nada de SQL, migração, trigger, webhook, Edge Function, fea
 
 ## Bloqueadores/limitações reais do backend (antes de implementar)
 
-1. **Switch do Resolver não pode ser escrito na tela da organização.** `feature_flags` tem `SELECT` liberado para qualquer autenticado, mas todo `UPDATE`/`ALL` exige `is_admin_user()` (admin de plataforma). Portanto em Configurações > Integrações > WhatsApp Comercial o switch será **read-only** (indicador ON = "Route Resolver V2" / OFF = "Modo legado") com link para `/admin/feature-flags`, onde o toggle real já existe. Habilitar escrita para org exigiria mudar RLS — fora do escopo aprovado.
-2. **Histórico de números não pode vir da auditoria de merge.** `message_thread_merge_audit` só é legível por `is_admin_user()`. O histórico ("Recebeu mensagens por 2890 → 5098 → 8439") será derivado de `messages.endpoint_id` distintos da própria thread canônica (ordenados pela primeira ocorrência) — dado legível e suficiente.
+1. **Switch do Resolver não pode ser escrito na tela da organização.** `feature_flags` tem `SELECT` liberado para qualquer autenticado, mas todo `UPDATE`/`ALL` exige `is_admin_user()` (admin de plataforma). Portanto em Configurações > Integrações > WhatsApp Comercial **não haverá toggle** (nem desabilitado): apenas um status informativo — ON = "Route Resolver V2", OFF = "Modo legado" — com link para `/admin/feature-flags`, onde o toggle real já existe. Habilitar escrita para org exigiria mudar RLS — fora do escopo aprovado.
+2. **Histórico de números não pode vir da auditoria de merge.** `message_thread_merge_audit` só é legível por `is_admin_user()`. O bloco "Histórico de endpoints utilizados" (2890 → 5098 → 8439) será derivado de `messages.endpoint_id` distintos da própria thread canônica (ordenados pela primeira ocorrência) — dado legível e suficiente.
+
 3. **Threads legadas outbound-only (3.089)** não têm inbound roteável: a Route/número ativo aparecerá como "Sem Route" / "Envio bloqueado (REPLY_ROUTE_UNRESOLVED)" — reflete o contrato fail-closed já aprovado, sem fallback.
 
 Se essas três interpretações estiverem OK, o resto da UI é implementável 100% com o backend atual.
