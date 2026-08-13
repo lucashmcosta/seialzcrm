@@ -37,12 +37,12 @@ for (const url of FILES) {
         `Termo proibido "${term}" encontrado em código de ${url.pathname}`,
       );
     }
-    // provider default: nenhum literal "twilio" fora de normalizeProvider
-    const twilioAssignments = code.match(/[^=!<>]=\s*"twilio"/g) ?? [];
+    // provider default proibido: nenhum coalesce/fallback para "twilio"
     assert(
-      twilioAssignments.length === 0,
-      `Provider default "twilio" atribuído em ${url.pathname}`,
+      !/(\?\?|\|\|)\s*"twilio"/.test(code),
+      `Provider default "twilio" usado como fallback em ${url.pathname}`,
     );
+
     // último outbound é proibido: só direction inbound pode ser consultado
     assert(!code.includes('"outbound"'), `Consulta a outbound em ${url.pathname}`);
     assert(code.includes('"inbound"'), `Consulta à inbound ausente em ${url.pathname}`);
