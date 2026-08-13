@@ -47,7 +47,9 @@ type Op =
   | "refreshEvolutionIdentity"
   | "provisionEndpoint"
   | "setActiveEndpoint"
-  | "restartInstance";
+  | "restartInstance"
+  | "connectInstance"
+  | "instanceState";
 
 interface Body {
   op: Op;
