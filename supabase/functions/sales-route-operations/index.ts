@@ -435,10 +435,65 @@ serve(async (req) => {
       }
 
       // --------------------------------------- REGRA: número ativo da Route
+      //
+      // Revalidação FRESCA server-side no momento do clique (Evolution):
+      // o `activationEligible` do `status` é apenas informativo para a UI e
+      // pode estar segundos desatualizado. Antes de chamar a RPC de rotação
+      // consultamos o estado REAL na Evolution e ressincronizamos a
+      // identidade. Qualquer falha aborta ANTES da RPC — logo nem
+      // `messaging_lines.active_endpoint_id` nem `messaging_line_rotations`
+      // são tocados.
       case "setActiveEndpoint": {
         if (typeof body.lineId !== "string" || typeof body.endpointId !== "string") {
           return json(400, { error: "INVALID_INPUT", message: "lineId/endpointId" });
         }
+
+        const { data: epRow } = await service
+          .from("communication_endpoints")
+          .select("id, organization_id, external_address, provider")
+          .eq("id", body.endpointId)
+          .maybeSingle();
+        if (!epRow || epRow.organization_id !== orgId) {
+          return json(404, { error: "ENDPOINT_NOT_FOUND" });
+        }
+
+        if (providerFromEndpoint(epRow.provider) === "evolution") {
+          // 1-2. instância vinculada, mesma organização.
+          const { data: inst } = await service
+            .from("evolution_instances")
+            .select("id, instance_name, organization_id")
+            .eq("endpoint_id", body.endpointId)
+            .eq("organization_id", orgId)
+            .maybeSingle();
+          if (!inst?.instance_name) {
+            return json(409, { error: "ACTIVATE_EVOLUTION_IDENTITY_UNKNOWN", message: "instância não vinculada" });
+          }
+
+          // 3-7. estado REAL agora + ressincronização da identidade real.
+          const sync = await syncEvolutionIdentity(inst.instance_name);
+          if ("error" in sync) {
+            return json(409, sync as Record<string, unknown>);
+          }
+          if (sync.connected !== true) {
+            return json(409, {
+              error: "ACTIVATE_EVOLUTION_NOT_CONNECTED",
+              message: `estado real: ${sync.state}`,
+            });
+          }
+          if (sync.identityKnown !== true) {
+            return json(409, { error: "ACTIVATE_EVOLUTION_IDENTITY_UNKNOWN" });
+          }
+          // 8. comparação com o external_address normalizado do endpoint.
+          const epDigits = digitsOf(epRow.external_address);
+          if (!epDigits || sync.ownerDigits !== epDigits) {
+            return json(409, {
+              error: "ACTIVATE_EVOLUTION_IDENTITY_MISMATCH",
+              message: `número conectado ${sync.ownerIdentity.masked ?? "desconhecido"} diverge do endpoint ${mask(epRow.external_address) ?? "—"}`,
+            });
+          }
+        }
+
+        // 9. só aqui a rotação acontece.
         const { data, error } = await caller.rpc("rotate_messaging_line_endpoint", {
           p_line_id: body.lineId,
           p_endpoint_id: body.endpointId,
