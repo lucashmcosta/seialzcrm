@@ -15,7 +15,7 @@ Se essas três interpretações estiverem OK, o resto da UI é implementável 10
 
 ### Novos hooks (somente leitura)
 - `useSalesRoute(threadId)` — reusa `resolveSalesReplyRoute` (já existe em `src/lib/salesReplyRoute.ts`, sem alterá-lo) + busca de `messaging_lines` (nome, `inbox_key`, `channel`, `is_active`, `active_endpoint_id`) e `communication_endpoints` (endereço, provider, status) para expor: Route, linha, endpoint ativo, provider, última inbound roteável, motivo (`resolved` | `flag_off` | `REPLY_ROUTE_UNRESOLVED`).
-- `useThreadEndpointHistory(threadId)` — endpoints distintos usados pelas mensagens da thread, na ordem de primeira ocorrência (fonte dos divisores da timeline e do bloco "Recebeu mensagens por").
+- `useThreadEndpointHistory(threadId)` — endpoints distintos usados pelas mensagens da thread, na ordem de primeira ocorrência (fonte dos divisores da timeline e do bloco "Histórico de endpoints utilizados").
 - `useSalesRouteConfig(organizationId)` — Route(s) `inbox_key='sales'` + `messaging_line_endpoints` vinculados + status/provider de cada endpoint, para a tela de Configurações.
 - `useRouteResolverFlag(organizationId)` — leitura de `feature_flags.conv_route_resolver_v2` (ON/OFF + escopo por org).
 
