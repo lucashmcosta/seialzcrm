@@ -11610,6 +11610,65 @@ export type Database = {
           },
         ]
       }
+      thread_reply_endpoint_prefs: {
+        Row: {
+          created_at: string
+          endpoint_id: string
+          id: string
+          organization_id: string
+          thread_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          endpoint_id: string
+          id?: string
+          organization_id: string
+          thread_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          endpoint_id?: string
+          id?: string
+          organization_id?: string
+          thread_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "thread_reply_endpoint_prefs_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "thread_reply_endpoint_prefs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "thread_reply_endpoint_prefs_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "thread_reply_endpoint_prefs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       thread_routing_rules: {
         Row: {
           action: Json
@@ -11708,6 +11767,65 @@ export type Database = {
           },
           {
             foreignKeyName: "user_organizations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_reply_endpoints: {
+        Row: {
+          created_at: string
+          endpoint_id: string
+          granted_by_user_id: string | null
+          id: string
+          organization_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          endpoint_id: string
+          granted_by_user_id?: string | null
+          id?: string
+          organization_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          endpoint_id?: string
+          granted_by_user_id?: string | null
+          id?: string
+          organization_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_reply_endpoints_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_reply_endpoints_granted_by_user_id_fkey"
+            columns: ["granted_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_reply_endpoints_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_reply_endpoints_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -13020,6 +13138,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      clear_thread_reply_endpoint_pref: {
+        Args: { _thread_id: string }
+        Returns: undefined
+      }
       count_custom_fields_for_org: {
         Args: { p_module?: string; p_organization_id: string }
         Returns: number
@@ -13090,6 +13212,14 @@ export type Database = {
           last_seen: string
           message: string
         }[]
+      }
+      fn_is_canonical_sales_thread: {
+        Args: { _organization_id: string; _thread_id: string }
+        Returns: boolean
+      }
+      fn_is_sales_eligible_endpoint: {
+        Args: { _endpoint_id: string; _organization_id: string }
+        Returns: boolean
       }
       fn_log_marketing_attribution_attempt: {
         Args: { _contact_id: string; _org_id: string }
@@ -13342,6 +13472,14 @@ export type Database = {
           user_id: string
           user_name: string
         }[]
+      }
+      grant_user_reply_endpoint: {
+        Args: {
+          _endpoint_id: string
+          _organization_id: string
+          _user_id: string
+        }
+        Returns: string
       }
       handle_user_signup: {
         Args: {
@@ -13636,6 +13774,14 @@ export type Database = {
       resolve_communication_endpoint: {
         Args: { _address: string; _channel: string; _organization_id: string }
         Returns: string
+      }
+      revoke_user_reply_endpoint: {
+        Args: {
+          _endpoint_id: string
+          _organization_id: string
+          _user_id: string
+        }
+        Returns: undefined
       }
       rotate_messaging_line_endpoint: {
         Args: { p_endpoint_id: string; p_line_id: string; p_reason?: string }
@@ -14102,6 +14248,10 @@ export type Database = {
           similarity: number
           title: string
         }[]
+      }
+      set_thread_reply_endpoint_pref: {
+        Args: { _endpoint_id: string; _thread_id: string }
+        Returns: string
       }
       take_over_thread: {
         Args: { _reason?: string; _thread_id: string }
