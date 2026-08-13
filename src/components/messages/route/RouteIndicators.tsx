@@ -130,10 +130,13 @@ export function RouteBadge({
   variant?: 'compact' | 'split';
   className?: string;
 }) {
-  const noRoute = state === 'no_route' || !address;
+  // Somente o resolver decide "conversa legada". Ausência de endereço é
+  // indeterminação de dado — nunca vira aviso de rota inexistente.
+  const unresolved = state === 'unresolved';
 
   if (variant === 'compact') {
-    if (noRoute) return <LegacyRouteIcon className={className} />;
+    if (unresolved) return <LegacyRouteIcon className={className} />;
+    if (!address) return null;
     const offline = state === 'offline';
     return (
       <span
@@ -157,23 +160,26 @@ export function RouteBadge({
   }
 
   // variant="split"
-  if (noRoute) return <LegacyRouteBadge className={className} />;
+  if (unresolved) return <LegacyRouteBadge className={className} />;
 
   return (
     <>
       <span className={cn(CHIP, 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400', className)}>
         Comercial
       </span>
-      <span
-        title={`Número de resposta ${address}`}
-        className={cn(CHIP, 'border-border bg-muted/50 text-muted-foreground font-medium')}
-      >
-        <WhatsappLogo size={11} weight="fill" className="opacity-70" />
-        <span className="font-data">{last4(address)}</span>
-      </span>
-      <EndpointStatusChip state={state ?? 'online'} />
+      {address && (
+        <span
+          title={`Número de resposta ${address}`}
+          className={cn(CHIP, 'border-border bg-muted/50 text-muted-foreground font-medium')}
+        >
+          <WhatsappLogo size={11} weight="fill" className="opacity-70" />
+          <span className="font-data">{last4(address)}</span>
+        </span>
+      )}
+      {(state === 'online' || state === 'offline') && <EndpointStatusChip state={state} />}
     </>
   );
+
 }
 
 export function EndpointHistoryTrail({
