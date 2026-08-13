@@ -47,7 +47,9 @@ type Op =
   | "refreshEvolutionIdentity"
   | "provisionEndpoint"
   | "setActiveEndpoint"
-  | "restartInstance";
+  | "restartInstance"
+  | "connectInstance"
+  | "instanceState";
 
 interface Body {
   op: Op;
@@ -158,6 +160,9 @@ serve(async (req) => {
   /**
    * Lê a identidade REAL da instância no servidor Evolution e persiste
    * owner_jid / owner_number_digits. Nunca infere nada.
+   *
+   * Retorna também `ownerDigits` (dígitos reais informados pelo provedor) e
+   * `instanceId`, usados pelos gates de ativação.
    */
   async function syncEvolutionIdentity(instanceName: string) {
     if (!INSTANCE_NAME_RE.test(instanceName)) {
@@ -168,7 +173,7 @@ serve(async (req) => {
     }
     const { data: row } = await service
       .from("evolution_instances")
-      .select("id, organization_id, instance_name")
+      .select("id, organization_id, instance_name, endpoint_id, owner_number_digits")
       .eq("instance_name", instanceName)
       .maybeSingle();
     if (!row) return { error: "INSTANCE_NOT_FOUND" } as const;
@@ -189,7 +194,10 @@ serve(async (req) => {
     if (!Array.isArray(list)) {
       return { error: list.code, message: list.message } as const;
     }
-    const found = list.find((i) => i.instanceName === instanceName) ?? list[0] ?? null;
+    const found = list.find((i) => {
+      const rec = i as unknown as Record<string, unknown>;
+      return rec.instanceName === instanceName || rec.name === instanceName;
+    }) ?? list[0] ?? null;
     const ownerJid = found?.ownerJid ?? null;
     const realNumber = found?.number ?? null;
     const ownerDigits = digitsOf(realNumber ?? (ownerJid ? ownerJid.split("@")[0] : ""));
@@ -205,12 +213,33 @@ serve(async (req) => {
 
     await service.from("evolution_instances").update(patch).eq("id", row.id);
 
+    const persistedDigits = ownerDigits.length >= 8
+      ? ownerDigits
+      : digitsOf(row.owner_number_digits);
+
     return {
+      instanceId: row.id as string,
       instanceName,
+      endpointId: (row.endpoint_id as string | null) ?? null,
       state,
       connected: state === "open",
-      ownerIdentity: ownerJid ? { masked: mask(ownerDigits), known: true } : { known: false },
+      ownerDigits: persistedDigits,
+      identityKnown: persistedDigits.length >= 8,
+      ownerIdentity: persistedDigits.length >= 8
+        ? { masked: mask(persistedDigits), known: true }
+        : { masked: null, known: false },
     } as const;
+  }
+
+  /** Dígitos do endereço real de um endpoint (leitura service-role). */
+  async function endpointDigits(endpointId: string): Promise<string | null> {
+    const { data } = await service
+      .from("communication_endpoints")
+      .select("id, organization_id, external_address, provider")
+      .eq("id", endpointId)
+      .maybeSingle();
+    if (!data || data.organization_id !== orgId) return null;
+    return digitsOf(data.external_address);
   }
 
   try {
@@ -281,6 +310,17 @@ serve(async (req) => {
           };
         });
 
+        const instanceByEndpoint = new Map(
+          ((instances ?? []) as {
+            instance_name: string;
+            endpoint_id: string | null;
+            last_known_state: string | null;
+            owner_number_digits: string | null;
+          }[])
+            .filter((i) => !!i.endpoint_id)
+            .map((i) => [i.endpoint_id as string, i]),
+        );
+
         return json(200, {
           organizationId: orgId,
           rules: {
@@ -304,9 +344,37 @@ serve(async (req) => {
                 const ep = ((eps ?? []) as Record<string, unknown>[])
                   .find((e) => e.id === k.endpoint_id) ?? null;
                 const logical = providerFromEndpoint(ep?.provider as string | null);
+                const linkActive = k.is_active === true;
+
+                // activationEligible é APENAS apresentação para a UI. A proteção
+                // real acontece server-side em `setActiveEndpoint`, no clique.
+                let activationEligible = linkActive;
+                let activationBlockedReason: string | null = linkActive
+                  ? null
+                  : "LINK_INACTIVE";
+
+                if (linkActive && logical === "evolution") {
+                  const inst = instanceByEndpoint.get(k.endpoint_id) ?? null;
+                  const epDigits = digitsOf(ep?.external_address as string | null);
+                  const ownerDigits = digitsOf(inst?.owner_number_digits ?? "");
+                  if (!inst) {
+                    activationEligible = false;
+                    activationBlockedReason = "INSTANCE_NOT_LINKED";
+                  } else if (inst.last_known_state !== "open") {
+                    activationEligible = false;
+                    activationBlockedReason = "NOT_CONNECTED";
+                  } else if (ownerDigits.length < 8) {
+                    activationEligible = false;
+                    activationBlockedReason = "IDENTITY_UNKNOWN";
+                  } else if (!epDigits || ownerDigits !== epDigits) {
+                    activationEligible = false;
+                    activationBlockedReason = "IDENTITY_MISMATCH";
+                  }
+                }
+
                 return {
                   endpointId: k.endpoint_id,
-                  linkActive: k.is_active === true,
+                  linkActive,
                   isRouteActive: l.active_endpoint_id === k.endpoint_id,
                   addressMasked: mask(ep?.external_address as string | null),
                   displayName: (ep?.display_name as string | null) ?? null,
@@ -314,6 +382,11 @@ serve(async (req) => {
                   providerRaw: (ep?.provider as string | null) ?? null,
                   technicalStatus: (ep?.status as string | null) ?? "unknown",
                   enabled: ep?.is_active === true,
+                  instanceName: logical === "evolution"
+                    ? (instanceByEndpoint.get(k.endpoint_id)?.instance_name ?? null)
+                    : null,
+                  activationEligible,
+                  activationBlockedReason,
                 };
               }),
           })),
@@ -362,10 +435,65 @@ serve(async (req) => {
       }
 
       // --------------------------------------- REGRA: número ativo da Route
+      //
+      // Revalidação FRESCA server-side no momento do clique (Evolution):
+      // o `activationEligible` do `status` é apenas informativo para a UI e
+      // pode estar segundos desatualizado. Antes de chamar a RPC de rotação
+      // consultamos o estado REAL na Evolution e ressincronizamos a
+      // identidade. Qualquer falha aborta ANTES da RPC — logo nem
+      // `messaging_lines.active_endpoint_id` nem `messaging_line_rotations`
+      // são tocados.
       case "setActiveEndpoint": {
         if (typeof body.lineId !== "string" || typeof body.endpointId !== "string") {
           return json(400, { error: "INVALID_INPUT", message: "lineId/endpointId" });
         }
+
+        const { data: epRow } = await service
+          .from("communication_endpoints")
+          .select("id, organization_id, external_address, provider")
+          .eq("id", body.endpointId)
+          .maybeSingle();
+        if (!epRow || epRow.organization_id !== orgId) {
+          return json(404, { error: "ENDPOINT_NOT_FOUND" });
+        }
+
+        if (providerFromEndpoint(epRow.provider) === "evolution") {
+          // 1-2. instância vinculada, mesma organização.
+          const { data: inst } = await service
+            .from("evolution_instances")
+            .select("id, instance_name, organization_id")
+            .eq("endpoint_id", body.endpointId)
+            .eq("organization_id", orgId)
+            .maybeSingle();
+          if (!inst?.instance_name) {
+            return json(409, { error: "ACTIVATE_EVOLUTION_IDENTITY_UNKNOWN", message: "instância não vinculada" });
+          }
+
+          // 3-7. estado REAL agora + ressincronização da identidade real.
+          const sync = await syncEvolutionIdentity(inst.instance_name);
+          if ("error" in sync) {
+            return json(409, sync as Record<string, unknown>);
+          }
+          if (sync.connected !== true) {
+            return json(409, {
+              error: "ACTIVATE_EVOLUTION_NOT_CONNECTED",
+              message: `estado real: ${sync.state}`,
+            });
+          }
+          if (sync.identityKnown !== true) {
+            return json(409, { error: "ACTIVATE_EVOLUTION_IDENTITY_UNKNOWN" });
+          }
+          // 8. comparação com o external_address normalizado do endpoint.
+          const epDigits = digitsOf(epRow.external_address);
+          if (!epDigits || sync.ownerDigits !== epDigits) {
+            return json(409, {
+              error: "ACTIVATE_EVOLUTION_IDENTITY_MISMATCH",
+              message: `número conectado ${sync.ownerIdentity.masked ?? "desconhecido"} diverge do endpoint ${mask(epRow.external_address) ?? "—"}`,
+            });
+          }
+        }
+
+        // 9. só aqui a rotação acontece.
         const { data, error } = await caller.rpc("rotate_messaging_line_endpoint", {
           p_line_id: body.lineId,
           p_endpoint_id: body.endpointId,
@@ -412,6 +540,86 @@ serve(async (req) => {
           state: "error" in sync ? null : sync.state,
         });
       }
+
+      // ------------------- INTEGRAÇÃO: conectar sessão (QR real) — Evolution
+      case "connectInstance": {
+        const name = typeof body.instanceName === "string" ? body.instanceName : "";
+        if (!INSTANCE_NAME_RE.test(name)) {
+          return json(400, { error: "INVALID_INPUT", message: "instanceName" });
+        }
+        if (!evolutionEnabled) {
+          return json(403, { error: "FEATURE_DISABLED", message: EVOLUTION_FLAG });
+        }
+
+        const { data: row } = await service
+          .from("evolution_instances")
+          .select("id, organization_id")
+          .eq("instance_name", name)
+          .maybeSingle();
+        if (!row) return json(404, { error: "INSTANCE_NOT_FOUND" });
+        if (row.organization_id !== orgId) return json(403, { error: "INSTANCE_FOREIGN_ORG" });
+
+        const provider = evolution();
+        if (isEvolutionError(provider)) {
+          return json(provider.status ?? 502, { error: provider.code, message: provider.message });
+        }
+
+        const out = await provider.connect(name);
+        if (isEvolutionError(out)) {
+          return json(out.status ?? 502, { error: out.code, message: out.message });
+        }
+
+        const expiresAt = new Date(Date.now() + 60_000).toISOString();
+        await service.from("evolution_instances").update({
+          last_known_state: "connecting",
+          last_state_checked_at: new Date().toISOString(),
+          last_qr_expires_at: expiresAt,
+          updated_at: new Date().toISOString(),
+        }).eq("id", row.id);
+
+        return json(200, {
+          instanceName: name,
+          pairingCode: out?.pairingCode ?? null,
+          qrBase64: out?.base64 ?? null,
+          count: out?.count ?? 0,
+          expiresAt,
+        });
+      }
+
+      // -------------------- INTEGRAÇÃO: estado real (polling do modal de QR)
+      //
+      // Ao detectar `open`, ressincroniza a identidade a partir da resposta
+      // REAL do servidor e compara com o endpoint esperado. Os campos são
+      // booleanos explícitos (ou null quando indeterminado) — o frontend só
+      // considera sucesso com os três `=== true`.
+      case "instanceState": {
+        const name = typeof body.instanceName === "string" ? body.instanceName : "";
+        const sync = await syncEvolutionIdentity(name);
+        if ("error" in sync) return json(200, { ...sync, connected: false });
+
+        const targetEndpointId = typeof body.endpointId === "string"
+          ? body.endpointId
+          : sync.endpointId;
+        const expectedDigits = targetEndpointId
+          ? (await endpointDigits(targetEndpointId)) ?? ""
+          : "";
+
+        let identityMatchesEndpoint: boolean | null = null;
+        if (sync.identityKnown && expectedDigits.length >= 8) {
+          identityMatchesEndpoint = sync.ownerDigits === expectedDigits;
+        }
+
+        return json(200, {
+          instanceName: sync.instanceName,
+          state: sync.state,
+          connected: sync.connected === true,
+          identityKnown: sync.identityKnown === true,
+          identityMatchesEndpoint,
+          expectedMasked: expectedDigits ? mask(expectedDigits) : null,
+          ownerMasked: sync.ownerIdentity.masked,
+        });
+      }
+
 
       default:
         return json(400, { error: "INVALID_INPUT", message: "unknown op" });
