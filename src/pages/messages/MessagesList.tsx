@@ -673,8 +673,8 @@ function DesktopMessagesList() {
     businessContext: selectedThreadBusinessContext,
     channel: 'whatsapp',
   });
-  const { history: threadEndpointHistory } = useThreadEndpointHistory(selectedThreadId);
-  const { flag: routeResolverFlag } = useRouteResolverFlag(organization?.id);
+  // Histórico de endpoints e status do resolver vivem no painel/modal de detalhes.
+
   const salesRouteEndpointState: 'online' | 'offline' | 'no_route' = salesRoute.resolved
     ? salesRoute.activeEndpoint?.is_active === true ? 'online' : 'offline'
     : 'no_route';
