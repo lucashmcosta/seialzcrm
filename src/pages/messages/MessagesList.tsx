@@ -41,7 +41,7 @@ import {
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { useOrganization } from '@/hooks/useOrganization';
 // Fase 2.5 — UI Comercial (Route/número/provider). Somente leitura.
-import { RouteBadge } from '@/components/messages/route/RouteIndicators';
+import { RouteBadge, type EndpointState } from '@/components/messages/route/RouteIndicators';
 import { SalesRouteDetailsDialog } from '@/components/messages/route/SalesRouteDetailsDialog';
 import { SalesConversationHeader } from '@/components/messages/route/SalesConversationHeader';
 import { SalesComposerStatus } from '@/components/messages/route/SalesComposerStatus';
