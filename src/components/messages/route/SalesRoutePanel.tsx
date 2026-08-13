@@ -4,7 +4,9 @@
 // Este é o único lugar (com o modal) onde termos técnicos podem aparecer.
 // ============================================================================
 
+import React from 'react';
 import { useSalesRoute } from '@/hooks/messages/useSalesRoute';
+
 import { useThreadEndpointHistory } from '@/hooks/messages/useThreadEndpointHistory';
 import { useRouteResolverFlag } from '@/hooks/messages/useRouteResolverFlag';
 import { EndpointStatusChip, ProviderChip, last4, providerLabel } from './RouteIndicators';
