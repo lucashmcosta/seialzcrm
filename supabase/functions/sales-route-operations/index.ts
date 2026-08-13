@@ -160,6 +160,9 @@ serve(async (req) => {
   /**
    * Lê a identidade REAL da instância no servidor Evolution e persiste
    * owner_jid / owner_number_digits. Nunca infere nada.
+   *
+   * Retorna também `ownerDigits` (dígitos reais informados pelo provedor) e
+   * `instanceId`, usados pelos gates de ativação.
    */
   async function syncEvolutionIdentity(instanceName: string) {
     if (!INSTANCE_NAME_RE.test(instanceName)) {
@@ -170,7 +173,7 @@ serve(async (req) => {
     }
     const { data: row } = await service
       .from("evolution_instances")
-      .select("id, organization_id, instance_name")
+      .select("id, organization_id, instance_name, endpoint_id, owner_number_digits")
       .eq("instance_name", instanceName)
       .maybeSingle();
     if (!row) return { error: "INSTANCE_NOT_FOUND" } as const;
@@ -191,7 +194,10 @@ serve(async (req) => {
     if (!Array.isArray(list)) {
       return { error: list.code, message: list.message } as const;
     }
-    const found = list.find((i) => i.instanceName === instanceName) ?? list[0] ?? null;
+    const found = list.find((i) => {
+      const rec = i as unknown as Record<string, unknown>;
+      return rec.instanceName === instanceName || rec.name === instanceName;
+    }) ?? list[0] ?? null;
     const ownerJid = found?.ownerJid ?? null;
     const realNumber = found?.number ?? null;
     const ownerDigits = digitsOf(realNumber ?? (ownerJid ? ownerJid.split("@")[0] : ""));
@@ -207,12 +213,33 @@ serve(async (req) => {
 
     await service.from("evolution_instances").update(patch).eq("id", row.id);
 
+    const persistedDigits = ownerDigits.length >= 8
+      ? ownerDigits
+      : digitsOf(row.owner_number_digits);
+
     return {
+      instanceId: row.id as string,
       instanceName,
+      endpointId: (row.endpoint_id as string | null) ?? null,
       state,
       connected: state === "open",
-      ownerIdentity: ownerJid ? { masked: mask(ownerDigits), known: true } : { known: false },
+      ownerDigits: persistedDigits,
+      identityKnown: persistedDigits.length >= 8,
+      ownerIdentity: persistedDigits.length >= 8
+        ? { masked: mask(persistedDigits), known: true }
+        : { masked: null, known: false },
     } as const;
+  }
+
+  /** Dígitos do endereço real de um endpoint (leitura service-role). */
+  async function endpointDigits(endpointId: string): Promise<string | null> {
+    const { data } = await service
+      .from("communication_endpoints")
+      .select("id, organization_id, external_address, provider")
+      .eq("id", endpointId)
+      .maybeSingle();
+    if (!data || data.organization_id !== orgId) return null;
+    return digitsOf(data.external_address);
   }
 
   try {
