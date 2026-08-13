@@ -216,6 +216,34 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    // Switch "Responder por": override manual apenas da ESCOLHA de endpoint.
+    // Fail-closed e barreira server-side da flag. Nenhuma outra regra é pulada.
+    const manualReply = await resolveManualReplyEndpoint(supabase, {
+      organizationId,
+      threadId: typeof threadId === "string" ? threadId : null,
+      userId: typeof userId === "string" ? userId : null,
+      manualReplyEndpointId: typeof manualReplyEndpointId === "string" ? manualReplyEndpointId : null,
+    });
+    if (manualReply.mode === "error") {
+      return errorResponse(400, { error: manualReply.code, message: manualReply.message }, {
+        branch: manualReply.code,
+        reason: manualReply.message,
+      });
+    }
+    if (manualReply.mode === "manual") {
+      if (manualReply.provider !== "meta_cloud_api") {
+        return errorResponse(400, {
+          error: "MANUAL_REPLY_ENDPOINT_INACTIVE",
+          message: "O número escolhido não é Meta Cloud.",
+        }, { branch: "manual_reply_provider_mismatch", reason: "provider != meta_cloud_api" });
+      }
+      explicitEndpointId = manualReply.endpointId;
+      endpointIdForLog = manualReply.endpointId;
+    }
+    const replyChoiceMeta = replyChoiceMetadata(manualReply);
+
+
+
     // Resolve endpoint.
     //
     // Contrato pós-restauração do roteamento por LINHA:
