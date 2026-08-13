@@ -25,8 +25,8 @@ Ou seja: infraestrutura pronta, fluxo de conexão ausente **nesta tela**. Esta f
 2. **Estado real legível** por instância: `Conectado`, `Conectando…`, `QR necessário`, `Desconectado`.
 3. **Botão "Conectar WhatsApp"** quando não há sessão ativa (estado ≠ conectado).
 4. **Modal de QR** com a imagem do QR, instruções, contador de expiração e botão "Atualizar QR".
-5. **Transição automática para "Conectado"**: enquanto o modal estiver aberto, o status é verificado periodicamente; ao conectar, o modal fecha, a identidade é gravada e a lista atualiza.
-6. **Gate de identidade**: "Tornar ativo" só habilitado quando o endpoint tem identidade confirmada (Evolution: `owner_number_digits` batendo com o endpoint; Meta/Twilio: mantém o comportamento atual).
+5. **Transição automática para "Conectado" só com identidade validada**: enquanto o modal estiver aberto, o estado real é verificado periodicamente. Ao detectar `open`, o servidor sincroniza `owner_jid` + `owner_number_digits` e compara com o número esperado do endpoint. Somente com correspondência o modal fecha como sucesso e a UI passa a "Conectado". Mismatch ou identidade desconhecida: o modal **não** fecha como sucesso, exibe erro explícito (`número conectado diverge do número do endpoint` / `identidade não confirmada`) e "Tornar ativo" continua bloqueado.
+6. **Gate duplo em "Tornar ativo" (Evolution)**: exige **simultaneamente** identidade confirmada (`owner_number_digits` compatível com o endpoint) **e** estado real atual da instância = conectado (`open`). Se a sessão cair depois, o endpoint deixa de ser elegível automaticamente (o estado real vem do status, não de memória da UI). Meta/Twilio mantêm o comportamento atual.
 
 ## Fora do escopo
 
@@ -39,18 +39,19 @@ Ou seja: infraestrutura pronta, fluxo de conexão ausente **nesta tela**. Esta f
 **Backend (`supabase/functions/sales-route-operations/index.ts`) — aditivo:**
 
 - Nova op `connectInstance`: valida admin de integrações (`can_manage_integrations_in_org`), flag `evolution_api_enabled`, instância da própria org; chama `provider.connect(name)`; grava `last_known_state = 'connecting'` e `last_qr_expires_at`; retorna `{ pairingCode, qrBase64, count }`.
-- Nova op `instanceState` (leve): retorna `state` real + `identityKnown` sem forçar o `fetchInstances` completo; ao detectar `open`, reaproveita `syncEvolutionIdentity` para persistir `owner_jid`/`owner_number_digits`.
+- Nova op `instanceState` (polling do modal): lê o estado real; ao detectar `open`, chama `syncEvolutionIdentity` (grava `owner_jid` + `owner_number_digits` só da resposta real do servidor) e devolve `{ state, connected, identityKnown, identityMatchesEndpoint, expectedMasked, ownerMasked }`. `connected: true` sozinho não é sucesso — o frontend exige `identityKnown && identityMatchesEndpoint !== false`.
+- `status` passa a devolver, por endpoint, `activationEligible` + `activationBlockedReason`, calculados no servidor: para Evolution exige instância vinculada com `last_known_state = 'open'` **e** `owner_number_digits` igual aos dígitos do endereço do endpoint; para Meta/Twilio mantém a regra atual (vínculo ativo).
 - `restartInstance` permanece como está (sem vazar QR).
 - Deploy da função ao final.
 
 **Frontend:**
 
-- `src/hooks/settings/useSalesRouteManager.ts`: adicionar `connectInstance` e `instanceState` (mutação + polling controlado, `refetchInterval` só enquanto o modal estiver aberto).
-- Novo `src/components/settings/SalesWhatsAppConnectDialog.tsx`: modal do QR (imagem `data:image/png;base64,...`, instruções, expiração, "Atualizar QR", fecha sozinho ao conectar e invalida o status do manager).
+- `src/hooks/settings/useSalesRouteManager.ts`: adicionar `connectInstance` (mutação) e `instanceState` (query com `refetchInterval` ativo **somente** enquanto o modal estiver aberto).
+- Novo `src/components/settings/SalesWhatsAppConnectDialog.tsx`: modal do QR (imagem `data:image/png;base64,...`, instruções, expiração, "Atualizar QR"). Fecha como sucesso apenas quando `connected && identityKnown && identityMatchesEndpoint !== false`; em mismatch/identidade desconhecida mantém aberto com `Alert` destrutivo explicando o problema.
 - `SalesWhatsAppSettingsSection.tsx`:
   - mapa `estado técnico → rótulo humano` (`open→Conectado`, `connecting→Conectando…`, `close`+QR válido→`QR necessário`, resto→`Desconectado`);
   - remover o chip "Evolution · habilitada";
   - botão "Conectar WhatsApp" (só admin, só quando não conectado) abrindo o modal;
-  - "Tornar ativo" desabilitado com tooltip quando a identidade do endpoint não estiver confirmada.
+  - "Tornar ativo" desabilitado quando `activationEligible === false`, com o motivo visível (sessão desconectada ou identidade não confirmada/divergente).
 
 **Validação:** typecheck, deploy da edge function e smoke manual na tela (`/settings/integrations`): estado legível, conectar → QR → conectado automático, "Tornar ativo" bloqueado sem identidade.
