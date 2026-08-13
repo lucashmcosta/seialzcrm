@@ -121,12 +121,19 @@ export function RouteBadge({
 
   if (variant === 'compact') {
     if (noRoute) return <LegacyRouteIcon className={className} />;
+    const offline = state === 'offline';
     return (
       <span
-        title={`Número de resposta ${address} · ${providerLabel(provider)}`}
+        title={
+          offline
+            ? `Número de resposta ${address} · ${providerLabel(provider)} · inativo`
+            : `Número de resposta ${address} · ${providerLabel(provider)}`
+        }
         className={cn(
           CHIP,
-          'border-border bg-muted/50 text-muted-foreground font-medium',
+          offline
+            ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium'
+            : 'border-border bg-muted/50 text-muted-foreground font-medium',
           className,
         )}
       >
