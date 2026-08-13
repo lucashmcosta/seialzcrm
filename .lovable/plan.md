@@ -1,50 +1,45 @@
-# Fase Final — Concluir o módulo Comercial + QA
+# Fase Final — Conclusão do módulo Comercial + QA (Go-Live)
 
-Frontend/apresentação apenas. Atendimento, Mobile, banco, Edge Functions, triggers, resolver e feature flags permanecem intocados. Nenhuma flag nova, nenhuma escrita nova.
+Frontend/apresentação apenas. Nada de SQL, banco, Edge Functions, triggers, resolver, feature flags, hooks de dados, queries novas, Atendimento ou Mobile.
 
 ## Lacunas confirmadas por inspeção
 
-1. `SalesConversationHeader` existe mas **não é usado** em nenhuma tela: o cabeçalho está duplicado inline em `MessagesList.tsx` (avatar + nome + status + `SalesConversationMeta`). Duas fontes de verdade para o mesmo cabeçalho.
-2. `SalesRoutePanel` só é renderizado **dentro do modal**. Não existe painel lateral de rota na conversa.
-3. O `RouteBadge` da lista lateral recebe `state={endpointAddress ? 'online' : 'no_route'}` — derivado do endpoint da mensagem, não do estado real da rota. Conversas com endpoint inativo aparecem como "online".
-4. Divisor de troca de número na timeline (previsto na Fase 2.5) não existe.
-5. Estados da lista: existe skeleton de loading e um vazio mínimo ("Nenhuma conversa"); **não há estado de erro** e o vazio não distingue "sem conversas" de "busca/filtro sem resultado".
-6. `SalesRouteDetailsDialog` é montado sempre que há thread selecionada e já dispara query de último outbound mesmo fechado.
+1. `SalesConversationHeader` existe mas **não é usado**: o cabeçalho da conversa está duplicado inline em `MessagesList.tsx` (avatar + nome + status + `SalesConversationMeta` + botão de detalhes).
+2. O `RouteBadge` da lista recebe `state={endpointAddress ? 'online' : 'no_route'}` — "tem endereço = online", ignorando endpoint inativo.
+3. `SalesRouteDetailsDialog` é montado sempre que há thread selecionada e já dispara a query de último outbound mesmo fechado.
+4. Lista: existe skeleton de loading e um vazio único ("Nenhuma conversa"); **não há estado de erro** nem vazio contextual para busca/filtro.
 
-## O que será feito
+## 1. Consolidação do cabeçalho
+- Adotar `SalesConversationHeader` como cabeçalho único do Comercial em `MessagesList.tsx`, recebendo `statusLabel`/`statusClassName`, `windowChips` (chip de janela com `tone="soft"`), `actions` (menu de ações existente) e `onOpenDetails`.
+- Remover integralmente o bloco de cabeçalho inline duplicado.
 
-### Consolidação de componentes
-- Adotar `SalesConversationHeader` como cabeçalho único da conversa Comercial em `MessagesList.tsx`, passando `statusLabel`/`statusClassName`, `windowChips`, `actions` e `onOpenDetails`. Remover o cabeçalho inline duplicado.
-- `SalesRouteDetailsDialog`: montar apenas quando `open` (evita query desnecessária) e remover linhas repetidas em relação ao `SalesRoutePanel`.
-- `SalesRoutePanel`: manter como CRM Card, revisar espaçamentos/alinhamento das linhas e o rótulo técnico apenas nesse contexto.
+## 2. RouteBadge com estado real
+- Derivar o estado do badge da lista do endpoint já carregado (`is_active`): ativo → Online, inativo → Offline, sem endereço/rota → Conversa legada. Sem tocar nas queries; usa apenas dados já em memória.
 
-### Painel lateral da rota
-- Adicionar na conversa Comercial um painel lateral colapsável (desktop ≥ `xl`) com `SalesRoutePanel`, alternado pelo mesmo botão "Detalhes da rota" (modal em telas menores). Sem novas queries: reutiliza os hooks existentes.
+## 3. Modal lazy
+- `SalesRouteDetailsDialog` passa a ser montado somente quando `routeDetailsOpen === true`, eliminando a query de último outbound com o modal fechado.
 
-### Estado real na lista
-- Derivar o estado do `RouteBadge` da lista a partir do endpoint já carregado (`is_active`) em vez de "tem endereço = online", mantendo `no_route` quando não há endereço. Sem alterar a query da lista.
+## 4. Estados da lista
+- Estado de erro com mensagem e botão "Tentar novamente" ligado ao refetch já existente.
+- Vazio contextual: sem filtros/busca → "Nenhuma conversa."; com busca ou filtro ativo → "Nenhuma conversa encontrada." + botão "Limpar filtros" (reseta busca e filtro para o padrão).
 
-### Timeline
-- Divisor discreto "Número alterado 2890 → 8439" entre mensagens quando o `endpoint_id` muda, usando o histórico já disponível em `useThreadEndpointHistory`.
+## 5. Polimento visual
+- Ajustes de espaçamento, alinhamento, tipografia, pesos (máx. 600), badges, chips, tooltips e cores por tokens semânticos, mantendo `font-data` em números.
+- Hierarquia: cliente → responsável → status → número → informações técnicas.
+- Sem novos componentes grandes; sem painel lateral, drawer ou sidebar.
 
-### Estados de UI
-- Estado de erro na lista (mensagem + botão "Tentar novamente" usando o refetch existente).
-- Vazio contextual: "Nenhuma conversa encontrada" quando há busca/filtro ativo, com ação de limpar; texto neutro caso contrário.
-- Estado vazio da área de conversa e estados sem rota/template-only revisados para tom âmbar consistente.
+## 6. Configurações → Integrações → WhatsApp Comercial
+- Somente layout: alinhar `Field` com o padrão de `Row`, revisar densidade, chips e apresentação de Route, número ativo, provider, status, endpoints vinculados e modo de roteamento. Continua somente leitura, sem toggle.
 
-### Polimento visual (varredura)
-- Espaçamentos, alinhamento e hierarquia do cabeçalho, lista, chips e composer; tipografia dentro do design system (peso máx. 600, `font-data` para números); tooltips em todos os chips; botões secundários discretos; tokens semânticos apenas.
-- Configurações → Integrações → WhatsApp Comercial: revisar apresentação de Route, número ativo, provider, status, endpoints vinculados e modo de roteamento; alinhar `Field`/`Row` com o padrão do painel; manter somente leitura.
-- Conferência visual de cada estado: normal, resolvida, reaberta, sem rota, template-only, online, offline e providers Meta/Evolution/Twilio (rótulos e chips).
-
-## QA final
-Playwright no preview autenticado + `tsgo` + build + suíte de testes. Checklist com PASS/FAIL para: abertura do Comercial, lista, filtros, pesquisa, seleção de conversa, painel, modal, composer, templates, badges, chips, status, route, provider, endpoint, timeline, configurações, navegação, console do navegador, erros React, typecheck, build. Qualquer FAIL é corrigido e o item reexecutado até PASS.
+## 7. QA final
+`tsgo --noEmit`, build, suíte de testes e QA manual via Playwright no preview autenticado, registrando PASS/FAIL para: abertura do Comercial, lista, pesquisa, filtros, seleção de conversa, cabeçalho, badges, RouteBadge, modal "Detalhes da rota", composer, templates, estados (loading/vazio/erro/sem rota/template-only), mensagens, timeline, Configurações, console do navegador e erros React.
+- Durante o QA corrigir apenas bugs funcionais, regressões e inconsistências visuais evidentes; melhorias não bloqueantes só são registradas.
 
 ## Notas técnicas
-- Arquivos alvo: `src/pages/messages/MessagesList.tsx`, `src/components/messages/route/*`, `src/components/settings/SalesWhatsAppSettingsSection.tsx`.
-- Nenhum hook de dados novo; nenhuma alteração em `useSalesRoute`, `useThreadEndpointHistory`, `useRouteResolverFlag`, `useSalesRouteConfig`, `useConsolidatedThreadIds`.
-- `EndpointBadge`, `InboxThreadList` e componentes mobile não são tocados; `WhatsAppWindowChip` continua com `tone="soft"` só no Comercial.
-- Caso algum bug de backend apareça durante o QA, ele é reportado antes de qualquer correção fora do frontend.
+- Arquivos alvo: `src/pages/messages/MessagesList.tsx`, `src/components/messages/route/{SalesConversationHeader,SalesConversationMeta,RouteIndicators,SalesRouteDetailsDialog,SalesRoutePanel,SalesComposerStatus}.tsx`, `src/components/settings/SalesWhatsAppSettingsSection.tsx`.
+- Nenhuma alteração em `useSalesRoute`, `useThreadEndpointHistory`, `useRouteResolverFlag`, `useSalesRouteConfig`, `useConsolidatedThreadIds`.
+- `EndpointBadge`, `InboxThreadList` e componentes mobile não são tocados.
+- Se surgir bug de backend, ele é reportado antes de qualquer ação fora do frontend.
 
 ## Entrega
-Arquivos alterados, resumo das melhorias, checklist QA com PASS/FAIL, bugs encontrados/corrigidos e confirmação final de prontidão para a operação.
+Arquivos alterados, resumo das melhorias, checklist QA PASS/FAIL, bugs encontrados e corrigidos, e confirmação explícita de backend/trigger/Edge Function/flag/query/Atendimento/Mobile intactos e do Comercial pronto para produção.
