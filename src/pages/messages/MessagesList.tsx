@@ -1607,6 +1607,16 @@ function DesktopMessagesList() {
       })()
     : visibleThreadsWithSelectedRaw;
 
+  // Fase Final — vazio contextual da lista: distingue "sem conversas" de
+  // "busca/filtro sem resultado". Não altera nenhuma query.
+  const hasActiveListFilters =
+    searchQuery.trim().length > 0 || endpointFilter !== 'all' || (filter !== null && filter !== 'all_open');
+  const clearListFilters = () => {
+    setSearchQuery('');
+    setEndpointFilter('all');
+    setFilter('all_open');
+  };
+
   const loadThreadForSelection = async (
     threadId: string,
     fallbackEndpointId: string | null,
