@@ -22,11 +22,13 @@ import {
 } from '@/components/ui/select';
 import { useOrganization } from '@/hooks/useOrganization';
 import {
-  useSalesRouteManager, useCanManageIntegrations, type SalesProvider,
+  useSalesRouteManager, useCanManageIntegrations,
+  type ActivationBlockedReason, type ManagerInstance, type SalesProvider,
 } from '@/hooks/settings/useSalesRouteManager';
+import { SalesWhatsAppConnectDialog } from '@/components/settings/SalesWhatsAppConnectDialog';
 import { ProviderChip } from '@/components/messages/route/RouteIndicators';
 import {
-  ChatCircle, ArrowsClockwise, WarningCircle, SpinnerGap, Plus, CheckCircle,
+  ChatCircle, ArrowsClockwise, WarningCircle, SpinnerGap, Plus, CheckCircle, QrCode,
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
@@ -35,6 +37,22 @@ const PROVIDER_OPTIONS: { value: SalesProvider; label: string }[] = [
   { value: 'twilio', label: 'Twilio' },
   { value: 'evolution', label: 'Evolution' },
 ];
+
+/** Estado técnico do provedor → linguagem humana. Nada de `open`/`close` na tela. */
+function humanState(i: ManagerInstance): { label: string; ok: boolean } {
+  if (i.technicalState === 'open') return { label: 'Conectado', ok: true };
+  if (i.technicalState === 'connecting') return { label: 'Conectando…', ok: false };
+  if (i.technicalState === 'close') return { label: 'QR necessário', ok: false };
+  return { label: 'Desconectado', ok: false };
+}
+
+const BLOCKED_LABEL: Record<ActivationBlockedReason, string> = {
+  LINK_INACTIVE: 'vínculo inativo',
+  INSTANCE_NOT_LINKED: 'sem sessão vinculada',
+  NOT_CONNECTED: 'sessão desconectada',
+  IDENTITY_UNKNOWN: 'identidade não confirmada',
+  IDENTITY_MISMATCH: 'número conectado divergente',
+};
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
