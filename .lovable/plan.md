@@ -53,6 +53,6 @@ Ou seja: infraestrutura pronta, fluxo de conexão ausente **nesta tela**. Esta f
   - mapa `estado técnico → rótulo humano` (`open→Conectado`, `connecting→Conectando…`, `close`+QR válido→`QR necessário`, resto→`Desconectado`);
   - remover o chip "Evolution · habilitada";
   - botão "Conectar WhatsApp" (só admin, só quando não conectado) abrindo o modal;
-  - "Tornar ativo" desabilitado quando `activationEligible === false`, com o motivo visível (sessão desconectada ou identidade não confirmada/divergente).
+  - "Tornar ativo" desabilitado quando `activationEligible !== true`, com o motivo visível (sessão desconectada ou identidade não confirmada/divergente); erros da revalidação server-side são exibidos em mensagem clara.
 
-**Validação:** typecheck, deploy da edge function e smoke manual na tela (`/settings/integrations`): estado legível, conectar → QR → conectado automático, "Tornar ativo" bloqueado sem identidade.
+**Validação:** typecheck, deploy da edge function e smoke manual na tela (`/settings/integrations`): estado legível, conectar → QR → conectado automático, "Tornar ativo" bloqueado sem identidade e recusado pelo servidor se a sessão cair entre o carregamento e o clique.
