@@ -127,8 +127,46 @@ async function flagEnabledForOrg(service: Db, organizationId: string): Promise<b
 }
 
 /**
+ * HOTFIX INBOUND — gate de LEITURA/RESOLUÇÃO canônica de thread no inbound.
+ *
+ * Avalia SOMENTE as condições estruturais (1) endpoint Comercial e (2) Route V2
+ * válida. NÃO consulta a feature flag: a trigger de canonicidade
+ * `trg_zz_guard_sales_thread_canonical` é GLOBAL, então o inbound precisa
+ * sempre resolver a thread canônica, mesmo com a flag OFF. A flag continua
+ * governando exclusivamente o caminho de ENVIO (resolver V2).
+ */
+export async function salesCanonicalInboundEnabled(
+  service: Db,
+  args: {
+    organizationId: string | null | undefined;
+    endpointId: string | null | undefined;
+    channel?: string;
+  },
+): Promise<SalesCanonicalGateResult> {
+  const organizationId = args.organizationId ?? null;
+  const endpointId = args.endpointId ?? null;
+  const channel = args.channel ?? "whatsapp";
+
+  if (!organizationId || !endpointId) return deny("missing_input");
+  if (!(await isSalesEndpoint(service, endpointId))) return deny("not_sales_endpoint");
+
+  const lineId = await resolveActiveSalesRoute(service, organizationId, endpointId, channel);
+  if (!lineId) return deny("no_route_v2");
+
+  const result: SalesCanonicalGateResult = { allowed: true, reason: "allowed", lineId };
+  console.log("[sales-gate] canonical_inbound_gate", JSON.stringify({
+    organization_id: organizationId,
+    endpoint_id: endpointId,
+    channel,
+    ...result,
+  }));
+  return result;
+}
+
+/**
  * Avalia o gate. Único ponto autorizado a liberar o caminho canônico.
  */
+
 export async function salesCanonicalPathEnabled(
   service: Db,
   args: {
