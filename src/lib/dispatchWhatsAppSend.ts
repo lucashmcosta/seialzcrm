@@ -274,12 +274,38 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
   //   (c) senão: cair no primary_endpoint_id se ainda ativo.
   //   (d) senão: resolveProvider legado (fallbacks).
   // ============================================================
+  // ── Caminho canônico Comercial V2 (flag conv_route_resolver_v2) ──
+  // Precede QUALQUER outra resolução, inclusive endpointId explícito do caller.
+  if (payload.threadId) {
+    const canonical = await resolveSalesReplyRoute({
+      organizationId: payload.organizationId,
+      threadId: payload.threadId,
+      businessContext: payload.businessContext ?? null,
+    });
+    if (canonical.applicable && canonical.sendEndpointId) {
+      payload = { ...payload, endpointId: canonical.sendEndpointId };
+    } else if (canonical.reason === "REPLY_ROUTE_UNRESOLVED") {
+      console.error("[dispatch-wa] REPLY_ROUTE_UNRESOLVED", {
+        threadId: payload.threadId,
+        discoveredByEndpointId: canonical.discoveredByEndpointId,
+      });
+      return {
+        data: null,
+        error: {
+          name: "REPLY_ROUTE_UNRESOLVED",
+          message: "Não foi possível resolver a linha de resposta desta conversa Comercial.",
+        } as any,
+      };
+    }
+  }
+
   let threadPrimaryEndpointId: string | null = null;
   let threadBusinessContext: string | null = payload.businessContext ?? null;
   let threadOrgId: string | null = payload.organizationId ?? null;
   let threadChannel: string = "whatsapp";
 
   if (payload.threadId && !payload.endpointId) {
+
     const { data: threadRow, error: threadErr } = await supabase
       .from("message_threads")
       .select("primary_endpoint_id, business_context, organization_id, channel")
