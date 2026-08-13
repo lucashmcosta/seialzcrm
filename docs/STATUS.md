@@ -1,6 +1,6 @@
 # Status da Documentação
 
-Snapshot: **2026-07-05** (pós-refinamento — ver [`audit/09-documentation-refinement.md`](audit/09-documentation-refinement.md) — e pós-rodada P0/P1/P2 do mesmo dia). Delta 2026-07-22: roteamento por linha ativa restaurado nas 3 send functions (Evolution/Meta/Twilio honram `endpointId` explícito do dispatcher; log `endpoint_override_ignored` → `line_routing_honored`); coluna `communication_endpoints.requires_template_outside_window` em produção substituindo o hardcode `provider === 'evolution_api'` no gate de janela 24h do composer; UX de migração manual de thread removida. Ver [`plans/2026-07-endpoint-lines-rotation.md`](plans/2026-07-endpoint-lines-rotation.md).
+Snapshot: **2026-07-05** (pós-refinamento — ver [`audit/09-documentation-refinement.md`](audit/09-documentation-refinement.md) — e pós-rodada P0/P1/P2 do mesmo dia). Delta 2026-07-22: roteamento por linha ativa restaurado nas 3 send functions (Evolution/Meta/Twilio honram `endpointId` explícito do dispatcher; log `endpoint_override_ignored` → `line_routing_honored`); coluna `communication_endpoints.requires_template_outside_window` em produção substituindo o hardcode `provider === 'evolution_api'` no gate de janela 24h do composer; UX de migração manual de thread removida. Ver [`plans/2026-07-endpoint-lines-rotation.md`](plans/2026-07-endpoint-lines-rotation.md). Delta 2026-08-13: hotfix de `action_type` no log de atribuição encerrado (inbound nunca mais é descartado por marcador de UI inválido); 1 inbound histórico não recuperado automaticamente registrado na seção 3.
 Fonte de verdade: código-fonte + banco vivo + `docs/audit/` (congelada em 2026-07-04).
 
 ---
@@ -87,7 +87,14 @@ Tudo mais é mantido manualmente com base em evidência (código, banco, auditor
 - Buckets de Storage listados como "prováveis" (`attachments`, `logos`, `call-recordings`, `voice-audio`) sem verificação formal — [`platform/infrastructure/README.md`](platform/infrastructure/README.md).
 - ⚠️ **Risco a revisar: bump major de `zod` 3.x → 4.x** feito pelo bot da Lovable em 2026-07-05 (commits `00fc045a`/`12bb4a94`, junto com `@lovable.dev/mcp-js`). Zod 4 muda comportamento de schemas/`.parse`/mensagens de erro — revisar todos os usos de zod no frontend (react-hook-form resolvers inclusive) e confirmar que o build/preview funciona antes de confiar em produção. Nenhuma ação tomada ainda.
 
----
+### Pendências operacionais — rollout Comercial canônico (2026-08-13)
+
+- **1 inbound histórico não recuperado automaticamente.** Evento `f982cfab-e16e-4d16-9a8a-aae70dd3681d` (Meta Cloud, `message:button`, contato `+5534984458934`, org Central Trabalhista) foi perdido antes do hotfix de `action_type`: a thread `bb32d6e4…` (`customer_service`, `resolved`) tinha o marcador de UI `last_routing_decision.action = "inbox_manual_start"`, valor fora do CHECK `thread_assignment_history_action_type_check`; a reabertura por `trg_messages_smart_reopen` disparava `fn_log_thread_assignment_change` e o erro derrubava o `INSERT` da mensagem.
+  - **Causa estrutural corrigida** (migração 2026-08-13): `trg_messages_smart_reopen` grava `action = "reopen"` (valor já válido) e `fn_log_thread_assignment_change` coage action desconhecida para `auto_reassign`, preservando o original em `metadata.original_action` / `reason = coerced_from:<x>`. Nenhum inbound é mais descartado por falha no log de atribuição.
+  - **Decisão de produto (Nelson, 2026-08-13):** **não recriar a mensagem manualmente no banco.** O evento está em `shadow_mode = true` (espelho; o processamento real era inline no webhook), portanto `fn_inbound_replay` não regrava a mensagem. Se o conteúdo for necessário, o contato reenvia e o fluxo corrigido persiste normalmente.
+  - **Sem ação pendente** — item registrado apenas como memória operacional. Bug encerrado.
+  - `[INCERTO]` 179 threads `resolved`/`closed` ainda carregam o marcador legado `inbox_manual_start` em `last_routing_decision`. Já são inofensivas (coerção defensiva), mas uma limpeza cosmética desses marcadores pode entrar numa onda futura — **não é bloqueador**.
+
 
 ## 4. Drift ativo (repo ≠ prod)
 
