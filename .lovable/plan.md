@@ -1,58 +1,70 @@
-# Diagnóstico — inbound Meta (Central Trabalhista) não chegou ao Comercial
+# Hotfix — inbound WhatsApp Comercial sem descarte silencioso
 
-Read-only. Nada foi alterado.
+## Causa raiz (refinada, confirmada em código)
 
-## Veredito
+O caminho canônico **já existe** e já é compartilhado pelos três webhooks (`_shared/sales-thread.ts` → `resolveSalesWhatsappThread`), chamado por Meta (linha 843), Twilio (~872) e Evolution (~645). O contrato dele já é exatamente o aprovado: `org + contact + whatsapp + business_context='sales' + merged_into_thread_id IS NULL`, com `primary_endpoint_id` fora da identidade.
 
-O evento chegou, foi autenticado e processado — e **parou na etapa de resolução da conversa**: o webhook não encontrou a thread canônica, tentou criar uma nova thread e foi **bloqueado pela trigger de canonicidade** (`SALES_THREAD_DUPLICATE_BLOCKED`). Sem `thread_id`, a mensagem **não foi persistida**. Logo, o banner "Sem inbound recente" está correto do ponto de vista do banco: **não existe inbound registrado** — a mensagem foi descartada antes da gravação.
+O problema é o **gate**: `_shared/sales-canonical-gate.ts` só libera o caminho canônico quando a feature flag `conv_route_resolver_v2` está habilitada **para a organização**. A flag está ON somente para a Viagi. Já a trigger `trg_zz_guard_sales_thread_canonical` é **global, sem escopo de org**.
 
-Não é falha da Meta, nem do resolver V2 de envio, nem da UI.
+Resultado para a Central Trabalhista (40ae935c…): gate nega (`flag_off`) → caminho legado busca por `primary_endpoint_id = endpoint` → a thread canônica `9c158663…` tem `primary_endpoint_id NULL` → não encontra → tenta INSERT → trigger bloqueia (`SALES_THREAD_DUPLICATE_BLOCKED`) → `no_thread_id` → mensagem descartada com HTTP 200.
 
-## Caminho completo do evento (com o ponto exato de parada)
+Ou seja: guarda global + lookup canônico escopado por flag = janela de descarte para toda org fora da flag.
 
-| Etapa | Resultado | Evidência |
-|---|---|---|
-| 1. Meta entregou o webhook? | SIM — 1 POST | edge log `POST | 200 | .../meta-whatsapp-webhook` às 06:17 UTC |
-| 2. `meta-whatsapp-webhook` executou? | SIM | boot + `POST` com `signature_match: true`, `phone_number_ids: ["1248455741664884"]`, `via: per_integration` |
-| 3. Assinatura/organização/endpoint resolvidos? | SIM | `inbound_settings resolved` → endpoint `bf04ce63…` (= **+551150287067**, Comercial CT, ativo) |
-| 4. Contato localizado? | SIM | `contact_id c90e9e78…` (João Teste Silva, +5511964298621) |
-| 5. Conversa localizada? | **NÃO — parou aqui** | `no_thread_id_after_lookup_and_insert` |
-| 6. Criação de thread nova | **BLOQUEADA** | `thread_insert_error P0001 SALES_THREAD_DUPLICATE_BLOCKED … existing_thread_id=9c158663…` |
-| 7. Mensagem persistida? | NÃO | 0 mensagens desse contato nas últimas 24h em `messages` |
-| 8. Enfileirada em `integration_inbound_events`? | NÃO | Meta ainda usa o caminho legado de escrita direta (ADR-0004); a fila só tem eventos `evolution_api` |
-| 9. Resolver V2 descartou? | NÃO se aplica | resolver V2 é do **envio**; não participa do inbound |
-| 10. Retentativa da Meta? | NÃO | webhook devolveu **200**, então a Meta considera entregue — evento perdido definitivamente |
+## Correção
 
-## Causa raiz (mecânica)
+### 1. Desacoplar o lookup de inbound da feature flag
 
-`supabase/functions/meta-whatsapp-webhook/index.ts` (~linha 858) busca a thread com:
+No gate, separar duas decisões:
 
-```
-organization_id = … AND contact_id = … AND channel = 'whatsapp'
-AND primary_endpoint_id = <endpoint do webhook>
-```
+- **inbound (identidade da conversa)**: passa a exigir apenas (1) endpoint Comercial e (2) Route Comercial V2 válida. **Sem** condição de flag — porque a trigger que bloqueia duplicidade também não é escopada por flag.
+- **outbound / resolver V2**: continua exigindo a flag, inalterado.
 
-A thread canônica desse contato (`9c158663-a1d0-4ae8-a983-0c9653148c0e`, `sales`/`whatsapp`, `open`) tem **`primary_endpoint_id = NULL`** — ela foi a vencedora da consolidação do grupo "Joao Teste" e nunca recebeu endpoint primário. As duas perdedoras (que tinham `primary_endpoint_id = 407ff93d…`) estão com `merged_into_thread_id` apontando para ela.
+Implementação: nova função exportada `salesCanonicalInboundEnabled()` no mesmo módulo (condições 1 e 2), mantendo `salesCanonicalPathEnabled()` como está para quem depende dela. Os três webhooks passam a usar a variante de inbound no ponto de resolução de thread.
 
-Resultado: filtro por `primary_endpoint_id` não casa → lookup vazio → INSERT de nova thread → trigger `trg_zz_guard_sales_thread_canonical` bloqueia (comportamento correto e desejado) → função segue sem `thread_id` e aborta o ingest.
+Isso satisfaz os itens 1 e 2 do pedido sem duplicar lógica nova de lookup — o lookup canônico correto já é o que `resolveSalesWhatsappThread` faz.
 
-Ou seja: a guarda de canonicidade está certa, mas o webhook Meta **não foi adaptado** ao mundo canônico — ele ainda assume "1 thread por endpoint" e não tem fallback para a thread canônica ativa do contato.
+### 2. Recuperação de corrida (`SALES_THREAD_DUPLICATE_BLOCKED`)
 
-## Sobre "os dois números"
+Em `resolveSalesWhatsappThread`, no INSERT: ao receber erro `P0001` cuja mensagem contém `SALES_THREAD_DUPLICATE_BLOCKED`, **refazer o SELECT canônico** e reutilizar a thread. O UUID da mensagem de erro não é usado como fonte — só como sinal para relookup. Se o relookup também falhar, retorna erro (que agora vira falha explícita, ver item 3).
 
-Só **um** webhook chegou na janela: o do `phone_number_id 1248455741664884` → endpoint **+551150287067** (ativo). Nenhum POST correspondente ao segundo número. O outro endpoint Meta comercial da CT (`+551150287020`, `407ff93d…`) está **`is_active = false` / `status = offline`** — mensagem para ele não gera webhook processável (assinatura/subscription do número não está entregando). Isso é um segundo achado, independente do bloqueio acima.
+### 3. Durabilidade do evento (nunca 200 + perda)
 
-## Escopo do impacto
+Nos três webhooks, quando o evento é válido, org/contato resolvidos, mas a persistência da mensagem falha:
 
-Qualquer contato cuja thread canônica `sales/whatsapp` tenha `primary_endpoint_id` NULL ou diferente do endpoint receptor entra no mesmo beco: inbound Meta silenciosamente descartado com 200. Isso inclui, potencialmente, todas as threads vencedoras da consolidação e as threads legadas outbound-only. **Recomendo quantificar isso antes de qualquer correção** (consulta read-only) — está no próximo passo proposto.
+- gravar o evento em `integration_inbound_events` com `process_status='failed'` e `process_error` (schema atual já tem `raw_payload`, `raw_headers`, `process_status`, `process_error`, `integration_slug`, `request_path`, `idempotency_key`) — trilha recuperável, sem mudança de schema;
+- Meta: manter `200` **apenas** se a trilha foi gravada com sucesso; se nem a trilha gravar, responder `500` para a Meta reentregar.
+- Twilio: idem, com TwiML vazio no caminho de sucesso e `500` quando não há trilha.
+- Evolution: idem.
+- Handshake/verificação (`GET hub.challenge`) permanece **byte-a-byte inalterado**.
 
-## Próximo passo proposto (ainda sem escrever código)
+### 4. Auditoria Twilio / Evolution
 
-1. Quantificar o universo em risco: threads canônicas `sales/whatsapp` ativas com `primary_endpoint_id` NULL ou ≠ do endpoint que costuma receber.
-2. Decidir o contrato de lookup do inbound Meta (uma das opções, a definir com você):
-   - lookup em duas fases: primeiro `primary_endpoint_id = endpoint`, depois **thread canônica ativa do contato** (`merged_into_thread_id IS NULL`, `business_context = 'sales'`), sem criar nada;
-   - e/ou tratar `SALES_THREAD_DUPLICATE_BLOCKED` reaproveitando o `existing_thread_id` que a própria exceção já informa.
-3. Definir se, na falha de resolução, o webhook deve **parar de responder 200** (para a Meta reentregar) ou gravar em `integration_inbound_events` como trilha de recuperação.
-4. Avaliar separadamente o endpoint `+551150287020` (inativo) — se deve receber inbound ou ficar desligado de propósito.
+Ambos já chamam o mesmo helper canônico e já são cobertos pela mudança do gate. Nenhuma reescrita de lookup neles — apenas a troca do gate para a variante de inbound e o fail-safe do item 3. Evidência do estado atual será registrada no relatório.
 
-Nada disso será implementado sem sua aprovação explícita. Não toquei em Atendimento, Mobile, flag, trigger ou resolver.
+### 5. Métricas antes/depois (read-only)
+
+Antes do deploy e depois: threads canônicas `sales/whatsapp` com `primary_endpoint_id IS NULL`; com primary divergente do endpoint histórico das mensagens; contagem de `SALES_THREAD_DUPLICATE_BLOCKED` e `no_thread_id_after_lookup_and_insert` nos logs por provider; duplicidades `sales/whatsapp`. Esperado depois: zero novos descartes.
+
+### 6. Evento do João Teste
+
+O payload não foi enfileirado (Meta usa escrita direta) e o log de edge function só guarda a linha de erro, sem corpo. Vou verificar se sobrou payload em qualquer trilha antes de concluir; se não houver, registro como **perdido** e a validação será feita com um novo inbound real seu.
+
+### 7. Endpoint +551150287020 (`407ff93d…`)
+
+Somente diagnóstico: por que está `is_active=false/status=offline`, se o número segue na integração Meta, se a subscription entrega webhook e se a desativação foi intencional. **Nenhuma alteração.**
+
+## QA
+
+Testes Deno em `supabase/functions/_shared/` cobrindo T1–T10 com um stub de banco: canônica com primary NULL, canônica com primary de outro endpoint, loser nunca selecionado, criação única, recuperação de corrida, fail-safe de durabilidade, contrato idêntico nos três providers, e Atendimento inalterado (gate nega em `purpose != sales/commercial`). Suite existente (66 testes) roda junto.
+
+## Não será tocado
+
+Trigger de canonicidade, resolver V2 de envio, merge/unmerge, Routes, `active_endpoint_id`, Atendimento, Mobile, feature flags (valor), Fase 3 manager, UI.
+
+## Entrega
+
+Bloco final com `META_CANONICAL_LOOKUP`, `TWILIO_CANONICAL_LOOKUP`, `EVOLUTION_CANONICAL_LOOKUP`, `LOSER_NEVER_SELECTED`, `RACE_RECOVERY`, `INBOUND_DURABILITY`, `ATENDIMENTO_REGRESSION`, `DUPLICIDADES_SALES_WHATSAPP`, `EVENTO_JOAO_RECUPERAVEL`, `ENDPOINT_7020_DIAGNOSTICO`, `BLOQUEADORES`.
+
+## Ponto que precisa da sua confirmação
+
+Remover a flag da condição de **inbound** significa que o caminho canônico de ingest passa a valer para **todas as orgs** (inclusive Central Trabalhista) imediatamente — que é exatamente o que a trigger global já assume. A alternativa mais conservadora seria escopar a correção só à Central; ela deixaria as demais orgs fora da flag ainda expostas ao mesmo descarte. O plano acima segue a opção global, alinhada ao contrato aprovado.
