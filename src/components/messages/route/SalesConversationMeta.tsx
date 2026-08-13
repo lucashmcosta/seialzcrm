@@ -5,14 +5,14 @@
 // Provider NÃO aparece aqui — apenas no painel/modal técnico.
 // ============================================================================
 
-import { RouteBadge, NO_ROUTE_SUBTEXT } from './RouteIndicators';
+import { RouteBadge, NO_ROUTE_SUBTEXT, type EndpointState } from './RouteIndicators';
 
 interface Props {
   contactPhone?: string | null;
   assigneeName?: string | null;
   address: string | null;
   provider?: string | null;
-  endpointState: 'online' | 'offline' | 'no_route';
+  endpointState: EndpointState;
   /** Chips de janela (24h / CTWA) renderizados ao final da linha 3. */
   windowChips?: React.ReactNode;
 }
@@ -25,7 +25,8 @@ export function SalesConversationMeta({
   endpointState,
   windowChips,
 }: Props) {
-  const noRoute = endpointState === 'no_route' || !address;
+  // Subtexto de conversa legada só quando o resolver realmente não resolveu.
+  const unresolved = endpointState === 'unresolved';
 
   return (
     <>
@@ -39,9 +40,10 @@ export function SalesConversationMeta({
         {windowChips}
       </div>
 
-      {noRoute && (
+      {unresolved && (
         <p className="mt-1 text-[11px] text-muted-foreground">{NO_ROUTE_SUBTEXT}</p>
       )}
+
     </>
   );
 }

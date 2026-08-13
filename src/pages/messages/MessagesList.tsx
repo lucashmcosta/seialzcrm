@@ -41,7 +41,7 @@ import {
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { useOrganization } from '@/hooks/useOrganization';
 // Fase 2.5 — UI Comercial (Route/número/provider). Somente leitura.
-import { RouteBadge } from '@/components/messages/route/RouteIndicators';
+import { RouteBadge, type EndpointState } from '@/components/messages/route/RouteIndicators';
 import { SalesRouteDetailsDialog } from '@/components/messages/route/SalesRouteDetailsDialog';
 import { SalesConversationHeader } from '@/components/messages/route/SalesConversationHeader';
 import { SalesComposerStatus } from '@/components/messages/route/SalesComposerStatus';
@@ -239,7 +239,9 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
             <RouteBadge
               address={endpointAddress ?? null}
               provider={endpointProvider ?? null}
-              state={!endpointAddress ? 'no_route' : endpointIsActive === false ? 'offline' : 'online'}
+              /* Estado nunca derivado de campo legado: sem dado de endpoint o
+                 badge fica indeterminado (não renderiza aviso de legado). */
+              state={!endpointAddress ? 'unknown' : endpointIsActive === false ? 'offline' : 'online'}
               variant="compact"
             />
 
@@ -672,7 +674,7 @@ function DesktopMessagesList() {
   // Fase 2.5 — Route Comercial da thread selecionada (SOMENTE LEITURA).
   // Reusa o resolver V2 do cliente; nenhum backend foi alterado.
   // ---------------------------------------------------------------------------
-  const { route: salesRoute } = useSalesRoute({
+  const { route: salesRoute, isLoading: salesRouteLoading } = useSalesRoute({
     threadId: selectedThreadId,
     organizationId: organization?.id,
     businessContext: selectedThreadBusinessContext,
@@ -680,9 +682,13 @@ function DesktopMessagesList() {
   });
   // Histórico de endpoints e status do resolver vivem no painel/modal de detalhes.
 
-  const salesRouteEndpointState: 'online' | 'offline' | 'no_route' = salesRoute.resolved
+  // Mesma derivação de `useSalesRouteView`: apenas REPLY_ROUTE_UNRESOLVED conta
+  // como conversa legada. Carregando / flag off / fora de escopo = indeterminado.
+  const salesRouteEndpointState: EndpointState = salesRoute.resolved
     ? salesRoute.activeEndpoint?.is_active === true ? 'online' : 'offline'
-    : 'no_route';
+    : !salesRouteLoading && salesRoute.reason === 'REPLY_ROUTE_UNRESOLVED'
+      ? 'unresolved'
+      : 'unknown';
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false);
   const salesEndpoints = useMemo(
     () => filterEndpointsByIntent(orgEndpoints, 'sales'),
@@ -2420,7 +2426,7 @@ function DesktopMessagesList() {
                           <>
                           {/* Fase 2.5.1 — avisos orientados ao operador (sem termos técnicos) */}
                           <SalesComposerStatus
-                            noRoute={salesRouteEndpointState === 'no_route'}
+                            noRoute={salesRouteEndpointState === 'unresolved'}
                             noRecentInbound={showNoInboundHint}
                           />
 

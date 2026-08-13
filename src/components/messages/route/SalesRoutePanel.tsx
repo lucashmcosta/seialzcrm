@@ -9,7 +9,7 @@ import { useSalesRoute } from '@/hooks/messages/useSalesRoute';
 
 import { useThreadEndpointHistory } from '@/hooks/messages/useThreadEndpointHistory';
 import { useRouteResolverFlag } from '@/hooks/messages/useRouteResolverFlag';
-import { EndpointStatusChip, ProviderChip, last4, providerLabel } from './RouteIndicators';
+import { EndpointStatusChip, ProviderChip, last4, providerLabel, type EndpointState } from './RouteIndicators';
 
 export interface SalesRouteContextProps {
   threadId: string;
@@ -45,11 +45,17 @@ export function useSalesRouteView(props: SalesRouteContextProps) {
   const { history } = useThreadEndpointHistory(props.threadId);
   const { flag } = useRouteResolverFlag(props.organizationId);
 
-  const endpointState: 'online' | 'offline' | 'no_route' = route.resolved
+  // Fonte de verdade única: o resolver. `unresolved` SOMENTE quando o resolver
+  // retorna REPLY_ROUTE_UNRESOLVED. Carregando / flag off / fora de escopo =
+  // `unknown` (neutro, sem aviso). Nenhum campo legado participa daqui.
+  const endpointState: EndpointState = route.resolved
     ? route.activeEndpoint?.is_active === true
       ? 'online'
       : 'offline'
-    : 'no_route';
+    : !isLoading && route.reason === 'REPLY_ROUTE_UNRESOLVED'
+      ? 'unresolved'
+      : 'unknown';
+
 
   /** Rótulo público (tela principal): sem jargão técnico. */
   const resolverLabelPublic = flag.enabledForOrg ? 'Rota Comercial' : 'Modo legado';
@@ -140,7 +146,13 @@ export function SalesRoutePanel(props: SalesRouteContextProps) {
           <span className="font-data">{route.activeEndpoint?.external_address ?? '—'}</span>
         </Row>
         <Row label="Status do endpoint">
-          {endpointState === 'online' ? 'Online' : endpointState === 'offline' ? 'Offline' : 'Sem rota'}
+          {endpointState === 'online'
+            ? 'Online'
+            : endpointState === 'offline'
+              ? 'Offline'
+              : endpointState === 'unresolved'
+                ? 'Sem rota'
+                : '—'}
         </Row>
         <Row label="Roteamento">{resolverLabelPublic}</Row>
         <Row label="Resolver">{resolverLabel}</Row>

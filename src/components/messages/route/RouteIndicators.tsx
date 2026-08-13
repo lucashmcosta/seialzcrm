@@ -39,7 +39,14 @@ export function ProviderChip({ provider, className }: { provider: string | null 
   );
 }
 
-type EndpointState = 'online' | 'offline' | 'no_route';
+/**
+ * Estado da rota de resposta — derivado EXCLUSIVAMENTE do resolver.
+ *  - online/offline: rota resolvida (endpoint ativo/inativo)
+ *  - unresolved: resolver retornou REPLY_ROUTE_UNRESOLVED (conversa legada)
+ *  - unknown: indeterminado (carregando, resolver desligado, fora do escopo)
+ * Somente `unresolved` autoriza a linguagem de "Conversa legada".
+ */
+export type EndpointState = 'online' | 'offline' | 'unresolved' | 'unknown';
 
 export function EndpointStatusChip({ state, className }: { state: EndpointState; className?: string }) {
   const map: Record<EndpointState, { label: string; cls: string; dot: string }> = {
@@ -53,10 +60,15 @@ export function EndpointStatusChip({ state, className }: { state: EndpointState;
       cls: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
       dot: 'bg-amber-500',
     },
-    no_route: {
+    unresolved: {
       label: 'Sem rota',
       cls: 'border-border bg-muted/60 text-muted-foreground',
       dot: 'bg-muted-foreground',
+    },
+    unknown: {
+      label: '—',
+      cls: 'border-border bg-muted/40 text-muted-foreground',
+      dot: 'bg-muted-foreground/50',
     },
   };
   const cfg = map[state];
@@ -67,6 +79,7 @@ export function EndpointStatusChip({ state, className }: { state: EndpointState;
     </span>
   );
 }
+
 
 /** Selo âmbar de conversa legada (sem inbound roteável). */
 export function LegacyRouteBadge({ className }: { className?: string }) {
@@ -117,10 +130,13 @@ export function RouteBadge({
   variant?: 'compact' | 'split';
   className?: string;
 }) {
-  const noRoute = state === 'no_route' || !address;
+  // Somente o resolver decide "conversa legada". Ausência de endereço é
+  // indeterminação de dado — nunca vira aviso de rota inexistente.
+  const unresolved = state === 'unresolved';
 
   if (variant === 'compact') {
-    if (noRoute) return <LegacyRouteIcon className={className} />;
+    if (unresolved) return <LegacyRouteIcon className={className} />;
+    if (!address) return null;
     const offline = state === 'offline';
     return (
       <span
@@ -144,23 +160,26 @@ export function RouteBadge({
   }
 
   // variant="split"
-  if (noRoute) return <LegacyRouteBadge className={className} />;
+  if (unresolved) return <LegacyRouteBadge className={className} />;
 
   return (
     <>
       <span className={cn(CHIP, 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400', className)}>
         Comercial
       </span>
-      <span
-        title={`Número de resposta ${address}`}
-        className={cn(CHIP, 'border-border bg-muted/50 text-muted-foreground font-medium')}
-      >
-        <WhatsappLogo size={11} weight="fill" className="opacity-70" />
-        <span className="font-data">{last4(address)}</span>
-      </span>
-      <EndpointStatusChip state={state ?? 'online'} />
+      {address && (
+        <span
+          title={`Número de resposta ${address}`}
+          className={cn(CHIP, 'border-border bg-muted/50 text-muted-foreground font-medium')}
+        >
+          <WhatsappLogo size={11} weight="fill" className="opacity-70" />
+          <span className="font-data">{last4(address)}</span>
+        </span>
+      )}
+      {(state === 'online' || state === 'offline') && <EndpointStatusChip state={state} />}
     </>
   );
+
 }
 
 export function EndpointHistoryTrail({
