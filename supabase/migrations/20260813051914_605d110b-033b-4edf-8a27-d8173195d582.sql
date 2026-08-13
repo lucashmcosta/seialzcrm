@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.provision_sales_endpoint(uuid,uuid,text,text,text,text) FROM anon;
