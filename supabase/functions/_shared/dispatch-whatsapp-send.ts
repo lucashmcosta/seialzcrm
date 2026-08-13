@@ -55,6 +55,7 @@ export interface WhatsAppSendResult {
 
 type Provider = "twilio" | "meta_cloud_api" | "evolution_api";
 type ResolveSource =
+  | "canonical_route_v2"
   | "endpoint_explicit"
   | "thread_primary_endpoint"
   | "thread_last_message_endpoint"
@@ -103,10 +104,32 @@ async function resolveProvider(
   supabase: SupabaseClient,
   payload: WhatsAppSendPayload,
 ): Promise<{ provider: Provider; source: ResolveSource }> {
+  // ── Caminho canônico Comercial V2 (atrás da flag conv_route_resolver_v2) ──
+  // Precede QUALQUER outra resolução: quando aplicável, a resposta sai
+  // obrigatoriamente pelo active_endpoint_id da Route Comercial.
+  if (payload.threadId) {
+    const route = await resolveSalesReplyRoute(supabase, {
+      organizationId: payload.organizationId,
+      threadId: payload.threadId,
+    });
+    if (route.applicable && route.sendEndpointId && route.provider) {
+      payload.endpointId = route.sendEndpointId;
+      return { provider: route.provider, source: "canonical_route_v2" };
+    }
+    if (route.reason === "REPLY_ROUTE_UNRESOLVED") {
+      throw new DispatchResolveError(
+        "REPLY_ROUTE_UNRESOLVED",
+        `Não foi possível resolver a Route Comercial de resposta da conversa ${payload.threadId}.`,
+      );
+    }
+    // flag_off / not_sales_context / missing_input → caminho legado intacto
+  }
+
   if (payload.endpointId) {
     const provider = await loadEndpointProvider(supabase, payload.endpointId);
     return { provider, source: "endpoint_explicit" };
   }
+
 
   if (payload.threadId) {
     const { data: thread, error: tErr } = await supabase
