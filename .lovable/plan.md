@@ -20,7 +20,13 @@ No painel (usado também pelo modal), introduzir a noção de **endpoint efetivo
 Aplicações:
 
 - **Título do card**: usar `route.line?.name ?? route.line?.route_slug`; se ausente e existir endpoint efetivo, mostrar "Modo legado" (rótulo `resolverLabelPublic`) em vez de "Sem rota". "Sem rota" fica reservado para o caso em que não há linha, não há endpoint efetivo e não há inbound roteável.
-- **Número do card / linha "Endpoint ativo"**: mostrar o endereço do endpoint efetivo (ex.: 7067) em vez de "—". Quando o valor vier do caminho legado (itens 2 ou 3), acrescentar a indicação de origem legada no texto de apoio.
+- **Número do card**: mostrar o endereço do endpoint efetivo (ex.: 7067) em vez de "—".
+- **Rótulo da linha do endpoint** (linguagem obrigatória, varia com a origem):
+  - origem `resolver` → "Endpoint ativo" (validado como destino atual de envio);
+  - origem `inbound` (última inbound roteável) → "Endpoint efetivo";
+  - origem `history` → "Último endpoint conhecido";
+  - origem `none` → "Endpoint ativo" com "—".
+  "Ativo" nunca é usado para valores derivados de histórico ou inbound.
 - **Chip de provider**: usar o provider do endpoint efetivo (ex.: Meta).
 - **Status do endpoint**: manter o contrato atual — "Sem rota" só quando `endpointState === 'unresolved'`; em modo legado permanece "—" com "Roteamento: Modo legado".
 - **Linha "Última inbound roteável"**: sem alteração de lógica.
