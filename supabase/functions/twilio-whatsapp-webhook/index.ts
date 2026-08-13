@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
-import { salesCanonicalPathEnabled } from "../_shared/sales-canonical-gate.ts";
+import { salesCanonicalInboundEnabled } from "../_shared/sales-canonical-gate.ts";
 
 
 const corsHeaders = {
@@ -873,7 +873,8 @@ serve(async (req) => {
       let existingThread: { id: string; primary_endpoint_id: string | null } | null = null
       let canonicalHandled = false
 
-      const salesGate = await salesCanonicalPathEnabled(supabase, {
+      // HOTFIX: gate de inbound sem feature flag (trigger canônica é global).
+      const salesGate = await salesCanonicalInboundEnabled(supabase, {
         organizationId: orgId as string | null,
         endpointId,
       })
@@ -889,13 +890,25 @@ serve(async (req) => {
         threadId = canonical.threadId
         canonicalHandled = true
         if (!threadId) {
-          console.error('[wa-inbound] canonical_sales_thread_unresolved', { contactId, endpointId })
+          console.error('[wa-inbound] canonical_sales_thread_unresolved', {
+            contactId, endpointId, error: canonical.error,
+          })
+          if (insertedEventId) {
+            await supabase
+              .from('integration_inbound_events')
+              .update({
+                process_status: 'failed',
+                process_error: `canonical_sales_thread_unresolved:${canonical.error ?? 'unknown'}`,
+              })
+              .eq('id', insertedEventId)
+          }
           return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'text/xml' }
           })
         }
       }
+
 
       if (!canonicalHandled) {
 
