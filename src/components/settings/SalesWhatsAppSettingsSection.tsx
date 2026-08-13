@@ -15,8 +15,8 @@ import { ChatCircle } from '@phosphor-icons/react';
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 border-b border-border/60 last:border-0">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <div className="text-xs text-foreground text-right">{children}</div>
+      <span className="text-[11px] text-muted-foreground shrink-0">{label}</span>
+      <div className="text-[11px] text-foreground text-right min-w-0 break-words">{children}</div>
     </div>
   );
 }
@@ -40,9 +40,9 @@ export function SalesWhatsAppSettingsSection() {
         </div>
         {/* Status informativo do resolver — sem toggle (flag é gerenciada pelo admin) */}
         <div className="text-right shrink-0">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Resolver Comercial</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Modo de roteamento</div>
           <div className="text-xs font-semibold text-foreground">
-            {flag.enabledForOrg ? 'Route Resolver V2' : 'Modo legado'}
+            {flag.enabledForOrg ? 'Rota Comercial' : 'Modo legado'}
           </div>
           <div className="font-data text-[10px] text-muted-foreground">
             conv_route_resolver_v2 · {flag.enabledForOrg ? 'ON' : 'OFF'}

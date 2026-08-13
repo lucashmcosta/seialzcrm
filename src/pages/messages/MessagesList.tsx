@@ -43,9 +43,9 @@ import { useOrganization } from '@/hooks/useOrganization';
 // Fase 2.5 — UI Comercial (Route/número/provider). Somente leitura.
 import { RouteBadge } from '@/components/messages/route/RouteIndicators';
 import { SalesRouteDetailsDialog } from '@/components/messages/route/SalesRouteDetailsDialog';
-import { SalesConversationMeta } from '@/components/messages/route/SalesConversationMeta';
+import { SalesConversationHeader } from '@/components/messages/route/SalesConversationHeader';
 import { SalesComposerStatus } from '@/components/messages/route/SalesComposerStatus';
-import { Info } from '@phosphor-icons/react';
+import { Warning } from '@phosphor-icons/react';
 import { useSalesRoute } from '@/hooks/messages/useSalesRoute';
 import { useConsolidatedThreadIds } from '@/hooks/messages/useConsolidatedThreadIds';
 
@@ -204,10 +204,12 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   endpointAddress?: string | null;
   endpointPurpose?: string | null;
   endpointProvider?: string | null;
+  /** Estado real do endpoint de resposta (ativo/inativo). */
+  endpointIsActive?: boolean | null;
   officialNumbers?: Set<string>;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, officialNumbers, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -233,8 +235,13 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
-            {/* Fase 2.5.1 — badge compacto: apenas número de resposta */}
-            <RouteBadge address={endpointAddress ?? null} provider={endpointProvider ?? null} state={endpointAddress ? 'online' : 'no_route'} variant="compact" />
+            {/* Fase Final — badge compacto com estado REAL do endpoint */}
+            <RouteBadge
+              address={endpointAddress ?? null}
+              provider={endpointProvider ?? null}
+              state={!endpointAddress ? 'no_route' : endpointIsActive === false ? 'offline' : 'online'}
+              variant="compact"
+            />
 
             {(value.unread) && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
@@ -636,7 +643,7 @@ function DesktopMessagesList() {
   };
 
   // Fetch threads via RPC (replaces N+1 query)
-  const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'], search: debouncedSearch });
+  const { threads, loading: threadsLoading, error: threadsError, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'], search: debouncedSearch });
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId)
     ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
@@ -1607,6 +1614,16 @@ function DesktopMessagesList() {
       })()
     : visibleThreadsWithSelectedRaw;
 
+  // Fase Final — vazio contextual da lista: distingue "sem conversas" de
+  // "busca/filtro sem resultado". Não altera nenhuma query.
+  const hasActiveListFilters =
+    searchQuery.trim().length > 0 || endpointFilter !== 'all' || (filter !== null && filter !== 'all_open');
+  const clearListFilters = () => {
+    setSearchQuery('');
+    setEndpointFilter('all');
+    setFilter('all_open');
+  };
+
   const loadThreadForSelection = async (
     threadId: string,
     fallbackEndpointId: string | null,
@@ -1784,11 +1801,28 @@ function DesktopMessagesList() {
                     </div>
                   ))}
                 </div>
-              ) : visibleThreadsWithSelected?.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-8 text-muted-foreground">
-                  <p className="text-sm">
-                    {locale === 'pt-BR' ? 'Nenhuma conversa' : 'No conversations'}
+              ) : threadsError ? (
+                <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
+                  <Warning size={20} className="text-amber-500" weight="bold" />
+                  <p className="text-sm text-foreground">
+                    {locale === 'pt-BR' ? 'Não foi possível carregar as conversas.' : 'Could not load conversations.'}
                   </p>
+                  <Button variant="outline" size="sm" onClick={() => refetchThreads()}>
+                    {locale === 'pt-BR' ? 'Tentar novamente' : 'Try again'}
+                  </Button>
+                </div>
+              ) : visibleThreadsWithSelected?.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {hasActiveListFilters
+                      ? (locale === 'pt-BR' ? 'Nenhuma conversa encontrada.' : 'No conversations found.')
+                      : (locale === 'pt-BR' ? 'Nenhuma conversa.' : 'No conversations.')}
+                  </p>
+                  {hasActiveListFilters && (
+                    <Button variant="outline" size="sm" onClick={clearListFilters}>
+                      {locale === 'pt-BR' ? 'Limpar filtros' : 'Clear filters'}
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <>
@@ -1821,6 +1855,9 @@ function DesktopMessagesList() {
                         endpointProvider={
                           endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.provider ?? null
                         }
+                        endpointIsActive={
+                          endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.is_active ?? null
+                        }
                         officialNumbers={officialNumbers}
                       />
                     ))}
@@ -1849,81 +1886,42 @@ function DesktopMessagesList() {
         <div className="flex-1 flex flex-col bg-background h-full overflow-hidden">
             {selectedThread ? (
               <>
-                {/* Chat Header */}
-                <div className="border-b border-border px-6 py-3.5">
-                  <div className="flex items-start justify-between gap-4">
-                    {/* Fase 2.5.1 — L1: nome + status | L2: telefone • responsável | L3: badges */}
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <Avatar fallbackText={selectedThread.contact_name} size="md" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Link
-                            to={`/contacts/${selectedThread.contact_id}`}
-                            className="text-base font-semibold leading-tight text-foreground truncate hover:text-primary hover:underline transition-colors"
-                            title={locale === 'pt-BR' ? 'Ver perfil do contato' : 'View contact profile'}
-                          >
-                            {selectedThread.contact_name}
-                          </Link>
-                          {selectedThread.status && statusConfig[selectedThread.status] && (
-                            <span className={cn('text-xs font-medium shrink-0', statusConfig[selectedThread.status].color)}>
-                              {locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn}
-                            </span>
-                          )}
-                        </div>
-
-                        <SalesConversationMeta
-                          contactPhone={selectedThread.contact_phone}
-                          assigneeName={selectedThread.assigned_user_name ?? null}
-                          address={
-                            salesRoute.activeEndpoint?.external_address
-                              ?? selectedThreadEndpoint?.external_address
-                              ?? null
-                          }
-                          provider={salesRoute.activeEndpoint?.provider ?? selectedThreadEndpoint?.provider ?? null}
-                          endpointState={salesRouteEndpointState}
-                          windowChips={
-                            <WhatsAppWindowChip
-                              channel="whatsapp"
-                              lastInboundAt={composerLastInboundAt}
-                              contactId={selectedThread.contact_id}
-                              tone="soft"
-                            />
-                          }
-                        />
-                      </div>
-                    </div>
-
-
-                    <SalesRouteDetailsDialog
-                      open={routeDetailsOpen}
-                      onOpenChange={setRouteDetailsOpen}
-                      threadId={selectedThread.id}
-                      organizationId={organization?.id}
-                      businessContext={selectedThreadBusinessContext}
+                {/* Chat Header — Fase Final: componente único (SalesConversationHeader) */}
+                <SalesConversationHeader
+                  threadId={selectedThread.id}
+                  organizationId={organization?.id}
+                  businessContext={selectedThreadBusinessContext}
+                  channel="whatsapp"
+                  contactId={selectedThread.contact_id}
+                  contactName={selectedThread.contact_name}
+                  contactPhone={selectedThread.contact_phone}
+                  contactProfileTitle={locale === 'pt-BR' ? 'Ver perfil do contato' : 'View contact profile'}
+                  assigneeName={selectedThread.assigned_user_name ?? null}
+                  statusLabel={
+                    selectedThread.status && statusConfig[selectedThread.status]
+                      ? (locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn)
+                      : null
+                  }
+                  statusClassName={
+                    selectedThread.status && statusConfig[selectedThread.status]
+                      ? statusConfig[selectedThread.status].color
+                      : undefined
+                  }
+                  fallbackAddress={selectedThreadEndpoint?.external_address ?? null}
+                  fallbackProvider={selectedThreadEndpoint?.provider ?? null}
+                  detailsLabel={locale === 'pt-BR' ? 'Detalhes da rota' : 'Route details'}
+                  onOpenDetails={() => setRouteDetailsOpen(true)}
+                  windowChips={
+                    <WhatsAppWindowChip
                       channel="whatsapp"
-                      contactName={selectedThread.contact_name}
-                      contactPhone={selectedThread.contact_phone}
-                      assigneeName={selectedThread.assigned_user_name ?? null}
-                      statusLabel={
-                        selectedThread.status && statusConfig[selectedThread.status]
-                          ? (locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn)
-                          : null
-                      }
+                      lastInboundAt={composerLastInboundAt}
+                      contactId={selectedThread.contact_id}
+                      tone="soft"
                     />
+                  }
+                  actions={
+                    <>
 
-
-                    {/* Actions — botão de detalhes da rota + menu único de ações */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setRouteDetailsOpen(true)}
-                        title="Detalhes da rota"
-                        className="text-xs text-muted-foreground"
-                      >
-                        <Info className="w-4 h-4 xl:mr-1" />
-                        <span className="hidden xl:inline">Detalhes da rota</span>
-                      </Button>
 
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -2018,9 +2016,29 @@ function DesktopMessagesList() {
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </div>
-                  </div>
-                </div>
+                    </>
+                  }
+                />
+
+                {/* Modal técnico da rota — lazy mount: só monta (e consulta) quando aberto */}
+                {routeDetailsOpen && (
+                  <SalesRouteDetailsDialog
+                    open
+                    onOpenChange={setRouteDetailsOpen}
+                    threadId={selectedThread.id}
+                    organizationId={organization?.id}
+                    businessContext={selectedThreadBusinessContext}
+                    channel="whatsapp"
+                    contactName={selectedThread.contact_name}
+                    contactPhone={selectedThread.contact_phone}
+                    assigneeName={selectedThread.assigned_user_name ?? null}
+                    statusLabel={
+                      selectedThread.status && statusConfig[selectedThread.status]
+                        ? (locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn)
+                        : null
+                    }
+                  />
+                )}
 
 
                 {/* Messages Area */}
