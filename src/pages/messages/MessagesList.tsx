@@ -2398,19 +2398,14 @@ function DesktopMessagesList() {
                         const outOfWindowCopy = serviceWindow.reason || (locale === 'pt-BR' ? 'Fora da janela — selecione um template' : 'Outside window — select a template');
                         const showNoInboundHint =
                           !outOfWindow && composerBypassesWindow && !serviceWindow.isOpen && messages.length > 0;
-                        const composerLast4 = (() => {
-                          const addr = (composerEndpoint as any)?.external_address ?? '';
-                          return String(addr).replace(/\D/g, '').slice(-4);
-                        })();
                         return (
                           <>
-                          {showNoInboundHint && (
-                            <div className="px-1 pb-1 text-[11px] text-muted-foreground">
-                              {locale === 'pt-BR'
-                                ? `Sem inbound recente — envio livre pelo número ••••${composerLast4}`
-                                : `No recent inbound — free send via number ••••${composerLast4}`}
-                            </div>
-                          )}
+                          {/* Fase 2.5.1 — avisos orientados ao operador (sem termos técnicos) */}
+                          <SalesComposerStatus
+                            noRoute={salesRouteEndpointState === 'no_route'}
+                            noRecentInbound={showNoInboundHint}
+                          />
+
                           {/* Note Mode Indicator */}
                           {!outOfWindow && isNoteMode && (
                             <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-t-lg">
