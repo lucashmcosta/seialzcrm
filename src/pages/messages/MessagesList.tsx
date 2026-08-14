@@ -2227,7 +2227,7 @@ function DesktopMessagesList() {
                               let prevDateKey: string | null = null;
                               let prevEndpoint: string | null = null;
                               const descriptors: GroupingItem[] = chatItems.map((item) => {
-                                const iso = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
+                                const iso = itemDateOf(item);
                                 const dateKey = new Date(iso).toDateString();
                                 const dateBreak = dateKey !== prevDateKey;
                                 prevDateKey = dateKey;
@@ -2243,7 +2243,19 @@ function DesktopMessagesList() {
                                   };
                                 }
 
+                                if (item._type === 'event') {
+                                  return {
+                                    kind: 'event' as const,
+                                    direction: null,
+                                    senderType: null,
+                                    senderId: null,
+                                    timestamp: new Date(iso).getTime(),
+                                    dateBreak,
+                                  };
+                                }
+
                                 const m = item.data;
+
                                 const metaKind = m.metadata && typeof m.metadata === 'object' ? (m.metadata as any).kind : null;
                                 const isSystem =
                                   m.sender_type === 'system' ||
