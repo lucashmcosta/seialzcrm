@@ -992,11 +992,17 @@ serve(async (req) => {
           return json(provider.status ?? 503, { error: provider.code });
         }
         const del = await provider.delete(name);
-        if (del !== true && (del as { code?: string }).code !== "EVOLUTION_NOT_FOUND") {
-          return json(502, {
-            error: (del as { code: string }).code ?? "EVOLUTION_DELETE_FAILED",
-          });
+        // 404 upstream = instância já inexistente na Evolution. É sucesso
+        // idempotente: seguimos limpando o registro local para não deixar
+        // linha órfã em evolution_instances.
+        if (del !== true) {
+          const e = del as { code?: string; status?: number };
+          const gone = e.code === "EVOLUTION_NOT_FOUND" || e.status === 404;
+          if (!gone) {
+            return json(502, { error: e.code ?? "EVOLUTION_DELETE_FAILED" });
+          }
         }
+
 
         // Só o registro da instância é removido. O endpoint (configuração) e
         // qualquer histórico permanecem intactos.
