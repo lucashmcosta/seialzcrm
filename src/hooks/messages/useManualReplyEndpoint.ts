@@ -18,7 +18,7 @@
 //    `messaging_line_rotations`.
 // ============================================================================
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSalesFeatureFlags } from './useSalesFeatureFlags';
@@ -152,6 +152,7 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
   // ---- seleção derivada: endpoint da última mensagem válida da conversa ----
   const {
     lastEndpointId,
+    lastMessageId,
     isLoading: lastLoading,
     error: lastError,
   } = useThreadLastEndpoint({ threadId, enabled });
@@ -159,6 +160,23 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
   // ---- escolha manual do operador, por conversa (sessão) ----
   const [manualByThread, setManualByThread] = useState<Record<string, string>>({});
   const manualEndpointId = threadId ? (manualByThread[threadId] ?? null) : null;
+  const previousLastMessageByThread = useRef<Record<string, string | null>>({});
+
+  // Uma nova mensagem válida encerra qualquer escolha manual transitória.
+  // A identidade da mensagem (não apenas o endpoint) cobre inclusive inbound
+  // novo recebido pelo mesmo número escolhido manualmente.
+  useEffect(() => {
+    if (!threadId || !lastMessageId) return;
+    const previous = previousLastMessageByThread.current[threadId];
+    previousLastMessageByThread.current[threadId] = lastMessageId;
+    if (previous === undefined || previous === lastMessageId) return;
+    setManualByThread((current) => {
+      if (!current[threadId]) return current;
+      const next = { ...current };
+      delete next[threadId];
+      return next;
+    });
+  }, [lastMessageId, threadId]);
 
   const options = optionsQuery.data ?? [];
   const derivedEndpointId = enabled ? (lastEndpointId ?? routeDefaultEndpointId ?? null) : null;

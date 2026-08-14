@@ -171,13 +171,16 @@ export async function resolveProvider(
     }
   }
 
-  // ── Seleção DERIVADA (canônica Comercial V2, flag conv_route_resolver_v2) ──
+  // ── Seleção DERIVADA (canônica Comercial) ──
   // O servidor é a fonte de verdade: reconsulta a última mensagem válida da
   // thread agora e envia por ela. A UI nunca comanda esse endpoint.
   if (payload.threadId) {
     const route = await resolveSalesReplyRoute(supabase, {
       organizationId: payload.organizationId,
       threadId: payload.threadId,
+      // Quando a UI declarou explicitamente `derived`, este contrato já está
+      // habilitado pelo seletor e não depende da flag legada do resolver V2.
+      requireFeatureFlag: selection.source !== "derived",
     });
     if (route.applicable && route.sendEndpointId && route.provider) {
       payload.endpointId = route.sendEndpointId;

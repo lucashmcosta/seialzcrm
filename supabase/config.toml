@@ -10,6 +10,11 @@ verify_jwt = false
 [functions.meta-whatsapp-send]
 verify_jwt = false
 
+# Dispatcher autenticado do Comercial. Valida JWT e membership em código,
+# rederiva o endpoint de resposta antes de chamar o sender do provider.
+[functions.dispatch-whatsapp-send]
+verify_jwt = false
+
 [functions.meta-whatsapp-templates-sync]
 verify_jwt = false
 

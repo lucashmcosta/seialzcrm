@@ -53,6 +53,8 @@ export interface SalesReplyRouteInput {
   threadId?: string | null;
   businessContext?: string | null;
   channel?: string | null;
+  /** O contrato explícito `source=derived` independe da antiga flag de rollout. */
+  requireFeatureFlag?: boolean;
 }
 
 export interface SalesReplyRouteResult {
@@ -237,8 +239,9 @@ export async function resolveSalesReplyRoute(
   }
   if (!organizationId) return deny("missing_input");
 
-  // 2) Flag por organização
-  if (!(await flagEnabledForOrg(db, organizationId))) {
+  // 2) Flag por organização. O dispatcher server-side pode dispensar somente
+  // esta flag quando recebeu o contrato explícito `source=derived`.
+  if (input.requireFeatureFlag !== false && !(await flagEnabledForOrg(db, organizationId))) {
     return deny("flag_off");
   }
 

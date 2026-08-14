@@ -21,14 +21,20 @@ export function useThreadLastEndpoint(params: {
 }) {
   const { threadId, enabled = true } = params;
 
-  const query = useQuery<string | null>({
+  const query = useQuery<{
+    messageId: string;
+    endpointId: string;
+    direction: string;
+    sentAt: string | null;
+    createdAt: string;
+  } | null>({
     queryKey: threadLastEndpointKey(threadId),
     enabled: !!threadId && enabled,
     staleTime: 15_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('messages')
-        .select('endpoint_id')
+        .select('id, endpoint_id, direction, sent_at, created_at')
         .eq('thread_id', threadId!)
         .in('direction', ['inbound', 'outbound'])
         .is('deleted_at', null)
@@ -39,12 +45,27 @@ export function useThreadLastEndpoint(params: {
         .limit(1)
         .maybeSingle();
       if (error) throw error;
-      return (data as { endpoint_id?: string | null } | null)?.endpoint_id ?? null;
+      const row = data as {
+        id: string;
+        endpoint_id: string | null;
+        direction: string;
+        sent_at: string | null;
+        created_at: string;
+      } | null;
+      if (!row?.endpoint_id) return null;
+      return {
+        messageId: row.id,
+        endpointId: row.endpoint_id,
+        direction: row.direction,
+        sentAt: row.sent_at,
+        createdAt: row.created_at,
+      };
     },
   });
 
   return {
-    lastEndpointId: query.data ?? null,
+    lastEndpointId: query.data?.endpointId ?? null,
+    lastMessageId: query.data?.messageId ?? null,
     isLoading: query.isLoading,
     error: query.error ?? null,
   };
