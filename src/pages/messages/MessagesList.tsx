@@ -2235,6 +2235,53 @@ function DesktopMessagesList() {
                                 if (epId) lastEndpointId = epId;
                               }
 
+                              // Cabeçalho do bloco de contexto (estilo Kommo):
+                              // identifica quem fala e por qual número/canal.
+                              // Puramente visual — nenhum dado novo é buscado.
+                              let blockHeader: JSX.Element | null = null;
+                              if (
+                                block.isBlockStart &&
+                                item._type === 'message' &&
+                                descriptor?.kind === 'message'
+                              ) {
+                                const m = item.data;
+                                const outbound = m.direction === 'outbound';
+                                const title = !outbound
+                                  ? (selectedThread?.contact_name || (locale === 'pt-BR' ? 'Cliente' : 'Customer'))
+                                  : m.sender_type === 'agent'
+                                    ? (m.sender_name || (locale === 'pt-BR' ? 'Assistente IA' : 'AI Assistant'))
+                                    : (m.sender_name || (locale === 'pt-BR' ? 'Operador' : 'Operator'));
+                                const epId = descriptor.endpointId ?? null;
+                                const epAddress = epId ? endpointNumbers[epId]?.address ?? null : null;
+                                const epProvider = epId ? endpointNumbers[epId]?.provider ?? null : null;
+                                const providerSuffix =
+                                  epProvider && epProvider !== 'meta_cloud_api'
+                                    ? ` • ${whatsappProviderLabel(epProvider)}`
+                                    : '';
+                                const metaLine = epAddress
+                                  ? `WhatsApp • ${formatPhoneDisplay(epAddress)}${providerSuffix}`
+                                  : null;
+                                blockHeader = (
+                                  <div
+                                    className={cn(
+                                      'flex flex-col gap-0 mt-4 px-1',
+                                      outbound ? 'items-end text-right' : 'items-start text-left'
+                                    )}
+                                  >
+                                    <span className="flex items-center gap-1 text-[11px] font-medium text-foreground/80 leading-[14px]">
+                                      {m.sender_type === 'agent' && outbound && <Robot className="w-3 h-3" />}
+                                      {title}
+                                    </span>
+                                    {metaLine && (
+                                      <span className="font-data text-[10px] text-muted-foreground leading-[13px]">
+                                        {metaLine}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              }
+
+
                               const renderItem = (() => {
                               if (item._type === 'note') {
                                 const note = item.data;
