@@ -36,9 +36,10 @@ interface WabaRow {
 
 export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
   const [addOpen, setAddOpen] = useState(false);
+  /** WABA alvo do fluxo "Adicionar número" — cada WABA é primeira classe (sem WABA "principal"). */
+  const [addNumberFor, setAddNumberFor] = useState<{ wabaId: string; appId: string } | null>(null);
   const [resubscribingId, setResubscribingId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
-  const queryClient = useQueryClient();
 
   const { data: wabas, isLoading } = useQuery({
     queryKey: ["meta-wabas", organizationId, metaIntegrationId],
