@@ -184,6 +184,27 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={!w.meta_waba_id || !wabaAppId}
+                        title={
+                          !w.meta_waba_id
+                            ? "WABA sem waba_id"
+                            : !wabaAppId
+                              ? "WABA sem app_id registrado"
+                              : "Adicionar número nesta WABA"
+                        }
+                        onClick={() =>
+                          setAddNumberFor({
+                            wabaId: w.meta_waba_id as string,
+                            appId: wabaAppId as string,
+                          })
+                        }
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        Adicionar número
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
                         disabled={syncing || !w.meta_waba_id}
                         onClick={() => handleSyncTemplates(w.id)}
                       >
