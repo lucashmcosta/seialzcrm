@@ -57,7 +57,7 @@ Deno.test("R2 Atendimento nunca entra no caminho canônico", async () => {
   assertEquals(db.calls.includes("feature_flags"), false);
 });
 
-Deno.test("R3 sales + flag ON → resolve pelo endpoint histórico da última inbound", async () => {
+Deno.test("R3 sales + flag ON → responde pelo endpoint da última mensagem válida", async () => {
   const db = fakeDb({
     message_threads: salesThread,
     feature_flags: flagOn,
@@ -65,19 +65,20 @@ Deno.test("R3 sales + flag ON → resolve pelo endpoint histórico da última in
     messaging_line_endpoints: { data: [{ line_id: LINE }] },
     messaging_lines: { data: [{ id: LINE, route_slug: "commercial", active_endpoint_id: ACTIVE_EP }] },
     communication_endpoints: {
-      data: { id: ACTIVE_EP, is_active: true, provider: "meta_cloud_api", organization_id: ORG },
+      data: { id: ACTIVE_EP, is_active: true, provider: "meta_cloud_api", organization_id: ORG, channel: "whatsapp" },
     },
   });
   const r = await resolveSalesReplyRoute(db, { threadId: THREAD });
   assertEquals(r.applicable, true);
-  assertEquals(r.reason, "resolved_by_last_inbound_endpoint");
-  assertEquals(r.sendEndpointId, ACTIVE_EP);
+  assertEquals(r.reason, "resolved_by_last_message");
+  assertEquals(r.sendEndpointId, HIST_EP);
+  assertEquals(r.choice, "derived");
   assertEquals(r.provider, "meta_cloud_api");
   assertEquals(r.discoveredByEndpointId, HIST_EP);
   assertEquals(r.lineId, LINE);
 });
 
-Deno.test("R4 sem inbound roteável → REPLY_ROUTE_UNRESOLVED (sem fallback)", async () => {
+Deno.test("R4 conversa sem mensagem roteável e sem Route default → UNRESOLVED", async () => {
   const db = fakeDb({
     message_threads: salesThread,
     feature_flags: flagOn,
@@ -101,16 +102,21 @@ Deno.test("R5 endpoint histórico sem link ativo de Route → UNRESOLVED", async
   assertEquals(r.discoveredByEndpointId, HIST_EP);
 });
 
-Deno.test("R6 Route sem active_endpoint_id → UNRESOLVED", async () => {
+Deno.test("R6 Route sem active_endpoint_id ainda responde pela última mensagem", async () => {
   const db = fakeDb({
     message_threads: salesThread,
     feature_flags: flagOn,
     messages: { data: { endpoint_id: HIST_EP } },
     messaging_line_endpoints: { data: [{ line_id: LINE }] },
     messaging_lines: { data: [{ id: LINE, route_slug: "commercial", active_endpoint_id: null }] },
+    communication_endpoints: {
+      data: { id: HIST_EP, is_active: true, provider: "meta_cloud_api", organization_id: ORG, channel: "whatsapp" },
+    },
   });
   const r = await resolveSalesReplyRoute(db, { threadId: THREAD });
-  assertEquals(r.reason, "REPLY_ROUTE_UNRESOLVED");
+  assertEquals(r.applicable, true);
+  assertEquals(r.reason, "resolved_by_last_message");
+  assertEquals(r.sendEndpointId, HIST_EP);
 });
 
 Deno.test("R7 endpoint ativo inativo/tecnicamente inapto → UNRESOLVED", async () => {
@@ -121,7 +127,7 @@ Deno.test("R7 endpoint ativo inativo/tecnicamente inapto → UNRESOLVED", async 
     messaging_line_endpoints: { data: [{ line_id: LINE }] },
     messaging_lines: { data: [{ id: LINE, route_slug: "commercial", active_endpoint_id: ACTIVE_EP }] },
     communication_endpoints: {
-      data: { id: ACTIVE_EP, is_active: false, provider: "meta_cloud_api", organization_id: ORG },
+      data: { id: ACTIVE_EP, is_active: false, provider: "meta_cloud_api", organization_id: ORG, channel: "whatsapp" },
     },
   });
   const r = await resolveSalesReplyRoute(db, { threadId: THREAD });
@@ -136,7 +142,7 @@ Deno.test("R8 endpoint ativo de outra organização → UNRESOLVED", async () =>
     messaging_line_endpoints: { data: [{ line_id: LINE }] },
     messaging_lines: { data: [{ id: LINE, route_slug: "commercial", active_endpoint_id: ACTIVE_EP }] },
     communication_endpoints: {
-      data: { id: ACTIVE_EP, is_active: true, provider: "meta_cloud_api", organization_id: "other-org" },
+      data: { id: ACTIVE_EP, is_active: true, provider: "meta_cloud_api", organization_id: "other-org", channel: "whatsapp" },
     },
   });
   const r = await resolveSalesReplyRoute(db, { threadId: THREAD });
@@ -151,7 +157,7 @@ Deno.test("R9 flag global (organization_ids vazio) habilita a org", async () => 
     messaging_line_endpoints: { data: [{ line_id: LINE }] },
     messaging_lines: { data: [{ id: LINE, route_slug: "commercial", active_endpoint_id: ACTIVE_EP }] },
     communication_endpoints: {
-      data: { id: ACTIVE_EP, is_active: true, provider: "evolution_api", organization_id: ORG },
+      data: { id: ACTIVE_EP, is_active: true, provider: "evolution_api", organization_id: ORG, channel: "whatsapp" },
     },
   });
   const r = await resolveSalesReplyRoute(db, { threadId: THREAD });
@@ -163,4 +169,40 @@ Deno.test("R10 sem threadId → missing_input (legado)", async () => {
   const db = fakeDb({});
   const r = await resolveSalesReplyRoute(db, { threadId: null });
   assertEquals(r.reason, "missing_input");
+});
+
+Deno.test("R11 conversa SEM mensagem válida → default legado da Route (route_default)", async () => {
+  const db = fakeDb({
+    message_threads: salesThread,
+    feature_flags: flagOn,
+    messages: { data: null },
+    messaging_lines: { data: [{ id: LINE, route_slug: "commercial", active_endpoint_id: ACTIVE_EP }] },
+    communication_endpoints: {
+      data: { id: ACTIVE_EP, is_active: true, provider: "meta_cloud_api", organization_id: ORG, channel: "whatsapp" },
+    },
+  });
+  const r = await resolveSalesReplyRoute(db, { threadId: THREAD });
+  assertEquals(r.applicable, true);
+  assertEquals(r.reason, "resolved_by_route_default");
+  assertEquals(r.sendEndpointId, ACTIVE_EP);
+  assertEquals(r.choice, "route_default");
+  assertEquals(r.discoveredByEndpointId, null);
+});
+
+Deno.test("R12 outbound é fonte válida da seleção derivada", async () => {
+  const db = fakeDb({
+    message_threads: salesThread,
+    feature_flags: flagOn,
+    // fake DB não filtra direção: prova que o resolver aceita a última mensagem
+    // qualquer que seja a direção (inbound OU outbound).
+    messages: { data: { endpoint_id: HIST_EP, direction: "outbound" } },
+    messaging_line_endpoints: { data: [{ line_id: LINE }] },
+    messaging_lines: { data: [{ id: LINE, route_slug: "commercial", active_endpoint_id: ACTIVE_EP }] },
+    communication_endpoints: {
+      data: { id: HIST_EP, is_active: true, provider: "meta_cloud_api", organization_id: ORG, channel: "whatsapp" },
+    },
+  });
+  const r = await resolveSalesReplyRoute(db, { threadId: THREAD });
+  assertEquals(r.sendEndpointId, HIST_EP);
+  assertEquals(r.reason, "resolved_by_last_message");
 });
