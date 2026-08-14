@@ -1,6 +1,6 @@
 // Resolve id de endpoint -> número (external_address), incluindo endpoints
-// INATIVOS (números antigos/rotacionados). Usado para o divisor de
-// "Número alterado" na timeline de /messages.
+// INATIVOS (números antigos/rotacionados). Usado no cabeçalho dos containers
+// da timeline de /commercial.
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
