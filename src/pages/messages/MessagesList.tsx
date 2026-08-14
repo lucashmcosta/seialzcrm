@@ -2636,7 +2636,7 @@ function DesktopMessagesList() {
                                 kind: (descriptor?.kind ?? 'message') as 'message' | 'note' | 'system',
                                 direction: descriptor?.direction ?? null,
                                 separator,
-                                rotationSeparator,
+                                
                                 blockHeader,
                                 renderItem,
                               };
