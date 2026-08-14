@@ -178,52 +178,74 @@ export function EvolutionProvisionPanel() {
 
       {instances.length > 0 && (
         <ul className="space-y-1">
-          {instances.map((i) => (
-            <li
-              key={i.id}
-              className="flex items-center gap-3 rounded-md border border-border px-3 py-2"
-            >
-              <span className="font-data text-sm font-semibold shrink-0 w-[8rem]">
-                {i.ownerMasked ?? 'Aguardando QR'}
-              </span>
-              <span className="flex items-center gap-2 min-w-0 flex-1">
-                <Badge variant="outline" className="text-[10px]">
-                  {STATE_LABEL[i.state] ?? i.state}
-                </Badge>
-                <Badge variant="outline" className="text-[10px]">
-                  {i.provisioningStatus === 'linked' ? 'Vinculado a um número' : 'Em provisionamento'}
-                </Badge>
-              </span>
-              <span className="flex items-center gap-1.5 shrink-0">
-                {!i.connected && (
+          {instances.map((i) => {
+            const finishing = i.provisioningStatus === 'pending' && i.connected && !i.identityKnown;
+            const linkable = i.provisioningStatus === 'pending' && i.connected && i.identityKnown;
+            return (
+              <li
+                key={i.id}
+                className="flex items-center gap-3 rounded-md border border-border px-3 py-2"
+              >
+                <span className="font-data text-sm font-semibold shrink-0 w-[8rem]">
+                  {i.identityKnown ? i.ownerMasked : finishing ? 'Finalizando…' : 'Aguardando QR'}
+                </span>
+                <span className="flex items-center gap-2 min-w-0 flex-1">
+                  <Badge variant="outline" className="text-[10px]">
+                    {STATE_LABEL[i.state] ?? i.state}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px]">
+                    {i.provisioningStatus === 'linked' ? 'Vinculado' : 'Em provisionamento'}
+                  </Badge>
+                  {finishing && (
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <SpinnerGap className="h-3 w-3 animate-spin" /> Finalizando conexão…
+                    </span>
+                  )}
+                </span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  {!i.connected && (
+                    <Button
+                      size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                      disabled={connect.isPending}
+                      onClick={() => onRegenerate(i.instanceName)}
+                    >
+                      <QrCode className="h-3 w-3 mr-1" /> Ver QR
+                    </Button>
+                  )}
+                  {linkable && (
+                    <Button
+                      size="sm" className="h-6 px-2 text-[10px]"
+                      disabled={link.isPending}
+                      onClick={() => onLink(i.id)}
+                    >
+                      {link.isPending
+                        ? <SpinnerGap className="h-3 w-3 mr-1 animate-spin" />
+                        : <LinkIcon className="h-3 w-3 mr-1" />}
+                      Vincular ao WhatsApp Comercial
+                    </Button>
+                  )}
                   <Button
-                    size="sm" variant="outline" className="h-6 px-2 text-[10px]"
-                    disabled={connect.isPending}
-                    onClick={() => onRegenerate(i.instanceName)}
+                    size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
+                    disabled={syncWebhook.isPending}
+                    onClick={() =>
+                      syncWebhook.mutateAsync(i.instanceName)
+                        .then(() => toast.success('Webhook atualizado'))
+                        .catch((e) => toast.error((e as Error).message))}
                   >
-                    <QrCode className="h-3 w-3 mr-1" /> Ver QR
+                    <Broadcast className="h-3 w-3 mr-1" /> Webhook
                   </Button>
-                )}
-                <Button
-                  size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
-                  disabled={syncWebhook.isPending}
-                  onClick={() =>
-                    syncWebhook.mutateAsync(i.instanceName)
-                      .then(() => toast.success('Webhook atualizado'))
-                      .catch((e) => toast.error((e as Error).message))}
-                >
-                  <Broadcast className="h-3 w-3 mr-1" /> Webhook
-                </Button>
-                <Button
-                  size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-destructive"
-                  disabled={remove.isPending}
-                  onClick={() => onDelete(i.instanceName)}
-                >
-                  <Trash className="h-3 w-3" />
-                </Button>
-              </span>
-            </li>
-          ))}
+                  <Button
+                    size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-destructive"
+                    disabled={remove.isPending}
+                    onClick={() => onDelete(i.instanceName)}
+                  >
+                    <Trash className="h-3 w-3" />
+                  </Button>
+                </span>
+              </li>
+            );
+          })}
+
         </ul>
       )}
 
