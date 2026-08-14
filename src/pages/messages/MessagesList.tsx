@@ -9,7 +9,7 @@ import { MobileMessagesList } from '@/components/mobile/MobileMessagesList';
 import {
   DotsHorizontal,
   FaceSmile,
-  PhoneCall01,
+  
   SearchLg,
   Send01,
   Archive,
