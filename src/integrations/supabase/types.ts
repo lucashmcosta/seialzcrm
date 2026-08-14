@@ -3420,7 +3420,7 @@ export type Database = {
       evolution_instances: {
         Row: {
           created_at: string
-          endpoint_id: string
+          endpoint_id: string | null
           id: string
           instance_id_remote: string | null
           instance_name: string
@@ -3431,11 +3431,12 @@ export type Database = {
           organization_id: string
           owner_jid: string | null
           owner_number_digits: string | null
+          provisioning_status: string
           updated_at: string
         }
         Insert: {
           created_at?: string
-          endpoint_id: string
+          endpoint_id?: string | null
           id?: string
           instance_id_remote?: string | null
           instance_name: string
@@ -3446,11 +3447,12 @@ export type Database = {
           organization_id: string
           owner_jid?: string | null
           owner_number_digits?: string | null
+          provisioning_status?: string
           updated_at?: string
         }
         Update: {
           created_at?: string
-          endpoint_id?: string
+          endpoint_id?: string | null
           id?: string
           instance_id_remote?: string | null
           instance_name?: string
@@ -3461,6 +3463,7 @@ export type Database = {
           organization_id?: string
           owner_jid?: string | null
           owner_number_digits?: string | null
+          provisioning_status?: string
           updated_at?: string
         }
         Relationships: [
