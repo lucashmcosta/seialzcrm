@@ -46,6 +46,57 @@ export function TimelineBlock({
   const [heights, setHeights] = useState<number[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const heightsRef = useRef<number[]>([]);
+  // Âncora de scroll: preserva a posição de leitura ao expandir/colapsar.
+  const anchorRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
+  const anchorClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const getViewport = useCallback(
+    () =>
+      (containerRef.current?.closest(
+        '[data-radix-scroll-area-viewport]',
+      ) as HTMLElement | null) ?? null,
+    [],
+  );
+
+  const restoreAnchor = useCallback(() => {
+    const anchor = anchorRef.current;
+    const viewport = getViewport();
+    if (!anchor || !viewport) return;
+    const delta = viewport.scrollHeight - anchor.scrollHeight;
+    if (delta !== 0) {
+      viewport.scrollTop = anchor.scrollTop + delta;
+      anchorRef.current = {
+        scrollTop: viewport.scrollTop,
+        scrollHeight: viewport.scrollHeight,
+      };
+    }
+  }, [getViewport]);
+
+  const handleToggle = useCallback(() => {
+    const viewport = getViewport();
+    if (viewport) {
+      anchorRef.current = {
+        scrollTop: viewport.scrollTop,
+        scrollHeight: viewport.scrollHeight,
+      };
+      if (anchorClearTimer.current) clearTimeout(anchorClearTimer.current);
+      // Mantém a âncora ativa por um curto período para absorver remedições
+      // (imagens/áudios) logo após a expansão.
+      anchorClearTimer.current = setTimeout(() => {
+        anchorRef.current = null;
+        anchorClearTimer.current = null;
+      }, 600);
+    }
+    setExpanded((v) => !v);
+  }, [getViewport]);
+
+  useEffect(
+    () => () => {
+      if (anchorClearTimer.current) clearTimeout(anchorClearTimer.current);
+    },
+    [],
+  );
+
 
   // Orçamento = altura visível da área de conversa.
   useEffect(() => {
