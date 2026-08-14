@@ -2409,13 +2409,11 @@ function DesktopMessagesList() {
                                           const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
                                           if (message.media_type === 'audio' || rawUrl.match(/\.(ogg|oga|opus|mp3|mpeg|wav|m4a|aac|amr|webm)(\?|$)/i)) {
                                              const isAudioOnly = message.media_type === 'audio';
-                                             const senderLabel = isOutbound && isGroupStart
-                                               ? (message.sender_name ? `${message.sender_name} · ` : '')
-                                               : '';
                                              const timeStr = isGroupEnd
                                                ? new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
                                                : '';
-                                             const audioTimestamp = `${senderLabel}${timeStr}`.replace(/ · $/, '');
+                                             const audioTimestamp = timeStr;
+
                                              return <AudioMessagePlayer key={i} src={url}
                                                messageId={message.id}
                                                threadId={(message as any).thread_id}
