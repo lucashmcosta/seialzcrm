@@ -111,7 +111,8 @@ import { EyeSlash, Paperclip, Plus } from '@phosphor-icons/react';
 import { ToastAction } from '@/components/ui/toast';
 import { AttachMediaDialog, type AttachMedia } from '@/components/documents/AttachMediaDialog';
 import { isAttachableMedia } from '@/lib/mediaToFile';
-import { computeMessageGroups, computeContextBlocks, resolveBlockCollapse, type GroupingItem } from '@/lib/messageGrouping';
+import { computeMessageGroups, computeContextBlocks, type GroupingItem } from '@/lib/messageGrouping';
+import { TimelineBlock } from '@/components/messages/timeline/TimelineBlock';
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
@@ -435,7 +436,6 @@ function DesktopMessagesList() {
   /** Marcos históricos do CRM exibidos na timeline (somente leitura). */
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   /** Expansão de containers encerrados, por blockKey (nunca persistido). */
-  const [expandedBlocks, setExpandedBlocks] = useState<Record<string, boolean>>({});
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
@@ -2296,7 +2296,6 @@ function DesktopMessagesList() {
                             })();
 
                             let lastDateKey: string | null = null;
-                            let lastEndpointId: string | null = null;
 
                             const renderedItems = chatItems.map((item, itemIndex) => {
                               const group = groupFlags[itemIndex] ?? { isGroupStart: true, isGroupEnd: true };
@@ -2319,27 +2318,11 @@ function DesktopMessagesList() {
                               ) : null;
 
 
-                              // Divisor de "Número alterado": aparece quando a mensagem
-                              // passou por um endpoint diferente do anterior (rotação de número).
-                              let rotationSeparator: JSX.Element | null = null;
-                              if (item._type === 'message') {
-                                const epId = (item.data as any).endpoint_id ?? null;
-                                if (epId && lastEndpointId && epId !== lastEndpointId) {
-                                  const fromAddr = endpointNumbers[lastEndpointId]?.address ?? null;
-                                  const toAddr = endpointNumbers[epId]?.address ?? null;
-                                  if (fromAddr && toAddr && fromAddr !== toAddr) {
-                                    const last4 = (a: string) => a.replace(/\D/g, '').slice(-4);
-                                    rotationSeparator = (
-                                      <div key={`rot-${item.data.id}`} className="flex justify-center my-3">
-                                        <div className="px-3 py-1 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide shadow-sm">
-                                          📞 Número alterado: {last4(fromAddr)} → {last4(toAddr)}
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-                                }
-                                if (epId) lastEndpointId = epId;
-                              }
+                              // O marcador visual "Número alterado" foi removido:
+                              // o cabeçalho do próprio container já informa o
+                              // canal/número do contexto. A quebra de container
+                              // (endpointBreak) continua inalterada.
+
 
                               // Cabeçalho do bloco de contexto (estilo Kommo):
                               // representa APENAS o canal/número do contexto.
@@ -2652,7 +2635,7 @@ function DesktopMessagesList() {
                                 kind: (descriptor?.kind ?? 'message') as 'message' | 'note' | 'system',
                                 direction: descriptor?.direction ?? null,
                                 separator,
-                                rotationSeparator,
+                                
                                 blockHeader,
                                 renderItem,
                               };
@@ -2677,7 +2660,7 @@ function DesktopMessagesList() {
                             for (const r of renderedItems) {
                               const loose: JSX.Element[] = [];
                               if (r.separator) loose.push(r.separator);
-                              if (r.rotationSeparator) loose.push(r.rotationSeparator);
+                              
                               if (loose.length) {
                                 segments.push({ type: 'loose', key: `loose-${r.key}`, nodes: loose });
                               }
@@ -2723,51 +2706,17 @@ function DesktopMessagesList() {
                                   ))}
                                 </Fragment>
                               ) : (
-                                (() => {
-                                  const collapse = resolveBlockCollapse(
-                                    segment.messageNodes.length,
-                                    segment.key === currentBlockKey,
-                                    !!expandedBlocks[segment.key],
-                                  );
-                                  const visibleNodes = segment.messageNodes.slice(
-                                    segment.messageNodes.length - collapse.visibleCount,
-                                  );
-                                  return (
-                                    <div
-                                      key={segment.key}
-                                      className="w-full rounded-lg border border-border/70 bg-muted/50 px-1 py-1.5 space-y-0.5 mt-4"
-                                    >
-                                      {segment.headerNodes.map((node, i) => (
-                                        <Fragment key={`h-${i}`}>{node}</Fragment>
-                                      ))}
-                                      {collapse.showToggle && (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setExpandedBlocks((prev) => ({
-                                              ...prev,
-                                              [segment.key]: !prev[segment.key],
-                                            }))
-                                          }
-                                          className="mx-auto block text-[11px] text-muted-foreground hover:text-foreground transition-colors py-0.5"
-                                        >
-                                          {collapse.hiddenCount > 0
-                                            ? locale === 'pt-BR'
-                                              ? `Ver mais ${collapse.hiddenCount} mensagens`
-                                              : `Show ${collapse.hiddenCount} more messages`
-                                            : locale === 'pt-BR'
-                                              ? 'Ver menos'
-                                              : 'Show less'}
-                                        </button>
-                                      )}
-                                      {visibleNodes.map((node, i) => (
-                                        <Fragment key={i}>{node}</Fragment>
-                                      ))}
-                                    </div>
-                                  );
-                                })()
+                                <TimelineBlock
+                                  key={segment.key}
+                                  headerNodes={segment.headerNodes}
+                                  messageNodes={segment.messageNodes}
+                                  isCurrent={segment.key === currentBlockKey}
+                                  locale={locale}
+                                  className="w-full rounded-lg border border-border/70 bg-muted/50 px-1 py-1.5 space-y-0.5 mt-4"
+                                />
                               )
                             );
+
 
 
                           })()}
