@@ -984,7 +984,8 @@ serve(async (req) => {
         .update({
           whatsapp_status: "sent",
           whatsapp_message_sid: wamid,
-          metadata: { meta_cloud: finalMeta },
+          // Preserva a auditoria da escolha de número (manual/auto) no update final.
+          metadata: { meta_cloud: finalMeta, ...replyChoiceMeta },
         })
         .eq("id", insertedMsg.id);
 
