@@ -145,6 +145,7 @@ export async function resolveProvider(
   // ── Seleção MANUAL do operador — PRECEDE tudo, inclusive V2 ──
   // Fail-closed: usa EXATAMENTE o endpoint escolhido, após revalidação.
   const selection = normalizeReplySelection(payload);
+  const explicitDerivedSelection = payload.replyEndpointSelection?.source === "derived";
 
   if (selection.source === "manual" && selection.endpointId) {
     const manual = await resolveManualReplyEndpoint(supabase, {
@@ -171,13 +172,16 @@ export async function resolveProvider(
     }
   }
 
-  // ── Seleção DERIVADA (canônica Comercial V2, flag conv_route_resolver_v2) ──
+  // ── Seleção DERIVADA (canônica Comercial) ──
   // O servidor é a fonte de verdade: reconsulta a última mensagem válida da
   // thread agora e envia por ela. A UI nunca comanda esse endpoint.
   if (payload.threadId) {
     const route = await resolveSalesReplyRoute(supabase, {
       organizationId: payload.organizationId,
       threadId: payload.threadId,
+      // Quando a UI declarou explicitamente `derived`, este contrato já está
+      // habilitado pelo seletor e não depende da flag legada do resolver V2.
+      requireFeatureFlag: !explicitDerivedSelection,
     });
     if (route.applicable && route.sendEndpointId && route.provider) {
       payload.endpointId = route.sendEndpointId;

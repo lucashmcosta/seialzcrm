@@ -181,6 +181,7 @@ interface Message {
   /** Identificador estável do operador — usado apenas para agrupamento visual. */
   sender_user_id?: string | null;
   metadata?: Record<string, any> | null;
+  endpoint_id?: string | null;
 }
 
 interface InlineNote {
@@ -1027,6 +1028,7 @@ function DesktopMessagesList() {
         const newMessage = payload.new as Message & { thread_id: string };
         
         if (newMessage.thread_id === selectedThreadId) {
+          invalidateThreadLastEndpoint(newMessage.thread_id);
           const enrichMessage = async () => {
             let enriched = newMessage as Message;
             if (newMessage.reply_to_message_id && !newMessage.reply_to_message) {
@@ -1067,6 +1069,7 @@ function DesktopMessagesList() {
       }, (payload) => {
         const updatedMessage = payload.new as Message & { thread_id: string };
         if (updatedMessage.thread_id === selectedThreadId) {
+          invalidateThreadLastEndpoint(updatedMessage.thread_id);
           setMessages((prev) =>
             prev.map((m) => m.id === updatedMessage.id
               ? { ...updatedMessage, reply_to_message: updatedMessage.reply_to_message || m.reply_to_message } as Message
@@ -1078,7 +1081,7 @@ function DesktopMessagesList() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [organization?.id, selectedThreadId]);
+  }, [organization?.id, selectedThreadId, invalidateThreadLastEndpoint]);
 
   // (removido) Timer 60s de `isIn24hWindow` — agora `useServiceWindow`
   // recalcula sozinho e cobre janela CTWA 72h além da sessão 24h.
@@ -1283,6 +1286,7 @@ function DesktopMessagesList() {
         throw new Error(data.message || data.error);
       }
 
+      if (replyEndpointSelection?.source === 'manual') void manualReply.useDerived();
       refetchThreads();
 
       // Auditoria de snippet: grava metadata.snippet_id + incrementa usage_count.
@@ -1419,6 +1423,7 @@ function DesktopMessagesList() {
         throw new Error(data.error);
       }
 
+      if (replyEndpointSelection?.source === 'manual') void manualReply.useDerived();
       refetchThreads();
     } catch (error: any) {
       console.error('Error sending template:', error);
@@ -1528,6 +1533,7 @@ function DesktopMessagesList() {
 
       if (error) throw error;
       invalidateThreadLastEndpoint(selectedThreadId);
+      if (replyEndpointSelection?.source === 'manual') void manualReply.useDerived();
       refetchThreads();
     } catch (error: any) {
       console.error('Error uploading media:', error);

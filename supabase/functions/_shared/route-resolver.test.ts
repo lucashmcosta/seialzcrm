@@ -206,3 +206,40 @@ Deno.test("R12 outbound é fonte válida da seleção derivada", async () => {
   assertEquals(r.sendEndpointId, HIST_EP);
   assertEquals(r.reason, "resolved_by_last_message");
 });
+
+Deno.test("R13 contrato derived explícito independe da flag legada", async () => {
+  const db = fakeDb({
+    message_threads: salesThread,
+    feature_flags: flagOff,
+    messages: { data: { endpoint_id: HIST_EP, direction: "inbound" } },
+    messaging_line_endpoints: { data: [{ line_id: LINE }] },
+    messaging_lines: { data: [{ id: LINE, route_slug: "commercial", active_endpoint_id: ACTIVE_EP }] },
+    communication_endpoints: {
+      data: { id: HIST_EP, is_active: true, provider: "evolution_api", organization_id: ORG, channel: "whatsapp" },
+    },
+  });
+  const r = await resolveSalesReplyRoute(db, {
+    threadId: THREAD,
+    requireFeatureFlag: false,
+  });
+  assertEquals(r.applicable, true);
+  assertEquals(r.sendEndpointId, HIST_EP);
+  assertEquals(r.provider, "evolution_api");
+  assertEquals(db.calls.includes("feature_flags"), false);
+});
+
+Deno.test("R14 organização da thread divergente é bloqueada", async () => {
+  const db = fakeDb({
+    message_threads: {
+      data: { organization_id: "other-org", business_context: "sales", channel: "whatsapp" },
+    },
+  });
+  const r = await resolveSalesReplyRoute(db, {
+    organizationId: ORG,
+    threadId: THREAD,
+    requireFeatureFlag: false,
+  });
+  assertEquals(r.applicable, false);
+  assertEquals(r.reason, "missing_input");
+  assertEquals(db.calls.includes("messages"), false);
+});

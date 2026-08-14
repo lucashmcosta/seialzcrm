@@ -280,6 +280,13 @@ async function resolveProvider(
  * Retorna o mesmo shape de `supabase.functions.invoke(...)`: `{ data, error }`.
  */
 export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
+  // O contrato novo do seletor Comercial é sempre resolvido server-side. O
+  // endpointId `derived` da UI é apenas hint; o servidor reconsulta a thread.
+  // Inbox e callers legados sem `replyEndpointSelection` ficam intactos.
+  if (payload.senderContext === "messages" && payload.replyEndpointSelection) {
+    return directFetchEdgeFunction("dispatch-whatsapp-send", payload);
+  }
+
   // ============================================================
   // Roteamento por LINHA (restaurado):
   // A thread é o histórico do contato. O número/provider de envio é

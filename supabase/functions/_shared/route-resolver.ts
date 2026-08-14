@@ -53,6 +53,8 @@ export interface SalesReplyRouteInput {
   threadId?: string | null;
   businessContext?: string | null;
   channel?: string | null;
+  /** O contrato explícito `source=derived` independe da antiga flag de rollout. */
+  requireFeatureFlag?: boolean;
 }
 
 export interface SalesReplyRouteResult {
@@ -224,6 +226,14 @@ export async function resolveSalesReplyRoute(
       | { organization_id?: string | null; business_context?: string | null; channel?: string | null }
       | null;
     if (!t) return deny("missing_input");
+    if (organizationId && t.organization_id && organizationId !== t.organization_id) {
+      console.error("[route-resolver] thread_org_mismatch", {
+        thread_id: threadId,
+        requested_organization_id: organizationId,
+        thread_organization_id: t.organization_id,
+      });
+      return deny("missing_input");
+    }
     organizationId = organizationId ?? t.organization_id ?? null;
     businessContext = businessContext ?? t.business_context ?? null;
     channel = channel ?? t.channel ?? null;
@@ -237,8 +247,9 @@ export async function resolveSalesReplyRoute(
   }
   if (!organizationId) return deny("missing_input");
 
-  // 2) Flag por organização
-  if (!(await flagEnabledForOrg(db, organizationId))) {
+  // 2) Flag por organização. O dispatcher server-side pode dispensar somente
+  // esta flag quando recebeu o contrato explícito `source=derived`.
+  if (input.requireFeatureFlag !== false && !(await flagEnabledForOrg(db, organizationId))) {
     return deny("flag_off");
   }
 
