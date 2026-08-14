@@ -35,7 +35,9 @@ async function callOp<T>(body: Record<string, unknown>): Promise<T> {
     if (typeof raw === 'string') {
       try {
         const parsed = JSON.parse(raw) as { error?: string; message?: string };
-        throw new Error(parsed.error ?? parsed.message ?? error.message);
+        // Preserva código + detalhe (ex.: PROVISION_FAILED / PROVISION_PROVIDER_CONFLICT).
+        const code = parsed.error ?? error.message;
+        throw new Error(parsed.message && parsed.message !== code ? `${code}: ${parsed.message}` : code);
       } catch {
         /* fallthrough */
       }

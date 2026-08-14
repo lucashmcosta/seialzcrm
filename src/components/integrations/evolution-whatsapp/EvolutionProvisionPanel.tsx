@@ -54,6 +54,32 @@ const DELETE_ERROR: Record<string, string> = {
   FEATURE_DISABLED: 'A integração Evolution não está habilitada nesta organização.',
 };
 
+// Erros de negócio do vínculo. Mensagens explicam a causa real; nada aqui
+// contorna a guarda do servidor.
+const LINK_ERROR: Record<string, string> = {
+  PROVISION_PROVIDER_CONFLICT:
+    'Este número já está cadastrado nesta organização com outro provedor (Meta ou Twilio). ' +
+    'Um mesmo número não pode pertencer a dois provedores: conecte a sessão Evolution com um ' +
+    'número diferente ou remova antes o endpoint existente desse número.',
+  PROVISION_ENDPOINT_AMBIGUOUS:
+    'Existe mais de um endpoint com este número nesta organização. Resolva a duplicidade antes de vincular.',
+  PROVISION_EVOLUTION_ADDRESS_UNKNOWN:
+    'O número real da sessão ainda não foi lido do provedor. Aguarde a sincronização e tente de novo.',
+  PROVISION_EVOLUTION_NOT_CONNECTED: 'A sessão não está conectada. Leia o QR Code novamente.',
+  INSTANCE_IDENTITY_UNKNOWN:
+    'Número da sessão ainda desconhecido. Aguarde "Finalizando conexão…" concluir.',
+  INSTANCE_NOT_CONNECTED: 'A sessão não está conectada. Leia o QR Code novamente.',
+  INSTANCE_ALREADY_LINKED: 'Esta sessão já está vinculada.',
+  SALES_ROUTE_NOT_FOUND: 'Nenhuma Route de WhatsApp Comercial encontrada nesta organização.',
+  PROVISION_FORBIDDEN: 'Você não tem permissão para gerenciar integrações nesta organização.',
+};
+
+function linkErrorMessage(raw: string): string {
+  const key = Object.keys(LINK_ERROR).find((k) => raw.includes(k));
+  return key ? LINK_ERROR[key] : raw;
+}
+
+
 
 export function EvolutionProvisionPanel() {
   const { data, isLoading, error, refetch } = useEvolutionProvisionedInstances();
@@ -91,7 +117,10 @@ export function EvolutionProvisionPanel() {
         description: 'O número não foi tornado ativo para envio.',
       });
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error('Não foi possível vincular esta sessão', {
+        description: linkErrorMessage((e as Error).message),
+        duration: 10000,
+      });
     }
   };
 
