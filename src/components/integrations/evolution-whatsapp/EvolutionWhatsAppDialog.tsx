@@ -329,12 +329,15 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
 
 export function EvolutionWhatsAppDialog({ open, onOpenChange }: Props) {
   const { organization } = useOrganization();
-  const { data: instances, isLoading, error, refetch } = useEvolutionInstances();
+  const { data: instances, isLoading, error } = useEvolutionInstances();
 
-  const myInstances = useMemo(
+  // Detalhes completos só fazem sentido para sessões já vinculadas a um número.
+  const linkedInstances = useMemo(
     () =>
       (instances ?? []).filter(
-        (i) => !organization?.id || i.organization_id === organization.id,
+        (i) =>
+          (!organization?.id || i.organization_id === organization.id) &&
+          !!i.endpoint_id,
       ),
     [instances, organization?.id],
   );
