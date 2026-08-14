@@ -2707,51 +2707,17 @@ function DesktopMessagesList() {
                                   ))}
                                 </Fragment>
                               ) : (
-                                (() => {
-                                  const collapse = resolveBlockCollapse(
-                                    segment.messageNodes.length,
-                                    segment.key === currentBlockKey,
-                                    !!expandedBlocks[segment.key],
-                                  );
-                                  const visibleNodes = segment.messageNodes.slice(
-                                    segment.messageNodes.length - collapse.visibleCount,
-                                  );
-                                  return (
-                                    <div
-                                      key={segment.key}
-                                      className="w-full rounded-lg border border-border/70 bg-muted/50 px-1 py-1.5 space-y-0.5 mt-4"
-                                    >
-                                      {segment.headerNodes.map((node, i) => (
-                                        <Fragment key={`h-${i}`}>{node}</Fragment>
-                                      ))}
-                                      {collapse.showToggle && (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setExpandedBlocks((prev) => ({
-                                              ...prev,
-                                              [segment.key]: !prev[segment.key],
-                                            }))
-                                          }
-                                          className="mx-auto block text-[11px] text-muted-foreground hover:text-foreground transition-colors py-0.5"
-                                        >
-                                          {collapse.hiddenCount > 0
-                                            ? locale === 'pt-BR'
-                                              ? `Ver mais ${collapse.hiddenCount} mensagens`
-                                              : `Show ${collapse.hiddenCount} more messages`
-                                            : locale === 'pt-BR'
-                                              ? 'Ver menos'
-                                              : 'Show less'}
-                                        </button>
-                                      )}
-                                      {visibleNodes.map((node, i) => (
-                                        <Fragment key={i}>{node}</Fragment>
-                                      ))}
-                                    </div>
-                                  );
-                                })()
+                                <TimelineBlock
+                                  key={segment.key}
+                                  headerNodes={segment.headerNodes}
+                                  messageNodes={segment.messageNodes}
+                                  isCurrent={segment.key === currentBlockKey}
+                                  locale={locale}
+                                  className="w-full rounded-lg border border-border/70 bg-muted/50 px-1 py-1.5 space-y-0.5 mt-4"
+                                />
                               )
                             );
+
 
 
                           })()}
