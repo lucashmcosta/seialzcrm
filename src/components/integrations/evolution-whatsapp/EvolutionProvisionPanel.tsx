@@ -117,7 +117,10 @@ export function EvolutionProvisionPanel() {
         description: 'O número não foi tornado ativo para envio.',
       });
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error('Não foi possível vincular esta sessão', {
+        description: linkErrorMessage((e as Error).message),
+        duration: 10000,
+      });
     }
   };
 
