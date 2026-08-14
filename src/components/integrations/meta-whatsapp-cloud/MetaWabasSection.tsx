@@ -253,6 +253,16 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
         onOpenChange={setAddOpen}
         organizationId={organizationId}
       />
+
+      {addNumberFor && (
+        <AddMetaWhatsAppNumberDialog
+          open
+          onOpenChange={(o) => { if (!o) setAddNumberFor(null); }}
+          organizationId={organizationId}
+          wabaId={addNumberFor.wabaId}
+          appId={addNumberFor.appId}
+        />
+      )}
     </>
   );
 }
