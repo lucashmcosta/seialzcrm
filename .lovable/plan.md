@@ -12,9 +12,10 @@ A flag `endpointBreak` do descritor (linhas ~2266-2273) **continua igual**: ela 
 
 Substituir `resolveBlockCollapse(count, isCurrent, expanded)` por uma versão baseada em altura estimada:
 
-- `estimateItemHeight(kind)` em `src/lib/messageGrouping.ts`, com pesos consistentes por tipo de conteúdo já conhecido no render: texto curto (~1-2 linhas) ~44px, texto longo cresce por quebra de linha estimada, áudio ~56px, imagem/vídeo ~220px, documento/PDF ~80px, template ~120px, nota interna ~48px.
+- O colapso é baseado **preferencialmente na altura real renderizada** de cada item no DOM (`offsetHeight` / `getBoundingClientRect`), medida por item dentro do container. Nada de pesos fixos por tipo como fonte de verdade.
+- Apenas enquanto a altura real ainda não estiver disponível (primeira renderização) usa-se um fallback aproximado, só para evitar layout shift. Após a primeira medição, a decisão de colapso usa sempre a altura real dos elementos.
 - `resolveBlockCollapseByHeight(heights, budgetPx, isCurrentBlock, expanded)`: percorre as mensagens **do fim para o começo** somando altura até estourar o orçamento; garante no mínimo 1 mensagem visível; devolve `{ visibleCount, hiddenCount, showToggle }` (mesmo contrato de hoje, para o render não mudar de forma).
-- Orçamento = altura visível da área de conversa, medida por `ref` no viewport do `ScrollArea` (`clientHeight`), com fallback 480px quando ainda não medida. Sem `ResizeObserver` novo além da medição inicial + `window resize`.
+- Orçamento = altura visível da área de conversa, medida por `ref` no viewport do `ScrollArea` (`clientHeight`), com fallback 480px quando ainda não medida.
 
 Consequência: 15 mensagens curtas podem aparecer inteiras; 3 imagens grandes já atingem o limite; 2 áudios + 1 imagem também. `BLOCK_COLLAPSE_LIMIT` fixo em 5 sai de uso.
 
