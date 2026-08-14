@@ -2554,6 +2554,7 @@ function DesktopMessagesList() {
                                 key: item._type === 'message' ? `m-${item.data.id}` : `n-${item.data.id}`,
                                 blockIndex: block.blockIndex,
                                 kind: (descriptor?.kind ?? 'message') as 'message' | 'note' | 'system',
+                                direction: descriptor?.direction ?? null,
                                 separator,
                                 rotationSeparator,
                                 blockHeader,
@@ -2567,7 +2568,14 @@ function DesktopMessagesList() {
                             // e notas internas ficam fora dos cartões.
                             type Segment =
                               | { type: 'loose'; key: string; nodes: JSX.Element[] }
-                              | { type: 'block'; key: string; blockIndex: number; nodes: JSX.Element[] };
+                              | {
+                                  type: 'block';
+                                  key: string;
+                                  blockIndex: number;
+                                  hasInbound: boolean;
+                                  hasOutbound: boolean;
+                                  nodes: JSX.Element[];
+                                };
                             const segments: Segment[] = [];
                             for (const r of renderedItems) {
                               const loose: JSX.Element[] = [];
@@ -2583,14 +2591,19 @@ function DesktopMessagesList() {
                                 continue;
                               }
 
+                              const isInbound = r.direction === 'inbound';
                               const last = segments[segments.length - 1];
                               if (last && last.type === 'block' && last.blockIndex === r.blockIndex) {
                                 last.nodes.push(r.renderItem);
+                                last.hasInbound = last.hasInbound || isInbound;
+                                last.hasOutbound = last.hasOutbound || !isInbound;
                               } else {
                                 segments.push({
                                   type: 'block',
                                   key: `block-${r.blockIndex}-${r.key}`,
                                   blockIndex: r.blockIndex,
+                                  hasInbound: isInbound,
+                                  hasOutbound: !isInbound,
                                   nodes: [
                                     ...(r.blockHeader ? [r.blockHeader] : []),
                                     r.renderItem,
@@ -2609,7 +2622,10 @@ function DesktopMessagesList() {
                               ) : (
                                 <div
                                   key={segment.key}
-                                  className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5 space-y-1"
+                                  className={cn(
+                                    'rounded-lg border border-border/30 bg-muted/10 px-2.5 py-1.5 space-y-0.5 w-fit max-w-[88%] mt-4',
+                                    segment.hasOutbound && !segment.hasInbound ? 'ml-auto' : 'mr-auto'
+                                  )}
                                 >
                                   {segment.nodes.map((node, i) => (
                                     <Fragment key={i}>{node}</Fragment>
@@ -2617,6 +2633,7 @@ function DesktopMessagesList() {
                                 </div>
                               )
                             );
+
                           })()}
                           <div ref={scrollRef} />
                         </div>
