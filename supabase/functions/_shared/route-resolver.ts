@@ -287,7 +287,7 @@ export async function resolveSalesReplyRoute(
       reason: "resolved_by_last_message",
       lineId: route.id,
       routeSlug: route.route_slug ?? null,
-      sendEndpointId: eligible.id,
+      sendEndpointId: contextEndpointId,
       provider: eligible.provider,
       discoveredByEndpointId: contextEndpointId,
       choice: "derived",

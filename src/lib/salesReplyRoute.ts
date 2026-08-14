@@ -180,7 +180,7 @@ export async function resolveSalesReplyRoute(input: {
       applicable: true,
       reason: "resolved_by_last_message",
       lineId: routes[0].id,
-      sendEndpointId: ep.id,
+      sendEndpointId: contextEndpointId,
       provider: ep.provider,
       discoveredByEndpointId: contextEndpointId,
     };
