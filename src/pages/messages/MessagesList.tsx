@@ -2319,27 +2319,11 @@ function DesktopMessagesList() {
                               ) : null;
 
 
-                              // Divisor de "Número alterado": aparece quando a mensagem
-                              // passou por um endpoint diferente do anterior (rotação de número).
-                              let rotationSeparator: JSX.Element | null = null;
-                              if (item._type === 'message') {
-                                const epId = (item.data as any).endpoint_id ?? null;
-                                if (epId && lastEndpointId && epId !== lastEndpointId) {
-                                  const fromAddr = endpointNumbers[lastEndpointId]?.address ?? null;
-                                  const toAddr = endpointNumbers[epId]?.address ?? null;
-                                  if (fromAddr && toAddr && fromAddr !== toAddr) {
-                                    const last4 = (a: string) => a.replace(/\D/g, '').slice(-4);
-                                    rotationSeparator = (
-                                      <div key={`rot-${item.data.id}`} className="flex justify-center my-3">
-                                        <div className="px-3 py-1 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide shadow-sm">
-                                          📞 Número alterado: {last4(fromAddr)} → {last4(toAddr)}
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-                                }
-                                if (epId) lastEndpointId = epId;
-                              }
+                              // O marcador visual "Número alterado" foi removido:
+                              // o cabeçalho do próprio container já informa o
+                              // canal/número do contexto. A quebra de container
+                              // (endpointBreak) continua inalterada.
+
 
                               // Cabeçalho do bloco de contexto (estilo Kommo):
                               // representa APENAS o canal/número do contexto.
