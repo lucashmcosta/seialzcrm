@@ -2318,10 +2318,9 @@ function DesktopMessagesList() {
                               ) : null;
 
 
-                              // O marcador visual "Número alterado" foi removido:
-                              // o cabeçalho do próprio container já informa o
-                              // canal/número do contexto. A quebra de container
-                              // (endpointBreak) continua inalterada.
+                              // A troca de endpoint apenas quebra o container;
+                              // o cabeçalho do container informa canal/provider/número.
+
 
 
                               // Cabeçalho do bloco de contexto (estilo Kommo):
