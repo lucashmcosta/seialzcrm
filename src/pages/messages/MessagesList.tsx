@@ -2661,7 +2661,7 @@ function DesktopMessagesList() {
                             for (const r of renderedItems) {
                               const loose: JSX.Element[] = [];
                               if (r.separator) loose.push(r.separator);
-                              if (r.rotationSeparator) loose.push(r.rotationSeparator);
+                              
                               if (loose.length) {
                                 segments.push({ type: 'loose', key: `loose-${r.key}`, nodes: loose });
                               }
