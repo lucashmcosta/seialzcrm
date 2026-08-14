@@ -2303,19 +2303,20 @@ function DesktopMessagesList() {
                               const isGroupEnd = group.isGroupEnd;
                               const block = blockFlags[itemIndex] ?? { isBlockStart: true, isBlockEnd: true, blockIndex: 0 };
                               const descriptor = descriptors[itemIndex];
-                              const itemDate = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
+                              const itemDate = itemDateOf(item);
                               const dateKey = new Date(itemDate).toDateString();
                               const showSeparator = dateKey !== lastDateKey;
                               lastDateKey = dateKey;
 
 
                               const separator = showSeparator ? (
-                                <div key={`sep-${dateKey}`} className="flex justify-center my-3">
-                                  <div className="px-3 py-1 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide shadow-sm">
-                                    {formatDateSeparator(itemDate)}
-                                  </div>
-                                </div>
+                                <TimelineEventMarker
+                                  key={`sep-${dateKey}`}
+                                  label={formatDateSeparator(itemDate)}
+                                  className="my-3"
+                                />
                               ) : null;
+
 
                               // Divisor de "Número alterado": aparece quando a mensagem
                               // passou por um endpoint diferente do anterior (rotação de número).
