@@ -108,6 +108,7 @@ import { EyeSlash, Paperclip, Plus } from '@phosphor-icons/react';
 import { ToastAction } from '@/components/ui/toast';
 import { AttachMediaDialog, type AttachMedia } from '@/components/documents/AttachMediaDialog';
 import { isAttachableMedia } from '@/lib/mediaToFile';
+import { computeMessageGroups, type GroupingItem } from '@/lib/messageGrouping';
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
@@ -175,6 +176,8 @@ interface Message {
   sender_type: 'user' | 'agent' | 'system' | null;
   sender_name: string | null;
   sender_agent_id: string | null;
+  /** Identificador estável do operador — usado apenas para agrupamento visual. */
+  sender_user_id?: string | null;
   metadata?: Record<string, any> | null;
 }
 
@@ -1088,7 +1091,7 @@ function DesktopMessagesList() {
         .from('messages')
         .select(`
           id, content, direction, sent_at, whatsapp_status, whatsapp_message_sid, media_urls, media_type, error_message, error_code, reply_to_message_id,
-          sender_type, sender_name, sender_agent_id, metadata, endpoint_id,
+          sender_type, sender_name, sender_agent_id, sender_user_id, metadata, endpoint_id,
           reply_to_message:reply_to_message_id (content, direction)
         `)
         .eq('thread_id', threadId)
@@ -2125,10 +2128,67 @@ function DesktopMessagesList() {
                               return d.toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase();
                             };
 
+                            // Pré-passe puramente visual: descreve cada item da
+                            // timeline para o agrupamento (estilo Kommo). Não
+                            // altera ordenação, dados nem paginação.
+                            const groupFlags = (() => {
+                              let prevDateKey: string | null = null;
+                              let prevEndpoint: string | null = null;
+                              const descriptors: GroupingItem[] = chatItems.map((item) => {
+                                const iso = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
+                                const dateKey = new Date(iso).toDateString();
+                                const dateBreak = dateKey !== prevDateKey;
+                                prevDateKey = dateKey;
+
+                                if (item._type === 'note') {
+                                  return {
+                                    kind: 'note' as const,
+                                    direction: 'internal',
+                                    senderType: null,
+                                    senderId: item.data.created_by_user_id ?? null,
+                                    timestamp: new Date(iso).getTime(),
+                                    dateBreak,
+                                  };
+                                }
+
+                                const m = item.data;
+                                const metaKind = m.metadata && typeof m.metadata === 'object' ? (m.metadata as any).kind : null;
+                                const isSystem =
+                                  m.sender_type === 'system' ||
+                                  metaKind === 'endpoint_migration_meta_7020' ||
+                                  metaKind === 'endpoint_provider_migration';
+
+                                const epId = (m as any).endpoint_id ?? null;
+                                let endpointBreak = false;
+                                if (epId && prevEndpoint && epId !== prevEndpoint) {
+                                  const fromAddr = endpointNumbers[prevEndpoint]?.address ?? null;
+                                  const toAddr = endpointNumbers[epId]?.address ?? null;
+                                  endpointBreak = Boolean(fromAddr && toAddr && fromAddr !== toAddr);
+                                }
+                                if (epId) prevEndpoint = epId;
+
+                                return {
+                                  kind: isSystem ? ('system' as const) : ('message' as const),
+                                  direction: m.direction ?? null,
+                                  senderType: m.sender_type ?? null,
+                                  senderId: m.sender_agent_id ?? m.sender_user_id ?? null,
+                                  timestamp: new Date(m.sent_at).getTime(),
+                                  failed: m.whatsapp_status === 'failed',
+                                  isReply: Boolean(m.reply_to_message_id),
+                                  dateBreak,
+                                  endpointBreak,
+                                };
+                              });
+                              return computeMessageGroups(descriptors);
+                            })();
+
                             let lastDateKey: string | null = null;
                             let lastEndpointId: string | null = null;
 
-                            return chatItems.map((item) => {
+                            return chatItems.map((item, itemIndex) => {
+                              const group = groupFlags[itemIndex] ?? { isGroupStart: true, isGroupEnd: true };
+                              const isGroupStart = group.isGroupStart;
+                              const isGroupEnd = group.isGroupEnd;
                               const itemDate = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
                               const dateKey = new Date(itemDate).toDateString();
                               const showSeparator = dateKey !== lastDateKey;
@@ -2225,7 +2285,10 @@ function DesktopMessagesList() {
                                   key={message.id}
                                   className={cn(
                                     'flex items-end gap-2 group',
-                                    isOutbound ? 'justify-end' : 'justify-start'
+                                    isOutbound ? 'justify-end' : 'justify-start',
+                                    // Agrupamento visual: mensagens continuadas
+                                    // ficam colada à anterior (space-y-3 = 12px).
+                                    !isGroupStart && '-mt-2.5'
                                   )}
                                 >
                                   {/* Reply button - left side for inbound */}
@@ -2247,11 +2310,15 @@ function DesktopMessagesList() {
                                       message.media_type === 'audio' ? 'p-1' : 'p-3',
                                       isOutbound
                                         ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
-                                        : 'bg-card border border-border text-foreground shadow-sm'
+                                        : 'bg-card border border-border text-foreground shadow-sm',
+                                      // Bloco contínuo: reduz o raio no lado do remetente.
+                                      isOutbound
+                                        ? cn(!isGroupStart && 'rounded-tr-sm', !isGroupEnd && 'rounded-br-sm')
+                                        : cn(!isGroupStart && 'rounded-tl-sm', !isGroupEnd && 'rounded-bl-sm')
                                     )}
                                   >
                                     {/* Agent Badge + Feedback Button for agent messages */}
-                                    {isOutbound && message.sender_type === 'agent' && (
+                                    {isOutbound && message.sender_type === 'agent' && isGroupStart && (
                                       <div className="flex items-center gap-2 mb-2">
                                         <Badge color="purple" size="sm" icon={<Robot className="w-3 h-3" />}>
                                           {message.sender_name || 'Agente IA'}
@@ -2284,19 +2351,21 @@ function DesktopMessagesList() {
                                         {message.media_urls.map((rawUrl, i) => {
                                           const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
                                           if (message.media_type === 'audio' || rawUrl.match(/\.(ogg|oga|opus|mp3|mpeg|wav|m4a|aac|amr|webm)(\?|$)/i)) {
-                                            const isAudioOnly = message.media_type === 'audio';
-                                            const senderLabel = isOutbound
-                                              ? (message.sender_name ? `${message.sender_name} · ` : '')
-                                              : '';
-                                            const timeStr = new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
-                                            const audioTimestamp = `${senderLabel}${timeStr}`;
-                                            return <AudioMessagePlayer key={i} src={url}
-                                              messageId={message.id}
-                                              threadId={(message as any).thread_id}
-                                              mediaType={message.media_type}
-                                              timestamp={isAudioOnly ? audioTimestamp : undefined}
-                                              statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message) : undefined}
-                                            />;
+                                             const isAudioOnly = message.media_type === 'audio';
+                                             const senderLabel = isOutbound && isGroupStart
+                                               ? (message.sender_name ? `${message.sender_name} · ` : '')
+                                               : '';
+                                             const timeStr = isGroupEnd
+                                               ? new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
+                                               : '';
+                                             const audioTimestamp = `${senderLabel}${timeStr}`.replace(/ · $/, '');
+                                             return <AudioMessagePlayer key={i} src={url}
+                                               messageId={message.id}
+                                               threadId={(message as any).thread_id}
+                                               mediaType={message.media_type}
+                                               timestamp={isAudioOnly && audioTimestamp ? audioTimestamp : undefined}
+                                               statusIcon={isAudioOnly && isOutbound && isGroupEnd ? renderStatusIcon(message) : undefined}
+                                             />;
                                           }
                                           if (message.media_type === 'image' || rawUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
                                             return (
@@ -2379,23 +2448,29 @@ function DesktopMessagesList() {
                                       <MessageFailureInline errorCode={message.error_code} />
                                     )}
 
-                                    {/* Footer - Name + Time + Status (hidden for audio-only, rendered inside player) */}
-                                    {!(message.media_type === 'audio') && (
-                                    <div className="mt-1 flex items-center justify-end gap-1">
-                                      <span className="text-[11px] leading-[14px] text-muted-foreground/70 whitespace-nowrap">
-                                        {isOutbound 
-                                          ? (message.sender_name ? `${message.sender_name} · ` : '')
-                                          : ''
-                                        }
-                                        {new Date(message.sent_at).toLocaleTimeString(locale, {
-                                          hour: '2-digit',
-                                          minute: '2-digit',
-                                          hour12: false
-                                        })}
-                                      </span>
-                                      {isOutbound && renderStatusIcon(message)}
-                                    </div>
-                                    )}
+                                    {/* Footer — nome no início do bloco, horário/status no fim
+                                        (áudio-only renderiza dentro do player) */}
+                                    {!(message.media_type === 'audio') && (() => {
+                                      const senderLabel = isOutbound && isGroupStart && message.sender_name
+                                        ? message.sender_name
+                                        : '';
+                                      const timeStr = isGroupEnd
+                                        ? new Date(message.sent_at).toLocaleTimeString(locale, {
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            hour12: false,
+                                          })
+                                        : '';
+                                      if (!senderLabel && !timeStr) return null;
+                                      return (
+                                        <div className="mt-1 flex items-center justify-end gap-1">
+                                          <span className="text-[11px] leading-[14px] text-muted-foreground/70 whitespace-nowrap">
+                                            {senderLabel && timeStr ? `${senderLabel} · ${timeStr}` : `${senderLabel}${timeStr}`}
+                                          </span>
+                                          {isOutbound && isGroupEnd && renderStatusIcon(message)}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                   
                                   {/* Reply button - right side for outbound */}
