@@ -1,58 +1,48 @@
-# Auditoria — "Responder por" (Comercial)
+# "Responder por" — Conclusão reclassificada + resposta sobre `active_endpoint_id`
 
-Somente leitura. Nada implementado nesta etapa.
+## A. Resposta objetiva
 
-## 1. Fluxo atual
+**SIM — existe um único cenário residual, estreito, e ele é corrigível com uma mudança mínima.**
 
-- UI: `src/components/messages/route/ManualReplySelector.tsx`, consumido em `src/pages/messages/MessagesList.tsx` (composer).
-- Estado/hook: `src/hooks/messages/useManualReplyEndpoint.ts` (opções, preferência, mutações) + `src/hooks/messages/useSalesFeatureFlags.ts` (flag lida na mesma query do resolver V2 — nenhuma query extra com a feature OFF).
-- Persistência: RPC `set_thread_reply_endpoint_pref` grava em `thread_reply_endpoint_prefs` (chave thread + usuário); `clear_thread_reply_endpoint_pref` remove (volta a Automático).
-- Envio: `MessagesList` injeta `manualReplyEndpointId` nos 3 pontos de envio (texto, mídia, template). O dispatcher cliente (`src/lib/dispatchWhatsAppSend.ts`) e o servidor (`supabase/functions/_shared/dispatch-whatsapp-send.ts`) revalidam e escolhem o provider antes de rotear. Cada function de provider (`meta-whatsapp-send`, `twilio-whatsapp-send`, `evolution-whatsapp-send`) revalida com `resolveManualReplyEndpoint` e substitui apenas o endpoint efetivo.
+Por que o override manual normalmente prevalece até o provider:
 
-## 2. Backend
+1. O dispatcher (cliente e servidor) chama `resolveManualReplyEndpoint` **antes** de qualquer resolução de linha/V2; com `mode === "manual"` ele fixa o provider e o `endpointId` e não consulta `messaging_lines`.
+2. Na function do provider o override é revalidado e grava `explicitEndpointId`; o `thread.primary_endpoint_id` divergente **apenas gera log** (`line_routing_honored`), não sobrescreve.
+3. O fallback purpose-aware (que escolheria outro número) só roda quando `endpoint === null`, o que não ocorre no modo Manual.
+4. A re-rota Comercial → Meta 7020 é **pós-envio** (persistência de thread), não escolhe o remetente.
 
-- Route intocada: nenhuma escrita em `messaging_lines`, `messaging_line_endpoints` ou `messaging_line_rotations` no caminho do switch. CONFIRMADO.
-- `active_endpoint_id` nunca alterado — apenas lido pelo caminho automático. CONFIRMADO.
-- Efeito limitado à mensagem enviada: o override troca `endpointId`/provider do envio; `primary_endpoint_id` e a Route seguem iguais. CONFIRMADO.
-- Resolver V2 intacto: `resolveSalesReplyRoute` só é chamado quando não há override manual válido; sem override o comportamento é byte-a-byte o atual. CONFIRMADO.
+O cenário residual (mesma estrutura nos três providers — Meta l.294-324, Evolution l.~300-320, Twilio l.~540-560):
 
-## 3. Modo Manual
+- Se, **entre a validação e o envio**, o endpoint escolhido manualmente ficar `is_active = false` (número desconectado/rotacionado nesse intervalo, ou desativado por outro operador), o bloco de "rotação por linha" troca o remetente para `messaging_lines.active_endpoint_id` da Route e envia por ele — silenciosamente, contrariando a escolha manual.
+- Probabilidade baixa (janela de milissegundos ou desativação concorrente), impacto: mensagem sai por número diferente do escolhido, com `metadata.reply_endpoint_choice = manual` apontando outro endpoint.
 
-Funciona ponta a ponta no código: validação fail-closed server-side (flag, thread Comercial canônica via `fn_is_canonical_sales_thread`, permissão explícita em `user_reply_endpoints`, elegibilidade via `fn_is_sales_eligible_endpoint`, org/canal/ativo, e para Evolution sessão `open` + identidade confirmada), precedência sobre V2 e sobre a re-rota automática da Central (Meta 7020). Falta apenas validação real de envio Manual em produção fora da Viagi (Evolution não pôde ser testado por falta de acesso ao aparelho).
+Correção mínima proposta (1 linha de guarda por provider): quando `manualReply.mode === "manual"`, **não** aplicar a rotação por linha; retornar erro `MANUAL_REPLY_ENDPOINT_INACTIVE` (fail-closed) para o operador escolher outro número ou voltar ao Automático.
 
-## 4. Modo Automático
+## B. Conclusão reclassificada
 
-Sem `manualReplyEndpointId` no payload há short-circuit imediato (`{ mode: "auto" }`), sem query nova. Voltar para Automático apaga a preferência via `clear_thread_reply_endpoint_pref`, restaurando 100% o fluxo anterior. CONFIRMADO.
+### Bloqueadores do piloto na Central
 
-## 5. Permissões
+1. Habilitar `sales_manual_reply_endpoint_v1` para a org da Central (`40ae935c-a7f7-4ad7-8ea4-91be6404a95f`).
+2. Conceder endpoints aos usuários piloto via RPC/SQL (`grant_user_reply_endpoint`) — Meta 7067 (`bf04ce63…`) e Meta 7020 (`407ff93d…`), os dois únicos endpoints vinculados à linha Comercial da Central.
+3. Validar envio real: Manual → 7067; Manual → 7020; volta para Automático; conferir `metadata.reply_endpoint_choice`, `manual_reply_endpoint_id` e `chosen_by_user_id` nas mensagens gravadas.
+4. Aplicar a guarda anti-rotação descrita em (A) antes de ligar a flag — é curta e evita envio pelo número errado.
 
-- `user_reply_endpoints` e `thread_reply_endpoint_prefs`: RLS ON, `GRANT SELECT` a `authenticated`, `ALL` a `service_role`; política de leitura restrita a `current_user_id()` ou gestor da org. Escrita só via RPCs `SECURITY DEFINER` com `EXECUTE` para `authenticated`. Nenhum grant pendente.
-- Concessão de números a usuários existe apenas como RPC (`grant_user_reply_endpoint` / `revoke_user_reply_endpoint`) — **não há tela de administração**. Hoje só é possível conceder via SQL.
-- Estado real: 2 concessões (piloto Viagi), 0 concessões na Central.
+### Melhorias pós-piloto
 
-## 6. Auditoria da escolha
+- Tela administrativa de grant/revoke de endpoints por usuário (hoje só via RPC/SQL).
+- Ajustes de UX do seletor.
+- Demais refinamentos (rótulos, tooltips, estados vazios).
 
-`replyChoiceMetadata()` grava `reply_endpoint_choice`, `manual_reply_endpoint_id` e `chosen_by_user_id` no `metadata` da mensagem nos três providers (Meta linha 808, Twilio 962, Evolution 459). CONFIRMADO — nada faltando.
+## C. Detalhes técnicos da guarda (item 4)
 
-## 7. Realtime / histórico
+Arquivos: `supabase/functions/meta-whatsapp-send/index.ts`, `supabase/functions/twilio-whatsapp-send/index.ts`, `supabase/functions/evolution-whatsapp-send/index.ts`.
 
-O switch não altera hooks de realtime, mensagens otimistas, paginação ou consultas de histórico; só adiciona um campo no payload de envio. CONFIRMADO.
+No bloco `if (endpoint && endpoint.is_active === false) { … }`, adicionar no topo: se `manualReply.mode === "manual"`, retornar 409 `MANUAL_REPLY_ENDPOINT_INACTIVE` com mensagem ao operador, sem consultar `messaging_lines`. Nenhuma mudança no caminho Automático, na Route, em flags ou no schema.
 
-## 8. Riscos para piloto na Central
+## D. Confirmado na auditoria (sem pendência)
 
-1. Sem UI de concessão: nenhum usuário da Central pode escolher número sem SQL manual.
-2. Flag `sales_manual_reply_endpoint_v1` está ON apenas para a Viagi (correto, mas é um passo pendente).
-3. A linha Comercial da Central tem só 2 endpoints vinculados (7067 ativo e 7020); os demais números Twilio da org são `purpose=other` e não são elegíveis — o seletor mostrará poucas opções.
-4. Central roda com resolver V2 OFF: em modo Automático nada muda, mas convive com a re-rota legada Meta 7020, que o override desliga — precisa ser conferido em envio real.
-5. Envio real Manual por Evolution nunca validado (bloqueio operacional, não de código).
-6. Build assíncrono atual falhou no `bun install` (cache corrompido de `@sentry/browser`) — não é da feature, mas impede validar build antes do piloto.
-
-## 9. Veredito
-
-❌ Ainda faltam 3 itens para piloto seguro na Central:
-
-1. Tela de administração de números por usuário (chamando `grant_user_reply_endpoint` / `revoke_user_reply_endpoint`) — sugerido em `src/components/settings/SalesWhatsAppSettingsSection.tsx` com hook novo em `src/hooks/`.
-2. Habilitar `sales_manual_reply_endpoint_v1` para a org da Central (`feature_flags.organization_ids`) — operação de dados, após o item 1.
-3. Teste real de envio Manual (Meta 7067 e 7020) por um usuário da Central, com verificação do `metadata.reply_endpoint_choice` na mensagem gravada.
-
-Correção paralela recomendada: reinstalar dependências para sanar o `bun install` (cache de `@sentry/browser`) antes do piloto.
+- Route, `active_endpoint_id`, `messaging_line_rotations` nunca escritos pelo switch.
+- Resolver V2 e modo Automático byte-a-byte inalterados sem override.
+- RLS/grants completos em `user_reply_endpoints` e `thread_reply_endpoint_prefs`; escrita só por RPC `SECURITY DEFINER`.
+- Auditoria de escolha persistida nos três providers.
+- Realtime, paginação e histórico intocados.
