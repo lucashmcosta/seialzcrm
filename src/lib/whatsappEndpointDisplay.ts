@@ -17,10 +17,25 @@ const PURPOSE_LABELS: Record<string, string> = {
   support: 'Atendimento',
 };
 
+const PROVIDER_SHORT_LABELS: Record<string, string> = {
+  meta_cloud_api: 'Meta',
+  meta_whatsapp_cloud: 'Meta',
+  evolution_api: 'Evolution',
+  twilio: 'Twilio',
+  twilio_whatsapp_api: 'Twilio',
+};
+
+/** Rótulo curto e amigável do provider para a UI (Meta, Evolution, Twilio). */
+export function whatsappProviderShortLabel(provider: string | null | undefined): string | null {
+  if (!provider) return null;
+  return PROVIDER_SHORT_LABELS[provider] ?? null;
+}
+
 export function whatsappProviderLabel(provider: string | null | undefined): string | null {
   if (!provider) return null;
   return PROVIDER_LABELS[provider] ?? provider;
 }
+
 
 export function endpointPurposeLabel(purpose: string | null | undefined): string | null {
   if (!purpose || purpose === 'other') return null;
