@@ -27,6 +27,18 @@
 3. Abrir `/commercial` autenticado e contar blocos no DOM: quantidade de cabeçalhos renderizados e presença de "Cliente"/nome do operador + linha `WhatsApp • +55…`, além de conferir que o divisor "Número alterado" é seguido por um novo cabeçalho.
 4. Reportar contagem real de blocos e itens da conversa aberta — sem novo ajuste visual nesta etapa.
 
+## Referência visual esclarecida
+
+A imagem enviada representa blocos de contexto **visualmente delimitados**, semelhantes a cartões consecutivos da timeline:
+
+- cada bloco possui um contêiner próprio e perceptível;
+- o cabeçalho identifica o participante/contexto uma única vez;
+- as mensagens relacionadas ficam dentro desse mesmo contêiner;
+- eventos de sistema permanecem entre blocos e provocam a abertura do próximo;
+- a troca de operador, IA, endpoint ou provider abre outro contêiner.
+
+O cabeçalho solto atualmente preparado (`blockHeader` acima das bolhas) não é suficiente para reproduzir essa hierarquia. Porém, esta auditoria primeiro fará o código atual aparecer e medirá os blocos reais. A transformação dos itens em contêineres explícitos será tratada somente depois de confirmar a causa raiz e a contagem, sem embutir a imagem no produto.
+
 ## Notas técnicas
 
 - Nenhuma alteração de SQL, RPC, Edge Function, flag, hook de dados ou contrato de mensagens.
