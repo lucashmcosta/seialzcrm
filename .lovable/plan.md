@@ -59,6 +59,30 @@ Nenhuma tela nova. `SalesWhatsAppSettingsSection` já lista endpoints com provid
 - Nada do fluxo lê ou escreve endpoints Meta/Twilio, webhooks Meta, purposes, Resolver V2 ou threads de Atendimento.
 - Flag `evolution_api_enabled` continua bloqueadora: com OFF, todas as ops retornam 403.
 
+## Validação da migração (trava obrigatória)
+Snapshot antes e depois, na mesma sessão, com backfill seguro (`endpoint_id NOT NULL → provisioning_status='linked'`). Pós-condições que precisam sair PASS antes de seguir para o backend:
+
+```text
+EXISTING_EVOLUTION_ENDPOINT_IDS_PRESERVED=PASS
+EXISTING_INSTANCES_LINKED=PASS
+PENDING_EXISTING_INSTANCES=0
+META_ENDPOINTS_CHANGED=0
+ACTIVE_ENDPOINT_CHANGED=NO
+MESSAGING_LINE_ROTATIONS_NEW=0
+ATENDIMENTO_CHANGED=NO
+```
+
+Somente instâncias criadas pelo novo `createInstance` podem nascer com `endpoint_id IS NULL` + `provisioning_status='pending'`.
+
+## Ordem de execução
+1. migração mínima;
+2. validação pós-migração (pós-condições acima);
+3. backend `createInstance`;
+4. backend `deleteInstance` com guarda de uso;
+5. UI multi-instância no card Evolution;
+6. testes com `evolution_api_enabled` OFF na Central;
+7. só depois, e somente após todo o código deployado e pós-condições PASS, habilitar `evolution_api_enabled` para a Central e testar com celular real.
+
 ## Confirmações solicitadas
 - META_EXISTING_ENDPOINTS_TOUCHED=NO
 - ACTIVE_ENDPOINT_CHANGE=NO
