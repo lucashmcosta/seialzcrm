@@ -817,6 +817,134 @@ serve(async (req) => {
         return json(200, { ok: true });
       }
 
+      // ------------------------------------- SYNC PENDING INSTANCE IDENTITY
+      // Leitura EXPLÍCITA da identidade real de uma instância recém-conectada.
+      // `listInstances` permanece leitura pura: só este op consulta o provedor
+      // e persiste `owner_jid` / `owner_number_digits`. Nada além da identidade
+      // é tocado (nenhum endpoint, Route, número ativo ou rotação).
+      case "syncPendingInstanceIdentity": {
+        if (!evolutionEnabled) {
+          return json(403, { error: "FEATURE_DISABLED", message: EVOLUTION_FLAG });
+        }
+        const instanceId = typeof body.instanceId === "string" ? body.instanceId : "";
+        if (!instanceId) return json(400, { error: "INVALID_INPUT", message: "instanceId" });
+
+        const { data: row } = await service
+          .from("evolution_instances")
+          .select(
+            "id, organization_id, instance_name, provisioning_status, last_known_state, owner_number_digits",
+          )
+          .eq("id", instanceId)
+          .maybeSingle();
+        if (!row) return json(404, { error: "INSTANCE_NOT_FOUND" });
+        if (row.organization_id !== orgId) return json(403, { error: "INSTANCE_FOREIGN_ORG" });
+        if ((row.provisioning_status ?? "pending") !== "pending") {
+          return json(409, { error: "INSTANCE_NOT_PENDING" });
+        }
+        if (row.last_known_state !== "open") {
+          return json(409, { error: "INSTANCE_NOT_CONNECTED" });
+        }
+
+        const sync = await syncEvolutionIdentity(row.instance_name as string);
+        if ("error" in sync) return json(400, sync as Record<string, unknown>);
+
+        logEvolution("info", {
+          fn: FN,
+          requestId,
+          orgId,
+          op: body.op,
+          code: sync.identityKnown ? "IDENTITY_SYNCED" : "IDENTITY_UNKNOWN",
+          instanceName: row.instance_name as string,
+        });
+
+        return json(200, {
+          instanceId: row.id,
+          instanceName: sync.instanceName,
+          state: sync.state,
+          connected: sync.connected,
+          identityKnown: sync.identityKnown,
+          ownerMasked: sync.ownerIdentity.masked,
+        });
+      }
+
+      // ------------------------------------------------- LINK PENDING INSTANCE
+      // Vincula uma instância `pending` já conectada e com identidade conhecida
+      // à Route Comercial da própria org. O número NUNCA vem do frontend: é
+      // exclusivamente `owner_number_digits` lido da Evolution. A escrita é
+      // atômica na RPC `provision_sales_endpoint`, que também marca
+      // `provisioning_status='linked'`. Não altera `active_endpoint_id`, não
+      // cria rotações e não toca Meta/Twilio/Atendimento.
+      case "linkPendingInstance": {
+        if (!evolutionEnabled) {
+          return json(403, { error: "FEATURE_DISABLED", message: EVOLUTION_FLAG });
+        }
+        const instanceId = typeof body.instanceId === "string" ? body.instanceId : "";
+        if (!instanceId) return json(400, { error: "INVALID_INPUT", message: "instanceId" });
+
+        const { data: row } = await service
+          .from("evolution_instances")
+          .select(
+            "id, organization_id, instance_name, endpoint_id, provisioning_status, last_known_state, owner_number_digits",
+          )
+          .eq("id", instanceId)
+          .maybeSingle();
+        if (!row) return json(404, { error: "INSTANCE_NOT_FOUND" });
+        if (row.organization_id !== orgId) return json(403, { error: "INSTANCE_FOREIGN_ORG" });
+        if ((row.provisioning_status ?? "pending") !== "pending" || row.endpoint_id) {
+          return json(409, { error: "INSTANCE_ALREADY_LINKED" });
+        }
+        if (row.last_known_state !== "open") {
+          return json(409, { error: "INSTANCE_NOT_CONNECTED" });
+        }
+        const digits = digitsOf(row.owner_number_digits as string | null);
+        if (digits.length < 8) return json(409, { error: "INSTANCE_IDENTITY_UNKNOWN" });
+
+        // Route Comercial (sales/whatsapp) da própria org.
+        const { data: lines } = await service
+          .from("messaging_lines")
+          .select("id, is_active, created_at")
+          .eq("organization_id", orgId)
+          .eq("inbox_key", "sales")
+          .eq("channel", "whatsapp")
+          .order("created_at", { ascending: true });
+        const line = ((lines ?? []) as { id: string; is_active: boolean | null }[])
+          .find((l) => l.is_active === true) ?? (lines ?? [])[0] ?? null;
+        if (!line) return json(409, { error: "SALES_ROUTE_NOT_FOUND" });
+
+        const { data, error } = await caller.rpc("provision_sales_endpoint", {
+          p_organization_id: orgId,
+          p_line_id: (line as { id: string }).id,
+          p_provider: "evolution",
+          p_address: `+${digits}`,
+          p_display_name: null,
+          p_instance_name: row.instance_name as string,
+        });
+        if (error) {
+          logEvolution("warn", {
+            fn: FN,
+            requestId,
+            orgId,
+            op: body.op,
+            code: "LINK_PENDING_FAILED",
+            message: error.message,
+          });
+          return json(400, { error: "PROVISION_FAILED", message: error.message });
+        }
+
+        logEvolution("info", {
+          fn: FN,
+          requestId,
+          orgId,
+          op: body.op,
+          code: "INSTANCE_LINKED",
+          instanceName: row.instance_name as string,
+        });
+
+        return json(200, { ok: true, result: data, ownerMasked: mask(digits) });
+      }
+
+
+
       // ------------------------------------------------------ DELETE INSTANCE
       // TRAVA OBRIGATÓRIA: jamais remove silenciosamente uma instância cujo
       // endpoint esteja em uso (Route ativa, link ativo em qualquer linha —
