@@ -192,9 +192,19 @@ interface InlineNote {
   author_name?: string;
 }
 
+/** Marco histórico do CRM na timeline (puramente apresentacional). */
+interface TimelineEvent {
+  id: string;
+  occurred_at: string;
+  label: string;
+  value?: string | null;
+}
+
 type ChatItem = 
   | { _type: 'message'; data: Message }
-  | { _type: 'note'; data: InlineNote };
+  | { _type: 'note'; data: InlineNote }
+  | { _type: 'event'; data: TimelineEvent };
+
 
 const statusConfig: Record<string, { label: string; labelEn: string; color: string; dotColor: string }> = {
   open: { label: 'Aberta', labelEn: 'Open', color: 'text-green-700 dark:text-green-400', dotColor: 'bg-green-500' },
