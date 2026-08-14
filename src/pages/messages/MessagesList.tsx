@@ -2342,7 +2342,7 @@ function DesktopMessagesList() {
                                     ? `WhatsApp • ${providerShort}`
                                     : 'WhatsApp';
                                 blockHeader = (
-                                  <div className="flex flex-col gap-0 pb-0.5 items-start text-left">
+                                  <div className="flex flex-col gap-0 pb-0.5 items-center text-center">
                                     <span className="text-xs font-medium text-foreground leading-4">
                                       {channelLine}
                                     </span>
