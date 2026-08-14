@@ -227,3 +227,19 @@ Deno.test("R13 contrato derived explícito independe da flag legada", async () =
   assertEquals(r.provider, "evolution_api");
   assertEquals(db.calls.includes("feature_flags"), false);
 });
+
+Deno.test("R14 organização da thread divergente é bloqueada", async () => {
+  const db = fakeDb({
+    message_threads: {
+      data: { organization_id: "other-org", business_context: "sales", channel: "whatsapp" },
+    },
+  });
+  const r = await resolveSalesReplyRoute(db, {
+    organizationId: ORG,
+    threadId: THREAD,
+    requireFeatureFlag: false,
+  });
+  assertEquals(r.applicable, false);
+  assertEquals(r.reason, "missing_input");
+  assertEquals(db.calls.includes("messages"), false);
+});

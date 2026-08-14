@@ -996,6 +996,7 @@ function DesktopMessagesList() {
         .eq('id', moveStageOpp.id);
       if (error) throw error;
       invalidateThreadLastEndpoint(selectedThreadId);
+      if (replyEndpointSelection?.source === 'manual') void manualReply.useDerived();
       toast({
         title: locale === 'pt-BR' ? 'Etapa atualizada' : 'Stage updated',
         description: locale === 'pt-BR' ? `"${moveStageOpp.title}" movida para ${target.name}.` : `"${moveStageOpp.title}" moved to ${target.name}.`,
@@ -1111,6 +1112,7 @@ function DesktopMessagesList() {
 
       if (error) throw error;
       invalidateThreadLastEndpoint(selectedThreadId);
+      if (replyEndpointSelection?.source === 'manual') void manualReply.useDerived();
       setMessages((data as Message[]) || []);
 
       // Fetch inline notes from activities for this contact
@@ -1191,6 +1193,7 @@ function DesktopMessagesList() {
       });
       if (error) throw error;
       invalidateThreadLastEndpoint(selectedThreadId);
+      if (replyEndpointSelection?.source === 'manual') void manualReply.useDerived();
     } catch (err: any) {
       setInlineNotes((prev) => prev.filter((n) => n.id !== tempId));
       toast({ variant: 'destructive', description: 'Erro ao salvar nota' });
