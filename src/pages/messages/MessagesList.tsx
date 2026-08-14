@@ -2246,31 +2246,43 @@ function DesktopMessagesList() {
                                 descriptor?.kind === 'message'
                               ) {
                                 const m = item.data;
-                                const outbound = m.direction === 'outbound';
-                                const title = !outbound
-                                  ? (selectedThread?.contact_name || (locale === 'pt-BR' ? 'Cliente' : 'Customer'))
-                                  : m.sender_type === 'agent'
-                                    ? (m.sender_name || (locale === 'pt-BR' ? 'Assistente IA' : 'AI Assistant'))
-                                    : (m.sender_name || (locale === 'pt-BR' ? 'Operador' : 'Operator'));
+                                // O cartão agora contém os dois lados: o cabeçalho
+                                // identifica o responsável do contexto (operador/IA)
+                                // e, se o bloco for só do cliente, o próprio contato.
+                                let ownerName: string | null = null;
+                                let ownerIsAgent = false;
+                                for (let k = itemIndex; k < chatItems.length; k++) {
+                                  if ((blockFlags[k]?.blockIndex ?? -1) !== block.blockIndex) break;
+                                  const ci = chatItems[k];
+                                  if (ci._type !== 'message') continue;
+                                  if (ci.data.direction === 'inbound') continue;
+                                  ownerIsAgent = ci.data.sender_type === 'agent';
+                                  ownerName =
+                                    ci.data.sender_name ||
+                                    (ownerIsAgent
+                                      ? locale === 'pt-BR' ? 'Assistente IA' : 'AI Assistant'
+                                      : locale === 'pt-BR' ? 'Operador' : 'Operator');
+                                  break;
+                                }
+                                const title =
+                                  ownerName ??
+                                  selectedThread?.contact_name ??
+                                  (locale === 'pt-BR' ? 'Cliente' : 'Customer');
                                 const epId = descriptor.endpointId ?? null;
                                 const epAddress = epId ? endpointNumbers[epId]?.address ?? null : null;
                                 const epProvider = epId ? endpointNumbers[epId]?.provider ?? null : null;
+                                const providerShort = whatsappProviderShortLabel(epProvider);
                                 const providerSuffix =
-                                  epProvider && epProvider !== 'meta_cloud_api'
-                                    ? ` • ${whatsappProviderLabel(epProvider)}`
+                                  providerShort && epProvider !== 'meta_cloud_api'
+                                    ? ` • ${providerShort}`
                                     : '';
                                 const metaLine = epAddress
                                   ? `WhatsApp • ${formatPhoneDisplay(epAddress)}${providerSuffix}`
                                   : null;
                                 blockHeader = (
-                                  <div
-                                    className={cn(
-                                      'flex flex-col gap-0 px-1 pb-1',
-                                      outbound ? 'items-end text-right' : 'items-start text-left'
-                                    )}
-                                  >
-                                    <span className="flex items-center gap-1 text-[11px] font-medium text-foreground/80 leading-[14px]">
-                                      {m.sender_type === 'agent' && outbound && <Robot className="w-3 h-3" />}
+                                  <div className="flex flex-col gap-0 pb-1 items-start text-left">
+                                    <span className="flex items-center gap-1 text-xs font-medium text-foreground leading-4">
+                                      {ownerIsAgent && <Robot className="w-3 h-3" />}
                                       {title}
                                     </span>
                                     {metaLine && (
@@ -2281,6 +2293,7 @@ function DesktopMessagesList() {
                                   </div>
                                 );
                               }
+
 
 
                               const renderItem = (() => {
