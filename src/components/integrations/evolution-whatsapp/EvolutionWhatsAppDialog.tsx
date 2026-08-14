@@ -352,37 +352,32 @@ export function EvolutionWhatsAppDialog({ open, onOpenChange }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        {isLoading ? (
-          <div className="space-y-3 py-4">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : error ? (
-          <Alert variant="destructive">
-            <WarningCircle className="h-4 w-4" />
-            <AlertTitle>Não foi possível carregar</AlertTitle>
-            <AlertDescription>{(error as Error).message}</AlertDescription>
-          </Alert>
-        ) : myInstances.length === 0 ? (
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertTitle>Sua instância ainda não está provisionada</AlertTitle>
-            <AlertDescription className="text-sm">
-              Fale com o suporte Seialz para provisionar seu canal Evolution. Assim que ele estiver pronto, você poderá conectar seu WhatsApp por esta tela.
-              <div className="mt-3">
-                <Button size="sm" variant="outline" onClick={() => refetch()}>
-                  <ArrowsClockwise className="h-4 w-4 mr-2" /> Atualizar
-                </Button>
+        <div className="space-y-6 max-h-[75dvh] overflow-y-auto pr-1">
+          {/* Porta de entrada oficial: provisionamento de novos números. */}
+          <EvolutionProvisionPanel />
+
+          {isLoading ? (
+            <div className="space-y-3 py-4">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : error ? (
+            <Alert variant="destructive">
+              <WarningCircle className="h-4 w-4" />
+              <AlertTitle>Não foi possível carregar</AlertTitle>
+              <AlertDescription>{(error as Error).message}</AlertDescription>
+            </Alert>
+          ) : linkedInstances.length > 0 ? (
+            <>
+              <Separator />
+              <div className="space-y-6">
+                {linkedInstances.map((i) => (
+                  <InstanceCard key={i.id} instance={i} />
+                ))}
               </div>
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <div className="space-y-6">
-            {myInstances.map((i) => (
-              <InstanceCard key={i.id} instance={i} />
-            ))}
-          </div>
-        )}
+            </>
+          ) : null}
+        </div>
       </DialogContent>
     </Dialog>
   );
