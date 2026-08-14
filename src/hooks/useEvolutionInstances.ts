@@ -7,7 +7,8 @@ export type EvolutionConnectionState = "open" | "connecting" | "close" | "unknow
 export interface EvolutionInstanceRow {
   id: string;
   organization_id: string;
-  endpoint_id: string;
+  // Sessões em provisionamento ainda não têm número conhecido (pré-QR).
+  endpoint_id: string | null;
   instance_name: string;
   instance_id_remote: string | null;
   integration: string;

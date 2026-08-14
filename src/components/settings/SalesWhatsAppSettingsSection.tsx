@@ -323,7 +323,9 @@ export function SalesWhatsAppSettingsSection() {
                       </SelectContent>
                     </Select>
                   ) : (
-                    <span className="text-muted-foreground">Nenhuma sessão disponível</span>
+                    <span className="text-muted-foreground">
+                      Nenhuma sessão disponível — crie em Integrações › Evolution WhatsApp
+                    </span>
                   )}
                 </Row>
               )}

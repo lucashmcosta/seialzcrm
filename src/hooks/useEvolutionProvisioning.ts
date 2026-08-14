@@ -1,0 +1,113 @@
+// ============================================================================
+// Provisionamento de instâncias Evolution (porta de entrada oficial:
+// Configurações > Integrações > card "Evolution WhatsApp").
+//
+// Toda operação passa pela Edge Function `sales-route-operations`, que valida
+// JWT + `can_manage_integrations_in_org` e nunca expõe credenciais.
+// Nenhuma credencial é criada ou duplicada no cliente.
+// ============================================================================
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useOrganization } from '@/hooks/useOrganization';
+
+const FN = 'sales-route-operations';
+
+export interface EvolutionProvisionedInstance {
+  id: string;
+  instanceName: string;
+  endpointId: string | null;
+  provisioningStatus: 'pending' | 'linked';
+  state: string;
+  connected: boolean;
+  checkedAt: string | null;
+  ownerMasked: string | null;
+  identityKnown: boolean;
+  createdAt: string;
+}
+
+async function callOp<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(FN, { body });
+  if (error) {
+    // Erros de negócio (409/403) vêm no corpo; preservamos o código.
+    const ctx = (error as unknown as { context?: { body?: unknown } }).context;
+    const raw = ctx?.body;
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw) as { error?: string; message?: string };
+        throw new Error(parsed.error ?? parsed.message ?? error.message);
+      } catch {
+        /* fallthrough */
+      }
+    }
+    throw new Error(error.message);
+  }
+  if (data && typeof data === 'object' && 'error' in data) {
+    const e = data as { error: string; message?: string };
+    throw new Error(e.error);
+  }
+  return data as T;
+}
+
+export function useEvolutionProvisionedInstances(enabled = true) {
+  const { organization } = useOrganization();
+  const orgId = organization?.id ?? null;
+
+  return useQuery({
+    queryKey: ['evolution', 'provisioned-instances', orgId],
+    enabled: enabled && !!orgId,
+    refetchInterval: 5000,
+    queryFn: async () => {
+      const r = await callOp<{ instances: EvolutionProvisionedInstance[]; evolutionIntegration: boolean }>(
+        { op: 'listInstances', organizationId: orgId },
+      );
+      return r;
+    },
+  });
+}
+
+export function useCreateEvolutionInstance() {
+  const { organization } = useOrganization();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () =>
+      callOp<{
+        instanceId: string;
+        instanceName: string;
+        qr: { base64: string | null; code: string | null } | null;
+      }>({ op: 'createInstance', organizationId: organization?.id }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['evolution'] });
+    },
+  });
+}
+
+export function useDeleteEvolutionInstance() {
+  const { organization } = useOrganization();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (instanceName: string) =>
+      callOp<{ ok: true; endpointPreserved: string | null }>({
+        op: 'deleteInstance',
+        organizationId: organization?.id,
+        instanceName,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['evolution'] });
+    },
+  });
+}
+
+export function useSyncEvolutionWebhook() {
+  const { organization } = useOrganization();
+  return useMutation({
+    mutationFn: async (instanceName: string) =>
+      callOp<{ ok: true }>({
+        op: 'syncWebhook',
+        organizationId: organization?.id,
+        instanceName,
+      }),
+  });
+}
