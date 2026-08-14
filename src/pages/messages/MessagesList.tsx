@@ -1274,7 +1274,6 @@ function DesktopMessagesList() {
 
       if (error) throw error;
       invalidateThreadLastEndpoint(selectedThreadId);
-      if (replyEndpointSelection?.source === 'manual') void manualReply.useDerived();
 
       if (data.error) {
         if (data.requiresTemplate) {
@@ -1287,6 +1286,7 @@ function DesktopMessagesList() {
         throw new Error(data.message || data.error);
       }
 
+      if (replyEndpointSelection?.source === 'manual') void manualReply.useDerived();
       refetchThreads();
 
       // Auditoria de snippet: grava metadata.snippet_id + incrementa usage_count.
@@ -1418,12 +1418,12 @@ function DesktopMessagesList() {
 
       if (error) throw error;
       invalidateThreadLastEndpoint(selectedThreadId);
-      if (replyEndpointSelection?.source === 'manual') void manualReply.useDerived();
 
       if (data.error) {
         throw new Error(data.error);
       }
 
+      if (replyEndpointSelection?.source === 'manual') void manualReply.useDerived();
       refetchThreads();
     } catch (error: any) {
       console.error('Error sending template:', error);
