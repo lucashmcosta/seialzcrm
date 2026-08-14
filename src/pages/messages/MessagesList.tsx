@@ -431,6 +431,10 @@ function DesktopMessagesList() {
   // Note mode state
   const [isNoteMode, setIsNoteMode] = useState(false);
   const [inlineNotes, setInlineNotes] = useState<InlineNote[]>([]);
+  /** Marcos históricos do CRM exibidos na timeline (somente leitura). */
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  /** Expansão de containers encerrados, por blockKey (nunca persistido). */
+  const [expandedBlocks, setExpandedBlocks] = useState<Record<string, boolean>>({});
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
