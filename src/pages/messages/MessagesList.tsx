@@ -2596,12 +2596,9 @@ function DesktopMessagesList() {
                               ) : (
                                 <div
                                   key={segment.key}
-                                  className={cn(
-                                    'rounded-lg border border-border/30 bg-muted/10 px-2 py-1.5 space-y-0.5 w-fit max-w-[82%] mt-4',
-                                    segment.hasOutbound && !segment.hasInbound ? 'ml-auto' : 'mr-auto'
-                                  )}
-
+                                  className="w-full rounded-lg border border-border/30 bg-muted/10 px-1 py-1.5 space-y-0.5 mt-4"
                                 >
+
                                   {segment.nodes.map((node, i) => (
                                     <Fragment key={i}>{node}</Fragment>
                                   ))}
