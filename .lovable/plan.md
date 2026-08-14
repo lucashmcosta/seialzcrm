@@ -35,7 +35,7 @@ Ciclo de vida do número: `purpose` define Comercial vs Atendimento; vínculo à
 
 Arquitetura proposta (dois estados independentes):
 - **Estado da integração** (por conexão): credenciais válidas / token expirando / webhook inscrito / última validação. Verificações reais: Meta = `GET /{phone_number_id}` + `subscribed_apps`; Twilio = `GET /IncomingPhoneNumbers.json`; Evolution = `instance/connectionState` + `fetchInstances`.
-- **Estado do número** (por endpoint): 🟢 Operacional / 🟡 Atenção / 🔴 Offline, derivado só de checagem fresca (Meta: número registrado + qualidade + tier; Evolution: sessão `open` + `owner_jid` casando com o endereço; Twilio: sender existe no Messaging Service). `is_active` passa a ser rotulado apenas como "habilitado no CRM"; nunca como funcionamento.
+- **Estado do número** (por endpoint): enquanto não existir checagem técnica real e fresca, a UI mostra **"Status técnico: Não verificado"** — nunca 🟢 Operacional nem 🔴 Offline. Os rótulos Operacional / Atenção / Offline só passam a existir quando houver verificação real por provider (Meta: número registrado + qualidade + tier; Evolution: sessão `open` + `owner_jid` casando com o endereço; Twilio: sender presente no Messaging Service). `is_active` é rotulado apenas como "habilitado no CRM"; nunca como funcionamento.
 
 ## Parte 4 — Nova arquitetura de Configurações
 
@@ -65,6 +65,17 @@ Falta implementar: teste de conexão uniforme por provider, aba de números para
 - Central Trabalhista: 3 conexões Meta (2 ativas), endpoints Comercial `+551150287067` e Atendimento `+551150287027` com `status='online'` persistido desde julho.
 - Nenhuma alteração pendente deste plano toca Central, Routes, números ou flags.
 
-## Próximo passo proposto
+## Próximo passo aprovado — Etapa 1 em duas ondas
 
-Aprovar apenas a Etapa 1 (🟢/🟡): reorganização visual de Configurações > Integrações + caminho de "adicionar número" para todas as WABAs + separação visual entre estado da integração e estado do número (sem novo health job, sem migração).
+**Onda 1 (raiz): múltiplas WABAs como primeira classe — antes de qualquer reorganização visual.**
+- Substituir a resolução de conexão única (`useOrgIntegration`, `order created_at desc limit 1`) por um hook que retorna **todas** as conexões `meta-whatsapp-cloud` da organização, sem escolher uma "principal".
+- `MetaWabasSection` passa a ser o caminho canônico: cada WABA lista seus números e tem seu próprio "+ Adicionar número desta WABA", passando `organizationIntegrationId`/`wabaId`/`appId` daquela WABA (reuso de `AddMetaWhatsAppNumberDialog` + `meta-whatsapp-connect` com `mode='additional'`, sem mudança de contrato no backend).
+- Remover a dependência do card legado ancorado na WABA mais recente; conexões desabilitadas aparecem como histórico, não como âncora.
+- Sem migração, sem alteração de credenciais, de `purpose`, de Route, de `active_endpoint_id` ou de flags. Central continua intocada — mudança é de leitura/UI.
+
+**Onda 2 (visual/honestidade de status), só depois da Onda 1 validada:**
+- Reagrupar Configurações (Organização / Usuários / Inbox / Automações / Integrações / IA) e Integrações por canal, com abas por provider.
+- Separar "Estado da integração" de "Estado do número"; parar de exibir a coluna `status` persistida; exibir `is_active` como "Habilitado no CRM" e o estado técnico como **"Não verificado"** até existir checagem real.
+
+Fora do escopo desta etapa: health job periódico, novas colunas de saúde, testes de conexão automáticos, canais Email/Instagram/Facebook/Telegram, switch "Responder por" e qualquer ativação na Central.
+
