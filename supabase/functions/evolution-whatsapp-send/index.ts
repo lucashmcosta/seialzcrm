@@ -300,6 +300,16 @@ serve(async (req) => {
     endpoint = data;
   }
 
+  // Guarda anti-rotação do modo Manual: escolha do operador é contrato.
+  // Endpoint ausente/inativo no momento do envio ⇒ fail-closed, sem rotação.
+  if (manualReply.mode === "manual" && (!endpoint || endpoint.is_active === false)) {
+    return json(409, {
+      error: "MANUAL_REPLY_ENDPOINT_INACTIVE",
+      message:
+        "O número escolhido em \"Responder por\" não está mais disponível. Escolha outro número ou volte para o modo Automático.",
+    });
+  }
+
   // Rotação por LINHA quando primary está inativo.
   if (endpoint && endpoint.is_active === false) {
     const lineKey = endpoint.purpose === "commercial" ? "commercial" : "customer_service";

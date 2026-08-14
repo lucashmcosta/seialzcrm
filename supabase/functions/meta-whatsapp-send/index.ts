@@ -291,6 +291,20 @@ serve(async (req) => {
     // ATIVO da linha (por purpose) em messaging_lines. Se a linha não tem número
     // ativo, bloquear com ação clara — nunca tentar o número morto (evita Meta 100/133010).
     // Threads com endpoint ATIVO não entram aqui (comportamento inalterado).
+    // Guarda anti-rotação do modo Manual: a escolha do operador é contrato.
+    // Se o endpoint escolhido ficou indisponível entre validação e envio,
+    // NÃO rotacionar para o active_endpoint_id da Route — fail-closed.
+    if (manualReply.mode === "manual" && (!endpoint || endpoint.is_active === false)) {
+      return errorResponse(409, {
+        error: "MANUAL_REPLY_ENDPOINT_INACTIVE",
+        message:
+          "O número escolhido em \"Responder por\" não está mais disponível. Escolha outro número ou volte para o modo Automático.",
+      }, {
+        branch: "manual_reply_endpoint_unavailable",
+        reason: "manual endpoint missing or inactive at send time",
+      });
+    }
+
     if (endpoint && endpoint.is_active === false) {
       const lineKey = endpoint.purpose === "commercial" ? "commercial" : "customer_service";
       const { data: line } = await supabase
