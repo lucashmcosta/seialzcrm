@@ -58,8 +58,10 @@ const STATE_LABEL: Record<EndpointTechnicalStatus, { label: string; ok: boolean 
   IDENTITY_UNCONFIRMED: { label: 'Identidade não confirmada', ok: false },
   IDENTITY_MISMATCH: { label: 'Número divergente', ok: false },
   NOT_LINKED: { label: 'Necessita conexão', ok: false },
-  PROVIDER_MANAGED: { label: 'Gerenciado pelo provedor', ok: true },
+  // Informativo apenas — badge neutra, nunca com aparência de ação.
+  PROVIDER_MANAGED: { label: 'Gerenciado pelo provedor', ok: false },
 };
+
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
