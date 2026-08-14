@@ -101,14 +101,15 @@ import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
 import { FunnelSimple } from '@phosphor-icons/react';
-import { formatEndpointIdentity, formatEndpointMigrationAuditLine } from '@/lib/whatsappEndpointDisplay';
+import { formatEndpointIdentity, formatEndpointMigrationAuditLine, whatsappProviderLabel } from '@/lib/whatsappEndpointDisplay';
+import { formatPhoneDisplay } from '@/lib/phoneUtils';
 
 import { useHiddenThreads } from '@/hooks/useHiddenThreads';
 import { EyeSlash, Paperclip, Plus } from '@phosphor-icons/react';
 import { ToastAction } from '@/components/ui/toast';
 import { AttachMediaDialog, type AttachMedia } from '@/components/documents/AttachMediaDialog';
 import { isAttachableMedia } from '@/lib/mediaToFile';
-import { computeMessageGroups, type GroupingItem } from '@/lib/messageGrouping';
+import { computeMessageGroups, computeContextBlocks, type GroupingItem } from '@/lib/messageGrouping';
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
@@ -2131,7 +2132,7 @@ function DesktopMessagesList() {
                             // Pré-passe puramente visual: descreve cada item da
                             // timeline para o agrupamento (estilo Kommo). Não
                             // altera ordenação, dados nem paginação.
-                            const groupFlags = (() => {
+                            const { blockFlags, groupFlags, descriptors } = (() => {
                               let prevDateKey: string | null = null;
                               let prevEndpoint: string | null = null;
                               const descriptors: GroupingItem[] = chatItems.map((item) => {
@@ -2177,9 +2178,17 @@ function DesktopMessagesList() {
                                   isReply: Boolean(m.reply_to_message_id),
                                   dateBreak,
                                   endpointBreak,
+                                  endpointId: epId,
+                                  provider: epId ? endpointNumbers[epId]?.provider ?? null : null,
                                 };
                               });
-                              return computeMessageGroups(descriptors);
+                              const blockFlags = computeContextBlocks(descriptors);
+                              // Agrupamento interno de bolhas restrito ao bloco.
+                              const withBlocks = descriptors.map((d, i) => ({
+                                ...d,
+                                blockIndex: blockFlags[i].blockIndex,
+                              }));
+                              return { blockFlags, groupFlags: computeMessageGroups(withBlocks), descriptors };
                             })();
 
                             let lastDateKey: string | null = null;
@@ -2189,10 +2198,13 @@ function DesktopMessagesList() {
                               const group = groupFlags[itemIndex] ?? { isGroupStart: true, isGroupEnd: true };
                               const isGroupStart = group.isGroupStart;
                               const isGroupEnd = group.isGroupEnd;
+                              const block = blockFlags[itemIndex] ?? { isBlockStart: true, isBlockEnd: true, blockIndex: 0 };
+                              const descriptor = descriptors[itemIndex];
                               const itemDate = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
                               const dateKey = new Date(itemDate).toDateString();
                               const showSeparator = dateKey !== lastDateKey;
                               lastDateKey = dateKey;
+
 
                               const separator = showSeparator ? (
                                 <div key={`sep-${dateKey}`} className="flex justify-center my-3">
@@ -2223,6 +2235,53 @@ function DesktopMessagesList() {
                                 }
                                 if (epId) lastEndpointId = epId;
                               }
+
+                              // Cabeçalho do bloco de contexto (estilo Kommo):
+                              // identifica quem fala e por qual número/canal.
+                              // Puramente visual — nenhum dado novo é buscado.
+                              let blockHeader: JSX.Element | null = null;
+                              if (
+                                block.isBlockStart &&
+                                item._type === 'message' &&
+                                descriptor?.kind === 'message'
+                              ) {
+                                const m = item.data;
+                                const outbound = m.direction === 'outbound';
+                                const title = !outbound
+                                  ? (selectedThread?.contact_name || (locale === 'pt-BR' ? 'Cliente' : 'Customer'))
+                                  : m.sender_type === 'agent'
+                                    ? (m.sender_name || (locale === 'pt-BR' ? 'Assistente IA' : 'AI Assistant'))
+                                    : (m.sender_name || (locale === 'pt-BR' ? 'Operador' : 'Operator'));
+                                const epId = descriptor.endpointId ?? null;
+                                const epAddress = epId ? endpointNumbers[epId]?.address ?? null : null;
+                                const epProvider = epId ? endpointNumbers[epId]?.provider ?? null : null;
+                                const providerSuffix =
+                                  epProvider && epProvider !== 'meta_cloud_api'
+                                    ? ` • ${whatsappProviderLabel(epProvider)}`
+                                    : '';
+                                const metaLine = epAddress
+                                  ? `WhatsApp • ${formatPhoneDisplay(epAddress)}${providerSuffix}`
+                                  : null;
+                                blockHeader = (
+                                  <div
+                                    className={cn(
+                                      'flex flex-col gap-0 mt-4 px-1',
+                                      outbound ? 'items-end text-right' : 'items-start text-left'
+                                    )}
+                                  >
+                                    <span className="flex items-center gap-1 text-[11px] font-medium text-foreground/80 leading-[14px]">
+                                      {m.sender_type === 'agent' && outbound && <Robot className="w-3 h-3" />}
+                                      {title}
+                                    </span>
+                                    {metaLine && (
+                                      <span className="font-data text-[10px] text-muted-foreground leading-[13px]">
+                                        {metaLine}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              }
+
 
                               const renderItem = (() => {
                               if (item._type === 'note') {
@@ -2317,12 +2376,9 @@ function DesktopMessagesList() {
                                         : cn(!isGroupStart && 'rounded-tl-sm', !isGroupEnd && 'rounded-bl-sm')
                                     )}
                                   >
-                                    {/* Agent Badge + Feedback Button for agent messages */}
-                                    {isOutbound && message.sender_type === 'agent' && isGroupStart && (
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <Badge color="purple" size="sm" icon={<Robot className="w-3 h-3" />}>
-                                          {message.sender_name || 'Agente IA'}
-                                        </Badge>
+                                    {/* Feedback do agente — identidade fica no cabeçalho do bloco */}
+                                    {isOutbound && message.sender_type === 'agent' && (
+                                      <div className="flex items-center justify-end -mt-1 -mr-1">
                                         <Button
                                           variant="ghost"
                                           size="sm"
@@ -2337,6 +2393,7 @@ function DesktopMessagesList() {
                                         </Button>
                                       </div>
                                     )}
+
                                     
                                     {/* Quoted Message */}
                                     {message.reply_to_message && (
@@ -2352,13 +2409,11 @@ function DesktopMessagesList() {
                                           const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
                                           if (message.media_type === 'audio' || rawUrl.match(/\.(ogg|oga|opus|mp3|mpeg|wav|m4a|aac|amr|webm)(\?|$)/i)) {
                                              const isAudioOnly = message.media_type === 'audio';
-                                             const senderLabel = isOutbound && isGroupStart
-                                               ? (message.sender_name ? `${message.sender_name} · ` : '')
-                                               : '';
                                              const timeStr = isGroupEnd
                                                ? new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
                                                : '';
-                                             const audioTimestamp = `${senderLabel}${timeStr}`.replace(/ · $/, '');
+                                             const audioTimestamp = timeStr;
+
                                              return <AudioMessagePlayer key={i} src={url}
                                                messageId={message.id}
                                                threadId={(message as any).thread_id}
@@ -2448,29 +2503,22 @@ function DesktopMessagesList() {
                                       <MessageFailureInline errorCode={message.error_code} />
                                     )}
 
-                                    {/* Footer — nome no início do bloco, horário/status no fim
-                                        (áudio-only renderiza dentro do player) */}
-                                    {!(message.media_type === 'audio') && (() => {
-                                      const senderLabel = isOutbound && isGroupStart && message.sender_name
-                                        ? message.sender_name
-                                        : '';
-                                      const timeStr = isGroupEnd
-                                        ? new Date(message.sent_at).toLocaleTimeString(locale, {
+                                    {/* Footer — apenas horário/status no fim do grupo
+                                        (identidade fica no cabeçalho do bloco;
+                                         áudio-only renderiza dentro do player) */}
+                                    {!(message.media_type === 'audio') && isGroupEnd && (
+                                      <div className="mt-1 flex items-center justify-end gap-1">
+                                        <span className="text-[11px] leading-[14px] text-muted-foreground/70 whitespace-nowrap">
+                                          {new Date(message.sent_at).toLocaleTimeString(locale, {
                                             hour: '2-digit',
                                             minute: '2-digit',
                                             hour12: false,
-                                          })
-                                        : '';
-                                      if (!senderLabel && !timeStr) return null;
-                                      return (
-                                        <div className="mt-1 flex items-center justify-end gap-1">
-                                          <span className="text-[11px] leading-[14px] text-muted-foreground/70 whitespace-nowrap">
-                                            {senderLabel && timeStr ? `${senderLabel} · ${timeStr}` : `${senderLabel}${timeStr}`}
-                                          </span>
-                                          {isOutbound && isGroupEnd && renderStatusIcon(message)}
-                                        </div>
-                                      );
-                                    })()}
+                                          })}
+                                        </span>
+                                        {isOutbound && renderStatusIcon(message)}
+                                      </div>
+                                    )}
+
                                   </div>
                                   
                                   {/* Reply button - right side for outbound */}
@@ -2493,6 +2541,7 @@ function DesktopMessagesList() {
                                 <Fragment key={item._type === 'message' ? `m-${item.data.id}` : `n-${item.data.id}`}>
                                   {separator}
                                   {rotationSeparator}
+                                  {blockHeader}
                                   {renderItem}
                                 </Fragment>
                               );

@@ -30,7 +30,20 @@ export interface GroupingItem {
   dateBreak?: boolean;
   /** Item precedido pelo divisor "Número alterado". */
   endpointBreak?: boolean;
+  /** Endpoint (número de envio/recebimento) da mensagem. */
+  endpointId?: string | null;
+  /** Provider do endpoint (meta_cloud_api | twilio | evolution_api). */
+  provider?: string | null;
+  /** Índice do bloco de contexto (preenchido por computeContextBlocks). */
+  blockIndex?: number;
 }
+
+export interface ContextBlockFlags {
+  isBlockStart: boolean;
+  isBlockEnd: boolean;
+  blockIndex: number;
+}
+
 
 export interface GroupingFlags {
   isGroupStart: boolean;
@@ -53,9 +66,45 @@ function continuesGroup(prev: GroupingItem | undefined, curr: GroupingItem): boo
   if (curr.dateBreak || curr.endpointBreak) return false;
   if (curr.isReply) return false;
   if (prev.failed) return false;
+  if ((prev.blockIndex ?? 0) !== (curr.blockIndex ?? 0)) return false;
   if (!sameSender(prev, curr)) return false;
   return curr.timestamp - prev.timestamp <= GROUP_GAP_MS;
 }
+
+/**
+ * Blocos de CONTEXTO (estilo Kommo). Cada bloco representa um mesmo contexto
+ * de atendimento: mesmo remetente, mesmo operador/IA, mesmo número de envio e
+ * mesmo provider. O gap de tempo NÃO quebra bloco — ele só afeta o
+ * agrupamento interno de bolhas (`computeMessageGroups`).
+ */
+function continuesBlock(prev: GroupingItem | undefined, curr: GroupingItem): boolean {
+  if (!prev) return false;
+  // Notas e eventos de sistema são sempre blocos próprios.
+  if (curr.kind !== 'message' || prev.kind !== 'message') return false;
+  if (curr.dateBreak || curr.endpointBreak) return false;
+  if (prev.direction !== curr.direction) return false;
+  if ((prev.senderType ?? null) !== (curr.senderType ?? null)) return false;
+  // Outbound: operador/IA precisa ser o mesmo.
+  if (curr.direction !== 'inbound' && (prev.senderId ?? null) !== (curr.senderId ?? null)) return false;
+  // Troca de número de envio ou de provider abre novo contexto.
+  if ((prev.endpointId ?? null) !== (curr.endpointId ?? null)) return false;
+  return (prev.provider ?? null) === (curr.provider ?? null);
+}
+
+export function computeContextBlocks(items: GroupingItem[]): ContextBlockFlags[] {
+  const starts: boolean[] = items.map((item, i) => !continuesBlock(items[i - 1], item));
+  let blockIndex = -1;
+  const indexes = starts.map((isStart) => {
+    if (isStart) blockIndex += 1;
+    return blockIndex;
+  });
+  return items.map((_item, i) => ({
+    isBlockStart: starts[i],
+    isBlockEnd: i === items.length - 1 || starts[i + 1] === true,
+    blockIndex: indexes[i],
+  }));
+}
+
 
 /**
  * Retorna as flags de agrupamento para cada item, na mesma ordem da entrada.

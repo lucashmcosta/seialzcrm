@@ -92,3 +92,60 @@ describe('computeMessageGroups', () => {
     expect(r).toEqual([{ isGroupStart: true, isGroupEnd: true }]);
   });
 });
+
+import { computeContextBlocks } from '../src/lib/messageGrouping';
+
+const starts = (items: GroupingItem[]) => computeContextBlocks(items).map((b) => b.isBlockStart);
+
+describe('computeContextBlocks', () => {
+  it('mantém um único bloco para o mesmo operador/número/provider', () => {
+    const base = { endpointId: 'e1', provider: 'meta_cloud_api' };
+    expect(starts([msg(base), msg({ ...base, timestamp: T0 + 1000 })])).toEqual([true, false]);
+  });
+
+  it('gap maior que 5 min NÃO abre novo bloco', () => {
+    expect(starts([msg(), msg({ timestamp: T0 + GROUP_GAP_MS * 10 })])).toEqual([true, false]);
+  });
+
+  it('troca de direção abre novo bloco', () => {
+    expect(starts([msg(), msg({ direction: 'inbound', senderId: null, senderType: null })])).toEqual([true, true]);
+  });
+
+  it('troca de operador abre novo bloco', () => {
+    expect(starts([msg(), msg({ senderId: 'u2' })])).toEqual([true, true]);
+  });
+
+  it('entrada de IA abre novo bloco', () => {
+    expect(starts([msg(), msg({ senderType: 'agent', senderId: 'a1' })])).toEqual([true, true]);
+  });
+
+  it('troca de endpoint abre novo bloco', () => {
+    expect(starts([msg({ endpointId: 'e1' }), msg({ endpointId: 'e2' })])).toEqual([true, true]);
+  });
+
+  it('troca de provider abre novo bloco', () => {
+    expect(
+      starts([
+        msg({ endpointId: 'e1', provider: 'meta_cloud_api' }),
+        msg({ endpointId: 'e1', provider: 'evolution_api' }),
+      ]),
+    ).toEqual([true, true]);
+  });
+
+  it('evento de sistema e nota interna são blocos próprios', () => {
+    const r = computeContextBlocks([
+      msg(),
+      { ...msg(), kind: 'system' },
+      msg(),
+      { ...msg(), kind: 'note', direction: 'internal' },
+      msg(),
+    ]);
+    expect(r.map((b) => b.isBlockStart)).toEqual([true, true, true, true, true]);
+    expect(r.map((b) => b.isBlockEnd)).toEqual([true, true, true, true, true]);
+    expect(r.map((b) => b.blockIndex)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it('separador de data e troca de número abrem novo bloco', () => {
+    expect(starts([msg(), msg({ dateBreak: true }), msg({ endpointBreak: true })])).toEqual([true, true, true]);
+  });
+});
