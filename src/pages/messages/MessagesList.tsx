@@ -2194,7 +2194,7 @@ function DesktopMessagesList() {
                             let lastDateKey: string | null = null;
                             let lastEndpointId: string | null = null;
 
-                            return chatItems.map((item, itemIndex) => {
+                            const renderedItems = chatItems.map((item, itemIndex) => {
                               const group = groupFlags[itemIndex] ?? { isGroupStart: true, isGroupEnd: true };
                               const isGroupStart = group.isGroupStart;
                               const isGroupEnd = group.isGroupEnd;
@@ -2265,7 +2265,7 @@ function DesktopMessagesList() {
                                 blockHeader = (
                                   <div
                                     className={cn(
-                                      'flex flex-col gap-0 mt-4 px-1',
+                                      'flex flex-col gap-0 px-1 pb-1',
                                       outbound ? 'items-end text-right' : 'items-start text-left'
                                     )}
                                   >
@@ -2537,15 +2537,73 @@ function DesktopMessagesList() {
                               );
                               })();
 
-                              return (
-                                <Fragment key={item._type === 'message' ? `m-${item.data.id}` : `n-${item.data.id}`}>
-                                  {separator}
-                                  {rotationSeparator}
-                                  {blockHeader}
-                                  {renderItem}
-                                </Fragment>
-                              );
+                              return {
+                                key: item._type === 'message' ? `m-${item.data.id}` : `n-${item.data.id}`,
+                                blockIndex: block.blockIndex,
+                                kind: (descriptor?.kind ?? 'message') as 'message' | 'note' | 'system',
+                                separator,
+                                rotationSeparator,
+                                blockHeader,
+                                renderItem,
+                              };
                             });
+
+                            // Segunda fase (puramente visual): mensagens do mesmo
+                            // bloco de contexto são envolvidas em um contêiner
+                            // ("cartão"), enquanto separadores, eventos de sistema
+                            // e notas internas ficam fora dos cartões.
+                            type Segment =
+                              | { type: 'loose'; key: string; nodes: JSX.Element[] }
+                              | { type: 'block'; key: string; blockIndex: number; nodes: JSX.Element[] };
+                            const segments: Segment[] = [];
+                            for (const r of renderedItems) {
+                              const loose: JSX.Element[] = [];
+                              if (r.separator) loose.push(r.separator);
+                              if (r.rotationSeparator) loose.push(r.rotationSeparator);
+                              if (loose.length) {
+                                segments.push({ type: 'loose', key: `loose-${r.key}`, nodes: loose });
+                              }
+
+                              const isInsideCard = r.kind === 'message';
+                              if (!isInsideCard) {
+                                segments.push({ type: 'loose', key: `item-${r.key}`, nodes: [r.renderItem] });
+                                continue;
+                              }
+
+                              const last = segments[segments.length - 1];
+                              if (last && last.type === 'block' && last.blockIndex === r.blockIndex) {
+                                last.nodes.push(r.renderItem);
+                              } else {
+                                segments.push({
+                                  type: 'block',
+                                  key: `block-${r.blockIndex}-${r.key}`,
+                                  blockIndex: r.blockIndex,
+                                  nodes: [
+                                    ...(r.blockHeader ? [r.blockHeader] : []),
+                                    r.renderItem,
+                                  ],
+                                });
+                              }
+                            }
+
+                            return segments.map((segment) =>
+                              segment.type === 'loose' ? (
+                                <Fragment key={segment.key}>
+                                  {segment.nodes.map((node, i) => (
+                                    <Fragment key={i}>{node}</Fragment>
+                                  ))}
+                                </Fragment>
+                              ) : (
+                                <div
+                                  key={segment.key}
+                                  className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5 space-y-1"
+                                >
+                                  {segment.nodes.map((node, i) => (
+                                    <Fragment key={i}>{node}</Fragment>
+                                  ))}
+                                </div>
+                              )
+                            );
                           })()}
                           <div ref={scrollRef} />
                         </div>
