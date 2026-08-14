@@ -2189,16 +2189,18 @@ function DesktopMessagesList() {
                         </div>
                       ) : (
                         <div className="p-6 space-y-3">
-                          {/* Merge messages and notes chronologically */}
+                          {/* Timeline única: mensagens, notas e marcos do CRM */}
                           {(() => {
+                            const itemDateOf = (i: ChatItem) =>
+                              i._type === 'message' ? i.data.sent_at : i.data.occurred_at;
                             const chatItems: ChatItem[] = [
                               ...messages.map((m) => ({ _type: 'message' as const, data: m })),
                               ...inlineNotes.map((n) => ({ _type: 'note' as const, data: n })),
+                              ...timelineEvents.map((e) => ({ _type: 'event' as const, data: e })),
                             ].sort((a, b) => {
-                              const dateA = a._type === 'message' ? a.data.sent_at : a.data.occurred_at;
-                              const dateB = b._type === 'message' ? b.data.sent_at : b.data.occurred_at;
-                              return new Date(dateA).getTime() - new Date(dateB).getTime();
+                              return new Date(itemDateOf(a)).getTime() - new Date(itemDateOf(b)).getTime();
                             });
+
 
                             const formatDateSeparator = (dateStr: string) => {
                               const d = new Date(dateStr);
