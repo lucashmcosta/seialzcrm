@@ -1,4 +1,13 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { CaretDown, CaretUp } from '@phosphor-icons/react';
 import {
   DEFAULT_BLOCK_BUDGET_PX,
@@ -37,6 +46,57 @@ export function TimelineBlock({
   const [heights, setHeights] = useState<number[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const heightsRef = useRef<number[]>([]);
+  // Âncora de scroll: preserva a posição de leitura ao expandir/colapsar.
+  const anchorRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
+  const anchorClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const getViewport = useCallback(
+    () =>
+      (containerRef.current?.closest(
+        '[data-radix-scroll-area-viewport]',
+      ) as HTMLElement | null) ?? null,
+    [],
+  );
+
+  const restoreAnchor = useCallback(() => {
+    const anchor = anchorRef.current;
+    const viewport = getViewport();
+    if (!anchor || !viewport) return;
+    const delta = viewport.scrollHeight - anchor.scrollHeight;
+    if (delta !== 0) {
+      viewport.scrollTop = anchor.scrollTop + delta;
+      anchorRef.current = {
+        scrollTop: viewport.scrollTop,
+        scrollHeight: viewport.scrollHeight,
+      };
+    }
+  }, [getViewport]);
+
+  const handleToggle = useCallback(() => {
+    const viewport = getViewport();
+    if (viewport) {
+      anchorRef.current = {
+        scrollTop: viewport.scrollTop,
+        scrollHeight: viewport.scrollHeight,
+      };
+      if (anchorClearTimer.current) clearTimeout(anchorClearTimer.current);
+      // Mantém a âncora ativa por um curto período para absorver remedições
+      // (imagens/áudios) logo após a expansão.
+      anchorClearTimer.current = setTimeout(() => {
+        anchorRef.current = null;
+        anchorClearTimer.current = null;
+      }, 600);
+    }
+    setExpanded((v) => !v);
+  }, [getViewport]);
+
+  useEffect(
+    () => () => {
+      if (anchorClearTimer.current) clearTimeout(anchorClearTimer.current);
+    },
+    [],
+  );
+
 
   // Orçamento = altura visível da área de conversa.
   useEffect(() => {
@@ -62,6 +122,11 @@ export function TimelineBlock({
   }, [total, heights, budget, isCurrent, expanded]);
 
   const firstVisibleIndex = total - collapse.visibleCount;
+
+  // Reposiciona o scroll após a mudança de conteúdo (expansão/colapso e remedições).
+  useLayoutEffect(() => {
+    restoreAnchor();
+  }, [expanded, heights, restoreAnchor]);
 
   const measureItem = useCallback(
     (index: number) => (node: HTMLDivElement | null) => {
@@ -97,7 +162,7 @@ export function TimelineBlock({
           label={toggleLabel}
           icon={collapse.hiddenCount > 0 ? <CaretDown /> : <CaretUp />}
           interactive
-          onClick={() => setExpanded((v) => !v)}
+          onClick={handleToggle}
           className="my-1"
         />
       )}
