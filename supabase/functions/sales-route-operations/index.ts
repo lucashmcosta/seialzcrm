@@ -983,21 +983,24 @@ serve(async (req) => {
             });
           }
 
+          // Links pertencentes a Routes desativadas não são uso efetivo.
           const { data: activeLinks } = await service
             .from("messaging_line_endpoints")
-            .select("line_id, endpoint_id, is_active")
+            .select("line_id, endpoint_id, is_active, messaging_lines!inner(id, is_active)")
             .eq("endpoint_id", endpointId)
-            .eq("is_active", true);
+            .eq("is_active", true)
+            .eq("messaging_lines.is_active", true);
           if ((activeLinks ?? []).length > 0) {
             return json(409, {
               error: "EVOLUTION_INSTANCE_IN_USE",
-              message: "endpoint está vinculado e ativo em uma Route",
+              message: "endpoint está vinculado e ativo em uma Route ativa",
               usedBy: (activeLinks ?? []).map((l: Record<string, unknown>) => ({
                 lineId: l.line_id,
                 reason: "ACTIVE_LINK",
               })),
             });
           }
+
         }
 
         const provider = evolution();
