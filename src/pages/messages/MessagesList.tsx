@@ -2402,7 +2402,24 @@ function DesktopMessagesList() {
                                 );
                               }
 
+                              if (item._type === 'event') {
+                                const ev = item.data;
+                                return (
+                                  <TimelineEventMarker
+                                    key={`event-${ev.id}`}
+                                    label={ev.label}
+                                    value={ev.value ?? null}
+                                    time={new Date(ev.occurred_at).toLocaleTimeString(locale, {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      hour12: false,
+                                    })}
+                                  />
+                                );
+                              }
+
                               const message = item.data;
+
 
                               const _migMetaKind =
                                 message.metadata && typeof message.metadata === 'object'
