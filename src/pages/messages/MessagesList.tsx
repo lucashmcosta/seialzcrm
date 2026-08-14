@@ -2237,7 +2237,7 @@ function DesktopMessagesList() {
                               }
 
                               // Cabeçalho do bloco de contexto (estilo Kommo):
-                              // identifica quem fala e por qual número/canal.
+                              // representa APENAS o canal/número do contexto.
                               // Puramente visual — nenhum dado novo é buscado.
                               let blockHeader: JSX.Element | null = null;
                               if (
@@ -2245,54 +2245,28 @@ function DesktopMessagesList() {
                                 item._type === 'message' &&
                                 descriptor?.kind === 'message'
                               ) {
-                                const m = item.data;
-                                // O cartão agora contém os dois lados: o cabeçalho
-                                // identifica o responsável do contexto (operador/IA)
-                                // e, se o bloco for só do cliente, o próprio contato.
-                                let ownerName: string | null = null;
-                                let ownerIsAgent = false;
-                                for (let k = itemIndex; k < chatItems.length; k++) {
-                                  if ((blockFlags[k]?.blockIndex ?? -1) !== block.blockIndex) break;
-                                  const ci = chatItems[k];
-                                  if (ci._type !== 'message') continue;
-                                  if (ci.data.direction === 'inbound') continue;
-                                  ownerIsAgent = ci.data.sender_type === 'agent';
-                                  ownerName =
-                                    ci.data.sender_name ||
-                                    (ownerIsAgent
-                                      ? locale === 'pt-BR' ? 'Assistente IA' : 'AI Assistant'
-                                      : locale === 'pt-BR' ? 'Operador' : 'Operator');
-                                  break;
-                                }
-                                const title =
-                                  ownerName ??
-                                  selectedThread?.contact_name ??
-                                  (locale === 'pt-BR' ? 'Cliente' : 'Customer');
                                 const epId = descriptor.endpointId ?? null;
                                 const epAddress = epId ? endpointNumbers[epId]?.address ?? null : null;
                                 const epProvider = epId ? endpointNumbers[epId]?.provider ?? null : null;
                                 const providerShort = whatsappProviderShortLabel(epProvider);
-                                const providerSuffix =
+                                const channelLine =
                                   providerShort && epProvider !== 'meta_cloud_api'
-                                    ? ` • ${providerShort}`
-                                    : '';
-                                const metaLine = epAddress
-                                  ? `WhatsApp • ${formatPhoneDisplay(epAddress)}${providerSuffix}`
-                                  : null;
+                                    ? `WhatsApp • ${providerShort}`
+                                    : 'WhatsApp';
                                 blockHeader = (
-                                  <div className="flex flex-col gap-0 pb-1 items-start text-left">
-                                    <span className="flex items-center gap-1 text-xs font-medium text-foreground leading-4">
-                                      {ownerIsAgent && <Robot className="w-3 h-3" />}
-                                      {title}
+                                  <div className="flex flex-col gap-0 pb-0.5 items-start text-left">
+                                    <span className="text-xs font-medium text-foreground leading-4">
+                                      {channelLine}
                                     </span>
-                                    {metaLine && (
+                                    {epAddress && (
                                       <span className="font-data text-[10px] text-muted-foreground leading-[13px]">
-                                        {metaLine}
+                                        {formatPhoneDisplay(epAddress)}
                                       </span>
                                     )}
                                   </div>
                                 );
                               }
+
 
 
 
