@@ -9,7 +9,7 @@ import { MobileMessagesList } from '@/components/mobile/MobileMessagesList';
 import {
   DotsHorizontal,
   FaceSmile,
-  PhoneCall01,
+  
   SearchLg,
   Send01,
   Archive,
@@ -782,7 +782,8 @@ function DesktopMessagesList() {
   const selectedEndpointIdentity = formatEndpointIdentity(selectedThreadEndpoint);
 
   // Números dos endpoints usados nas mensagens (inclui inativos) — para o
-  // divisor de "Número alterado" quando a conversa passou por mais de um número.
+  // cabeçalho do container quando a conversa passou por mais de um número.
+
   const messageEndpointIds = useMemo(
     () => Array.from(new Set(messages.map((m: any) => m.endpoint_id).filter(Boolean))) as string[],
     [messages],
@@ -2318,10 +2319,9 @@ function DesktopMessagesList() {
                               ) : null;
 
 
-                              // O marcador visual "Número alterado" foi removido:
-                              // o cabeçalho do próprio container já informa o
-                              // canal/número do contexto. A quebra de container
-                              // (endpointBreak) continua inalterada.
+                              // A troca de endpoint apenas quebra o container;
+                              // o cabeçalho do container informa canal/provider/número.
+
 
 
                               // Cabeçalho do bloco de contexto (estilo Kommo):
