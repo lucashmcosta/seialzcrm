@@ -111,7 +111,7 @@ import { EyeSlash, Paperclip, Plus } from '@phosphor-icons/react';
 import { ToastAction } from '@/components/ui/toast';
 import { AttachMediaDialog, type AttachMedia } from '@/components/documents/AttachMediaDialog';
 import { isAttachableMedia } from '@/lib/mediaToFile';
-import { computeMessageGroups, computeContextBlocks, type GroupingItem } from '@/lib/messageGrouping';
+import { computeMessageGroups, computeContextBlocks, resolveBlockCollapse, type GroupingItem } from '@/lib/messageGrouping';
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
