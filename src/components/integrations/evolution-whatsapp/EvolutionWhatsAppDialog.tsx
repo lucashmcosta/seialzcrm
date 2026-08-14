@@ -40,6 +40,7 @@ import {
   type EvolutionConnectionState,
   type EvolutionInstanceRow,
 } from "@/hooks/useEvolutionInstances";
+import { EvolutionProvisionPanel } from "./EvolutionProvisionPanel";
 
 interface Props {
   open: boolean;
