@@ -11,8 +11,11 @@
 /** Intervalo máximo entre duas mensagens do mesmo remetente para manter o bloco. */
 export const GROUP_GAP_MS = 5 * 60 * 1000;
 
-/** Máximo de mensagens visíveis em um container de contexto já encerrado. */
-export const BLOCK_COLLAPSE_LIMIT = 5;
+/** Altura aproximada usada apenas ANTES da primeira medição real do item. */
+export const FALLBACK_ITEM_HEIGHT = 64;
+
+/** Orçamento visual padrão quando a área de conversa ainda não foi medida. */
+export const DEFAULT_BLOCK_BUDGET_PX = 480;
 
 export interface BlockCollapseState {
   /** Quantas mensagens do bloco ficam visíveis. */
@@ -24,29 +27,42 @@ export interface BlockCollapseState {
 }
 
 /**
- * Decide o colapso de um container de contexto. Puramente visual:
- * apenas as ÚLTIMAS `BLOCK_COLLAPSE_LIMIT` mensagens ficam visíveis quando o
- * bloco já foi encerrado por um evento. O bloco atual (último da timeline)
- * nunca colapsa.
+ * Decide o colapso de um container de contexto por ESPAÇO VISUAL.
+ *
+ * `heights` traz a altura de cada mensagem do bloco, na ordem cronológica —
+ * preferencialmente a altura real renderizada (medida no DOM). Quando a altura
+ * de um item ainda não foi medida, o chamador passa um fallback aproximado.
+ *
+ * Percorre do fim para o começo somando alturas até estourar `budgetPx`,
+ * garantindo pelo menos uma mensagem visível. O bloco atual (último da
+ * timeline) nunca colapsa.
  */
-export function resolveBlockCollapse(
-  messageCount: number,
+export function resolveBlockCollapseByHeight(
+  heights: number[],
+  budgetPx: number,
   isCurrentBlock: boolean,
   expanded: boolean,
 ): BlockCollapseState {
-  const total = Math.max(0, messageCount);
-  if (isCurrentBlock || total <= BLOCK_COLLAPSE_LIMIT) {
-    return { visibleCount: total, hiddenCount: 0, showToggle: false };
+  const total = heights.length;
+  if (total === 0) return { visibleCount: 0, hiddenCount: 0, showToggle: false };
+  if (isCurrentBlock) return { visibleCount: total, hiddenCount: 0, showToggle: false };
+
+  const budget = budgetPx > 0 ? budgetPx : DEFAULT_BLOCK_BUDGET_PX;
+  let used = 0;
+  let visible = 0;
+  for (let i = total - 1; i >= 0; i -= 1) {
+    const h = heights[i] > 0 ? heights[i] : FALLBACK_ITEM_HEIGHT;
+    if (visible > 0 && used + h > budget) break;
+    used += h;
+    visible += 1;
   }
-  if (expanded) {
-    return { visibleCount: total, hiddenCount: 0, showToggle: true };
-  }
-  return {
-    visibleCount: BLOCK_COLLAPSE_LIMIT,
-    hiddenCount: total - BLOCK_COLLAPSE_LIMIT,
-    showToggle: true,
-  };
+  if (visible < 1) visible = 1;
+
+  if (visible >= total) return { visibleCount: total, hiddenCount: 0, showToggle: false };
+  if (expanded) return { visibleCount: total, hiddenCount: 0, showToggle: true };
+  return { visibleCount: visible, hiddenCount: total - visible, showToggle: true };
 }
+
 
 
 export interface GroupingItem {
