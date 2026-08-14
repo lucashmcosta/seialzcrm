@@ -2541,6 +2541,7 @@ function DesktopMessagesList() {
                                 <Fragment key={item._type === 'message' ? `m-${item.data.id}` : `n-${item.data.id}`}>
                                   {separator}
                                   {rotationSeparator}
+                                  {blockHeader}
                                   {renderItem}
                                 </Fragment>
                               );
