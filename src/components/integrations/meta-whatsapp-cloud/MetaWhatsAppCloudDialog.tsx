@@ -278,8 +278,9 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
 
 
 
-            {/* ===== Regras de Entrada ===== */}
-            {isConnected && orgIntegration?.id && (
+            {/* ===== Regras de Entrada (visão legada) =====
+                 Com multi-WABA ligada, cada WABA já expõe suas próprias regras. */}
+            {!multiWabaEnabled && isConnected && orgIntegration?.id && (
               <Card className="p-4">
                 <WhatsAppInboundSettings integrationId={orgIntegration.id} />
               </Card>
