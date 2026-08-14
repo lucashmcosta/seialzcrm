@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeMessageGroups, GROUP_GAP_MS, type GroupingItem } from '../src/lib/messageGrouping';
+import { computeMessageGroups, GROUP_GAP_MS, resolveBlockCollapseByHeight, FALLBACK_ITEM_HEIGHT, type GroupingItem } from '../src/lib/messageGrouping';
 
 const T0 = Date.parse('2026-08-14T10:00:00Z');
 
@@ -168,5 +168,46 @@ describe('computeContextBlocks', () => {
 
   it('separador de data e troca de número abrem novo bloco', () => {
     expect(starts([msg(), msg({ dateBreak: true }), msg({ endpointBreak: true })])).toEqual([true, true, true]);
+  });
+});
+
+describe('resolveBlockCollapseByHeight', () => {
+  const h = (n: number, px: number) => Array.from({ length: n }, () => px);
+
+  it('mostra todas quando muitas mensagens curtas ainda cabem', () => {
+    const r = resolveBlockCollapseByHeight(h(15, 30), 480, false, false);
+    expect(r.visibleCount).toBe(15);
+    expect(r.showToggle).toBe(false);
+  });
+
+  it('colapsa quando poucas mensagens pesadas estouram o orçamento', () => {
+    const r = resolveBlockCollapseByHeight(h(6, 220), 480, false, false);
+    expect(r.visibleCount).toBe(2);
+    expect(r.hiddenCount).toBe(4);
+    expect(r.showToggle).toBe(true);
+  });
+
+  it('garante ao menos uma mensagem visível', () => {
+    const r = resolveBlockCollapseByHeight([100, 2000], 480, false, false);
+    expect(r.visibleCount).toBe(1);
+    expect(r.hiddenCount).toBe(1);
+  });
+
+  it('bloco atual nunca colapsa', () => {
+    const r = resolveBlockCollapseByHeight(h(20, 300), 480, true, false);
+    expect(r.visibleCount).toBe(20);
+    expect(r.showToggle).toBe(false);
+  });
+
+  it('expandido mostra tudo mantendo o toggle', () => {
+    const r = resolveBlockCollapseByHeight(h(6, 220), 480, false, true);
+    expect(r.visibleCount).toBe(6);
+    expect(r.hiddenCount).toBe(0);
+    expect(r.showToggle).toBe(true);
+  });
+
+  it('usa fallback quando a altura ainda não foi medida', () => {
+    const r = resolveBlockCollapseByHeight([0, 0, 0, 0], FALLBACK_ITEM_HEIGHT * 2, false, false);
+    expect(r.visibleCount).toBe(2);
   });
 });
