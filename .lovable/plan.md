@@ -22,31 +22,53 @@
 
 ## O que muda
 
-### 1. Nova fonte de seleção (UI)
-- Novo hook `useThreadLastEndpoint(threadId)`: busca a última mensagem válida da thread (`direction in ('inbound','outbound')`, `deleted_at is null`, `is_internal_note is not true`, `endpoint_id not null`, order `sent_at desc, created_at desc`, limit 1).
-- `selectedEndpointId` passa a ser derivado assim:
-  1. endpoint da última mensagem válida, **se ainda elegível** (mesma org, whatsapp, ativo, vinculado à Route Comercial, provider suportado);
-  2. senão, se não existir nenhuma mensagem válida com endpoint → `messaging_lines.active_endpoint_id` da Route Comercial (fallback legado);
-  3. se o endpoint da última mensagem existir mas estiver inelegível → nada é auto-selecionado; o seletor mostra estado "selecione um número" e o envio fica bloqueado até escolha explícita.
-- Não há mais preferência persistida para explicar o estado visual: após um envio manual, a própria mensagem outbound vira a última mensagem e o seletor já reflete o novo número (invalidação da query no `onSuccess` do envio).
+### 1. Estado da UI: endpoint real + origem da seleção
+- Novo hook `useThreadLastEndpoint(threadId)`: última mensagem válida da thread — `direction in ('inbound','outbound')`, `deleted_at is null`, `is_internal_note is not true`, `endpoint_id not null`, order `sent_at desc, created_at desc`, limit 1.
+- Estado interno passa a ter `selectionSource: 'derived' | 'manual'`:
+  - **derived** (padrão): ao abrir a conversa e a cada nova mensagem válida (realtime/invalidação), o seletor mostra o endpoint dessa última mensagem, se ainda elegível.
+  - **manual**: só quando o operador troca explicitamente no dropdown. `selectedEndpointId` = escolha dele.
+- Após um envio manual ser persistido, a query da última mensagem é invalidada e o estado volta a `derived` — a própria outbound recém-criada é agora a última mensagem, então o número exibido não muda.
+- Thread sem nenhuma mensagem válida com endpoint → seleção inicial derivada do `active_endpoint_id` da Route Comercial (fallback legado), marcada internamente como `route_default`.
+- Endpoint da última mensagem existente mas inelegível → nada é auto-selecionado; o composer bloqueia o envio e pede escolha explícita (nunca substitui em silêncio).
+- A UI nunca exibe "Automático": sempre um número real ou o estado de "selecione um número".
 
 ### 2. Lista de opções = endpoints Comerciais da organização
 - Substituir a query em `user_reply_endpoints` por: endpoints `communication_endpoints` da org, `channel='whatsapp'`, `is_active=true`, com link ativo em `messaging_line_endpoints` para a `messaging_lines` sales/whatsapp ativa da org (mesma definição de `fn_is_sales_eligible_endpoint`).
-- Resultado: nunca históricos/inativos, nunca Atendimento, nunca outra organização. Visível para qualquer usuário do módulo Comercial, sem grant.
+- Resultado: nunca históricos/inativos, nunca Atendimento, nunca outra organização. Visível para qualquer usuário do módulo Comercial, sem grant e sem preferência salva.
 
 ### 3. Remoção de "Automático" e do conceito "Ativo"
-- `ManualReplySelector.tsx`: remover item "Automático", `resetToAuto` e o rótulo `AUTO_LABEL`; lista só números reais com check no selecionado.
-- `RouteIndicators.tsx` / `SalesRoutePanel.tsx` / `SalesWhatsAppSettingsSection.tsx`: remover badge "Ativo para envio" e ação "Tornar ativo" como conceito de resposta.
-- `active_endpoint_id` permanece no backend apenas como fallback legado.
+- `ManualReplySelector.tsx`: remover item "Automático", `resetToAuto` e `AUTO_LABEL`; lista só números reais com check no selecionado.
+- `RouteIndicators.tsx` / `SalesRoutePanel.tsx` / `SalesWhatsAppSettingsSection.tsx`: remover badge "Ativo para envio" e a ação "Tornar ativo" como conceito de resposta; a lista passa a mostrar apenas `7067 | Meta | Conectado`, `7020 | Evolution | Conectado`.
+- Essa limpeza de UI entra **depois** de o backend novo estar validado.
 
-### 4. Envio sempre explícito
-- O composer passa **sempre** o endpoint selecionado no payload (`manualReplyEndpointId`), inclusive quando ele coincide com o da última inbound. Some o caminho "auto" que caía em `active_endpoint_id`.
-- `_shared/route-resolver.ts`: quando um endpoint explícito é informado e validado, ele é o `sendEndpointId` — o passo que hoje troca para `active_endpoint_id` deixa de valer para threads com contexto. Threads sem nenhuma mensagem com endpoint continuam usando `active_endpoint_id`.
-- `_shared/manual-reply-endpoint.ts` (e o mirror em `src/lib/manualReplyEndpoint.ts`): o passo de autorização por `user_reply_endpoints` deixa de ser exigido; a validação passa a ser org + channel whatsapp + ativo + `fn_is_sales_eligible_endpoint` + provider suportado, mantendo fail-closed e os erros 409 já existentes.
-- `thread_reply_endpoint_prefs` e `user_reply_endpoints` não são apagados nem alterados; apenas deixam de ser lidos no caminho de resposta.
+### 4. Novo contrato de payload (`replyEndpointSelection`)
+Substitui o uso indiscriminado de `manualReplyEndpointId`:
 
-## Testes (arquivo novo em `supabase/functions/_shared/`, helpers puros)
-`LAST_MESSAGE_INBOUND_7020_EVOLUTION`, `LAST_MESSAGE_OUTBOUND_7067_META`, `LAST_MESSAGE_OUTBOUND_7020_EVOLUTION`, `NEW_INBOUND_AFTER_MANUAL_OVERRIDE`, `THREAD_WITHOUT_MESSAGES`, `LAST_MESSAGE_ENDPOINT_INACTIVE`, `CROSS_ORG_ENDPOINT`, `CUSTOMER_SERVICE_ENDPOINT`, `SWITCH_VISIBLE_FOR_COMMERCIAL_USER_WITHOUT_GRANTS`, mais o filtro de notas internas/`direction='internal'`.
+```text
+replyEndpointSelection: {
+  source: "derived" | "manual",
+  endpointId?: uuid   // obrigatório em manual; em derived é só hint visual
+}
+```
+
+- `manualReplyEndpointId` continua aceito por compatibilidade e é interpretado como `{ source: "manual", endpointId }`; a UI passa a enviar o novo campo.
+- Em `derived`, o `endpointId` enviado **não é usado para rotear** — serve apenas para log de divergência (detecta UI stale).
+
+### 5. Precedência server-side (fonte de verdade no envio)
+Em `_shared/route-resolver.ts` (dentro do escopo sales/whatsapp):
+- **A) manual** → usa exatamente o endpoint escolhido; revalida org + channel whatsapp + `is_active` + `fn_is_sales_eligible_endpoint` + provider suportado; fail-closed (409) se falhar. Nunca cai em outro endpoint.
+- **B) derived** → o backend **reconsulta a última mensagem válida no momento do envio** (mesmo filtro do hook) e envia exatamente por aquele `endpoint_id`, após a mesma revalidação. Se existe contexto e o endpoint está inelegível → fail-closed. Isso resolve a race condition de UI stale: inbound nova pelo 7020 chegando depois de a UI ter renderizado 7067 → envio sai pelo 7020.
+- **C) route_default** → somente quando não existe nenhuma mensagem válida com `endpoint_id`: usa `messaging_lines.active_endpoint_id`.
+- O passo atual que troca para `active_endpoint_id` mesmo havendo inbound roteável é removido.
+- `_shared/manual-reply-endpoint.ts` e o mirror `src/lib/manualReplyEndpoint.ts`: o passo de autorização por `user_reply_endpoints` deixa de ser exigido; validação passa a ser org + whatsapp + ativo + elegibilidade Comercial + provider, mantendo os códigos de erro e os 409 já existentes.
+- `thread_reply_endpoint_prefs` e `user_reply_endpoints` permanecem no schema, sem escrita nem leitura neste fluxo.
+
+### 6. Auditoria da mensagem
+`messages.metadata.reply_endpoint_choice` passa a assumir `"derived" | "manual" | "route_default"` (auto-select nunca é gravado como `manual`). `chosen_by_user_id` só é preenchido em `manual`. Mantém `resolved_endpoint_id` e, quando `derived` divergir do hint da UI, grava `ui_hint_endpoint_id` para rastrear staleness.
+
+## Testes (helpers puros + testes em `supabase/functions/_shared/`)
+`LAST_INBOUND_7020`, `LAST_OUTBOUND_7067`, `MANUAL_CHANGE_7020_TO_7067` (envio manual + próxima seleção derived=7067), `NEW_INBOUND_AFTER_MANUAL`, `RACE_CONDITION_UI_STALE` (hint 7067, banco 7020 → envia 7020), `LAST_ENDPOINT_INACTIVE` (fail-closed), `THREAD_WITHOUT_VALID_MESSAGE` (route default), `CROSS_ORG` (forbidden), `CUSTOMER_SERVICE_ENDPOINT` (forbidden), `COMMERCIAL_USER_WITHOUT_GRANTS` (switch visível), mais o filtro de internal/note/deleted na determinação da última mensagem.
+
 
 ## Escopo e limites
 - Zero migração de dados, zero alteração de Routes, `active_endpoint_id`, `messaging_lines`, rotações, Atendimento.
