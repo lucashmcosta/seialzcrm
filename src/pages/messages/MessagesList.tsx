@@ -101,7 +101,7 @@ import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
 import { FunnelSimple } from '@phosphor-icons/react';
-import { formatEndpointIdentity, formatEndpointMigrationAuditLine, whatsappProviderLabel } from '@/lib/whatsappEndpointDisplay';
+import { formatEndpointIdentity, formatEndpointMigrationAuditLine, whatsappProviderLabel, whatsappProviderShortLabel } from '@/lib/whatsappEndpointDisplay';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 
 import { useHiddenThreads } from '@/hooks/useHiddenThreads';
@@ -2246,31 +2246,43 @@ function DesktopMessagesList() {
                                 descriptor?.kind === 'message'
                               ) {
                                 const m = item.data;
-                                const outbound = m.direction === 'outbound';
-                                const title = !outbound
-                                  ? (selectedThread?.contact_name || (locale === 'pt-BR' ? 'Cliente' : 'Customer'))
-                                  : m.sender_type === 'agent'
-                                    ? (m.sender_name || (locale === 'pt-BR' ? 'Assistente IA' : 'AI Assistant'))
-                                    : (m.sender_name || (locale === 'pt-BR' ? 'Operador' : 'Operator'));
+                                // O cartão agora contém os dois lados: o cabeçalho
+                                // identifica o responsável do contexto (operador/IA)
+                                // e, se o bloco for só do cliente, o próprio contato.
+                                let ownerName: string | null = null;
+                                let ownerIsAgent = false;
+                                for (let k = itemIndex; k < chatItems.length; k++) {
+                                  if ((blockFlags[k]?.blockIndex ?? -1) !== block.blockIndex) break;
+                                  const ci = chatItems[k];
+                                  if (ci._type !== 'message') continue;
+                                  if (ci.data.direction === 'inbound') continue;
+                                  ownerIsAgent = ci.data.sender_type === 'agent';
+                                  ownerName =
+                                    ci.data.sender_name ||
+                                    (ownerIsAgent
+                                      ? locale === 'pt-BR' ? 'Assistente IA' : 'AI Assistant'
+                                      : locale === 'pt-BR' ? 'Operador' : 'Operator');
+                                  break;
+                                }
+                                const title =
+                                  ownerName ??
+                                  selectedThread?.contact_name ??
+                                  (locale === 'pt-BR' ? 'Cliente' : 'Customer');
                                 const epId = descriptor.endpointId ?? null;
                                 const epAddress = epId ? endpointNumbers[epId]?.address ?? null : null;
                                 const epProvider = epId ? endpointNumbers[epId]?.provider ?? null : null;
+                                const providerShort = whatsappProviderShortLabel(epProvider);
                                 const providerSuffix =
-                                  epProvider && epProvider !== 'meta_cloud_api'
-                                    ? ` • ${whatsappProviderLabel(epProvider)}`
+                                  providerShort && epProvider !== 'meta_cloud_api'
+                                    ? ` • ${providerShort}`
                                     : '';
                                 const metaLine = epAddress
                                   ? `WhatsApp • ${formatPhoneDisplay(epAddress)}${providerSuffix}`
                                   : null;
                                 blockHeader = (
-                                  <div
-                                    className={cn(
-                                      'flex flex-col gap-0 px-1 pb-1',
-                                      outbound ? 'items-end text-right' : 'items-start text-left'
-                                    )}
-                                  >
-                                    <span className="flex items-center gap-1 text-[11px] font-medium text-foreground/80 leading-[14px]">
-                                      {m.sender_type === 'agent' && outbound && <Robot className="w-3 h-3" />}
+                                  <div className="flex flex-col gap-0 pb-1 items-start text-left">
+                                    <span className="flex items-center gap-1 text-xs font-medium text-foreground leading-4">
+                                      {ownerIsAgent && <Robot className="w-3 h-3" />}
                                       {title}
                                     </span>
                                     {metaLine && (
@@ -2281,6 +2293,7 @@ function DesktopMessagesList() {
                                   </div>
                                 );
                               }
+
 
 
                               const renderItem = (() => {
@@ -2541,6 +2554,7 @@ function DesktopMessagesList() {
                                 key: item._type === 'message' ? `m-${item.data.id}` : `n-${item.data.id}`,
                                 blockIndex: block.blockIndex,
                                 kind: (descriptor?.kind ?? 'message') as 'message' | 'note' | 'system',
+                                direction: descriptor?.direction ?? null,
                                 separator,
                                 rotationSeparator,
                                 blockHeader,
@@ -2554,7 +2568,14 @@ function DesktopMessagesList() {
                             // e notas internas ficam fora dos cartões.
                             type Segment =
                               | { type: 'loose'; key: string; nodes: JSX.Element[] }
-                              | { type: 'block'; key: string; blockIndex: number; nodes: JSX.Element[] };
+                              | {
+                                  type: 'block';
+                                  key: string;
+                                  blockIndex: number;
+                                  hasInbound: boolean;
+                                  hasOutbound: boolean;
+                                  nodes: JSX.Element[];
+                                };
                             const segments: Segment[] = [];
                             for (const r of renderedItems) {
                               const loose: JSX.Element[] = [];
@@ -2570,14 +2591,19 @@ function DesktopMessagesList() {
                                 continue;
                               }
 
+                              const isInbound = r.direction === 'inbound';
                               const last = segments[segments.length - 1];
                               if (last && last.type === 'block' && last.blockIndex === r.blockIndex) {
                                 last.nodes.push(r.renderItem);
+                                last.hasInbound = last.hasInbound || isInbound;
+                                last.hasOutbound = last.hasOutbound || !isInbound;
                               } else {
                                 segments.push({
                                   type: 'block',
                                   key: `block-${r.blockIndex}-${r.key}`,
                                   blockIndex: r.blockIndex,
+                                  hasInbound: isInbound,
+                                  hasOutbound: !isInbound,
                                   nodes: [
                                     ...(r.blockHeader ? [r.blockHeader] : []),
                                     r.renderItem,
@@ -2596,7 +2622,10 @@ function DesktopMessagesList() {
                               ) : (
                                 <div
                                   key={segment.key}
-                                  className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5 space-y-1"
+                                  className={cn(
+                                    'rounded-lg border border-border/30 bg-muted/10 px-2.5 py-1.5 space-y-0.5 w-fit max-w-[88%] mt-4',
+                                    segment.hasOutbound && !segment.hasInbound ? 'ml-auto' : 'mr-auto'
+                                  )}
                                 >
                                   {segment.nodes.map((node, i) => (
                                     <Fragment key={i}>{node}</Fragment>
@@ -2604,6 +2633,7 @@ function DesktopMessagesList() {
                                 </div>
                               )
                             );
+
                           })()}
                           <div ref={scrollRef} />
                         </div>

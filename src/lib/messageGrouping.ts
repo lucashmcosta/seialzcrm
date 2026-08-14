@@ -73,26 +73,43 @@ function continuesGroup(prev: GroupingItem | undefined, curr: GroupingItem): boo
 
 /**
  * Blocos de CONTEXTO (estilo Kommo). Cada bloco representa um mesmo contexto
- * de atendimento: mesmo remetente, mesmo operador/IA, mesmo número de envio e
- * mesmo provider. O gap de tempo NÃO quebra bloco — ele só afeta o
- * agrupamento interno de bolhas (`computeMessageGroups`).
+ * TÉCNICO da conversa: mesmo número de envio (endpoint), mesmo provider e mesmo
+ * operador/IA responsável. A direção da mensagem NÃO quebra bloco — cliente e
+ * operador convivem no mesmo cartão. O gap de tempo também não quebra bloco;
+ * ele só afeta o agrupamento interno de bolhas (`computeMessageGroups`).
  */
-function continuesBlock(prev: GroupingItem | undefined, curr: GroupingItem): boolean {
+function continuesBlock(
+  prev: GroupingItem | undefined,
+  curr: GroupingItem,
+  /** Identidade outbound corrente do bloco (propagada através de inbounds). */
+  outbound: { senderType: string | null; senderId: string | null } | null,
+): boolean {
   if (!prev) return false;
   // Notas e eventos de sistema são sempre blocos próprios.
   if (curr.kind !== 'message' || prev.kind !== 'message') return false;
   if (curr.dateBreak || curr.endpointBreak) return false;
-  if (prev.direction !== curr.direction) return false;
-  if ((prev.senderType ?? null) !== (curr.senderType ?? null)) return false;
-  // Outbound: operador/IA precisa ser o mesmo.
-  if (curr.direction !== 'inbound' && (prev.senderId ?? null) !== (curr.senderId ?? null)) return false;
   // Troca de número de envio ou de provider abre novo contexto.
   if ((prev.endpointId ?? null) !== (curr.endpointId ?? null)) return false;
-  return (prev.provider ?? null) === (curr.provider ?? null);
+  if ((prev.provider ?? null) !== (curr.provider ?? null)) return false;
+  // Outbound: operador/IA precisa ser o mesmo do contexto corrente.
+  if (curr.direction !== 'inbound' && outbound) {
+    if (outbound.senderType !== (curr.senderType ?? null)) return false;
+    if (outbound.senderId !== (curr.senderId ?? null)) return false;
+  }
+  return true;
 }
 
 export function computeContextBlocks(items: GroupingItem[]): ContextBlockFlags[] {
-  const starts: boolean[] = items.map((item, i) => !continuesBlock(items[i - 1], item));
+  const starts: boolean[] = [];
+  let outbound: { senderType: string | null; senderId: string | null } | null = null;
+  items.forEach((item, i) => {
+    const isStart = !continuesBlock(items[i - 1], item, outbound);
+    starts.push(isStart);
+    if (isStart) outbound = null;
+    if (item.kind === 'message' && item.direction !== 'inbound') {
+      outbound = { senderType: item.senderType ?? null, senderId: item.senderId ?? null };
+    }
+  });
   let blockIndex = -1;
   const indexes = starts.map((isStart) => {
     if (isStart) blockIndex += 1;
@@ -104,6 +121,7 @@ export function computeContextBlocks(items: GroupingItem[]): ContextBlockFlags[]
     blockIndex: indexes[i],
   }));
 }
+
 
 
 /**

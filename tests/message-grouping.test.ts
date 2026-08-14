@@ -107,17 +107,38 @@ describe('computeContextBlocks', () => {
     expect(starts([msg(), msg({ timestamp: T0 + GROUP_GAP_MS * 10 })])).toEqual([true, false]);
   });
 
-  it('troca de direção abre novo bloco', () => {
-    expect(starts([msg(), msg({ direction: 'inbound', senderId: null, senderType: null })])).toEqual([true, true]);
+  it('troca de direção NÃO abre novo bloco', () => {
+    expect(starts([msg(), msg({ direction: 'inbound', senderId: null, senderType: null })])).toEqual([true, false]);
+  });
+
+  it('inbound entre duas outbound do mesmo operador mantém o cartão', () => {
+    expect(
+      starts([
+        msg(),
+        msg({ direction: 'inbound', senderId: null, senderType: null, timestamp: T0 + 1000 }),
+        msg({ timestamp: T0 + 2000 }),
+      ]),
+    ).toEqual([true, false, false]);
   });
 
   it('troca de operador abre novo bloco', () => {
     expect(starts([msg(), msg({ senderId: 'u2' })])).toEqual([true, true]);
   });
 
+  it('troca de operador através de um inbound abre novo bloco', () => {
+    expect(
+      starts([
+        msg(),
+        msg({ direction: 'inbound', senderId: null, senderType: null }),
+        msg({ senderId: 'u2' }),
+      ]),
+    ).toEqual([true, false, true]);
+  });
+
   it('entrada de IA abre novo bloco', () => {
     expect(starts([msg(), msg({ senderType: 'agent', senderId: 'a1' })])).toEqual([true, true]);
   });
+
 
   it('troca de endpoint abre novo bloco', () => {
     expect(starts([msg({ endpointId: 'e1' }), msg({ endpointId: 'e2' })])).toEqual([true, true]);
