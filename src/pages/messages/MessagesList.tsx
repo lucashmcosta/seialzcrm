@@ -2351,19 +2351,21 @@ function DesktopMessagesList() {
                                         {message.media_urls.map((rawUrl, i) => {
                                           const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
                                           if (message.media_type === 'audio' || rawUrl.match(/\.(ogg|oga|opus|mp3|mpeg|wav|m4a|aac|amr|webm)(\?|$)/i)) {
-                                            const isAudioOnly = message.media_type === 'audio';
-                                            const senderLabel = isOutbound
-                                              ? (message.sender_name ? `${message.sender_name} · ` : '')
-                                              : '';
-                                            const timeStr = new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
-                                            const audioTimestamp = `${senderLabel}${timeStr}`;
-                                            return <AudioMessagePlayer key={i} src={url}
-                                              messageId={message.id}
-                                              threadId={(message as any).thread_id}
-                                              mediaType={message.media_type}
-                                              timestamp={isAudioOnly ? audioTimestamp : undefined}
-                                              statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message) : undefined}
-                                            />;
+                                             const isAudioOnly = message.media_type === 'audio';
+                                             const senderLabel = isOutbound && isGroupStart
+                                               ? (message.sender_name ? `${message.sender_name} · ` : '')
+                                               : '';
+                                             const timeStr = isGroupEnd
+                                               ? new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
+                                               : '';
+                                             const audioTimestamp = `${senderLabel}${timeStr}`.replace(/ · $/, '');
+                                             return <AudioMessagePlayer key={i} src={url}
+                                               messageId={message.id}
+                                               threadId={(message as any).thread_id}
+                                               mediaType={message.media_type}
+                                               timestamp={isAudioOnly && audioTimestamp ? audioTimestamp : undefined}
+                                               statusIcon={isAudioOnly && isOutbound && isGroupEnd ? renderStatusIcon(message) : undefined}
+                                             />;
                                           }
                                           if (message.media_type === 'image' || rawUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
                                             return (
