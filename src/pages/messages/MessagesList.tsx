@@ -2448,23 +2448,29 @@ function DesktopMessagesList() {
                                       <MessageFailureInline errorCode={message.error_code} />
                                     )}
 
-                                    {/* Footer - Name + Time + Status (hidden for audio-only, rendered inside player) */}
-                                    {!(message.media_type === 'audio') && (
-                                    <div className="mt-1 flex items-center justify-end gap-1">
-                                      <span className="text-[11px] leading-[14px] text-muted-foreground/70 whitespace-nowrap">
-                                        {isOutbound 
-                                          ? (message.sender_name ? `${message.sender_name} · ` : '')
-                                          : ''
-                                        }
-                                        {new Date(message.sent_at).toLocaleTimeString(locale, {
-                                          hour: '2-digit',
-                                          minute: '2-digit',
-                                          hour12: false
-                                        })}
-                                      </span>
-                                      {isOutbound && renderStatusIcon(message)}
-                                    </div>
-                                    )}
+                                    {/* Footer — nome no início do bloco, horário/status no fim
+                                        (áudio-only renderiza dentro do player) */}
+                                    {!(message.media_type === 'audio') && (() => {
+                                      const senderLabel = isOutbound && isGroupStart && message.sender_name
+                                        ? message.sender_name
+                                        : '';
+                                      const timeStr = isGroupEnd
+                                        ? new Date(message.sent_at).toLocaleTimeString(locale, {
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            hour12: false,
+                                          })
+                                        : '';
+                                      if (!senderLabel && !timeStr) return null;
+                                      return (
+                                        <div className="mt-1 flex items-center justify-end gap-1">
+                                          <span className="text-[11px] leading-[14px] text-muted-foreground/70 whitespace-nowrap">
+                                            {senderLabel && timeStr ? `${senderLabel} · ${timeStr}` : `${senderLabel}${timeStr}`}
+                                          </span>
+                                          {isOutbound && isGroupEnd && renderStatusIcon(message)}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                   
                                   {/* Reply button - right side for outbound */}
