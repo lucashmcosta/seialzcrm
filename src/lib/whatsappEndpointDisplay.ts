@@ -33,7 +33,7 @@ export function whatsappProviderShortLabel(provider: string | null | undefined):
 
 export function whatsappProviderLabel(provider: string | null | undefined): string | null {
   if (!provider) return null;
-  return PROVIDER_LABELS[provider] ?? provider;
+  return PROVIDER_LABELS[provider] ?? PROVIDER_SHORT_LABELS[provider] ?? provider;
 }
 
 
