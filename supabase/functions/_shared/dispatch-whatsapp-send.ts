@@ -12,6 +12,12 @@
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { resolveSalesReplyRoute } from "./route-resolver.ts";
 import { resolveManualReplyEndpoint } from "./manual-reply-endpoint.ts";
+import {
+  normalizeReplySelection,
+  type ReplyEndpointChoice,
+  type ReplyEndpointSelection,
+} from "./reply-endpoint-selection.ts";
+
 
 
 
@@ -50,12 +56,23 @@ export interface WhatsAppSendPayload {
   dryRun?: boolean;
   endpointId?: string;
   /**
-   * Switch "Responder por" (Comercial). Quando presente e válido, substitui
-   * SOMENTE o endpoint e o provider correspondente. Ausente ⇒ short-circuit.
+   * Switch "Responder por" (Comercial) — contrato legado equivalente a
+   * `replyEndpointSelection = { source: "manual", endpointId }`.
    */
   manualReplyEndpointId?: string;
+  /**
+   * Seleção do endpoint de resposta com ORIGEM explícita:
+   *   • { source: "manual", endpointId } → usa exatamente esse endpoint.
+   *   • { source: "derived" }            → o servidor reconsulta a última
+   *     mensagem válida da thread no momento do envio (fonte de verdade);
+   *     `endpointId` aqui é apenas hint da UI e NÃO é usado como comando.
+   */
+  replyEndpointSelection?: ReplyEndpointSelection;
+  /** Auditoria: origem efetiva da seleção, propagada à provider function. */
+  replyEndpointChoice?: ReplyEndpointChoice;
   migrationContext?: MigrationContext;
 }
+
 
 
 export interface WhatsAppSendResult {
@@ -125,15 +142,16 @@ export async function resolveProvider(
   supabase: SupabaseClient,
   payload: WhatsAppSendPayload,
 ): Promise<{ provider: Provider; source: ResolveSource }> {
-  // ── Override manual ("Responder por") — PRECEDE tudo, inclusive V2 ──
-  // Campo ausente ⇒ short-circuit dentro de resolveManualReplyEndpoint
-  // (nenhuma query nova, fluxo atual byte-a-byte).
-  if (payload.manualReplyEndpointId) {
+  // ── Seleção MANUAL do operador — PRECEDE tudo, inclusive V2 ──
+  // Fail-closed: usa EXATAMENTE o endpoint escolhido, após revalidação.
+  const selection = normalizeReplySelection(payload);
+
+  if (selection.source === "manual" && selection.endpointId) {
     const manual = await resolveManualReplyEndpoint(supabase, {
       organizationId: payload.organizationId,
       threadId: payload.threadId ?? null,
       userId: payload.userId ?? null,
-      manualReplyEndpointId: payload.manualReplyEndpointId,
+      manualReplyEndpointId: selection.endpointId,
     });
     if (manual.mode === "error") {
       throw new DispatchResolveError(manual.code, manual.message);
@@ -142,6 +160,8 @@ export async function resolveProvider(
       // Substitui SOMENTE endpoint + provider. Todo o resto do pipeline do
       // provider escolhido continua sendo executado normalmente.
       payload.endpointId = manual.endpointId;
+      payload.manualReplyEndpointId = manual.endpointId;
+      payload.replyEndpointChoice = "manual";
       console.log("[dispatch-wa] manual_reply_override (server)", {
         threadId: payload.threadId ?? null,
         endpointId: manual.endpointId,
@@ -151,10 +171,9 @@ export async function resolveProvider(
     }
   }
 
-  // ── Caminho canônico Comercial V2 (atrás da flag conv_route_resolver_v2) ──
-  // Precede QUALQUER outra resolução: quando aplicável, a resposta sai
-  // obrigatoriamente pelo active_endpoint_id da Route Comercial.
-
+  // ── Seleção DERIVADA (canônica Comercial V2, flag conv_route_resolver_v2) ──
+  // O servidor é a fonte de verdade: reconsulta a última mensagem válida da
+  // thread agora e envia por ela. A UI nunca comanda esse endpoint.
   if (payload.threadId) {
     const route = await resolveSalesReplyRoute(supabase, {
       organizationId: payload.organizationId,
@@ -162,6 +181,8 @@ export async function resolveProvider(
     });
     if (route.applicable && route.sendEndpointId && route.provider) {
       payload.endpointId = route.sendEndpointId;
+      payload.manualReplyEndpointId = undefined;
+      payload.replyEndpointChoice = route.choice ?? "derived";
       return { provider: route.provider, source: "canonical_route_v2" };
     }
     if (route.reason === "REPLY_ROUTE_UNRESOLVED") {
@@ -180,6 +201,7 @@ export async function resolveProvider(
 
 
   if (payload.threadId) {
+
     const { data: thread, error: tErr } = await supabase
       .from("message_threads")
       .select("primary_endpoint_id, business_context, organization_id, channel")

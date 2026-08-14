@@ -536,7 +536,10 @@ serve(async (req) => {
       }
       messagesEndpointIdInput = manualReply.endpointId
     }
-    const replyChoiceMeta = replyChoiceMetadata(manualReply)
+    const replyChoiceMeta = replyChoiceMetadata(
+      manualReply,
+      (body as any).replyEndpointChoice === "route_default" ? "route_default" : "derived",
+    )
 
 
 

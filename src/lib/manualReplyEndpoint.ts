@@ -96,19 +96,10 @@ export async function resolveManualReplyEndpoint(input: {
     );
   }
 
-  const { data: grant, error: grantErr } = await supabase
-    .from("user_reply_endpoints")
-    .select("id")
-    .eq("organization_id", input.organizationId)
-    .eq("user_id", input.userId)
-    .eq("endpoint_id", manualId)
-    .maybeSingle();
-  if (grantErr || !grant) {
-    return fail(
-      "MANUAL_REPLY_ENDPOINT_FORBIDDEN",
-      "Usuário não autorizado a enviar por este número.",
-    );
-  }
+  // Sem gate por grants: o seletor vale para TODO usuário com acesso ao
+  // Comercial. A autorização é a elegibilidade Comercial do número (abaixo),
+  // avaliada server-side.
+
 
   const { data: eligible, error: eligibleErr } = await supabase.rpc(
     "fn_is_sales_eligible_endpoint",

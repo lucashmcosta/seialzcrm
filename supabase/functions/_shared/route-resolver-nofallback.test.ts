@@ -1,8 +1,9 @@
 // Barreira estática anti-fallback do caminho canônico V2.
 //
-// Contrato Fase 2: a Route é descoberta EXCLUSIVAMENTE pelo endpoint_id da
-// última mensagem inbound roteável. É PROIBIDO qualquer fallback por
-// primary_endpoint_id, purpose, último outbound ou provider default.
+// Contrato atual: a resposta sai pelo endpoint da ÚLTIMA MENSAGEM VÁLIDA da
+// conversa (inbound OU outbound). É PROIBIDO qualquer fallback por
+// primary_endpoint_id, purpose ou provider default. O default legado da Route
+// (`active_endpoint_id`) só é permitido para conversa SEM nenhuma mensagem.
 //
 // Este teste falha se esses termos aparecerem em CÓDIGO (fora de comentários)
 // nos dois arquivos do caminho V2.
@@ -43,8 +44,8 @@ for (const url of FILES) {
       `Provider default "twilio" usado como fallback em ${url.pathname}`,
     );
 
-    // último outbound é proibido: só direction inbound pode ser consultado
-    assert(!code.includes('"outbound"'), `Consulta a outbound em ${url.pathname}`);
+    // A seleção derivada considera as duas direções da conversa.
     assert(code.includes('"inbound"'), `Consulta à inbound ausente em ${url.pathname}`);
+    assert(code.includes('"outbound"'), `Consulta a outbound ausente em ${url.pathname}`);
   });
 }

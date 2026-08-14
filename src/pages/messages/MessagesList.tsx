@@ -47,6 +47,7 @@ import { SalesConversationHeader } from '@/components/messages/route/SalesConver
 import { SalesComposerStatus } from '@/components/messages/route/SalesComposerStatus';
 import { ManualReplySelector } from '@/components/messages/route/ManualReplySelector';
 import { useManualReplyEndpoint } from '@/hooks/messages/useManualReplyEndpoint';
+import { useInvalidateThreadLastEndpoint } from '@/hooks/messages/useThreadLastEndpoint';
 import { Warning } from '@phosphor-icons/react';
 import { useSalesRoute } from '@/hooks/messages/useSalesRoute';
 import { useConsolidatedThreadIds } from '@/hooks/messages/useConsolidatedThreadIds';
@@ -705,8 +706,13 @@ function DesktopMessagesList() {
     userId: userProfile?.id,
     businessContext: selectedThreadBusinessContext,
     channel: 'whatsapp',
+    // Usado SOMENTE quando a conversa não tem nenhuma mensagem roteável.
+    routeDefaultEndpointId: salesRoute.activeEndpoint?.id ?? null,
   });
-  const manualReplyEndpointId = manualReply.manualReplyEndpointId;
+  const replyEndpointSelection = manualReply.replyEndpointSelection;
+  // O seletor "Responder por" reflete a última mensagem válida da conversa:
+  // após qualquer envio, essa leitura precisa ser revalidada.
+  const invalidateThreadLastEndpoint = useInvalidateThreadLastEndpoint();
 
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false);
   const salesEndpoints = useMemo(
@@ -988,6 +994,7 @@ function DesktopMessagesList() {
         } as any)
         .eq('id', moveStageOpp.id);
       if (error) throw error;
+      invalidateThreadLastEndpoint(selectedThreadId);
       toast({
         title: locale === 'pt-BR' ? 'Etapa atualizada' : 'Stage updated',
         description: locale === 'pt-BR' ? `"${moveStageOpp.title}" movida para ${target.name}.` : `"${moveStageOpp.title}" moved to ${target.name}.`,
@@ -1100,6 +1107,7 @@ function DesktopMessagesList() {
         .order('sent_at', { ascending: true });
 
       if (error) throw error;
+      invalidateThreadLastEndpoint(selectedThreadId);
       setMessages((data as Message[]) || []);
 
       // Fetch inline notes from activities for this contact
@@ -1179,6 +1187,7 @@ function DesktopMessagesList() {
         occurred_at: new Date().toISOString(),
       });
       if (error) throw error;
+      invalidateThreadLastEndpoint(selectedThreadId);
     } catch (err: any) {
       setInlineNotes((prev) => prev.filter((n) => n.id !== tempId));
       toast({ variant: 'destructive', description: 'Erro ao salvar nota' });
@@ -1257,10 +1266,11 @@ function DesktopMessagesList() {
           senderContext: 'messages',
           ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
           ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
-          ...(manualReplyEndpointId ? { manualReplyEndpointId } : {}),
+          ...(replyEndpointSelection ? { replyEndpointSelection } : {}),
         });
 
       if (error) throw error;
+      invalidateThreadLastEndpoint(selectedThreadId);
 
       if (data.error) {
         if (data.requiresTemplate) {
@@ -1399,10 +1409,11 @@ function DesktopMessagesList() {
           senderContext: 'messages',
           ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
           ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
-          ...(manualReplyEndpointId ? { manualReplyEndpointId } : {}),
+          ...(replyEndpointSelection ? { replyEndpointSelection } : {}),
         });
 
       if (error) throw error;
+      invalidateThreadLastEndpoint(selectedThreadId);
 
       if (data.error) {
         throw new Error(data.error);
@@ -1512,10 +1523,11 @@ function DesktopMessagesList() {
           senderContext: 'messages',
           ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
           ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
-          ...(manualReplyEndpointId ? { manualReplyEndpointId } : {}),
+          ...(replyEndpointSelection ? { replyEndpointSelection } : {}),
         });
 
       if (error) throw error;
+      invalidateThreadLastEndpoint(selectedThreadId);
       refetchThreads();
     } catch (error: any) {
       console.error('Error uploading media:', error);
