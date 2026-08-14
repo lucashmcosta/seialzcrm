@@ -1,63 +1,63 @@
-# Evolution 7020 — inbound ausente com sessão viva (auditoria read-only concluída)
+# "Responder por" — seleção automática pelo endpoint da última mensagem
 
-## Relatório solicitado
+## Auditoria read-only (estado atual)
 
-```text
-PHONE_RECEIVED_INBOUND=YES (informado pelo operador)
-BAILEYS_SESSION_OPEN=YES        (connectionState=open, ownerJid 551150287020@s.whatsapp.net)
-BAILEYS_DEVICE_LINKED=YES       (sessão pareada e ativa; profileName "Central Trabalhista",
-                                 profilePicUrl e contatos sincronizados)
-DEVICE_LINKED_AT=2026-08-14T17:13:52Z (createdAt da instância) / último update 18:03:44Z
-APP_STATE_SYNC=OK               (contatos 446, chats 276, histórico 5.386 msgs importadas;
-                                 contato de João Teste sincronizado às 17:15:03)
-NON_MESSAGE_EVENTS=YES          (messages.update/receipts chegando ao webhook até 18:43:45Z,
-                                 inclusive receipts fromMe:false — socket vivo e entregando)
-MESSAGES_UPSERT_RECEIVED=NO     (último messages.upsert: 18:20:40Z, outbound fromMe:true;
-                                 zero mensagens de 5511964298621 na store da instância)
-SESSION_ERRORS=indisponível pela API (Evolution v2 não expõe /logs);
-                nenhum disconnectionReasonCode / disconnectionObject / disconnectionAt na instância
-EVOLUTION_VERSION=2.3.7 (clientName evolution_divus)
-BAILEYS_VERSION=não exposto pela API; WhatsApp Web pinado em 2.3000.1045220589
-INSTANCE_SETTINGS=padrão (rejectCall=false, groupsIgnore=false, alwaysOnline=false,
-                  readMessages=false, readStatus=false, syncFullHistory=false) — igual ao default
-                  de criação manual no Manager
-WEBHOOK=enabled, byEvents=false, base64=false, eventos CONNECTION_UPDATE/QRCODE_UPDATED/
-        MESSAGES_UPSERT/MESSAGES_UPDATE (válido; entrega comprovada)
-```
+**Como a "última mensagem" é determinada hoje**
+- O resolver (`_shared/route-resolver.ts`, passo 3) busca apenas a última **inbound** com `endpoint_id`, ordenada por `created_at DESC`. Outbound nunca influencia.
+- Com esse endpoint ele descobre a Route (`messaging_line_endpoints` ativo → `messaging_lines` sales/whatsapp ativa) e **envia por `messaging_lines.active_endpoint_id`**, não pelo endpoint da inbound.
+- A UI ordena a timeline por `sent_at` (`MessagesList.tsx`).
 
-LIKELY_ROOT_CAUSE: a sessão Baileys está registrada e recebendo tráfego de sinalização
-(receipts/updates/contatos), mas não está materializando notificações de mensagem de entrada.
-O último inbound real na store é 17:15:37Z — cerca de 2 minutos após o pareamento — e depois
-disso somente eventos de status. Isso caracteriza degradação do canal de mensagens do próprio
-socket (falha de decrypt/Signal session/pre-key silenciosa ou dessincronia de endereçamento
-@lid do Evolution 2.3.7, que grava todos os chats como `<id>@lid` e não consegue associar o
-remetente `5511964298621@s.whatsapp.net`), e não problema de configuração, de webhook, de
-parser do CRM ou de roteamento externo do número.
+**Todos os tipos têm `endpoint_id`?** Não. Em threads sales/whatsapp:
+- outbound com endpoint: 74.903 · sem endpoint: 1.878
+- inbound com endpoint: 73.587 · sem endpoint: 2.149
+- `direction='internal'` (notas internas e eventos): 114 registros, parte com endpoint herdado
 
-Achado secundário (não é a causa): todos os eventos `evolution_api` recentes estão com
-`process_status = failed` em `integration_inbound_events` — o parser rejeita `messages.update`.
-Isso não afeta inbound de mensagem, mas gera ruído e mascara diagnóstico.
+**Notas internas / sistema entram na ordenação?** Sim, se não filtradas: existem 80 registros com `is_internal_note=true` e 34 `direction='internal'` sem nota. Precisam ser ignorados: só `direction in ('inbound','outbound')`, `deleted_at is null`, `is_internal_note is not true`, `endpoint_id is not null`.
 
-SAFE_NEXT_STEP: nada foi reiniciado, deslogado ou re-pareado. Duas frentes possíveis, ambas
-sem tocar Meta 7067 / Meta histórico 7020 / Atendimento:
+**Consumidores atuais das tabelas de preferência**
+- `thread_reply_endpoint_prefs`: escrita/leitura via RPCs `set_thread_reply_endpoint_pref` / `clear_thread_reply_endpoint_pref`; lida por `useManualReplyEndpoint` e pelo validador server-side `_shared/manual-reply-endpoint.ts`. Nenhum outro consumidor.
+- `user_reply_endpoints`: fonte da **lista de opções** na UI e passo de autorização no validador server-side (client mirror em `src/lib/manualReplyEndpoint.ts`).
 
-## Próximos passos propostos (escolher antes de qualquer ação)
+**Consequência**: hoje o seletor mostra "Automático" + apenas endpoints com grant do usuário, e "Automático" cai em `active_endpoint_id`. Isso é exatamente o que o novo contrato remove.
 
-1. Confirmação no aparelho (zero risco, manual)
-   - No celular 7020: WhatsApp > Aparelhos conectados > verificar se a sessão Evolution
-     aparece e qual a data/hora. A API não expõe isso; só o aparelho responde.
-   - Enviar novo inbound de um terceiro número e reauditar store + `integration_inbound_events`.
-     Se continuar ausente com receipts fluindo, a degradação do socket está confirmada.
+## O que muda
 
-2. Recuperação da sessão (requer sua autorização explícita)
-   - Opção A: `restart` da instância (mantém credenciais, força re-handshake do socket).
-     Menor intervenção; sem novo QR; risco baixo.
-   - Opção B: logout + novo QR (recria Signal keys). Só se A não resolver.
-   - Nenhuma opção altera `active_endpoint_id` (Meta 7067 segue ativo), `messaging_lines`,
-     `messaging_line_rotations` nem o endpoint Meta histórico 7020.
+### 1. Nova fonte de seleção (UI)
+- Novo hook `useThreadLastEndpoint(threadId)`: busca a última mensagem válida da thread (`direction in ('inbound','outbound')`, `deleted_at is null`, `is_internal_note is not true`, `endpoint_id not null`, order `sent_at desc, created_at desc`, limit 1).
+- `selectedEndpointId` passa a ser derivado assim:
+  1. endpoint da última mensagem válida, **se ainda elegível** (mesma org, whatsapp, ativo, vinculado à Route Comercial, provider suportado);
+  2. senão, se não existir nenhuma mensagem válida com endpoint → `messaging_lines.active_endpoint_id` da Route Comercial (fallback legado);
+  3. se o endpoint da última mensagem existir mas estiver inelegível → nada é auto-selecionado; o seletor mostra estado "selecione um número" e o envio fica bloqueado até escolha explícita.
+- Não há mais preferência persistida para explicar o estado visual: após um envio manual, a própria mensagem outbound vira a última mensagem e o seletor já reflete o novo número (invalidação da query no `onSuccess` do envio).
 
-3. Higiene do parser (independente, opcional)
-   - Corrigir o handler de `messages.update` no `evolution-webhook` para não marcar eventos
-     legítimos de status como `failed`.
+### 2. Lista de opções = endpoints Comerciais da organização
+- Substituir a query em `user_reply_endpoints` por: endpoints `communication_endpoints` da org, `channel='whatsapp'`, `is_active=true`, com link ativo em `messaging_line_endpoints` para a `messaging_lines` sales/whatsapp ativa da org (mesma definição de `fn_is_sales_eligible_endpoint`).
+- Resultado: nunca históricos/inativos, nunca Atendimento, nunca outra organização. Visível para qualquer usuário do módulo Comercial, sem grant.
 
-Nada será executado sem sua autorização.
+### 3. Remoção de "Automático" e do conceito "Ativo"
+- `ManualReplySelector.tsx`: remover item "Automático", `resetToAuto` e o rótulo `AUTO_LABEL`; lista só números reais com check no selecionado.
+- `RouteIndicators.tsx` / `SalesRoutePanel.tsx` / `SalesWhatsAppSettingsSection.tsx`: remover badge "Ativo para envio" e ação "Tornar ativo" como conceito de resposta.
+- `active_endpoint_id` permanece no backend apenas como fallback legado.
+
+### 4. Envio sempre explícito
+- O composer passa **sempre** o endpoint selecionado no payload (`manualReplyEndpointId`), inclusive quando ele coincide com o da última inbound. Some o caminho "auto" que caía em `active_endpoint_id`.
+- `_shared/route-resolver.ts`: quando um endpoint explícito é informado e validado, ele é o `sendEndpointId` — o passo que hoje troca para `active_endpoint_id` deixa de valer para threads com contexto. Threads sem nenhuma mensagem com endpoint continuam usando `active_endpoint_id`.
+- `_shared/manual-reply-endpoint.ts` (e o mirror em `src/lib/manualReplyEndpoint.ts`): o passo de autorização por `user_reply_endpoints` deixa de ser exigido; a validação passa a ser org + channel whatsapp + ativo + `fn_is_sales_eligible_endpoint` + provider suportado, mantendo fail-closed e os erros 409 já existentes.
+- `thread_reply_endpoint_prefs` e `user_reply_endpoints` não são apagados nem alterados; apenas deixam de ser lidos no caminho de resposta.
+
+## Testes (arquivo novo em `supabase/functions/_shared/`, helpers puros)
+`LAST_MESSAGE_INBOUND_7020_EVOLUTION`, `LAST_MESSAGE_OUTBOUND_7067_META`, `LAST_MESSAGE_OUTBOUND_7020_EVOLUTION`, `NEW_INBOUND_AFTER_MANUAL_OVERRIDE`, `THREAD_WITHOUT_MESSAGES`, `LAST_MESSAGE_ENDPOINT_INACTIVE`, `CROSS_ORG_ENDPOINT`, `CUSTOMER_SERVICE_ENDPOINT`, `SWITCH_VISIBLE_FOR_COMMERCIAL_USER_WITHOUT_GRANTS`, mais o filtro de notas internas/`direction='internal'`.
+
+## Escopo e limites
+- Zero migração de dados, zero alteração de Routes, `active_endpoint_id`, `messaging_lines`, rotações, Atendimento.
+- Nenhuma flag alterada nesta etapa. Observação: `sales_manual_reply_endpoint_v1` hoje está ON só para Viagi e Central — com a regra nova ela deixa de fazer sentido como gate de visibilidade; a liberação global fica como decisão separada, sua, depois da validação.
+- Não mexe no diagnóstico da sessão Evolution 7020 (inbound Baileys) em andamento.
+
+## Arquivos afetados
+- `src/hooks/messages/useManualReplyEndpoint.ts` (reescrita da fonte de opções e da seleção)
+- novo `src/hooks/messages/useThreadLastEndpoint.ts`
+- `src/lib/manualReplySelection.ts` (helpers puros de última mensagem/elegibilidade)
+- `src/components/messages/route/ManualReplySelector.tsx`, `RouteIndicators.tsx`, `SalesRoutePanel.tsx`
+- `src/pages/messages/MessagesList.tsx` (payload sempre explícito + invalidação após envio)
+- `supabase/functions/_shared/route-resolver.ts`, `supabase/functions/_shared/manual-reply-endpoint.ts`, `src/lib/manualReplyEndpoint.ts`
+- deploy das functions de envio/dispatch afetadas
