@@ -228,7 +228,7 @@ export function SalesWhatsAppSettingsSection() {
                     key={ep.endpointId}
                     className="flex items-center gap-3 rounded-md border border-border px-3 py-2"
                   >
-                    <span className="font-data text-xs text-foreground shrink-0 w-[9.5rem]">
+                    <span className="font-data text-sm font-semibold text-foreground shrink-0 w-[9.5rem]">
                       {ep.addressMasked ?? '—'}
                     </span>
 
@@ -236,7 +236,7 @@ export function SalesWhatsAppSettingsSection() {
                       <ProviderChip provider={ep.providerRaw} />
                       <StateChip ok={state.ok} label={state.label} title={blockedTitle} />
                       {ep.isRouteActive && (
-                        <Badge className="text-[10px]">Ativo</Badge>
+                        <Badge className="text-[10px]">Ativo para envio</Badge>
                       )}
                     </span>
 
@@ -253,19 +253,30 @@ export function SalesWhatsAppSettingsSection() {
                         </Button>
                       )}
                       {canActivate && (
-                        <Button
-                          size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
-                          title={ep.activationEligible ? undefined : blockedTitle}
-                          disabled={setActiveEndpoint.isPending || !ep.activationEligible}
-                          onClick={() =>
-                            setActiveEndpoint.mutateAsync({ lineId: ep.lineId, endpointId: ep.endpointId })
-                              .then(() => toast.success('Número ativo atualizado'))
-                              .catch((e) => toast.error(e instanceof Error ? e.message : 'Falha'))}
-                        >
-                          Tornar ativo
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Button
+                                size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
+                                disabled={setActiveEndpoint.isPending || !ep.activationEligible}
+                                onClick={() =>
+                                  setActiveEndpoint.mutateAsync({ lineId: ep.lineId, endpointId: ep.endpointId })
+                                    .then(() => toast.success('Número ativo atualizado'))
+                                    .catch((e) => toast.error(e instanceof Error ? e.message : 'Falha'))}
+                              >
+                                Tornar ativo
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          {!ep.activationEligible && (
+                            <TooltipContent side="left" className="max-w-[15rem] text-[11px]">
+                              {blockedTitle ?? 'Este número ainda não pode ser ativado.'}
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
                       )}
                     </span>
+
                   </li>
                 );
               })}
