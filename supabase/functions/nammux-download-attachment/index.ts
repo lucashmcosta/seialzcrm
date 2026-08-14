@@ -181,7 +181,15 @@ Deno.serve(async (req) => {
 
   const buf = await file.arrayBuffer();
   const mime = att.mime_type || "application/octet-stream";
-  const safeName = (att.display_name || att.original_file_name || att.file_name).replace(/"/g, "");
+  // Latin-1-safe Content-Disposition (RFC 5987). display_name é auto-gerado como
+  // "Tipo — Nome" com travessão "—" (U+2014, fora do Latin-1); colocá-lo cru num header
+  // fazia o construtor de Response lançar TypeError -> HTTP 500 não capturado.
+  const rawName = (att.display_name || att.original_file_name || att.file_name || "download").replace(/"/g, "");
+  const asciiName = rawName.replace(/[^\x20-\x7E]/g, "_"); // filename= legado: só ASCII imprimível
+  const utf8Name = encodeURIComponent(rawName).replace(
+    /['()*]/g,
+    (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase(),
+  ); // filename*: nome real preservado
 
   await logAudit(supabase, {
     ...baseAudit,
@@ -197,7 +205,7 @@ Deno.serve(async (req) => {
       ...corsHeaders,
       "Content-Type": mime,
       "Content-Length": String(buf.byteLength),
-      "Content-Disposition": `attachment; filename="${safeName}"`,
+      "Content-Disposition": `attachment; filename="${asciiName}"; filename*=UTF-8''${utf8Name}`,
       "X-Seialz-Attachment-Id": att.id,
       "X-Seialz-Storage-Path": att.storage_path,
     },
