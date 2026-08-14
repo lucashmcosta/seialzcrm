@@ -162,7 +162,7 @@ export function TimelineBlock({
           label={toggleLabel}
           icon={collapse.hiddenCount > 0 ? <CaretDown /> : <CaretUp />}
           interactive
-          onClick={() => setExpanded((v) => !v)}
+          onClick={handleToggle}
           className="my-1"
         />
       )}
