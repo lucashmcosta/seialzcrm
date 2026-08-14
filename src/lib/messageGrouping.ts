@@ -30,7 +30,20 @@ export interface GroupingItem {
   dateBreak?: boolean;
   /** Item precedido pelo divisor "Número alterado". */
   endpointBreak?: boolean;
+  /** Endpoint (número de envio/recebimento) da mensagem. */
+  endpointId?: string | null;
+  /** Provider do endpoint (meta_cloud_api | twilio | evolution_api). */
+  provider?: string | null;
+  /** Índice do bloco de contexto (preenchido por computeContextBlocks). */
+  blockIndex?: number;
 }
+
+export interface ContextBlockFlags {
+  isBlockStart: boolean;
+  isBlockEnd: boolean;
+  blockIndex: number;
+}
+
 
 export interface GroupingFlags {
   isGroupStart: boolean;
