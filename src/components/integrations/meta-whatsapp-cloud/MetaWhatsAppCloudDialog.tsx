@@ -22,6 +22,7 @@ import { MetaAdditionalEndpointsSection } from "./MetaAdditionalEndpointsSection
 import { MetaWabasSection } from "./MetaWabasSection";
 import { MigrateEndpointDialog } from "./MigrateEndpointDialog";
 import { useMetaMultiWabaFlag } from "@/hooks/useMetaMultiWabaFlag";
+import { useMetaWabaConnections } from "@/hooks/useMetaWabaConnections";
 
 interface Props {
   open: boolean;
