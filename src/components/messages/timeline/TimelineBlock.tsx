@@ -123,6 +123,11 @@ export function TimelineBlock({
 
   const firstVisibleIndex = total - collapse.visibleCount;
 
+  // Reposiciona o scroll após a mudança de conteúdo (expansão/colapso e remedições).
+  useLayoutEffect(() => {
+    restoreAnchor();
+  }, [expanded, heights, restoreAnchor]);
+
   const measureItem = useCallback(
     (index: number) => (node: HTMLDivElement | null) => {
       if (!node) return;
