@@ -1153,6 +1153,63 @@ function DesktopMessagesList() {
         setInlineNotes([]);
       }
 
+      // Marcos históricos do CRM (somente leitura, escopo da thread).
+      // Puramente apresentacional: não altera mensagens, envio ou realtime.
+      try {
+        const events: TimelineEvent[] = [];
+        if (thread?.created_at) {
+          events.push({
+            id: `created-${threadId}`,
+            occurred_at: thread.created_at,
+            label: locale === 'pt-BR' ? 'Conversa criada' : 'Conversation created',
+          });
+        }
+        const { data: assignments } = await supabase
+          .from('thread_assignment_history')
+          .select('id, action_type, from_user_id, to_user_id, performed_by_user_id, created_at, from_user:from_user_id(full_name), to_user:to_user_id(full_name), performed_by:performed_by_user_id(full_name)')
+          .eq('thread_id', threadId)
+          .order('created_at', { ascending: true });
+
+        for (const row of (assignments || []) as any[]) {
+          const fromName = row.from_user?.full_name ?? null;
+          const toName = row.to_user?.full_name ?? null;
+          const byName = row.performed_by?.full_name ?? null;
+          let label: string;
+          let value: string | null = null;
+          switch (row.action_type) {
+            case 'take_over':
+              label = 'Atendimento assumido';
+              value = byName ?? toName;
+              break;
+            case 'auto_reassign':
+              label = 'Atendente alterado automaticamente';
+              value = `${fromName ?? '—'} → ${toName ?? '—'}`;
+              break;
+            case 'reopen':
+              label = 'Atendimento reaberto';
+              value = byName;
+              break;
+            case 'manual_assignment':
+            default:
+              label = fromName ? 'Atendente alterado' : 'Atendente definido';
+              value = fromName ? `${fromName} → ${toName ?? '—'}` : toName ?? '—';
+              break;
+          }
+          events.push({
+            id: `assign-${row.id}`,
+            occurred_at: row.created_at,
+            label,
+            value,
+          });
+        }
+        setTimelineEvents(events);
+      } catch (eventsError) {
+        console.error('Error fetching timeline events:', eventsError);
+        setTimelineEvents([]);
+      }
+
+
+
       // (removido) recomputo local de 24h; `useServiceWindow` cuida disso.
 
 
