@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -97,7 +96,7 @@ export function SalesWhatsAppSettingsSection() {
   const { canManage } = useCanManageIntegrations(orgId);
   const {
     status, isLoading, error, refetch,
-    provisionEndpoint, setActiveEndpoint,
+    provisionEndpoint,
   } = useSalesRouteManager(orgId);
 
   const [showForm, setShowForm] = useState(false);
