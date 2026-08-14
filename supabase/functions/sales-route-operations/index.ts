@@ -947,8 +947,10 @@ serve(async (req) => {
 
       // ------------------------------------------------------ DELETE INSTANCE
       // TRAVA OBRIGATÓRIA: jamais remove silenciosamente uma instância cujo
-      // endpoint esteja em uso (Route ativa, link ativo em qualquer linha —
-      // Comercial ou Atendimento). Fail-closed com EVOLUTION_INSTANCE_IN_USE.
+      // endpoint seja o número efetivamente selecionado por uma Route ativa
+      // (Comercial ou Atendimento). O vínculo em messaging_line_endpoints
+      // representa elegibilidade, não uso; a fonte de verdade de uso é
+      // messaging_lines.active_endpoint_id.
       case "deleteInstance": {
         const name = typeof body.instanceName === "string" ? body.instanceName : "";
         if (!INSTANCE_NAME_RE.test(name)) {
@@ -979,24 +981,6 @@ serve(async (req) => {
                 lineId: l.id,
                 inboxKey: l.inbox_key,
                 reason: "ACTIVE_ENDPOINT",
-              })),
-            });
-          }
-
-          // Links pertencentes a Routes desativadas não são uso efetivo.
-          const { data: activeLinks } = await service
-            .from("messaging_line_endpoints")
-            .select("line_id, endpoint_id, is_active, messaging_lines!inner(id, is_active)")
-            .eq("endpoint_id", endpointId)
-            .eq("is_active", true)
-            .eq("messaging_lines.is_active", true);
-          if ((activeLinks ?? []).length > 0) {
-            return json(409, {
-              error: "EVOLUTION_INSTANCE_IN_USE",
-              message: "endpoint está vinculado e ativo em uma Route ativa",
-              usedBy: (activeLinks ?? []).map((l: Record<string, unknown>) => ({
-                lineId: l.line_id,
-                reason: "ACTIVE_LINK",
               })),
             });
           }
