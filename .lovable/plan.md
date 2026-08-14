@@ -1,48 +1,34 @@
-# "Responder por" — Conclusão reclassificada + resposta sobre `active_endpoint_id`
+# Guarda anti-rotação do modo Manual + piloto na Central
 
-## A. Resposta objetiva
+## Princípio
 
-**SIM — existe um único cenário residual, estreito, e ele é corrigível com uma mudança mínima.**
+No modo Manual, a escolha do operador é contrato. Se o endpoint escolhido ficar indisponível entre a validação e o envio, a mensagem NÃO pode sair pelo `active_endpoint_id` da Route. Comportamento correto: fail-closed com `409 MANUAL_REPLY_ENDPOINT_INACTIVE`, mensagem clara ao operador, e liberdade de escolher outro número ou voltar para Automático. Nenhum fallback silencioso.
 
-Por que o override manual normalmente prevalece até o provider:
+## Etapa 1 — Guarda anti-rotação (código)
 
-1. O dispatcher (cliente e servidor) chama `resolveManualReplyEndpoint` **antes** de qualquer resolução de linha/V2; com `mode === "manual"` ele fixa o provider e o `endpointId` e não consulta `messaging_lines`.
-2. Na function do provider o override é revalidado e grava `explicitEndpointId`; o `thread.primary_endpoint_id` divergente **apenas gera log** (`line_routing_honored`), não sobrescreve.
-3. O fallback purpose-aware (que escolheria outro número) só roda quando `endpoint === null`, o que não ocorre no modo Manual.
-4. A re-rota Comercial → Meta 7020 é **pós-envio** (persistência de thread), não escolhe o remetente.
+`supabase/functions/meta-whatsapp-send/index.ts` e `supabase/functions/evolution-whatsapp-send/index.ts`: antes do bloco de rotação por linha (`if (endpoint && endpoint.is_active === false)`) e antes do fallback purpose-aware (`if (!endpoint)`), inserir:
 
-O cenário residual (mesma estrutura nos três providers — Meta l.294-324, Evolution l.~300-320, Twilio l.~540-560):
+- se `manualReply.mode === "manual"` e o endpoint estiver ausente ou `is_active === false` → retornar `409` com `error: "MANUAL_REPLY_ENDPOINT_INACTIVE"` e mensagem "O número escolhido em 'Responder por' não está mais disponível. Escolha outro número ou volte para o modo Automático.";
+- não consultar `messaging_lines`, não escolher outro endpoint, não enviar.
 
-- Se, **entre a validação e o envio**, o endpoint escolhido manualmente ficar `is_active = false` (número desconectado/rotacionado nesse intervalo, ou desativado por outro operador), o bloco de "rotação por linha" troca o remetente para `messaging_lines.active_endpoint_id` da Route e envia por ele — silenciosamente, contrariando a escolha manual.
-- Probabilidade baixa (janela de milissegundos ou desativação concorrente), impacto: mensagem sai por número diferente do escolhido, com `metadata.reply_endpoint_choice = manual` apontando outro endpoint.
+`supabase/functions/twilio-whatsapp-send/index.ts`: já é fail-closed no caminho `/messages` (endpoint inativo → 403 antes de qualquer envio); alinhar apenas o código/mensagem de erro para `MANUAL_REPLY_ENDPOINT_INACTIVE` quando a escolha for manual, sem mudar o fluxo.
 
-Correção mínima proposta (1 linha de guarda por provider): quando `manualReply.mode === "manual"`, **não** aplicar a rotação por linha; retornar erro `MANUAL_REPLY_ENDPOINT_INACTIVE` (fail-closed) para o operador escolher outro número ou voltar ao Automático.
+O caminho Automático fica inalterado nos três providers. Sem mudanças em Route, flags, schema ou UI.
 
-## B. Conclusão reclassificada
+Verificação: bateria de testes existente + typecheck; deploy das três functions com a flag ainda OFF na Central.
 
-### Bloqueadores do piloto na Central
+## Etapa 2 — Piloto controlado na Central
 
-1. Habilitar `sales_manual_reply_endpoint_v1` para a org da Central (`40ae935c-a7f7-4ad7-8ea4-91be6404a95f`).
-2. Conceder endpoints aos usuários piloto via RPC/SQL (`grant_user_reply_endpoint`) — Meta 7067 (`bf04ce63…`) e Meta 7020 (`407ff93d…`), os dois únicos endpoints vinculados à linha Comercial da Central.
-3. Validar envio real: Manual → 7067; Manual → 7020; volta para Automático; conferir `metadata.reply_endpoint_choice`, `manual_reply_endpoint_id` e `chosen_by_user_id` nas mensagens gravadas.
-4. Aplicar a guarda anti-rotação descrita em (A) antes de ligar a flag — é curta e evita envio pelo número errado.
+1. Habilitar `sales_manual_reply_endpoint_v1` para a org da Central (`40ae935c-a7f7-4ad7-8ea4-91be6404a95f`), preservando a Viagi.
+2. Conceder endpoints aos usuários piloto via RPC `grant_user_reply_endpoint`: Meta 7067 (`bf04ce63…`) e Meta 7020 (`407ff93d…`).
+3. Validar envio Manual → 7067.
+4. Validar envio Manual → 7020.
+5. Validar retorno para Automático (preferência apagada, roteamento original restaurado).
+6. Conferir em cada mensagem gravada: `metadata.reply_endpoint_choice`, `manual_reply_endpoint_id`, `chosen_by_user_id`.
 
-### Melhorias pós-piloto
+Os passos 3-5 dependem de envio real pelo operador; entrego o relatório de verificação do banco após cada envio.
 
-- Tela administrativa de grant/revoke de endpoints por usuário (hoje só via RPC/SQL).
-- Ajustes de UX do seletor.
-- Demais refinamentos (rótulos, tooltips, estados vazios).
+## Fora de escopo (pós-piloto)
 
-## C. Detalhes técnicos da guarda (item 4)
-
-Arquivos: `supabase/functions/meta-whatsapp-send/index.ts`, `supabase/functions/twilio-whatsapp-send/index.ts`, `supabase/functions/evolution-whatsapp-send/index.ts`.
-
-No bloco `if (endpoint && endpoint.is_active === false) { … }`, adicionar no topo: se `manualReply.mode === "manual"`, retornar 409 `MANUAL_REPLY_ENDPOINT_INACTIVE` com mensagem ao operador, sem consultar `messaging_lines`. Nenhuma mudança no caminho Automático, na Route, em flags ou no schema.
-
-## D. Confirmado na auditoria (sem pendência)
-
-- Route, `active_endpoint_id`, `messaging_line_rotations` nunca escritos pelo switch.
-- Resolver V2 e modo Automático byte-a-byte inalterados sem override.
-- RLS/grants completos em `user_reply_endpoints` e `thread_reply_endpoint_prefs`; escrita só por RPC `SECURITY DEFINER`.
-- Auditoria de escolha persistida nos três providers.
-- Realtime, paginação e histórico intocados.
+- Tela administrativa de grant/revoke de endpoints por usuário.
+- Ajustes de UX do seletor e demais refinamentos.
