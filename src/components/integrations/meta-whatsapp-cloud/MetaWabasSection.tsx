@@ -40,6 +40,7 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
   const [addNumberFor, setAddNumberFor] = useState<{ wabaId: string; appId: string } | null>(null);
   const [resubscribingId, setResubscribingId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const { data: wabas, isLoading } = useQuery({
     queryKey: ["meta-wabas", organizationId, metaIntegrationId],
