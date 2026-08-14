@@ -782,7 +782,8 @@ function DesktopMessagesList() {
   const selectedEndpointIdentity = formatEndpointIdentity(selectedThreadEndpoint);
 
   // Números dos endpoints usados nas mensagens (inclui inativos) — para o
-  // divisor de "Número alterado" quando a conversa passou por mais de um número.
+  // cabeçalho do container quando a conversa passou por mais de um número.
+
   const messageEndpointIds = useMemo(
     () => Array.from(new Set(messages.map((m: any) => m.endpoint_id).filter(Boolean))) as string[],
     [messages],
