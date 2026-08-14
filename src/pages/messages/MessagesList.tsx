@@ -101,6 +101,7 @@ import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
+import { TimelineEventMarker } from '@/components/messages/timeline/TimelineEventMarker';
 import { FunnelSimple } from '@phosphor-icons/react';
 import { formatEndpointIdentity, formatEndpointMigrationAuditLine, whatsappProviderLabel, whatsappProviderShortLabel } from '@/lib/whatsappEndpointDisplay';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
@@ -110,7 +111,7 @@ import { EyeSlash, Paperclip, Plus } from '@phosphor-icons/react';
 import { ToastAction } from '@/components/ui/toast';
 import { AttachMediaDialog, type AttachMedia } from '@/components/documents/AttachMediaDialog';
 import { isAttachableMedia } from '@/lib/mediaToFile';
-import { computeMessageGroups, computeContextBlocks, type GroupingItem } from '@/lib/messageGrouping';
+import { computeMessageGroups, computeContextBlocks, resolveBlockCollapse, type GroupingItem } from '@/lib/messageGrouping';
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
@@ -192,9 +193,19 @@ interface InlineNote {
   author_name?: string;
 }
 
+/** Marco histórico do CRM na timeline (puramente apresentacional). */
+interface TimelineEvent {
+  id: string;
+  occurred_at: string;
+  label: string;
+  value?: string | null;
+}
+
 type ChatItem = 
   | { _type: 'message'; data: Message }
-  | { _type: 'note'; data: InlineNote };
+  | { _type: 'note'; data: InlineNote }
+  | { _type: 'event'; data: TimelineEvent };
+
 
 const statusConfig: Record<string, { label: string; labelEn: string; color: string; dotColor: string }> = {
   open: { label: 'Aberta', labelEn: 'Open', color: 'text-green-700 dark:text-green-400', dotColor: 'bg-green-500' },
@@ -421,6 +432,10 @@ function DesktopMessagesList() {
   // Note mode state
   const [isNoteMode, setIsNoteMode] = useState(false);
   const [inlineNotes, setInlineNotes] = useState<InlineNote[]>([]);
+  /** Marcos históricos do CRM exibidos na timeline (somente leitura). */
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  /** Expansão de containers encerrados, por blockKey (nunca persistido). */
+  const [expandedBlocks, setExpandedBlocks] = useState<Record<string, boolean>>({});
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
@@ -1138,6 +1153,63 @@ function DesktopMessagesList() {
       } else {
         setInlineNotes([]);
       }
+
+      // Marcos históricos do CRM (somente leitura, escopo da thread).
+      // Puramente apresentacional: não altera mensagens, envio ou realtime.
+      try {
+        const events: TimelineEvent[] = [];
+        if (thread?.created_at) {
+          events.push({
+            id: `created-${threadId}`,
+            occurred_at: thread.created_at,
+            label: locale === 'pt-BR' ? 'Conversa criada' : 'Conversation created',
+          });
+        }
+        const { data: assignments } = await supabase
+          .from('thread_assignment_history')
+          .select('id, action_type, from_user_id, to_user_id, performed_by_user_id, created_at, from_user:from_user_id(full_name), to_user:to_user_id(full_name), performed_by:performed_by_user_id(full_name)')
+          .eq('thread_id', threadId)
+          .order('created_at', { ascending: true });
+
+        for (const row of (assignments || []) as any[]) {
+          const fromName = row.from_user?.full_name ?? null;
+          const toName = row.to_user?.full_name ?? null;
+          const byName = row.performed_by?.full_name ?? null;
+          let label: string;
+          let value: string | null = null;
+          switch (row.action_type) {
+            case 'take_over':
+              label = 'Atendimento assumido';
+              value = byName ?? toName;
+              break;
+            case 'auto_reassign':
+              label = 'Atendente alterado automaticamente';
+              value = `${fromName ?? '—'} → ${toName ?? '—'}`;
+              break;
+            case 'reopen':
+              label = 'Atendimento reaberto';
+              value = byName;
+              break;
+            case 'manual_assignment':
+            default:
+              label = fromName ? 'Atendente alterado' : 'Atendente definido';
+              value = fromName ? `${fromName} → ${toName ?? '—'}` : toName ?? '—';
+              break;
+          }
+          events.push({
+            id: `assign-${row.id}`,
+            occurred_at: row.created_at,
+            label,
+            value,
+          });
+        }
+        setTimelineEvents(events);
+      } catch (eventsError) {
+        console.error('Error fetching timeline events:', eventsError);
+        setTimelineEvents([]);
+      }
+
+
 
       // (removido) recomputo local de 24h; `useServiceWindow` cuida disso.
 
@@ -2118,16 +2190,18 @@ function DesktopMessagesList() {
                         </div>
                       ) : (
                         <div className="p-6 space-y-3">
-                          {/* Merge messages and notes chronologically */}
+                          {/* Timeline única: mensagens, notas e marcos do CRM */}
                           {(() => {
+                            const itemDateOf = (i: ChatItem) =>
+                              i._type === 'message' ? i.data.sent_at : i.data.occurred_at;
                             const chatItems: ChatItem[] = [
                               ...messages.map((m) => ({ _type: 'message' as const, data: m })),
                               ...inlineNotes.map((n) => ({ _type: 'note' as const, data: n })),
+                              ...timelineEvents.map((e) => ({ _type: 'event' as const, data: e })),
                             ].sort((a, b) => {
-                              const dateA = a._type === 'message' ? a.data.sent_at : a.data.occurred_at;
-                              const dateB = b._type === 'message' ? b.data.sent_at : b.data.occurred_at;
-                              return new Date(dateA).getTime() - new Date(dateB).getTime();
+                              return new Date(itemDateOf(a)).getTime() - new Date(itemDateOf(b)).getTime();
                             });
+
 
                             const formatDateSeparator = (dateStr: string) => {
                               const d = new Date(dateStr);
@@ -2154,7 +2228,7 @@ function DesktopMessagesList() {
                               let prevDateKey: string | null = null;
                               let prevEndpoint: string | null = null;
                               const descriptors: GroupingItem[] = chatItems.map((item) => {
-                                const iso = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
+                                const iso = itemDateOf(item);
                                 const dateKey = new Date(iso).toDateString();
                                 const dateBreak = dateKey !== prevDateKey;
                                 prevDateKey = dateKey;
@@ -2170,7 +2244,19 @@ function DesktopMessagesList() {
                                   };
                                 }
 
+                                if (item._type === 'event') {
+                                  return {
+                                    kind: 'event' as const,
+                                    direction: null,
+                                    senderType: null,
+                                    senderId: null,
+                                    timestamp: new Date(iso).getTime(),
+                                    dateBreak,
+                                  };
+                                }
+
                                 const m = item.data;
+
                                 const metaKind = m.metadata && typeof m.metadata === 'object' ? (m.metadata as any).kind : null;
                                 const isSystem =
                                   m.sender_type === 'system' ||
@@ -2218,19 +2304,20 @@ function DesktopMessagesList() {
                               const isGroupEnd = group.isGroupEnd;
                               const block = blockFlags[itemIndex] ?? { isBlockStart: true, isBlockEnd: true, blockIndex: 0 };
                               const descriptor = descriptors[itemIndex];
-                              const itemDate = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
+                              const itemDate = itemDateOf(item);
                               const dateKey = new Date(itemDate).toDateString();
                               const showSeparator = dateKey !== lastDateKey;
                               lastDateKey = dateKey;
 
 
                               const separator = showSeparator ? (
-                                <div key={`sep-${dateKey}`} className="flex justify-center my-3">
-                                  <div className="px-3 py-1 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide shadow-sm">
-                                    {formatDateSeparator(itemDate)}
-                                  </div>
-                                </div>
+                                <TimelineEventMarker
+                                  key={`sep-${dateKey}`}
+                                  label={formatDateSeparator(itemDate)}
+                                  className="my-3"
+                                />
                               ) : null;
+
 
                               // Divisor de "Número alterado": aparece quando a mensagem
                               // passou por um endpoint diferente do anterior (rotação de número).
@@ -2316,7 +2403,24 @@ function DesktopMessagesList() {
                                 );
                               }
 
+                              if (item._type === 'event') {
+                                const ev = item.data;
+                                return (
+                                  <TimelineEventMarker
+                                    key={`event-${ev.id}`}
+                                    label={ev.label}
+                                    value={ev.value ?? null}
+                                    time={new Date(ev.occurred_at).toLocaleTimeString(locale, {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      hour12: false,
+                                    })}
+                                  />
+                                );
+                              }
+
                               const message = item.data;
+
 
                               const _migMetaKind =
                                 message.metadata && typeof message.metadata === 'object'
@@ -2566,7 +2670,8 @@ function DesktopMessagesList() {
                                   blockIndex: number;
                                   hasInbound: boolean;
                                   hasOutbound: boolean;
-                                  nodes: JSX.Element[];
+                                  headerNodes: JSX.Element[];
+                                  messageNodes: JSX.Element[];
                                 };
                             const segments: Segment[] = [];
                             for (const r of renderedItems) {
@@ -2586,7 +2691,7 @@ function DesktopMessagesList() {
                               const isInbound = r.direction === 'inbound';
                               const last = segments[segments.length - 1];
                               if (last && last.type === 'block' && last.blockIndex === r.blockIndex) {
-                                last.nodes.push(r.renderItem);
+                                last.messageNodes.push(r.renderItem);
                                 last.hasInbound = last.hasInbound || isInbound;
                                 last.hasOutbound = last.hasOutbound || !isInbound;
                               } else {
@@ -2596,13 +2701,19 @@ function DesktopMessagesList() {
                                   blockIndex: r.blockIndex,
                                   hasInbound: isInbound,
                                   hasOutbound: !isInbound,
-                                  nodes: [
-                                    ...(r.blockHeader ? [r.blockHeader] : []),
-                                    r.renderItem,
-                                  ],
+                                  headerNodes: r.blockHeader ? [r.blockHeader] : [],
+                                  messageNodes: [r.renderItem],
                                 });
                               }
                             }
+
+                            // Colapso automático de containers encerrados: o último
+                            // container (atual) permanece sempre expandido.
+                            const blockSegments = segments.filter((s) => s.type === 'block');
+                            const currentBlockKey =
+                              blockSegments.length > 0
+                                ? (blockSegments[blockSegments.length - 1] as Extract<Segment, { type: 'block' }>).key
+                                : null;
 
                             return segments.map((segment) =>
                               segment.type === 'loose' ? (
@@ -2612,17 +2723,52 @@ function DesktopMessagesList() {
                                   ))}
                                 </Fragment>
                               ) : (
-                                <div
-                                  key={segment.key}
-                                  className="w-full rounded-lg border border-border/30 bg-muted/10 px-1 py-1.5 space-y-0.5 mt-4"
-                                >
-
-                                  {segment.nodes.map((node, i) => (
-                                    <Fragment key={i}>{node}</Fragment>
-                                  ))}
-                                </div>
+                                (() => {
+                                  const collapse = resolveBlockCollapse(
+                                    segment.messageNodes.length,
+                                    segment.key === currentBlockKey,
+                                    !!expandedBlocks[segment.key],
+                                  );
+                                  const visibleNodes = segment.messageNodes.slice(
+                                    segment.messageNodes.length - collapse.visibleCount,
+                                  );
+                                  return (
+                                    <div
+                                      key={segment.key}
+                                      className="w-full rounded-lg border border-border/30 bg-muted/10 px-1 py-1.5 space-y-0.5 mt-4"
+                                    >
+                                      {segment.headerNodes.map((node, i) => (
+                                        <Fragment key={`h-${i}`}>{node}</Fragment>
+                                      ))}
+                                      {collapse.showToggle && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setExpandedBlocks((prev) => ({
+                                              ...prev,
+                                              [segment.key]: !prev[segment.key],
+                                            }))
+                                          }
+                                          className="mx-auto block text-[11px] text-muted-foreground hover:text-foreground transition-colors py-0.5"
+                                        >
+                                          {collapse.hiddenCount > 0
+                                            ? locale === 'pt-BR'
+                                              ? `Ver mais ${collapse.hiddenCount} mensagens`
+                                              : `Show ${collapse.hiddenCount} more messages`
+                                            : locale === 'pt-BR'
+                                              ? 'Ver menos'
+                                              : 'Show less'}
+                                        </button>
+                                      )}
+                                      {visibleNodes.map((node, i) => (
+                                        <Fragment key={i}>{node}</Fragment>
+                                      ))}
+                                    </div>
+                                  );
+                                })()
                               )
                             );
+
 
                           })()}
                           <div ref={scrollRef} />

@@ -11,10 +11,49 @@
 /** Intervalo máximo entre duas mensagens do mesmo remetente para manter o bloco. */
 export const GROUP_GAP_MS = 5 * 60 * 1000;
 
+/** Máximo de mensagens visíveis em um container de contexto já encerrado. */
+export const BLOCK_COLLAPSE_LIMIT = 5;
+
+export interface BlockCollapseState {
+  /** Quantas mensagens do bloco ficam visíveis. */
+  visibleCount: number;
+  /** Quantas mensagens ficam ocultas (0 = sem ação "Ver mais"). */
+  hiddenCount: number;
+  /** Se a ação de expandir/recolher deve ser exibida. */
+  showToggle: boolean;
+}
+
+/**
+ * Decide o colapso de um container de contexto. Puramente visual:
+ * apenas as ÚLTIMAS `BLOCK_COLLAPSE_LIMIT` mensagens ficam visíveis quando o
+ * bloco já foi encerrado por um evento. O bloco atual (último da timeline)
+ * nunca colapsa.
+ */
+export function resolveBlockCollapse(
+  messageCount: number,
+  isCurrentBlock: boolean,
+  expanded: boolean,
+): BlockCollapseState {
+  const total = Math.max(0, messageCount);
+  if (isCurrentBlock || total <= BLOCK_COLLAPSE_LIMIT) {
+    return { visibleCount: total, hiddenCount: 0, showToggle: false };
+  }
+  if (expanded) {
+    return { visibleCount: total, hiddenCount: 0, showToggle: true };
+  }
+  return {
+    visibleCount: BLOCK_COLLAPSE_LIMIT,
+    hiddenCount: total - BLOCK_COLLAPSE_LIMIT,
+    showToggle: true,
+  };
+}
+
+
 export interface GroupingItem {
-  /** Tipo do item da timeline: mensagem, nota interna, evento de sistema. */
-  kind: 'message' | 'note' | 'system';
+  /** Tipo do item da timeline: mensagem, nota interna, evento de sistema, evento de CRM. */
+  kind: 'message' | 'note' | 'system' | 'event';
   /** 'inbound' | 'outbound' | 'internal' | null */
+
   direction: string | null;
   /** sender_type estável ('user' | 'agent' | 'system' | null). */
   senderType: string | null;
