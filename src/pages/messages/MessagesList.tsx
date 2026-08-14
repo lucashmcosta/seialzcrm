@@ -2128,10 +2128,67 @@ function DesktopMessagesList() {
                               return d.toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase();
                             };
 
+                            // Pré-passe puramente visual: descreve cada item da
+                            // timeline para o agrupamento (estilo Kommo). Não
+                            // altera ordenação, dados nem paginação.
+                            const groupFlags = (() => {
+                              let prevDateKey: string | null = null;
+                              let prevEndpoint: string | null = null;
+                              const descriptors: GroupingItem[] = chatItems.map((item) => {
+                                const iso = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
+                                const dateKey = new Date(iso).toDateString();
+                                const dateBreak = dateKey !== prevDateKey;
+                                prevDateKey = dateKey;
+
+                                if (item._type === 'note') {
+                                  return {
+                                    kind: 'note' as const,
+                                    direction: 'internal',
+                                    senderType: null,
+                                    senderId: item.data.created_by_user_id ?? null,
+                                    timestamp: new Date(iso).getTime(),
+                                    dateBreak,
+                                  };
+                                }
+
+                                const m = item.data;
+                                const metaKind = m.metadata && typeof m.metadata === 'object' ? (m.metadata as any).kind : null;
+                                const isSystem =
+                                  m.sender_type === 'system' ||
+                                  metaKind === 'endpoint_migration_meta_7020' ||
+                                  metaKind === 'endpoint_provider_migration';
+
+                                const epId = (m as any).endpoint_id ?? null;
+                                let endpointBreak = false;
+                                if (epId && prevEndpoint && epId !== prevEndpoint) {
+                                  const fromAddr = endpointNumbers[prevEndpoint]?.address ?? null;
+                                  const toAddr = endpointNumbers[epId]?.address ?? null;
+                                  endpointBreak = Boolean(fromAddr && toAddr && fromAddr !== toAddr);
+                                }
+                                if (epId) prevEndpoint = epId;
+
+                                return {
+                                  kind: isSystem ? ('system' as const) : ('message' as const),
+                                  direction: m.direction ?? null,
+                                  senderType: m.sender_type ?? null,
+                                  senderId: m.sender_agent_id ?? m.sender_user_id ?? null,
+                                  timestamp: new Date(m.sent_at).getTime(),
+                                  failed: m.whatsapp_status === 'failed',
+                                  isReply: Boolean(m.reply_to_message_id),
+                                  dateBreak,
+                                  endpointBreak,
+                                };
+                              });
+                              return computeMessageGroups(descriptors);
+                            })();
+
                             let lastDateKey: string | null = null;
                             let lastEndpointId: string | null = null;
 
-                            return chatItems.map((item) => {
+                            return chatItems.map((item, itemIndex) => {
+                              const group = groupFlags[itemIndex] ?? { isGroupStart: true, isGroupEnd: true };
+                              const isGroupStart = group.isGroupStart;
+                              const isGroupEnd = group.isGroupEnd;
                               const itemDate = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
                               const dateKey = new Date(itemDate).toDateString();
                               const showSeparator = dateKey !== lastDateKey;
