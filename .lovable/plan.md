@@ -46,7 +46,26 @@ Em `computeContextBlocks()`, além das quebras atuais (endpoint, provider, mudan
 
 O agrupamento interno de bolhas (`computeMessageGroups`, janela de 5 min) não muda.
 
+## Colapso automático de containers encerrados
+
+Um container permanece aberto enquanto nenhum evento o encerrar. Os eventos que encerram são exatamente os que já quebram `computeContextBlocks()` (troca de endpoint, troca de provider, mudança de dia, evento de atendimento, mensagem de sistema, nota interna e demais quebras).
+
+Regra:
+
+- container **encerrado** com mais de 5 mensagens válidas nasce colapsado: exibe apenas as **últimas 5**, ocultando visualmente as anteriores;
+- ação discreta dentro do próprio cartão: `Ver mais X mensagens` (X = ocultas; singular "mensagem" quando X = 1);
+- ao clicar, expande **somente aquele container** e a ação passa a `Ver menos`; ao recolher, volta às últimas 5;
+- o container **atual** (último da timeline, ainda não encerrado) nunca colapsa, independente da quantidade de mensagens;
+- nova mensagem chegando (realtime ou otimista) no container atual não dispara colapso; só quando um evento posterior encerrar o bloco a regra de 5 passa a valer;
+- o corte é puramente visual: nenhuma reordenação, nenhuma mensagem recriada, nenhuma alteração de grouping, endpoint, provider, thread, eventos, realtime ou estado de mensagem;
+- sem modal, drawer ou nova página; sem alterar paginação ou consultas — o colapso opera só sobre os itens já em memória.
+
+Estado de expansão local da UI (`Record<blockKey, boolean>` em `MessagesList.tsx`), indexado por uma `blockKey` estável derivada do bloco (id da primeira mensagem do bloco + `blockIndex`). Nada persistido no banco.
+
+Visual da ação: `text-[11px] text-muted-foreground hover:text-foreground`, alinhada ao topo do cartão (acima das mensagens visíveis), com chevron 12px, sem fundo e sem borda.
+
 ## Demais regras já atendidas
+
 
 - Data só aparece na mudança de dia (comportamento atual, mantido); o separador de data passa a usar o mesmo estilo fino dos marcos, para leitura homogênea.
 - Horário permanece dentro da bolha, na última mensagem do grupo.
@@ -63,6 +82,7 @@ O agrupamento interno de bolhas (`computeMessageGroups`, janela de 5 min) não m
   - eventos são renderizados como `loose` (fora dos cartões), como já ocorre com notas e sistema.
 - `src/lib/messageGrouping.ts`: `GroupingItem.kind` aceita `'event'`; nenhuma outra regra alterada.
 - `tests/message-grouping.test.ts`: casos novos — evento de CRM quebra bloco; mensagens antes/depois do evento ficam em cartões distintos; evento não entra em grupo de bolhas.
+- Colapso: a decisão fica numa função pura em `src/lib/messageGrouping.ts` (`resolveBlockCollapse(count, isCurrentBlock, expanded)` → `{ hiddenCount, visibleCount }`, limite `BLOCK_COLLAPSE_LIMIT = 5`), coberta por testes: `ENCERRADO_4_MSGS`, `ENCERRADO_5_MSGS`, `ENCERRADO_6_MSGS`, `ENCERRADO_30_MSGS`, `CONTAINER_ATUAL_30_MSGS`, `EXPANDIR`, `RECOLHER`, `EVENTO_ENTRE_BLOCOS` (estado independente por `blockKey`), `REALTIME_NO_CONTAINER_ATUAL`.
 
 ## Verificação
 
