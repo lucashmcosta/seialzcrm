@@ -2131,7 +2131,7 @@ function DesktopMessagesList() {
                             // Pré-passe puramente visual: descreve cada item da
                             // timeline para o agrupamento (estilo Kommo). Não
                             // altera ordenação, dados nem paginação.
-                            const groupFlags = (() => {
+                            const { blockFlags, groupFlags, descriptors } = (() => {
                               let prevDateKey: string | null = null;
                               let prevEndpoint: string | null = null;
                               const descriptors: GroupingItem[] = chatItems.map((item) => {
@@ -2177,9 +2177,17 @@ function DesktopMessagesList() {
                                   isReply: Boolean(m.reply_to_message_id),
                                   dateBreak,
                                   endpointBreak,
+                                  endpointId: epId,
+                                  provider: epId ? endpointNumbers[epId]?.provider ?? null : null,
                                 };
                               });
-                              return computeMessageGroups(descriptors);
+                              const blockFlags = computeContextBlocks(descriptors);
+                              // Agrupamento interno de bolhas restrito ao bloco.
+                              const withBlocks = descriptors.map((d, i) => ({
+                                ...d,
+                                blockIndex: blockFlags[i].blockIndex,
+                              }));
+                              return { blockFlags, groupFlags: computeMessageGroups(withBlocks), descriptors };
                             })();
 
                             let lastDateKey: string | null = null;
@@ -2189,10 +2197,13 @@ function DesktopMessagesList() {
                               const group = groupFlags[itemIndex] ?? { isGroupStart: true, isGroupEnd: true };
                               const isGroupStart = group.isGroupStart;
                               const isGroupEnd = group.isGroupEnd;
+                              const block = blockFlags[itemIndex] ?? { isBlockStart: true, isBlockEnd: true, blockIndex: 0 };
+                              const descriptor = descriptors[itemIndex];
                               const itemDate = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
                               const dateKey = new Date(itemDate).toDateString();
                               const showSeparator = dateKey !== lastDateKey;
                               lastDateKey = dateKey;
+
 
                               const separator = showSeparator ? (
                                 <div key={`sep-${dateKey}`} className="flex justify-center my-3">
