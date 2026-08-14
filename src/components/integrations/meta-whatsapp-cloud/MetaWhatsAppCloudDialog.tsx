@@ -226,8 +226,10 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               </Card>
             )}
 
-            {/* ===== PR1-B: Multi-WABA (atrás de feature flag) ===== */}
-            {multiWabaEnabled && isConnected && organization?.id && integration?.id && (
+            {/* ===== Multi-WABA: cada WABA é primeira classe =====
+                 O gate NÃO usa mais a conexão ancorada (mais recente): basta existir
+                 qualquer conexão Meta habilitada na organização. */}
+            {multiWabaEnabled && hasAnyConnected && organization?.id && integration?.id && (
               <MetaWabasSection
                 organizationId={organization.id}
                 metaIntegrationId={integration.id}
