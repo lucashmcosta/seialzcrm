@@ -166,13 +166,15 @@ export function TimelineBlock({
           className="my-1"
         />
       )}
-      {messageNodes.map((node, i) =>
-        i >= firstVisibleIndex ? (
-          <div key={i} ref={measureItem(i)}>
-            {node}
-          </div>
-        ) : null,
-      )}
+      <div className="space-y-3">
+        {messageNodes.map((node, i) =>
+          i >= firstVisibleIndex ? (
+            <div key={i} ref={measureItem(i)}>
+              {node}
+            </div>
+          ) : null,
+        )}
+      </div>
     </div>
   );
 }
