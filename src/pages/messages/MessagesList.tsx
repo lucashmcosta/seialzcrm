@@ -2670,7 +2670,8 @@ function DesktopMessagesList() {
                                   blockIndex: number;
                                   hasInbound: boolean;
                                   hasOutbound: boolean;
-                                  nodes: JSX.Element[];
+                                  headerNodes: JSX.Element[];
+                                  messageNodes: JSX.Element[];
                                 };
                             const segments: Segment[] = [];
                             for (const r of renderedItems) {
@@ -2690,7 +2691,7 @@ function DesktopMessagesList() {
                               const isInbound = r.direction === 'inbound';
                               const last = segments[segments.length - 1];
                               if (last && last.type === 'block' && last.blockIndex === r.blockIndex) {
-                                last.nodes.push(r.renderItem);
+                                last.messageNodes.push(r.renderItem);
                                 last.hasInbound = last.hasInbound || isInbound;
                                 last.hasOutbound = last.hasOutbound || !isInbound;
                               } else {
@@ -2700,13 +2701,19 @@ function DesktopMessagesList() {
                                   blockIndex: r.blockIndex,
                                   hasInbound: isInbound,
                                   hasOutbound: !isInbound,
-                                  nodes: [
-                                    ...(r.blockHeader ? [r.blockHeader] : []),
-                                    r.renderItem,
-                                  ],
+                                  headerNodes: r.blockHeader ? [r.blockHeader] : [],
+                                  messageNodes: [r.renderItem],
                                 });
                               }
                             }
+
+                            // Colapso automático de containers encerrados: o último
+                            // container (atual) permanece sempre expandido.
+                            const blockSegments = segments.filter((s) => s.type === 'block');
+                            const currentBlockKey =
+                              blockSegments.length > 0
+                                ? (blockSegments[blockSegments.length - 1] as Extract<Segment, { type: 'block' }>).key
+                                : null;
 
                             return segments.map((segment) =>
                               segment.type === 'loose' ? (
@@ -2716,17 +2723,52 @@ function DesktopMessagesList() {
                                   ))}
                                 </Fragment>
                               ) : (
-                                <div
-                                  key={segment.key}
-                                  className="w-full rounded-lg border border-border/30 bg-muted/10 px-1 py-1.5 space-y-0.5 mt-4"
-                                >
-
-                                  {segment.nodes.map((node, i) => (
-                                    <Fragment key={i}>{node}</Fragment>
-                                  ))}
-                                </div>
+                                (() => {
+                                  const collapse = resolveBlockCollapse(
+                                    segment.messageNodes.length,
+                                    segment.key === currentBlockKey,
+                                    !!expandedBlocks[segment.key],
+                                  );
+                                  const visibleNodes = segment.messageNodes.slice(
+                                    segment.messageNodes.length - collapse.visibleCount,
+                                  );
+                                  return (
+                                    <div
+                                      key={segment.key}
+                                      className="w-full rounded-lg border border-border/30 bg-muted/10 px-1 py-1.5 space-y-0.5 mt-4"
+                                    >
+                                      {segment.headerNodes.map((node, i) => (
+                                        <Fragment key={`h-${i}`}>{node}</Fragment>
+                                      ))}
+                                      {collapse.showToggle && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setExpandedBlocks((prev) => ({
+                                              ...prev,
+                                              [segment.key]: !prev[segment.key],
+                                            }))
+                                          }
+                                          className="mx-auto block text-[11px] text-muted-foreground hover:text-foreground transition-colors py-0.5"
+                                        >
+                                          {collapse.hiddenCount > 0
+                                            ? locale === 'pt-BR'
+                                              ? `Ver mais ${collapse.hiddenCount} mensagens`
+                                              : `Show ${collapse.hiddenCount} more messages`
+                                            : locale === 'pt-BR'
+                                              ? 'Ver menos'
+                                              : 'Show less'}
+                                        </button>
+                                      )}
+                                      {visibleNodes.map((node, i) => (
+                                        <Fragment key={i}>{node}</Fragment>
+                                      ))}
+                                    </div>
+                                  );
+                                })()
                               )
                             );
+
 
                           })()}
                           <div ref={scrollRef} />
