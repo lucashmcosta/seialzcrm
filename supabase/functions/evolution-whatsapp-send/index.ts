@@ -243,7 +243,10 @@ serve(async (req) => {
     }
     explicitEndpointId = manualReply.endpointId;
   }
-  const replyChoiceMeta = replyChoiceMetadata(manualReply);
+  const replyChoiceMeta = replyChoiceMetadata(
+    manualReply,
+    (body as Record<string, any>).replyEndpointChoice === "route_default" ? "route_default" : "derived",
+  );
 
 
 

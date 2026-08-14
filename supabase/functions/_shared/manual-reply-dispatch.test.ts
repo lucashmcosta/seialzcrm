@@ -287,7 +287,8 @@ Deno.test("NO_MANUAL_FIELD_EXTRA_QUERY=0 e AUTO_PROVIDER_BEHAVIOR_UNCHANGED", as
   );
   assertEquals(manualOnly.length, 0, "NO_MANUAL_FIELD_EXTRA_QUERY deve ser 0");
   // Com o campo, o caminho manual roda.
-  assertEquals(manualQueries.includes("from:grants"), true);
+  // Grants (`user_reply_endpoints`) não fazem mais parte do caminho manual.
+  assertEquals(manualQueries.includes("from:grants"), false);
   // Provider automático inalterado.
   assertEquals(autoResolved.provider, "meta_cloud_api");
 });

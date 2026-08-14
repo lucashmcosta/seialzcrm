@@ -1,29 +1,35 @@
 // ============================================================================
-// Switch "Responder por" (Comercial) — estado da UI.
+// Seletor "Responder por" (Comercial) — estado da UI.
 //
 // REGRAS
-//  • Feature OFF  ⇒ nada é renderizado e NENHUMA query extra é disparada
-//    (a leitura da flag reaproveita a query já existente das flags Comerciais).
-//  • Feature ON   ⇒ lista SOMENTE endpoints autorizados ao usuário atual
-//    (`user_reply_endpoints`), elegíveis ao Comercial
-//    (`fn_is_sales_eligible_endpoint`) e da MESMA organização.
-//  • Escolha manual  ⇒ `set_thread_reply_endpoint_pref` (RPC SECURITY DEFINER).
-//  • Voltar Automático ⇒ `clear_thread_reply_endpoint_pref`.
+//  • NÃO existe item "Automático". O seletor sempre mostra um NÚMERO real:
+//      1. escolha manual do operador nesta conversa (se houver);
+//      2. senão, endpoint da ÚLTIMA MENSAGEM VÁLIDA da conversa (inbound OU
+//         outbound) — seleção "derived";
+//      3. senão (conversa sem nenhuma mensagem roteável), o default legado da
+//         Route (`messaging_lines.active_endpoint_id`).
+//  • Visível para TODO usuário com acesso ao Comercial — não há mais gate por
+//    `user_reply_endpoints`. As opções são os números WhatsApp da organização
+//    elegíveis ao Comercial (`fn_is_sales_eligible_endpoint`, server-side).
+//  • A escolha manual vale para a conversa aberta (sessão) e é enviada como
+//    `{ source: 'manual', endpointId }`. O backend revalida e é a fonte de
+//    verdade — em "derived" ele reconsulta a última mensagem no envio.
 //  • Nunca toca `active_endpoint_id`, `primary_endpoint_id` ou
-//    `messaging_line_rotations`. Persistência é por thread + usuário.
-//
-// Toda a autorização é server-side (RPCs + RLS). Nada é inferido no browser.
+//    `messaging_line_rotations`.
 // ============================================================================
 
-import { useCallback, useMemo } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSalesFeatureFlags } from './useSalesFeatureFlags';
+import { useThreadLastEndpoint } from './useThreadLastEndpoint';
+import { filterWhatsAppCandidates, toManualReplyOptions } from '@/lib/manualReplySelection';
 import {
-  filterWhatsAppCandidates,
-  manualReplyPayloadValue,
-  toManualReplyOptions,
-} from '@/lib/manualReplySelection';
+  deriveSelectedEndpoint,
+  replySelectionPayload,
+  type ReplyEndpointSelection,
+  type ReplySelectionSource,
+} from '@/lib/replyEndpointSelection';
 
 export interface ManualReplyOption {
   endpointId: string;
@@ -37,7 +43,7 @@ export interface ManualReplyOption {
 export type ManualReplyUiState =
   | 'disabled' // feature OFF / fora do escopo Comercial
   | 'loading'
-  | 'no_endpoints' // usuário sem endpoints autorizados
+  | 'no_endpoints' // organização sem número Comercial elegível
   | 'error' // falha de leitura/permissão
   | 'ready';
 
@@ -46,15 +52,21 @@ export interface ManualReplyState {
   enabled: boolean;
   uiState: ManualReplyUiState;
   options: ManualReplyOption[];
-  /** endpoint manual persistido para (thread, usuário) — null = Automático */
+  /** endpoint exibido no seletor (nunca "Automático") */
   selectedEndpointId: string | null;
   selectedOption: ManualReplyOption | null;
-  /** valor a enviar no payload de envio; undefined quando Automático */
-  manualReplyEndpointId: string | undefined;
+  /** origem da seleção atual */
+  selectionSource: ReplySelectionSource;
+  /** endpoint derivado da última mensagem válida (para voltar de manual → derived) */
+  derivedEndpointId: string | null;
+  derivedOption: ManualReplyOption | null;
+  /** payload de envio: `{ source, endpointId }`; undefined quando a feature está OFF */
+  replyEndpointSelection: ReplyEndpointSelection | undefined;
   isMutating: boolean;
   errorMessage: string | null;
   selectEndpoint: (endpointId: string) => Promise<void>;
-  resetToAuto: () => Promise<void>;
+  /** volta para a seleção derivada (endpoint da última mensagem da conversa) */
+  useDerived: () => Promise<void>;
 }
 
 interface Params {
@@ -63,6 +75,8 @@ interface Params {
   userId?: string | null;
   businessContext?: string | null;
   channel?: string | null;
+  /** default legado da Route, usado apenas quando a conversa não tem mensagens */
+  routeDefaultEndpointId?: string | null;
 }
 
 /** Mensagens humanas para os códigos MANUAL_REPLY_* / erros das RPCs. */
@@ -70,63 +84,55 @@ export function humanizeManualReplyError(raw: unknown): string {
   const msg = typeof raw === 'string' ? raw : ((raw as Error)?.message ?? '');
   if (msg.includes('MANUAL_REPLY_FEATURE_DISABLED'))
     return 'A escolha manual de número não está habilitada para esta organização.';
-  if (msg.includes('MANUAL_REPLY_ENDPOINT_FORBIDDEN') || msg.includes('not authorized'))
-    return 'Você não tem permissão para responder por este número.';
+  if (msg.includes('MANUAL_REPLY_ENDPOINT_FORBIDDEN'))
+    return 'Não foi possível responder por este número.';
   if (msg.includes('MANUAL_REPLY_ENDPOINT_NOT_SALES') || msg.includes('not sales eligible'))
     return 'Este número não faz parte da configuração Comercial desta organização.';
   if (msg.includes('MANUAL_REPLY_THREAD_NOT_SALES') || msg.includes('not a canonical'))
     return 'Esta conversa não aceita escolha manual de número.';
   if (msg.includes('MANUAL_REPLY_ENDPOINT_INACTIVE'))
-    return 'Número indisponível no momento. Escolha outro ou volte para Automático.';
+    return 'Número indisponível no momento. Escolha outro número.';
   if (msg.includes('MANUAL_REPLY_ENDPOINT_CROSS_ORG'))
-    return 'Número pertence a outra organização.';
+    return 'Número de outra organização.';
+  if (msg.includes('MANUAL_REPLY_ENDPOINT_OFFLINE'))
+    return 'Número desconectado no provedor. Escolha outro número.';
+  if (msg.includes('MANUAL_REPLY_ENDPOINT_IDENTITY'))
+    return 'Identidade do número não confirmada no provedor.';
   return msg || 'Não foi possível aplicar a escolha de número.';
 }
 
 export function useManualReplyEndpoint(params: Params): ManualReplyState {
-  const { organizationId, threadId, userId } = params;
+  const {
+    organizationId,
+    threadId,
+    userId,
+    businessContext,
+    channel = 'whatsapp',
+    routeDefaultEndpointId = null,
+  } = params;
+
   const { flags, isLoading: flagsLoading } = useSalesFeatureFlags(organizationId);
-
-  const inScope =
-    (params.businessContext ?? 'sales') === 'sales' && (params.channel ?? 'whatsapp') === 'whatsapp';
-
+  const inScope = businessContext === 'sales' && channel === 'whatsapp';
   const enabled =
-    flags.manualReplyEndpoint.enabledForOrg &&
-    inScope &&
-    !!organizationId &&
-    !!threadId &&
-    !!userId;
+    flags.manualReplyEndpoint.enabledForOrg && inScope && !!organizationId && !!threadId && !!userId;
 
-  const queryClient = useQueryClient();
-
-  // ---- endpoints autorizados (somente com a feature ON) --------------------
+  // ---- números Comerciais elegíveis da ORGANIZAÇÃO (sem gate por usuário) ----
   const optionsQuery = useQuery<ManualReplyOption[]>({
-    queryKey: ['manual-reply-options', organizationId ?? null, userId ?? null],
+    queryKey: ['sales-reply-endpoints', organizationId ?? null],
     enabled,
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('user_reply_endpoints')
-        .select(
-          'endpoint_id, communication_endpoints!inner(id, external_address, display_name, provider, is_active, channel)',
-        )
+        .from('communication_endpoints')
+        .select('id, external_address, display_name, provider, is_active, channel')
         .eq('organization_id', organizationId!)
-        .eq('user_id', userId!);
+        .eq('channel', 'whatsapp')
+        .eq('is_active', true);
       if (error) throw error;
 
-      const rows = (data ?? []) as Array<{
-        endpoint_id: string;
-        communication_endpoints: {
-          id: string;
-          external_address: string | null;
-          display_name: string | null;
-          provider: string | null;
-          is_active: boolean | null;
-          channel: string | null;
-        } | null;
-      }>;
-
-      const candidates = filterWhatsAppCandidates(rows.map((r) => r.communication_endpoints));
+      const candidates = filterWhatsAppCandidates(
+        (data ?? []) as Array<Parameters<typeof filterWhatsAppCandidates>[0][number]>,
+      );
 
       // Elegibilidade Comercial é decidida no servidor, endpoint por endpoint.
       const eligibility = await Promise.all(
@@ -143,59 +149,39 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
     },
   });
 
-  // ---- preferência persistida (thread + usuário) ---------------------------
-  const prefQuery = useQuery<string | null>({
-    queryKey: ['manual-reply-pref', threadId ?? null, userId ?? null],
-    enabled,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('thread_reply_endpoint_prefs')
-        .select('endpoint_id')
-        .eq('thread_id', threadId!)
-        .eq('user_id', userId!)
-        .maybeSingle();
-      if (error) throw error;
-      return (data as { endpoint_id?: string } | null)?.endpoint_id ?? null;
-    },
-  });
+  // ---- seleção derivada: endpoint da última mensagem válida da conversa ----
+  const {
+    lastEndpointId,
+    isLoading: lastLoading,
+    error: lastError,
+  } = useThreadLastEndpoint({ threadId, enabled });
 
-  const invalidate = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['manual-reply-pref', threadId ?? null, userId ?? null] });
-  }, [queryClient, threadId, userId]);
-
-  const setMutation = useMutation({
-    mutationFn: async (endpointId: string) => {
-      const { error } = await supabase.rpc('set_thread_reply_endpoint_pref', {
-        _thread_id: threadId!,
-        _endpoint_id: endpointId,
-      });
-      if (error) throw new Error(humanizeManualReplyError(error.message));
-    },
-    onSuccess: invalidate,
-  });
-
-  const clearMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.rpc('clear_thread_reply_endpoint_pref', {
-        _thread_id: threadId!,
-      });
-      if (error) throw new Error(humanizeManualReplyError(error.message));
-    },
-    onSuccess: invalidate,
-  });
+  // ---- escolha manual do operador, por conversa (sessão) ----
+  const [manualByThread, setManualByThread] = useState<Record<string, string>>({});
+  const manualEndpointId = threadId ? (manualByThread[threadId] ?? null) : null;
 
   const options = optionsQuery.data ?? [];
-  const selectedEndpointId = enabled ? (prefQuery.data ?? null) : null;
-  const selectedOption = useMemo(
-    () => options.find((o) => o.endpointId === selectedEndpointId) ?? null,
-    [options, selectedEndpointId],
+  const derivedEndpointId = enabled ? (lastEndpointId ?? routeDefaultEndpointId ?? null) : null;
+
+  const selection = useMemo(
+    () =>
+      deriveSelectedEndpoint({
+        manualEndpointId: enabled ? manualEndpointId : null,
+        lastMessageEndpointId: lastEndpointId,
+        routeDefaultEndpointId,
+      }),
+    [enabled, manualEndpointId, lastEndpointId, routeDefaultEndpointId],
   );
 
-  const readError = optionsQuery.error ?? prefQuery.error;
+  const findOption = useCallback(
+    (id: string | null) => options.find((o) => o.endpointId === id) ?? null,
+    [options],
+  );
+
+  const readError = optionsQuery.error ?? lastError;
   const uiState: ManualReplyUiState = !enabled
     ? 'disabled'
-    : flagsLoading || optionsQuery.isLoading || prefQuery.isLoading
+    : flagsLoading || optionsQuery.isLoading || lastLoading
       ? 'loading'
       : readError
         ? 'error'
@@ -203,27 +189,46 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
           ? 'no_endpoints'
           : 'ready';
 
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const selectEndpoint = useCallback(
+    async (endpointId: string) => {
+      if (!threadId) return;
+      const option = options.find((o) => o.endpointId === endpointId);
+      if (!option || !option.available) {
+        const msg = 'Número indisponível no momento. Escolha outro número.';
+        setLocalError(msg);
+        throw new Error(msg);
+      }
+      setLocalError(null);
+      setManualByThread((prev) => ({ ...prev, [threadId]: endpointId }));
+    },
+    [options, threadId],
+  );
+
+  const useDerived = useCallback(async () => {
+    if (!threadId) return;
+    setLocalError(null);
+    setManualByThread((prev) => {
+      const next = { ...prev };
+      delete next[threadId];
+      return next;
+    });
+  }, [threadId]);
+
   return {
     enabled,
     uiState,
     options,
-    selectedEndpointId,
-    selectedOption,
-    // Só envia o override quando a feature está ON e há preferência válida.
-    manualReplyEndpointId: manualReplyPayloadValue(enabled, selectedEndpointId),
-    isMutating: setMutation.isPending || clearMutation.isPending,
-    errorMessage: readError
-      ? humanizeManualReplyError(readError)
-      : setMutation.error
-        ? humanizeManualReplyError(setMutation.error)
-        : clearMutation.error
-          ? humanizeManualReplyError(clearMutation.error)
-          : null,
-    selectEndpoint: async (endpointId: string) => {
-      await setMutation.mutateAsync(endpointId);
-    },
-    resetToAuto: async () => {
-      await clearMutation.mutateAsync();
-    },
+    selectedEndpointId: selection.endpointId,
+    selectedOption: findOption(selection.endpointId),
+    selectionSource: selection.source,
+    derivedEndpointId,
+    derivedOption: findOption(derivedEndpointId),
+    replyEndpointSelection: replySelectionPayload(enabled, selection),
+    isMutating: false,
+    errorMessage: readError ? humanizeManualReplyError(readError) : localError,
+    selectEndpoint,
+    useDerived,
   };
 }

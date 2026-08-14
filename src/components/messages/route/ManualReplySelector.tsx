@@ -19,8 +19,6 @@ import { toast } from '@/hooks/use-toast';
 import { last4, providerLabel } from './RouteIndicators';
 import type { ManualReplyOption, ManualReplyState } from '@/hooks/messages/useManualReplyEndpoint';
 
-const AUTO_LABEL = 'Automático';
-
 function optionLabel(option: ManualReplyOption): string {
   return `••••${last4(option.address)} · ${providerLabel(option.provider)}`;
 }
@@ -48,7 +46,12 @@ export function ManualReplySelector({ state }: { state: ManualReplyState }) {
   }
 
   const current = state.selectedOption;
-  const currentLabel = current ? optionLabel(current) : AUTO_LABEL;
+  const isManual = state.selectionSource === 'manual';
+  const currentLabel = current
+    ? optionLabel(current)
+    : state.selectedEndpointId
+      ? '••••'
+      : 'Número não definido';
 
   const apply = async (fn: () => Promise<void>, successMsg: string) => {
     try {
@@ -76,8 +79,7 @@ export function ManualReplySelector({ state }: { state: ManualReplyState }) {
               current && 'text-foreground',
             )}
           >
-            {state.isMutating ? <SpinnerGap size={12} className="animate-spin" /> : null}
-            {current ? <WhatsappLogo size={12} weight="fill" className="text-emerald-500" /> : null}
+            <WhatsappLogo size={12} weight="fill" className="text-emerald-500" />
             {currentLabel}
             <CaretDown size={10} />
           </Button>
@@ -86,27 +88,34 @@ export function ManualReplySelector({ state }: { state: ManualReplyState }) {
           <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
             Número de resposta
           </DropdownMenuLabel>
-          <DropdownMenuItem
-            className="text-xs"
-            onSelect={() => {
-              if (!current) return;
-              void apply(state.resetToAuto, 'Voltou para o envio Automático.');
-            }}
-          >
-            <span className="flex-1">{AUTO_LABEL}</span>
-            {!current ? <Check size={12} /> : null}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {isManual && state.derivedOption ? (
+            <>
+              <DropdownMenuItem
+                className="text-xs"
+                onSelect={() => {
+                  void apply(
+                    state.useDerived,
+                    `Respostas voltam a sair por ${optionLabel(state.derivedOption!)} (última mensagem).`,
+                  );
+                }}
+              >
+                <span className="flex-1">
+                  Seguir a última mensagem · {optionLabel(state.derivedOption)}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           {state.options.map((option) => (
             <DropdownMenuItem
               key={option.endpointId}
-              disabled={!option.available || option.endpointId === current?.endpointId}
+              disabled={!option.available}
               className="text-xs"
               onSelect={() => {
                 if (!option.available) {
                   toast({
                     variant: 'destructive',
-                    description: 'Número indisponível no momento. Escolha outro ou use Automático.',
+                    description: 'Número indisponível no momento. Escolha outro número.',
                   });
                   return;
                 }

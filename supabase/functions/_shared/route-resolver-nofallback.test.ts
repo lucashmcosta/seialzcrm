@@ -1,8 +1,9 @@
 // Barreira estática anti-fallback do caminho canônico V2.
 //
-// Contrato Fase 2: a Route é descoberta EXCLUSIVAMENTE pelo endpoint_id da
-// última mensagem inbound roteável. É PROIBIDO qualquer fallback por
-// primary_endpoint_id, purpose, último outbound ou provider default.
+// Contrato atual: a resposta sai pelo endpoint da ÚLTIMA MENSAGEM VÁLIDA da
+// conversa (inbound OU outbound). É PROIBIDO qualquer fallback por
+// primary_endpoint_id, purpose ou provider default. O default legado da Route
+// (`active_endpoint_id`) só é permitido para conversa SEM nenhuma mensagem.
 //
 // Este teste falha se esses termos aparecerem em CÓDIGO (fora de comentários)
 // nos dois arquivos do caminho V2.
@@ -11,8 +12,14 @@ import { assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
 const FILES = [
   new URL("./route-resolver.ts", import.meta.url),
+  new URL("./reply-endpoint-selection.ts", import.meta.url),
   new URL("../../../src/lib/salesReplyRoute.ts", import.meta.url),
 ];
+
+// A definição de "última mensagem válida" pode viver no módulo compartilhado
+// (`reply-endpoint-selection.ts`) ou no próprio arquivo; a barreira exige que
+// as DUAS direções apareçam no conjunto do caminho V2.
+const DIRECTION_FILES = FILES;
 
 const FORBIDDEN = [
   "primary_endpoint_id",
@@ -43,8 +50,13 @@ for (const url of FILES) {
       `Provider default "twilio" usado como fallback em ${url.pathname}`,
     );
 
-    // último outbound é proibido: só direction inbound pode ser consultado
-    assert(!code.includes('"outbound"'), `Consulta a outbound em ${url.pathname}`);
-    assert(code.includes('"inbound"'), `Consulta à inbound ausente em ${url.pathname}`);
   });
 }
+
+Deno.test("NF seleção derivada considera inbound E outbound", async () => {
+  const all = (
+    await Promise.all(DIRECTION_FILES.map((u) => Deno.readTextFile(u)))
+  ).map(stripComments).join("\n");
+  assert(all.includes('"inbound"'), "Consulta à inbound ausente no caminho V2");
+  assert(all.includes('"outbound"'), "Consulta a outbound ausente no caminho V2");
+});

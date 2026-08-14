@@ -9,6 +9,7 @@
 // de cair silenciosamente para Twilio.
 
 import { supabase } from "@/integrations/supabase/client";
+import type { ReplyEndpointSelection } from "@/lib/replyEndpointSelection";
 import { isSalesPurpose } from "./endpointPurpose";
 import { assertTemplateAllowedForEndpoint } from "./complianceGuards";
 import { logComplianceBlock } from "./complianceLog";
@@ -68,6 +69,14 @@ export interface WhatsAppSendPayload {
    * + provider, após validação server-side. Ausente ⇒ short-circuit total.
    */
   manualReplyEndpointId?: string;
+  /**
+   * Seleção do endpoint de resposta com ORIGEM explícita:
+   *   • { source: "manual", endpointId } → usa exatamente esse endpoint;
+   *   • { source: "derived" }            → o servidor reconsulta a última
+   *     mensagem válida da conversa (fonte de verdade). O hint da UI aqui NÃO
+   *     comanda o envio.
+   */
+  replyEndpointSelection?: ReplyEndpointSelection;
   migrationContext?: MigrationContext;
 }
 
@@ -290,18 +299,28 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
   // rate limit, integração) e revalida o override server-side.
   // Campo ausente ⇒ short-circuit sem nenhuma query nova.
   let manualOverrideProvider: Provider | null = null;
-  if (payload.manualReplyEndpointId) {
+  const selection = payload.replyEndpointSelection ?? null;
+  const manualSelectedEndpointId =
+    selection?.source === "manual" && selection.endpointId
+      ? selection.endpointId
+      : (payload.manualReplyEndpointId ?? null);
+  if (manualSelectedEndpointId) {
     const manual = await resolveManualReplyEndpoint({
       organizationId: payload.organizationId,
       threadId: payload.threadId ?? null,
       userId: payload.userId ?? null,
-      manualReplyEndpointId: payload.manualReplyEndpointId,
+      manualReplyEndpointId: manualSelectedEndpointId,
     });
     if (manual.mode === "error") {
       return { data: null, error: { name: manual.code, message: manual.message } as any };
     }
     if (manual.mode === "manual") {
-      payload = { ...payload, endpointId: manual.endpointId };
+      payload = {
+        ...payload,
+        endpointId: manual.endpointId,
+        manualReplyEndpointId: manual.endpointId,
+        replyEndpointChoice: "manual",
+      } as WhatsAppSendPayload & { replyEndpointChoice: string };
       manualOverrideProvider = manual.provider;
       console.log("[dispatch-wa] manual_reply_override", {
         threadId: payload.threadId ?? null,
@@ -321,7 +340,13 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
       businessContext: payload.businessContext ?? null,
     });
     if (canonical.applicable && canonical.sendEndpointId) {
-      payload = { ...payload, endpointId: canonical.sendEndpointId };
+      payload = {
+        ...payload,
+        endpointId: canonical.sendEndpointId,
+        manualReplyEndpointId: undefined,
+        replyEndpointChoice:
+          canonical.reason === "resolved_by_route_default" ? "route_default" : "derived",
+      } as WhatsAppSendPayload & { replyEndpointChoice: string };
     } else if (canonical.reason === "REPLY_ROUTE_UNRESOLVED") {
       console.error("[dispatch-wa] REPLY_ROUTE_UNRESOLVED", {
         threadId: payload.threadId,

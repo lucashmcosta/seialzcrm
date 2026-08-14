@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -97,7 +96,7 @@ export function SalesWhatsAppSettingsSection() {
   const { canManage } = useCanManageIntegrations(orgId);
   const {
     status, isLoading, error, refetch,
-    provisionEndpoint, setActiveEndpoint,
+    provisionEndpoint,
   } = useSalesRouteManager(orgId);
 
   const [showForm, setShowForm] = useState(false);
@@ -223,7 +222,12 @@ export function SalesWhatsAppSettingsSection() {
                   && (ep.technicalStatus === 'QR_REQUIRED'
                     || ep.technicalStatus === 'DISCONNECTED'
                     || ep.technicalStatus === 'IDENTITY_UNCONFIRMED');
-                const canActivate = canManage && ep.linkActive && !ep.isRouteActive;
+                // "Tornar ativo" deixou de existir como conceito de resposta:
+                // a resposta sai pelo número da última mensagem da conversa (ou
+                // pelo número escolhido em "Responder por"). O default legado da
+                // Route só vale para conversa sem nenhuma mensagem.
+                const canConnect = canManage && ep.linkActive && !ep.isRouteActive;
+
 
                 return (
                   <li
@@ -238,12 +242,14 @@ export function SalesWhatsAppSettingsSection() {
                       <ProviderChip provider={ep.providerRaw} />
                       <StateChip ok={state.ok} label={state.label} title={blockedTitle} />
                       {ep.isRouteActive && (
-                        <Badge className="text-[10px]">Ativo para envio</Badge>
+                        <Badge variant="secondary" className="text-[10px]">
+                          Padrão de conversas sem histórico
+                        </Badge>
                       )}
                     </span>
 
                     <span className="flex items-center gap-1.5 shrink-0">
-                      {canActivate && needsConnection && (
+                      {canConnect && needsConnection && (
                         <Button
                           size="sm" variant="outline" className="h-6 px-2 text-[10px]"
                           onClick={() => setConnectTarget({
@@ -254,30 +260,8 @@ export function SalesWhatsAppSettingsSection() {
                           <QrCode className="h-3 w-3 mr-1" /> Conectar WhatsApp
                         </Button>
                       )}
-                      {canActivate && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>
-                              <Button
-                                size="sm" variant="ghost" className="h-6 px-2 text-[10px]"
-                                disabled={setActiveEndpoint.isPending || !ep.activationEligible}
-                                onClick={() =>
-                                  setActiveEndpoint.mutateAsync({ lineId: ep.lineId, endpointId: ep.endpointId })
-                                    .then(() => toast.success('Número ativo atualizado'))
-                                    .catch((e) => toast.error(e instanceof Error ? e.message : 'Falha'))}
-                              >
-                                Tornar ativo
-                              </Button>
-                            </span>
-                          </TooltipTrigger>
-                          {!ep.activationEligible && (
-                            <TooltipContent side="left" className="max-w-[15rem] text-[11px]">
-                              {blockedTitle ?? 'Este número ainda não pode ser ativado.'}
-                            </TooltipContent>
-                          )}
-                        </Tooltip>
-                      )}
                     </span>
+
 
                   </li>
                 );

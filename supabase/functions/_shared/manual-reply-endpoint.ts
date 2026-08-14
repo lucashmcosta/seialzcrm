@@ -113,26 +113,10 @@ export async function resolveManualReplyEndpoint(
     );
   }
 
-  // 2. Permissão explícita do usuário sobre o endpoint (nunca inferida).
-  const { data: grant, error: grantErr } = await supabase
-    .from("user_reply_endpoints")
-    .select("id")
-    .eq("organization_id", input.organizationId)
-    .eq("user_id", input.userId)
-    .eq("endpoint_id", manualId)
-    .maybeSingle();
-  if (grantErr) {
-    return fail(
-      "MANUAL_REPLY_ENDPOINT_FORBIDDEN",
-      `Falha ao verificar permissão do endpoint: ${grantErr.message}`,
-    );
-  }
-  if (!grant) {
-    return fail(
-      "MANUAL_REPLY_ENDPOINT_FORBIDDEN",
-      "Usuário não autorizado a enviar por este número.",
-    );
-  }
+  // 2. Sem gate por grants (`user_reply_endpoints`): o seletor "Responder por"
+  //    vale para TODO usuário com acesso ao Comercial. A autorização é a
+  //    elegibilidade Comercial do número na própria organização (passo 3).
+
 
   // 3. Elegibilidade Comercial (link ativo em linha whatsapp/sales ativa).
   const { data: eligible, error: eligibleErr } = await supabase.rpc(
@@ -215,8 +199,16 @@ export async function resolveManualReplyEndpoint(
   return { mode: "manual", endpointId: manualId, provider, chosenByUserId: input.userId };
 }
 
-/** Metadata de auditoria (item 10 do contrato). Nada sensível. */
-export function replyChoiceMetadata(resolution: ManualReplyResolution) {
+/**
+ * Metadata de auditoria (item 10 do contrato). Nada sensível.
+ * `derivedChoice` distingue a seleção automática:
+ *   • "derived"       → endpoint da última mensagem válida da thread
+ *   • "route_default" → fallback legado `messaging_lines.active_endpoint_id`
+ */
+export function replyChoiceMetadata(
+  resolution: ManualReplyResolution,
+  derivedChoice: "derived" | "route_default" = "derived",
+) {
   if (resolution.mode === "manual") {
     return {
       reply_endpoint_choice: "manual" as const,
@@ -224,5 +216,6 @@ export function replyChoiceMetadata(resolution: ManualReplyResolution) {
       chosen_by_user_id: resolution.chosenByUserId,
     };
   }
-  return { reply_endpoint_choice: "auto" as const };
+  return { reply_endpoint_choice: derivedChoice };
 }
+
