@@ -40,15 +40,46 @@ UI_REFRESH_BUG=NO
 
 Onde parou: logo após a conexão (estado `open`), na etapa 4 — leitura da identidade real no provedor. Sem `owner_jid`/`owner_number_digits`, o número real permanece desconhecido, então nada chama `provision_sales_endpoint` e nenhum endpoint é criado. É uma lacuna de fluxo (nenhum gatilho de identidade para instâncias `pending`), não uma falha de webhook nem de UI.
 
-## Correção mínima proposta (aguardando aprovação)
+## Correção aprovada — dois ops explícitos (sem persistência silenciosa)
+
+`listInstances` permanece LEITURA PURA (nada de chamada ao provedor nem escrita).
 
 Backend (`sales-route-operations`), sem DDL:
 
-- Em `listInstances`, para instâncias da org com `provisioning_status='pending'` e `last_known_state='open'` sem `owner_number_digits`, chamar `syncEvolutionIdentity` (já existente) e devolver a identidade lida. Continua sendo leitura no provedor + persistência dos campos de identidade; nenhuma Route, endpoint ativo ou rotação é tocada.
-- Novo op `linkPendingInstance` (nome sugerido): a partir de uma instância `pending` + `open` + identidade conhecida, chama `provision_sales_endpoint` usando o número REAL vindo do provedor (nunca digitado), vinculando à Route Comercial da org e deixando `provisioning_status='linked'`. Não altera `active_endpoint_id`.
+1. Novo op `syncPendingInstanceIdentity`
+   - Exige JWT + `can_manage_integrations_in_org`.
+   - Valida que a instância pertence à org do chamador.
+   - Valida `provisioning_status='pending'` e `last_known_state='open'` (senão 409).
+   - Chama `syncEvolutionIdentity` e persiste apenas `owner_jid` / `owner_number_digits`.
+   - Não toca endpoint, Route, `active_endpoint_id` nem rotação.
+
+2. Novo op `linkPendingInstance`
+   - Recebe apenas `instanceId` (nenhum número vindo do frontend).
+   - Usa exclusivamente `owner_number_digits` já persistido a partir da Evolution.
+   - Localiza a Route Comercial da mesma org; chama `provision_sales_endpoint`.
+   - Cria/localiza o `communication_endpoint` Evolution e o vínculo com a Route.
+   - Marca `provisioning_status='linked'`.
+   - Não altera `active_endpoint_id`, não cria `messaging_line_rotations`, não toca Meta/Twilio/Atendimento.
 
 Frontend (`EvolutionProvisionPanel`), somente apresentação:
 
-- Exibir o número real quando a identidade for conhecida e um botão "Vincular ao WhatsApp Comercial" que chama o novo op. Sem tornar ativo, sem formulário de endereço manual.
+- `pending` + `open` sem identidade: exibir "Finalizando conexão…" e chamar `syncPendingInstanceIdentity`.
+- Com identidade: exibir o número real.
+- Botão "Vincular ao WhatsApp Comercial" → `linkPendingInstance`; após sucesso, estado "Vinculado".
+- Nunca tornar ativo automaticamente; sem formulário de endereço manual.
 
-Pós-condições a validar após implementar: `META_EXISTING_ENDPOINTS_TOUCHED=NO`, `ACTIVE_ENDPOINT_CHANGED=NO`, `MESSAGING_LINE_ROTATIONS_NEW=0`, `ATENDIMENTO_CHANGED=NO`.
+Pós-condições a validar e reportar após o deploy:
+
+```text
+INSTANCE_CONNECTED=YES
+OWNER_JID_PRESENT=YES
+OWNER_NUMBER_DIGITS_PRESENT=YES
+EVOLUTION_ENDPOINT_CREATED=YES
+EVOLUTION_ENDPOINT_LINKED_TO_COMMERCIAL=YES
+EVOLUTION_ENDPOINT_ACTIVE_FOR_SEND=NO
+META_EXISTING_ENDPOINTS_TOUCHED=NO
+ACTIVE_ENDPOINT_CHANGED=NO
+MESSAGING_LINE_ROTATIONS_NEW=0
+ATENDIMENTO_CHANGED=NO
+```
+
