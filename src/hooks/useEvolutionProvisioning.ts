@@ -111,3 +111,51 @@ export function useSyncEvolutionWebhook() {
       }),
   });
 }
+
+/**
+ * Leitura EXPLÍCITA da identidade real (número) de uma instância recém
+ * conectada. `listInstances` permanece leitura pura — nenhuma persistência
+ * silenciosa acontece na listagem.
+ */
+export function useSyncPendingInstanceIdentity() {
+  const { organization } = useOrganization();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (instanceId: string) =>
+      callOp<{
+        instanceId: string;
+        identityKnown: boolean;
+        ownerMasked: string | null;
+      }>({
+        op: 'syncPendingInstanceIdentity',
+        organizationId: organization?.id,
+        instanceId,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['evolution'] });
+    },
+  });
+}
+
+/**
+ * Vincula a sessão à Route Comercial usando exclusivamente o número real
+ * vindo da Evolution. Não torna o número ativo para envio.
+ */
+export function useLinkPendingInstance() {
+  const { organization } = useOrganization();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (instanceId: string) =>
+      callOp<{ ok: true; ownerMasked: string | null }>({
+        op: 'linkPendingInstance',
+        organizationId: organization?.id,
+        instanceId,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['evolution'] });
+    },
+  });
+}
+
