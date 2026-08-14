@@ -223,7 +223,12 @@ export function SalesWhatsAppSettingsSection() {
                   && (ep.technicalStatus === 'QR_REQUIRED'
                     || ep.technicalStatus === 'DISCONNECTED'
                     || ep.technicalStatus === 'IDENTITY_UNCONFIRMED');
-                const canActivate = canManage && ep.linkActive && !ep.isRouteActive;
+                // "Tornar ativo" deixou de existir como conceito de resposta:
+                // a resposta sai pelo número da última mensagem da conversa (ou
+                // pelo número escolhido em "Responder por"). O default legado da
+                // Route só vale para conversa sem nenhuma mensagem.
+                const canConnect = canManage && ep.linkActive && !ep.isRouteActive;
+
 
                 return (
                   <li
