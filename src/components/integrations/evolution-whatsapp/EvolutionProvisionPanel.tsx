@@ -154,8 +154,9 @@ export function EvolutionProvisionPanel() {
       if (qr?.instanceName === instanceName) setQr(null);
       toast.success('Sessão removida');
     } catch (e) {
-      const code = (e as Error).message;
-      toast.error(DELETE_ERROR[code] ?? code);
+      const raw = (e as Error).message;
+      const key = Object.keys(DELETE_ERROR).find((k) => raw.includes(k));
+      toast.error(key ? DELETE_ERROR[key] : raw, { duration: 10000 });
     }
   };
 

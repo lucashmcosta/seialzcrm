@@ -964,10 +964,13 @@ serve(async (req) => {
 
         const endpointId = (row.endpoint_id as string | null) ?? null;
         if (endpointId) {
+          // Só bloqueia quando a Route está REALMENTE ativa. Uma linha
+          // desativada apontando para o endpoint não é uso efetivo.
           const { data: activeLines } = await service
             .from("messaging_lines")
-            .select("id, inbox_key, active_endpoint_id")
-            .eq("active_endpoint_id", endpointId);
+            .select("id, inbox_key, active_endpoint_id, is_active")
+            .eq("active_endpoint_id", endpointId)
+            .eq("is_active", true);
           if ((activeLines ?? []).length > 0) {
             return json(409, {
               error: "EVOLUTION_INSTANCE_IN_USE",
