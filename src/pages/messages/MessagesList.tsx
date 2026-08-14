@@ -436,7 +436,6 @@ function DesktopMessagesList() {
   /** Marcos históricos do CRM exibidos na timeline (somente leitura). */
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   /** Expansão de containers encerrados, por blockKey (nunca persistido). */
-  const [expandedBlocks, setExpandedBlocks] = useState<Record<string, boolean>>({});
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
@@ -2297,7 +2296,6 @@ function DesktopMessagesList() {
                             })();
 
                             let lastDateKey: string | null = null;
-                            let lastEndpointId: string | null = null;
 
                             const renderedItems = chatItems.map((item, itemIndex) => {
                               const group = groupFlags[itemIndex] ?? { isGroupStart: true, isGroupEnd: true };
