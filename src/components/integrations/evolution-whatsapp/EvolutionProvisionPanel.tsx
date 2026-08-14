@@ -61,10 +61,40 @@ export function EvolutionProvisionPanel() {
   const remove = useDeleteEvolutionInstance();
   const syncWebhook = useSyncEvolutionWebhook();
   const connect = useConnectInstance();
+  const syncIdentity = useSyncPendingInstanceIdentity();
+  const link = useLinkPendingInstance();
 
   const [qr, setQr] = useState<{ instanceName: string; base64: string | null } | null>(null);
 
   const instances = data?.instances ?? [];
+
+  // Ao detectar `pending` + `open` sem identidade, pede ao servidor a leitura
+  // explícita do número real (uma vez por instância nesta sessão de tela).
+  const identityAsked = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    instances.forEach((i) => {
+      const needsIdentity = i.provisioningStatus === 'pending' && i.connected && !i.identityKnown;
+      if (!needsIdentity || identityAsked.current.has(i.id)) return;
+      identityAsked.current.add(i.id);
+      syncIdentity.mutateAsync(i.id).catch(() => {
+        // Permite nova tentativa manual/automática no próximo ciclo.
+        identityAsked.current.delete(i.id);
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instances.map((i) => `${i.id}:${i.connected}:${i.identityKnown}`).join('|')]);
+
+  const onLink = async (instanceId: string) => {
+    try {
+      await link.mutateAsync(instanceId);
+      toast.success('Número vinculado ao WhatsApp Comercial', {
+        description: 'O número não foi tornado ativo para envio.',
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
 
   const onCreate = async () => {
     setQr(null);
