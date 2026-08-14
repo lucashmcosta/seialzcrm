@@ -589,8 +589,18 @@ serve(async (req) => {
         .select('id, external_address, channel, is_active, organization_id, provider')
         .eq('id', messagesEndpointIdInput)
         .maybeSingle()
+      const manualUnavailable = () =>
+        new Response(
+          JSON.stringify({
+            error: 'MANUAL_REPLY_ENDPOINT_INACTIVE',
+            message:
+              'O número escolhido em "Responder por" não está mais disponível. Escolha outro número ou volte para o modo Automático.',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       if (epErr || !ep) {
         console.warn('[messages-endpoint-override] endpoint not found', { messagesEndpointIdInput, err: epErr?.message })
+        if (manualReply.mode === 'manual') return manualUnavailable()
         return new Response(
           JSON.stringify({ error: 'Invalid endpointId' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -622,6 +632,7 @@ serve(async (req) => {
           channel: ep.channel,
           is_active: ep.is_active,
         })
+        if (manualReply.mode === 'manual') return manualUnavailable()
         return new Response(
           JSON.stringify({ error: 'Endpoint not allowed for this organization/channel' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
