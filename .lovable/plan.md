@@ -35,7 +35,7 @@ Ciclo de vida do número: `purpose` define Comercial vs Atendimento; vínculo à
 
 Arquitetura proposta (dois estados independentes):
 - **Estado da integração** (por conexão): credenciais válidas / token expirando / webhook inscrito / última validação. Verificações reais: Meta = `GET /{phone_number_id}` + `subscribed_apps`; Twilio = `GET /IncomingPhoneNumbers.json`; Evolution = `instance/connectionState` + `fetchInstances`.
-- **Estado do número** (por endpoint): 🟢 Operacional / 🟡 Atenção / 🔴 Offline, derivado só de checagem fresca (Meta: número registrado + qualidade + tier; Evolution: sessão `open` + `owner_jid` casando com o endereço; Twilio: sender existe no Messaging Service). `is_active` passa a ser rotulado apenas como "habilitado no CRM"; nunca como funcionamento.
+- **Estado do número** (por endpoint): enquanto não existir checagem técnica real e fresca, a UI mostra **"Status técnico: Não verificado"** — nunca 🟢 Operacional nem 🔴 Offline. Os rótulos Operacional / Atenção / Offline só passam a existir quando houver verificação real por provider (Meta: número registrado + qualidade + tier; Evolution: sessão `open` + `owner_jid` casando com o endereço; Twilio: sender presente no Messaging Service). `is_active` é rotulado apenas como "habilitado no CRM"; nunca como funcionamento.
 
 ## Parte 4 — Nova arquitetura de Configurações
 
