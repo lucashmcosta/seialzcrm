@@ -2735,7 +2735,7 @@ function DesktopMessagesList() {
                                   return (
                                     <div
                                       key={segment.key}
-                                      className="w-full rounded-lg border border-border/30 bg-muted/10 px-1 py-1.5 space-y-0.5 mt-4"
+                                      className="w-full rounded-lg border border-border/70 bg-muted/50 px-1 py-1.5 space-y-0.5 mt-4"
                                     >
                                       {segment.headerNodes.map((node, i) => (
                                         <Fragment key={`h-${i}`}>{node}</Fragment>
