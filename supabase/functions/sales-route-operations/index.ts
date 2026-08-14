@@ -49,7 +49,11 @@ type Op =
   | "setActiveEndpoint"
   | "restartInstance"
   | "connectInstance"
-  | "instanceState";
+  | "instanceState"
+  | "listInstances"
+  | "createInstance"
+  | "syncWebhook"
+  | "deleteInstance";
 
 interface Body {
   op: Op;
