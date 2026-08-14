@@ -101,7 +101,7 @@ import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
 import { FunnelSimple } from '@phosphor-icons/react';
-import { formatEndpointIdentity, formatEndpointMigrationAuditLine, whatsappProviderLabel } from '@/lib/whatsappEndpointDisplay';
+import { formatEndpointIdentity, formatEndpointMigrationAuditLine, whatsappProviderLabel, whatsappProviderShortLabel } from '@/lib/whatsappEndpointDisplay';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 
 import { useHiddenThreads } from '@/hooks/useHiddenThreads';
