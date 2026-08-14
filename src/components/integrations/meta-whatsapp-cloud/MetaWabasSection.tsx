@@ -14,6 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { metaWhatsAppService } from "@/services/metaWhatsAppService";
 import { MetaAdditionalEndpointsSection } from "./MetaAdditionalEndpointsSection";
 import { AddMetaWabaDialog } from "./AddMetaWabaDialog";
+import { AddMetaWhatsAppNumberDialog } from "./AddMetaWhatsAppNumberDialog";
 import { WhatsAppInboundSettings } from "@/components/settings/WhatsAppInboundSettings";
 
 
@@ -36,6 +37,8 @@ interface WabaRow {
 
 export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
   const [addOpen, setAddOpen] = useState(false);
+  /** WABA alvo do fluxo "Adicionar número" — cada WABA é primeira classe (sem WABA "principal"). */
+  const [addNumberFor, setAddNumberFor] = useState<{ wabaId: string; appId: string } | null>(null);
   const [resubscribingId, setResubscribingId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -143,6 +146,7 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
               const ca = (w.connected_account ?? {}) as Record<string, unknown>;
               const cv = (w.config_values ?? {}) as Record<string, unknown>;
               const primaryPnid = (ca.phone_number_id as string | undefined) ?? null;
+              const wabaAppId = (ca.app_id as string | undefined) ?? (cv.app_id as string | undefined) ?? null;
               const wabaLabel = w.display_name || (w.meta_waba_id ? `WABA ${w.meta_waba_id}` : "WABA (sem ID)");
               const subscribed = cv.webhook_subscribed === true;
               const subscribedAt = typeof cv.webhook_subscribed_at === "string" ? cv.webhook_subscribed_at : null;
@@ -181,6 +185,27 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!w.meta_waba_id || !wabaAppId}
+                        title={
+                          !w.meta_waba_id
+                            ? "WABA sem waba_id"
+                            : !wabaAppId
+                              ? "WABA sem app_id registrado"
+                              : "Adicionar número nesta WABA"
+                        }
+                        onClick={() =>
+                          setAddNumberFor({
+                            wabaId: w.meta_waba_id as string,
+                            appId: wabaAppId as string,
+                          })
+                        }
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        Adicionar número
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -229,6 +254,16 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
         onOpenChange={setAddOpen}
         organizationId={organizationId}
       />
+
+      {addNumberFor && (
+        <AddMetaWhatsAppNumberDialog
+          open
+          onOpenChange={(o) => { if (!o) setAddNumberFor(null); }}
+          organizationId={organizationId}
+          wabaId={addNumberFor.wabaId}
+          appId={addNumberFor.appId}
+        />
+      )}
     </>
   );
 }

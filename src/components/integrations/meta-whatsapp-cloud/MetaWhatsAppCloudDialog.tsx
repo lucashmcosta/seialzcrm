@@ -22,6 +22,7 @@ import { MetaAdditionalEndpointsSection } from "./MetaAdditionalEndpointsSection
 import { MetaWabasSection } from "./MetaWabasSection";
 import { MigrateEndpointDialog } from "./MigrateEndpointDialog";
 import { useMetaMultiWabaFlag } from "@/hooks/useMetaMultiWabaFlag";
+import { useMetaWabaConnections } from "@/hooks/useMetaWabaConnections";
 
 interface Props {
   open: boolean;
@@ -60,6 +61,8 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
     senderSid: string | null;
   } | null>(null);
   const isConnected = !!orgIntegration?.is_enabled;
+  // Fonte de verdade multi-WABA: qualquer conexão Meta habilitada da org (não a "principal").
+  const { hasAnyConnected } = useMetaWabaConnections(organization?.id, integration?.id);
 
   // Pré-preenche os campos visíveis a partir do connected_account quando reconectando
   useEffect(() => {
@@ -226,16 +229,22 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               </Card>
             )}
 
-            {/* ===== PR1-B: Multi-WABA (atrás de feature flag) ===== */}
-            {multiWabaEnabled && isConnected && organization?.id && integration?.id && (
+            {/* ===== Multi-WABA: cada WABA é primeira classe =====
+                 O gate NÃO usa mais a conexão ancorada (mais recente): basta existir
+                 qualquer conexão Meta habilitada na organização. */}
+            {multiWabaEnabled && hasAnyConnected && organization?.id && integration?.id && (
               <MetaWabasSection
                 organizationId={organization.id}
                 metaIntegrationId={integration.id}
               />
             )}
 
-            {/* ===== Números adicionais da WABA (visão legada por WABA principal) ===== */}
-            {isConnected && organization?.id && orgIntegration?.id && (
+            {/* ===== Visão legada por "WABA principal" =====
+                 Só existe quando a visão multi-WABA está desligada. Com multi-WABA
+                 ligada, cada WABA é primeira classe em MetaWabasSection (inclui
+                 "Adicionar número" por WABA), então esta seção — ancorada na conexão
+                 mais recente — seria ambígua e é omitida. */}
+            {!multiWabaEnabled && isConnected && organization?.id && orgIntegration?.id && (
               <Card className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div>
@@ -269,8 +278,9 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
 
 
 
-            {/* ===== Regras de Entrada ===== */}
-            {isConnected && orgIntegration?.id && (
+            {/* ===== Regras de Entrada (visão legada) =====
+                 Com multi-WABA ligada, cada WABA já expõe suas próprias regras. */}
+            {!multiWabaEnabled && isConnected && orgIntegration?.id && (
               <Card className="p-4">
                 <WhatsAppInboundSettings integrationId={orgIntegration.id} />
               </Card>
