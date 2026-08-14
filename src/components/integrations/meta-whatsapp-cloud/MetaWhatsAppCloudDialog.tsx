@@ -234,8 +234,12 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               />
             )}
 
-            {/* ===== Números adicionais da WABA (visão legada por WABA principal) ===== */}
-            {isConnected && organization?.id && orgIntegration?.id && (
+            {/* ===== Visão legada por "WABA principal" =====
+                 Só existe quando a visão multi-WABA está desligada. Com multi-WABA
+                 ligada, cada WABA é primeira classe em MetaWabasSection (inclui
+                 "Adicionar número" por WABA), então esta seção — ancorada na conexão
+                 mais recente — seria ambígua e é omitida. */}
+            {!multiWabaEnabled && isConnected && organization?.id && orgIntegration?.id && (
               <Card className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div>
