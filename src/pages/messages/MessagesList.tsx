@@ -2285,7 +2285,10 @@ function DesktopMessagesList() {
                                   key={message.id}
                                   className={cn(
                                     'flex items-end gap-2 group',
-                                    isOutbound ? 'justify-end' : 'justify-start'
+                                    isOutbound ? 'justify-end' : 'justify-start',
+                                    // Agrupamento visual: mensagens continuadas
+                                    // ficam colada à anterior (space-y-3 = 12px).
+                                    !isGroupStart && '-mt-2.5'
                                   )}
                                 >
                                   {/* Reply button - left side for inbound */}
@@ -2307,11 +2310,15 @@ function DesktopMessagesList() {
                                       message.media_type === 'audio' ? 'p-1' : 'p-3',
                                       isOutbound
                                         ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
-                                        : 'bg-card border border-border text-foreground shadow-sm'
+                                        : 'bg-card border border-border text-foreground shadow-sm',
+                                      // Bloco contínuo: reduz o raio no lado do remetente.
+                                      isOutbound
+                                        ? cn(!isGroupStart && 'rounded-tr-sm', !isGroupEnd && 'rounded-br-sm')
+                                        : cn(!isGroupStart && 'rounded-tl-sm', !isGroupEnd && 'rounded-bl-sm')
                                     )}
                                   >
                                     {/* Agent Badge + Feedback Button for agent messages */}
-                                    {isOutbound && message.sender_type === 'agent' && (
+                                    {isOutbound && message.sender_type === 'agent' && isGroupStart && (
                                       <div className="flex items-center gap-2 mb-2">
                                         <Badge color="purple" size="sm" icon={<Robot className="w-3 h-3" />}>
                                           {message.sender_name || 'Agente IA'}
