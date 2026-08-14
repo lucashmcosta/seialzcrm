@@ -143,6 +143,7 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
               const ca = (w.connected_account ?? {}) as Record<string, unknown>;
               const cv = (w.config_values ?? {}) as Record<string, unknown>;
               const primaryPnid = (ca.phone_number_id as string | undefined) ?? null;
+              const wabaAppId = (ca.app_id as string | undefined) ?? (cv.app_id as string | undefined) ?? null;
               const wabaLabel = w.display_name || (w.meta_waba_id ? `WABA ${w.meta_waba_id}` : "WABA (sem ID)");
               const subscribed = cv.webhook_subscribed === true;
               const subscribedAt = typeof cv.webhook_subscribed_at === "string" ? cv.webhook_subscribed_at : null;
