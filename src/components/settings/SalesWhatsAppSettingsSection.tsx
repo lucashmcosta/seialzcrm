@@ -151,19 +151,18 @@ export function SalesWhatsAppSettingsSection() {
         <div className="flex items-center gap-2">
           <ChatCircle className="h-5 w-5 text-primary" weight="duotone" />
           <div>
-            <h3 className="text-sm font-semibold text-foreground">WhatsApp Comercial</h3>
+            <h3 className="text-sm font-semibold text-foreground">Números do WhatsApp Comercial</h3>
             <p className="text-xs text-muted-foreground">
-              Números disponíveis para as conversas comerciais e qual deles envia as respostas.
+              Números disponíveis para envio nas conversas comerciais.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <div className="text-right">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Modo de roteamento</div>
-            <div className="text-xs font-semibold text-foreground">
-              {status?.rules.resolverV2 ? 'Rota Comercial' : 'Modo legado'}
-            </div>
-          </div>
+          {canManage && primaryLineId && (
+            <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Vincular número
+            </Button>
+          )}
           <Button variant="ghost" size="icon" onClick={() => refetch()} title="Atualizar status">
             <ArrowsClockwise className="h-4 w-4" />
           </Button>
@@ -197,14 +196,13 @@ export function SalesWhatsAppSettingsSection() {
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Números do WhatsApp Comercial
+              Modo de roteamento
             </div>
-            {canManage && primaryLineId && (
-              <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Vincular número
-              </Button>
-            )}
+            <div className="text-xs font-medium text-foreground">
+              {status?.rules.resolverV2 ? 'Automático' : 'Padrão'}
+            </div>
           </div>
+
 
           {numbers.length === 0 ? (
             <p className="text-xs text-muted-foreground">
