@@ -632,6 +632,7 @@ serve(async (req) => {
           channel: ep.channel,
           is_active: ep.is_active,
         })
+        if (manualReply.mode === 'manual') return manualUnavailable()
         return new Response(
           JSON.stringify({ error: 'Endpoint not allowed for this organization/channel' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
