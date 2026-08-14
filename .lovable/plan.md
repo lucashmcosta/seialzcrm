@@ -82,6 +82,7 @@ Visual da ação: `text-[11px] text-muted-foreground hover:text-foreground`, ali
   - eventos são renderizados como `loose` (fora dos cartões), como já ocorre com notas e sistema.
 - `src/lib/messageGrouping.ts`: `GroupingItem.kind` aceita `'event'`; nenhuma outra regra alterada.
 - `tests/message-grouping.test.ts`: casos novos — evento de CRM quebra bloco; mensagens antes/depois do evento ficam em cartões distintos; evento não entra em grupo de bolhas.
+- Colapso: a decisão fica numa função pura em `src/lib/messageGrouping.ts` (`resolveBlockCollapse(count, isCurrentBlock, expanded)` → `{ hiddenCount, visibleCount }`, limite `BLOCK_COLLAPSE_LIMIT = 5`), coberta por testes: `ENCERRADO_4_MSGS`, `ENCERRADO_5_MSGS`, `ENCERRADO_6_MSGS`, `ENCERRADO_30_MSGS`, `CONTAINER_ATUAL_30_MSGS`, `EXPANDIR`, `RECOLHER`, `EVENTO_ENTRE_BLOCOS` (estado independente por `blockKey`), `REALTIME_NO_CONTAINER_ATUAL`.
 
 ## Verificação
 
