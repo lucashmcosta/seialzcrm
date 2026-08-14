@@ -1087,6 +1087,8 @@ serve(async (req) => {
 
     // Update message with Twilio SID + enrich metadata
     const enrichedMetadata = {
+      // Preserva a auditoria da escolha de número (manual/auto).
+      ...replyChoiceMeta,
       twilio: {
         ...twilioMetadata,
         MessageSid: twilioData.sid,
