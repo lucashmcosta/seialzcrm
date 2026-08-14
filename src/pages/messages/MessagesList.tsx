@@ -2376,12 +2376,9 @@ function DesktopMessagesList() {
                                         : cn(!isGroupStart && 'rounded-tl-sm', !isGroupEnd && 'rounded-bl-sm')
                                     )}
                                   >
-                                    {/* Agent Badge + Feedback Button for agent messages */}
-                                    {isOutbound && message.sender_type === 'agent' && isGroupStart && (
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <Badge color="purple" size="sm" icon={<Robot className="w-3 h-3" />}>
-                                          {message.sender_name || 'Agente IA'}
-                                        </Badge>
+                                    {/* Feedback do agente — identidade fica no cabeçalho do bloco */}
+                                    {isOutbound && message.sender_type === 'agent' && (
+                                      <div className="flex items-center justify-end -mt-1 -mr-1">
                                         <Button
                                           variant="ghost"
                                           size="sm"
@@ -2396,6 +2393,7 @@ function DesktopMessagesList() {
                                         </Button>
                                       </div>
                                     )}
+
                                     
                                     {/* Quoted Message */}
                                     {message.reply_to_message && (
