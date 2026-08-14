@@ -53,6 +53,8 @@ type Op =
   | "listInstances"
   | "createInstance"
   | "syncWebhook"
+  | "syncPendingInstanceIdentity"
+  | "linkPendingInstance"
   | "deleteInstance";
 
 interface Body {
@@ -64,6 +66,7 @@ interface Body {
   address?: string;
   displayName?: string;
   instanceName?: string;
+  instanceId?: string;
   reason?: string;
 }
 
