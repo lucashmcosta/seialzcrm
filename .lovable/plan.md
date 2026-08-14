@@ -33,7 +33,14 @@ Fluxo atômico, tudo server-side, com JWT + `can_manage_integrations_in_org` + f
 
 Reuso sem mudança: `instanceState` para polling, `refreshEvolutionIdentity` para gravar `owner_jid`/`owner_number_digits`, `provisionEndpoint` para criar/localizar o endpoint quando `connected === true` e a identidade for conhecida — com `provisioning_status` virando `linked`.
 
-Também adicionada `deleteInstance` (desconectar/remover com confirmação), restrita à org e que só toca a instância Evolution — nunca endpoint ativo.
+### 2b. `deleteInstance` com guarda de uso (trava obrigatória)
+- `provisioning_status='pending'` e `endpoint_id IS NULL`: remove a instância pendente e o recurso remoto na Evolution.
+- `provisioning_status='linked'`: antes de qualquer remoção, verifica se o `endpoint_id`
+  (a) é `active_endpoint_id` de alguma `messaging_lines`;
+  (b) tem `messaging_line_endpoints` ativo;
+  (c) está em uso em Route Comercial (`inbox_key='sales'`) ou Atendimento (`inbox_key='inbox'`).
+  Em qualquer um dos casos: retorna `409 EVOLUTION_INSTANCE_IN_USE` e **não remove nada** (nem local, nem remoto).
+- Nenhuma remoção rotaciona Route, troca `active_endpoint_id`, desativa endpoint Meta ou remove vínculo — desvincular exige ação explícita separada, fora deste fluxo.
 
 ### 3. UI: dialog "Evolution WhatsApp" passa a ser o gerenciador do provider
 Reescrita do `EvolutionWhatsAppDialog` para lista multi-número:
