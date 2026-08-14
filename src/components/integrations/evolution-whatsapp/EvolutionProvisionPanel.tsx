@@ -12,12 +12,13 @@
 //  - Nada aqui altera número ativo, rotações ou o módulo Atendimento.
 // ============================================================================
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   ArrowsClockwise,
   Broadcast,
   Info,
+  Link as LinkIcon,
   Plus,
   QrCode,
   SpinnerGap,
@@ -33,7 +34,9 @@ import {
   useCreateEvolutionInstance,
   useDeleteEvolutionInstance,
   useEvolutionProvisionedInstances,
+  useLinkPendingInstance,
   useSyncEvolutionWebhook,
+  useSyncPendingInstanceIdentity,
 } from '@/hooks/useEvolutionProvisioning';
 import { useConnectInstance } from '@/hooks/useEvolutionInstances';
 
@@ -50,6 +53,7 @@ const DELETE_ERROR: Record<string, string> = {
   INSTANCE_NOT_FOUND: 'Sessão não encontrada.',
   FEATURE_DISABLED: 'A integração Evolution não está habilitada nesta organização.',
 };
+
 
 export function EvolutionProvisionPanel() {
   const { data, isLoading, error, refetch } = useEvolutionProvisionedInstances();
