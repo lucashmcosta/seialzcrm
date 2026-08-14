@@ -60,6 +60,8 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
     senderSid: string | null;
   } | null>(null);
   const isConnected = !!orgIntegration?.is_enabled;
+  // Fonte de verdade multi-WABA: qualquer conexão Meta habilitada da org (não a "principal").
+  const { hasAnyConnected } = useMetaWabaConnections(organization?.id, integration?.id);
 
   // Pré-preenche os campos visíveis a partir do connected_account quando reconectando
   useEffect(() => {
