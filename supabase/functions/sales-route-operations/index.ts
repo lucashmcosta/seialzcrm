@@ -654,6 +654,241 @@ serve(async (req) => {
         });
       }
 
+      // -------------------------------------------------- LIST INSTANCES (org)
+      // Somente leitura da CONFIGURAÇÃO local do tenant. Nenhum segredo.
+      case "listInstances": {
+        const { data: rows } = await service
+          .from("evolution_instances")
+          .select(
+            "id, instance_name, endpoint_id, provisioning_status, last_known_state, last_state_checked_at, owner_number_digits, created_at",
+          )
+          .eq("organization_id", orgId)
+          .order("created_at", { ascending: true });
+
+        return json(200, {
+          organizationId: orgId,
+          evolutionIntegration: evolutionEnabled,
+          instances: ((rows ?? []) as Record<string, unknown>[]).map((r) => ({
+            id: r.id,
+            instanceName: r.instance_name,
+            endpointId: r.endpoint_id ?? null,
+            provisioningStatus: r.provisioning_status ?? "pending",
+            state: r.last_known_state ?? "unknown",
+            connected: r.last_known_state === "open",
+            checkedAt: r.last_state_checked_at ?? null,
+            ownerMasked: mask(r.owner_number_digits as string | null),
+            identityKnown: digitsOf(r.owner_number_digits as string | null).length >= 8,
+            createdAt: r.created_at,
+          })),
+        });
+      }
+
+      // ------------------------------------------------------ CREATE INSTANCE
+      // Provisionamento de uma NOVA instância Evolution (porta de entrada:
+      // card "Evolution WhatsApp"). O número real só é conhecido depois da
+      // leitura do QR, portanto a instância nasce `pending` (endpoint_id NULL).
+      // Nenhuma credencial é criada, duplicada ou retornada.
+      case "createInstance": {
+        if (!evolutionEnabled) {
+          return json(403, { error: "FEATURE_DISABLED", message: EVOLUTION_FLAG });
+        }
+        const webhookSecret = Deno.env.get("EVOLUTION_WEBHOOK_SECRET");
+        const supabaseUrl = Deno.env.get("SUPABASE_URL");
+        if (!webhookSecret || !supabaseUrl) return json(503, { error: "MISSING_SECRET" });
+
+        const provider = evolution();
+        if (isEvolutionError(provider)) {
+          return json(provider.status ?? 503, {
+            error: provider.code,
+            message: provider.message,
+          });
+        }
+
+        // Nome técnico gerado SERVER-SIDE. O usuário nunca escolhe/injeta.
+        const name = `evo-${orgId.replace(/-/g, "").slice(0, 8)}-${
+          crypto.randomUUID().replace(/-/g, "").slice(0, 8)
+        }`;
+        if (!INSTANCE_NAME_RE.test(name)) return json(500, { error: "UNEXPECTED" });
+
+        // 1. Registro local `pending` primeiro: sem órfãos invisíveis na UI.
+        const { data: inserted, error: insErr } = await service
+          .from("evolution_instances")
+          .insert({
+            organization_id: orgId,
+            instance_name: name,
+            endpoint_id: null,
+            provisioning_status: "pending",
+            last_known_state: "connecting",
+          })
+          .select("id, instance_name")
+          .single();
+        if (insErr || !inserted) {
+          logEvolution("error", {
+            fn: FN,
+            requestId,
+            orgId,
+            code: "INSTANCE_INSERT_FAILED",
+            message: insErr?.message ?? "insert failed",
+          });
+          return json(500, { error: "INSTANCE_INSERT_FAILED" });
+        }
+
+        // 2. Cria de fato no servidor Evolution.
+        const created = await provider.create({ instanceName: name, qrcode: true });
+        if (isEvolutionError(created)) {
+          await service.from("evolution_instances").delete().eq("id", inserted.id);
+          return json(created.status ?? 502, {
+            error: created.code,
+            message: created.message,
+          });
+        }
+
+        // 3. Webhook obrigatório (URL montada no servidor, com o secret).
+        const url = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/evolution-webhook?token=${
+          encodeURIComponent(webhookSecret)
+        }`;
+        const hook = await provider.webhookSet(name, {
+          enabled: true,
+          url,
+          events: ["CONNECTION_UPDATE", "QRCODE_UPDATED", "MESSAGES_UPSERT", "MESSAGES_UPDATE"],
+          webhookByEvents: false,
+          webhookBase64: false,
+        });
+        if (hook !== true) {
+          // Sem webhook a instância é inútil e perderia inbound: desfaz tudo.
+          await provider.delete(name);
+          await service.from("evolution_instances").delete().eq("id", inserted.id);
+          return json(502, { error: "WEBHOOK_SET_FAILED" });
+        }
+
+        // 4. QR inicial.
+        const qr = await provider.connect(name);
+        if (isEvolutionError(qr)) {
+          return json(200, { instanceId: inserted.id, instanceName: name, qr: null });
+        }
+
+        return json(200, {
+          instanceId: inserted.id,
+          instanceName: name,
+          provisioningStatus: "pending",
+          qr: { base64: qr.base64 ?? null, code: qr.code ?? null },
+        });
+      }
+
+      // -------------------------------------------------------- SYNC WEBHOOK
+      // Reaplica o webhook canônico de uma instância existente da org.
+      case "syncWebhook": {
+        if (!evolutionEnabled) {
+          return json(403, { error: "FEATURE_DISABLED", message: EVOLUTION_FLAG });
+        }
+        const name = typeof body.instanceName === "string" ? body.instanceName : "";
+        if (!INSTANCE_NAME_RE.test(name)) {
+          return json(400, { error: "INVALID_INPUT", message: "instanceName" });
+        }
+        const { data: row } = await service
+          .from("evolution_instances")
+          .select("id, organization_id")
+          .eq("instance_name", name)
+          .maybeSingle();
+        if (!row) return json(404, { error: "INSTANCE_NOT_FOUND" });
+        if (row.organization_id !== orgId) return json(403, { error: "INSTANCE_FOREIGN_ORG" });
+
+        const webhookSecret = Deno.env.get("EVOLUTION_WEBHOOK_SECRET");
+        const supabaseUrl = Deno.env.get("SUPABASE_URL");
+        if (!webhookSecret || !supabaseUrl) return json(503, { error: "MISSING_SECRET" });
+
+        const provider = evolution();
+        if (isEvolutionError(provider)) {
+          return json(provider.status ?? 503, { error: provider.code });
+        }
+        const hook = await provider.webhookSet(name, {
+          enabled: true,
+          url: `${supabaseUrl.replace(/\/$/, "")}/functions/v1/evolution-webhook?token=${
+            encodeURIComponent(webhookSecret)
+          }`,
+          events: ["CONNECTION_UPDATE", "QRCODE_UPDATED", "MESSAGES_UPSERT", "MESSAGES_UPDATE"],
+          webhookByEvents: false,
+          webhookBase64: false,
+        });
+        if (hook !== true) return json(502, { error: "WEBHOOK_SET_FAILED" });
+        return json(200, { ok: true });
+      }
+
+      // ------------------------------------------------------ DELETE INSTANCE
+      // TRAVA OBRIGATÓRIA: jamais remove silenciosamente uma instância cujo
+      // endpoint esteja em uso (Route ativa, link ativo em qualquer linha —
+      // Comercial ou Atendimento). Fail-closed com EVOLUTION_INSTANCE_IN_USE.
+      case "deleteInstance": {
+        const name = typeof body.instanceName === "string" ? body.instanceName : "";
+        if (!INSTANCE_NAME_RE.test(name)) {
+          return json(400, { error: "INVALID_INPUT", message: "instanceName" });
+        }
+        const { data: row } = await service
+          .from("evolution_instances")
+          .select("id, organization_id, instance_name, endpoint_id, provisioning_status")
+          .eq("instance_name", name)
+          .maybeSingle();
+        if (!row) return json(404, { error: "INSTANCE_NOT_FOUND" });
+        if (row.organization_id !== orgId) return json(403, { error: "INSTANCE_FOREIGN_ORG" });
+
+        const endpointId = (row.endpoint_id as string | null) ?? null;
+        if (endpointId) {
+          const { data: activeLines } = await service
+            .from("messaging_lines")
+            .select("id, inbox_key, active_endpoint_id")
+            .eq("active_endpoint_id", endpointId);
+          if ((activeLines ?? []).length > 0) {
+            return json(409, {
+              error: "EVOLUTION_INSTANCE_IN_USE",
+              message: "endpoint é o número ativo de uma Route",
+              usedBy: (activeLines ?? []).map((l: Record<string, unknown>) => ({
+                lineId: l.id,
+                inboxKey: l.inbox_key,
+                reason: "ACTIVE_ENDPOINT",
+              })),
+            });
+          }
+
+          const { data: activeLinks } = await service
+            .from("messaging_line_endpoints")
+            .select("line_id, endpoint_id, is_active")
+            .eq("endpoint_id", endpointId)
+            .eq("is_active", true);
+          if ((activeLinks ?? []).length > 0) {
+            return json(409, {
+              error: "EVOLUTION_INSTANCE_IN_USE",
+              message: "endpoint está vinculado e ativo em uma Route",
+              usedBy: (activeLinks ?? []).map((l: Record<string, unknown>) => ({
+                lineId: l.line_id,
+                reason: "ACTIVE_LINK",
+              })),
+            });
+          }
+        }
+
+        const provider = evolution();
+        if (isEvolutionError(provider)) {
+          return json(provider.status ?? 503, { error: provider.code });
+        }
+        const del = await provider.delete(name);
+        if (del !== true && (del as { code?: string }).code !== "EVOLUTION_NOT_FOUND") {
+          return json(502, {
+            error: (del as { code: string }).code ?? "EVOLUTION_DELETE_FAILED",
+          });
+        }
+
+        // Só o registro da instância é removido. O endpoint (configuração) e
+        // qualquer histórico permanecem intactos.
+        await service.from("evolution_instances").delete().eq("id", row.id);
+        logEvolution("info", {
+          fn: FN,
+          requestId,
+          orgId,
+          code: "INSTANCE_DELETED",
+          instanceName: name,
+        });
+        return json(200, { ok: true, endpointPreserved: endpointId });
+      }
 
       default:
         return json(400, { error: "INVALID_INPUT", message: "unknown op" });
