@@ -12,9 +12,10 @@
 export const GROUP_GAP_MS = 5 * 60 * 1000;
 
 export interface GroupingItem {
-  /** Tipo do item da timeline: mensagem, nota interna, evento de sistema. */
-  kind: 'message' | 'note' | 'system';
+  /** Tipo do item da timeline: mensagem, nota interna, evento de sistema, evento de CRM. */
+  kind: 'message' | 'note' | 'system' | 'event';
   /** 'inbound' | 'outbound' | 'internal' | null */
+
   direction: string | null;
   /** sender_type estável ('user' | 'agent' | 'system' | null). */
   senderType: string | null;
