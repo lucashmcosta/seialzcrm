@@ -101,6 +101,7 @@ import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
+import { TimelineEventMarker } from '@/components/messages/timeline/TimelineEventMarker';
 import { FunnelSimple } from '@phosphor-icons/react';
 import { formatEndpointIdentity, formatEndpointMigrationAuditLine, whatsappProviderLabel, whatsappProviderShortLabel } from '@/lib/whatsappEndpointDisplay';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
