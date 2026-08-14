@@ -51,10 +51,11 @@ Deno.serve(async (req) => {
   const auth = await validateCallerAuth(req, parsed.data.organizationId);
   if (!auth.ok) return json(401, { error: "unauthorized", reason: auth.error });
 
+  const authenticatedUserId = auth.kind === "user" ? auth.userId : undefined;
   const payload: WhatsAppSendPayload = {
     ...(parsed.data as WhatsAppSendPayload),
     // A identidade interna validada no servidor sempre prevalece sobre a UI.
-    ...(auth.kind === "user" ? { userId: auth.userId } : {}),
+    ...(authenticatedUserId ? { userId: authenticatedUserId } : {}),
   };
 
   const supabase = createClient(

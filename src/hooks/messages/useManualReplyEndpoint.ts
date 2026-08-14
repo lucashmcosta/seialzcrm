@@ -178,7 +178,7 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
     });
   }, [lastMessageId, threadId]);
 
-  const options = optionsQuery.data ?? [];
+  const options = useMemo(() => optionsQuery.data ?? [], [optionsQuery.data]);
   const derivedEndpointId = enabled ? (lastEndpointId ?? routeDefaultEndpointId ?? null) : null;
 
   const selection = useMemo(
