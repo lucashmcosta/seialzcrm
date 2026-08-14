@@ -1,115 +1,161 @@
-# Auditoria: mesmo número em dois providers (Meta 7020 → Evolution 7020)
+# Correção estrutural: mesmo número físico em dois providers (Meta 7020 histórico + Evolution 7020)
 
-Nada foi alterado. Nenhum write executado. O endpoint Meta 7020 (`407ff93d…`) permanece intocado.
+Nada executado ainda. SQL final abaixo, para aprovação.
 
-## 1. Origem exata do conflito
+## Pré-check bloqueante (já executado, READ-ONLY)
 
-`public.provision_sales_endpoint(uuid,uuid,text,text,text,text)` — passo 5 ("identidade do endpoint"):
+```text
+uq_comm_endpoints_org_channel_address É CONSTRAINT? NO  (índice independente → DROP INDEX)
+DUP (org, channel, normalized_address, provider) = 0
+DUP ATIVOS (org, channel, normalized_address, is_active=true) = 0
+PROVIDER NULL = 0
+external_address sem dígitos = 0
+Código dependente do nome do índice antigo / ON CONFLICT = 0
+```
+
+Nenhum conflito. O pré-check é repetido dentro da migração como gate `RAISE EXCEPTION`, para o caso de mudança entre agora e a execução.
+
+## Peça 1 — Índices normalizados (ordem segura)
+
+Identidade lógica: `org + channel + normalized_address + provider`.
+Trava operacional: no máximo **um endpoint ativo** por número físico.
 
 ```sql
-SELECT count(*) FROM communication_endpoints
- WHERE organization_id = p_organization_id AND channel = 'whatsapp'
-   AND regexp_replace(COALESCE(external_address,''),'\D','','g') = v_digits;
--- se 1 linha: carrega provider e:
-IF v_ep_provider IS NOT NULL AND NOT (v_ep_provider = ANY (v_family)) THEN
-  RAISE EXCEPTION 'PROVISION_PROVIDER_CONFLICT';
+BEGIN;
+
+-- gate 1: duplicidade provider-aware
+IF EXISTS (...) -> RAISE 'PRECHECK_DUP_PROVIDER_AWARE'   -- (bloco DO abaixo)
+-- gate 2: dois ativos no mesmo número
+-- gate 3: provider NULL
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.communication_endpoints
+     WHERE external_address IS NOT NULL
+     GROUP BY organization_id, channel,
+              regexp_replace(COALESCE(external_address,''),'\D','','g'), provider
+    HAVING count(*) > 1) THEN
+    RAISE EXCEPTION 'PRECHECK_DUP_PROVIDER_AWARE';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.communication_endpoints
+     WHERE external_address IS NOT NULL AND is_active
+     GROUP BY organization_id, channel,
+              regexp_replace(COALESCE(external_address,''),'\D','','g')
+    HAVING count(*) > 1) THEN
+    RAISE EXCEPTION 'PRECHECK_DUP_ACTIVE_SAME_NUMBER';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public.communication_endpoints WHERE provider IS NULL) THEN
+    RAISE EXCEPTION 'PRECHECK_PROVIDER_NULL';
+  END IF;
+END $$;
+
+-- (a) identidade provider-aware, número normalizado
+CREATE UNIQUE INDEX uq_comm_endpoints_org_channel_digits_provider
+  ON public.communication_endpoints (
+    organization_id, channel,
+    regexp_replace(COALESCE(external_address,''),'\D','','g'), provider)
+  WHERE external_address IS NOT NULL;
+
+-- (b) trava: um único endpoint ATIVO por número físico
+CREATE UNIQUE INDEX uq_comm_endpoints_org_channel_digits_active
+  ON public.communication_endpoints (
+    organization_id, channel,
+    regexp_replace(COALESCE(external_address,''),'\D','','g'))
+  WHERE external_address IS NOT NULL AND is_active;
+
+-- (c) validação: ambos existem e são únicos
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM pg_indexes
+       WHERE schemaname='public' AND tablename='communication_endpoints'
+         AND indexname IN ('uq_comm_endpoints_org_channel_digits_provider',
+                           'uq_comm_endpoints_org_channel_digits_active')) <> 2 THEN
+    RAISE EXCEPTION 'INDEX_VALIDATION_FAILED';
+  END IF;
+END $$;
+
+-- (d) só então remover o índice antigo (índice independente, não constraint)
+DROP INDEX IF EXISTS public.uq_comm_endpoints_org_channel_address;
+
+COMMIT;
 ```
 
-Para `p_provider='evolution'`, `v_family = {evolution_api}`; o endpoint achado é `meta_cloud_api` → exceção. A busca é **por número, sem provider**, então o RPC trata "um número = um endpoint".
+`regexp_replace` é IMMUTABLE, portanto válido em índice de expressão. Nenhum dado é alterado nesta peça.
 
-Segunda barreira, ainda não atingida: índice único `uq_comm_endpoints_org_channel_address` em `(organization_id, channel, external_address) WHERE external_address IS NOT NULL`. Mesmo se o passo 5 passasse, o INSERT do segundo endpoint 7020 falharia aqui.
+## Peça 2 — `provision_sales_endpoint`: resolução por número normalizado + família de provider
 
-## 2. Chave lógica atual de `communication_endpoints`
+Somente o passo 5 muda (mesma assinatura, mesmo restante do corpo, `SECURITY DEFINER`, `search_path=public`):
 
-- `uq_comm_endpoints_org_channel_address` → **organization + channel + address** (provider NÃO entra).
-- `uq_comm_endpoints_org_sender_sid` → organization + sender_sid.
-- `communication_endpoints_meta_sender_sid_unique` → sender_sid global para família Meta.
+```sql
+  -- 5. identidade do endpoint: número normalizado + família do provider
+  SELECT count(*) INTO v_ep_count FROM public.communication_endpoints
+   WHERE organization_id = p_organization_id AND channel = 'whatsapp'
+     AND regexp_replace(COALESCE(external_address,''),'\D','','g') = v_digits
+     AND provider = ANY (v_family);
+  IF v_ep_count > 1 THEN RAISE EXCEPTION 'PROVISION_ENDPOINT_AMBIGUOUS'; END IF;
 
-Ou seja: hoje a identidade é `org + channel + address`; provider é atributo, não parte da chave.
-
-## 3. Critério de busca do RPC
-
-Exatamente o do item 1: `organization_id` + `channel='whatsapp'` + dígitos de `external_address`. Se houver >1 linha → `PROVISION_ENDPOINT_AMBIGUOUS`; se houver 1 com provider de outra família → `PROVISION_PROVIDER_CONFLICT`; se 0 → cria.
-
-## 4. Quem assume "1 E.164 = 1 endpoint"
-
-ADDRESS_ONLY (resolvem/deduplicam por número):
-- `provision_sales_endpoint` (passos 5 e 6).
-- Índice `uq_comm_endpoints_org_channel_address`.
-- `twilio-whatsapp-webhook` — fallback cross-org: varre até 50 endpoints `channel='whatsapp' AND is_active` e casa por dígitos de `external_address` (`.find`, primeira ocorrência) para descobrir a org.
-- UI/hooks de apresentação e dedupe por número: `useOrgWhatsAppEndpoints` (Set de números próprios), `useEndpointNumbers`, `whatsappEndpointDisplay`, seletores/filtros do composer.
-
-PROVIDER_AWARE (não afetados):
-- `meta-whatsapp-webhook` → `provider='meta_cloud_api' AND sender_sid = phone_number_id`.
-- `evolution-webhook` → `evolution_instances.instance_name` → `endpoint_id`.
-- `twilio-whatsapp-webhook` caminho principal → `messaging_service_sid` / `sender_sid`.
-- Resolver V2 (`_shared/route-resolver.ts`) → sempre por `endpoint_id` (+ `is_active` + provider normalizado).
-- `_shared/manual-reply-endpoint.ts` → por `endpoint_id`, com provider e org validados.
-- `messages.endpoint_id`, `message_threads.primary_endpoint_id`, `messaging_line_endpoints`, `user_reply_endpoints`, `thread_reply_endpoint_prefs` → todos por id.
-
-## 5. Ambiguidade com 7020 Meta inativo + 7020 Evolution ativo
-
-- **Inbound**: nenhuma. Meta entra por `sender_sid`, Evolution por instância.
-- **Outbound**: nenhuma no caminho V2/manual — tudo por `endpoint_id`; o Meta 7020 está `is_active=false`, então o resolver o rejeita.
-- Riscos residuais: (a) o fallback do webhook Twilio por número (só define org — mesma org aqui, impacto nulo, mas é lookup frágil); (b) o próprio RPC, que passa a ver 2 linhas do mesmo número → `PROVISION_ENDPOINT_AMBIGUOUS` em provisionamentos futuros; (c) listas de UI podem exibir o número duas vezes.
-
-## 6. Histórico Meta
-
-`407ff93d…` (Central, `meta_cloud_api`, offline, inativo) é referenciado por:
-
-```text
-messages.endpoint_id          19.398
-message_threads.primary_…      1.436
-messaging_line_endpoints           1
-messaging_line_rotations           1
-user_reply_endpoints / prefs       0
+  IF v_ep_count = 1 THEN
+    SELECT id, provider INTO v_endpoint_id, v_ep_provider
+      FROM public.communication_endpoints
+     WHERE organization_id = p_organization_id AND channel = 'whatsapp'
+       AND regexp_replace(COALESCE(external_address,''),'\D','','g') = v_digits
+       AND provider = ANY (v_family)
+     FOR UPDATE;
+  ELSE
+    -- nenhum candidato da própria família: outro provider com o mesmo número
+    -- só é aceitável se estiver INATIVO (histórico preservado, nunca alterado)
+    IF EXISTS (
+      SELECT 1 FROM public.communication_endpoints
+       WHERE organization_id = p_organization_id AND channel = 'whatsapp'
+         AND regexp_replace(COALESCE(external_address,''),'\D','','g') = v_digits
+         AND NOT (provider = ANY (v_family))
+         AND is_active) THEN
+      RAISE EXCEPTION 'PROVISION_ADDRESS_ACTIVE_ON_OTHER_PROVIDER';
+    END IF;
+  END IF;
 ```
 
-Trocar o `provider` desse registro para `evolution_api` faria 19.398 mensagens históricas aparentarem ter saído/entrado pela Evolution — falsificação de auditoria. Apagar o endpoint quebraria/anularia 20.834 referências. **Não há motivo técnico para remover ou reprovisionar o endpoint Meta** — solução descartada.
+Consequências:
+- `v_endpoint_id` fica NULL quando só existe o endpoint Meta inativo → passo 7 **cria** um endpoint novo `evolution_api`; o `UPDATE ... provider = COALESCE(provider, v_canonical)` só roda no endpoint reutilizado da mesma família, logo o Meta histórico nunca é tocado.
+- `PROVISION_PROVIDER_CONFLICT` deixa de ocorrer nesse cenário; o novo erro fail-closed é `PROVISION_ADDRESS_ACTIVE_ON_OTHER_PROVIDER`.
+- Nenhuma escolha arbitrária: 2+ candidatos da mesma família continuam em `PROVISION_ENDPOINT_AMBIGUOUS`.
+- Passo 6 (posse do endereço) e demais gates ficam inalterados. Evolution continua exigindo instância `open`, mesma org e `owner_number_digits` batendo com o número.
 
-## Veredito
+## Concorrência / idempotência
 
-```text
-CONFLICT_SOURCE=provision_sales_endpoint passo 5 (PROVISION_PROVIDER_CONFLICT) + índice uq_comm_endpoints_org_channel_address
-CURRENT_ENDPOINT_UNIQUENESS=organization_id + channel + external_address (provider fora da chave)
-ADDRESS_ONLY_LOOKUPS=provision_sales_endpoint; uq_comm_endpoints_org_channel_address; twilio-whatsapp-webhook (fallback cross-org); hooks/UI de dedupe por número
-PROVIDER_AWARE_LOOKUPS=meta-whatsapp-webhook (sender_sid); evolution-webhook (instance_name); twilio principal (messaging_service_sid); route-resolver V2; manual-reply-endpoint; messages.endpoint_id; message_threads.primary_endpoint_id; messaging_line_endpoints; user_reply_endpoints
-HISTORICAL_META_ENDPOINT_MUST_BE_PRESERVED=YES
-CROSS_PROVIDER_SAME_NUMBER_SAFE_TODAY=NO (bloqueado por RPC + índice; resolvers já seriam seguros)
-SCHEMA_CHANGE_REQUIRED=YES
-RPC_CHANGE_REQUIRED=YES
-WEBHOOK_CHANGE_REQUIRED=NO
-RESOLVER_CHANGE_REQUIRED=NO
-META_HISTORY_RISK=NONE (com o plano abaixo)
-READY_FOR_SAFE_FIX=YES
-```
+Mantidos e agora reforçados:
+- `pg_advisory_xact_lock('ce:<org>:whatsapp:<digits>')` serializa duplo clique e requisições paralelas no mesmo número.
+- `FOR UPDATE` no candidato e na `messaging_lines` / `evolution_instances`.
+- Proteção final no banco: os dois índices únicos normalizados — um INSERT concorrente que escapasse do lock falharia no índice, não silenciosamente.
+- Repetir a operação após sucesso é idempotente: `outcome='reused'`, link `unchanged`, `evolution_mapping='unchanged'`.
 
-## Correção mínima proposta (a aprovar, nada implementado)
+## Fora de escopo nesta etapa
 
-1. **Unicidade passa a incluir provider, com trava anti-ambiguidade**
-   - Substituir `uq_comm_endpoints_org_channel_address` por:
-     - `UNIQUE (organization_id, channel, external_address, provider) WHERE external_address IS NOT NULL` — permite 7020 Meta + 7020 Evolution;
-     - `UNIQUE (organization_id, channel, external_address) WHERE external_address IS NOT NULL AND is_active` — garante **no máximo um endpoint ATIVO por número físico**, eliminando toda ambiguidade de envio e o fallback do Twilio.
-   - Validação bloqueante antes: nenhum par (org, channel, address) com 2+ ativos hoje.
+Webhooks (Meta/Twilio/Evolution), Resolver V2, "Responder por", `active_endpoint_id`, rotações, Atendimento e UI. A UI ficará mostrando duas linhas do 7020 (Meta inativo e Evolution) até o ajuste visual seguinte — sem impacto funcional.
 
-2. **RPC `provision_sales_endpoint`: busca passa a ser por número + família de provider**
-   - Passo 5 filtra também `provider = ANY(v_family)` (tratando `provider IS NULL` como adotável apenas quando não houver candidato de outra família).
-   - Endpoints de outra família com o mesmo número deixam de causar `PROVISION_PROVIDER_CONFLICT`; passam a exigir que estejam inativos (senão erro novo `PROVISION_ADDRESS_ACTIVE_ON_OTHER_PROVIDER`, fail-closed).
-   - Cria um endpoint Evolution novo; **nunca** altera provider de endpoint existente.
-
-3. **UI**: agrupar por número mostrando uma linha por provider, com badge "Histórico" quando inativo (ajuste apenas de apresentação, opcional nesta etapa).
-
-Não muda: webhooks, Resolver V2, `active_endpoint_id`, rotações, Atendimento, Meta 7067.
-
-Pós-condições a validar após aplicar:
+## Pós-condições a auditar após execução e vínculo
 
 ```text
-META_7020_ENDPOINT_ID_UNCHANGED=PASS
-META_7020_PROVIDER_UNCHANGED=PASS
+META_7020_ENDPOINT_ID_UNCHANGED=PASS      (407ff93d…)
+META_7020_PROVIDER_UNCHANGED=PASS         (meta_cloud_api, is_active=false)
 MESSAGES_ENDPOINT_REFS_UNCHANGED=19398
 THREADS_PRIMARY_ENDPOINT_REFS_UNCHANGED=1436
-EVOLUTION_ENDPOINT_CREATED=YES (novo id)
-ACTIVE_ENDPOINT_CHANGED=NO (Meta 7067)
+EVOLUTION_7020_ENDPOINT_CREATED=YES
+EVOLUTION_7020_PROVIDER=evolution_api
+EVOLUTION_7020_LINKED_TO_COMMERCIAL=YES
+EVOLUTION_7020_ACTIVE_ENDPOINT=NO
+META_7067_STILL_ACTIVE=YES
+ACTIVE_ENDPOINT_CHANGED=NO
 MESSAGING_LINE_ROTATIONS_NEW=0
 ATENDIMENTO_CHANGED=NO
 ```
+
+## Ordem de execução após aprovação
+
+1. Migração Peça 1 (gates + índices a/b + validação + drop do antigo).
+2. Migração Peça 2 (`CREATE OR REPLACE FUNCTION provision_sales_endpoint`).
+3. Você clica em "Vincular ao WhatsApp Comercial" no card Evolution.
+4. Eu rodo a auditoria das pós-condições acima.
