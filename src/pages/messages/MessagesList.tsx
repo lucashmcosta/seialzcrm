@@ -192,7 +192,31 @@ interface InlineNote {
   occurred_at: string;
   created_by_user_id: string | null;
   author_name?: string;
+  /** Título da activity — usado para classificar eventos de sistema. */
+  title?: string | null;
 }
+
+/**
+ * Títulos de activities gravadas por triggers/automações (não são notas
+ * escritas por pessoas). Classificação por TIPO, nunca por autor.
+ */
+const SYSTEM_ACTIVITY_TITLES = new Set(
+  [
+    'Atribuicao automatica',
+    'Atribuição automática',
+    'Distribuicao automatica',
+    'Distribuição automática',
+    'Round-robin',
+    'Automacao',
+    'Automação',
+  ].map((t) => t.toLowerCase()),
+);
+
+function isSystemActivity(title: string | null | undefined): boolean {
+  if (!title) return false;
+  return SYSTEM_ACTIVITY_TITLES.has(title.trim().toLowerCase());
+}
+
 
 /** Marco histórico do CRM na timeline (puramente apresentacional). */
 interface TimelineEvent {
@@ -2366,7 +2390,23 @@ function DesktopMessagesList() {
                               const renderItem = (() => {
                               if (item._type === 'note') {
                                 const note = item.data;
+                                // Atividades de sistema (round-robin, automações) são
+                                // classificadas pelo TIPO/título e viram separador discreto.
+                                if (isSystemActivity(note.title)) {
+                                  return (
+                                    <TimelineEventMarker
+                                      key={`sysnote-${note.id}`}
+                                      label={note.body || note.title || 'Evento do sistema'}
+                                      time={new Date(note.occurred_at).toLocaleTimeString(locale, {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        hour12: false,
+                                      })}
+                                    />
+                                  );
+                                }
                                 return (
+
                                   <div key={`note-${note.id}`} className="flex justify-center">
                                     <div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700">
                                       <div className="flex items-center gap-1 mb-1">
