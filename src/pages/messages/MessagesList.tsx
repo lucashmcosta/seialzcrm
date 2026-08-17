@@ -2342,17 +2342,22 @@ function DesktopMessagesList() {
                                     ? `WhatsApp • ${providerShort}`
                                     : 'WhatsApp';
                                 blockHeader = (
-                                  <div className="flex flex-col gap-0 pb-0.5 items-center text-center">
-                                    <span className="text-xs font-medium text-foreground leading-4">
-                                      {channelLine}
-                                    </span>
-                                    {epAddress && (
-                                      <span className="font-data text-[10px] text-muted-foreground leading-[13px]">
-                                        {formatPhoneDisplay(epAddress)}
-                                      </span>
-                                    )}
+                                  <div className="pb-0">
+                                    <div className="flex items-center justify-center gap-1.5 text-[11px] leading-4">
+                                      <span className="font-medium text-foreground">{channelLine}</span>
+                                      {epAddress && (
+                                        <>
+                                          <span className="text-muted-foreground/50">•</span>
+                                          <span className="font-data text-muted-foreground">
+                                            {formatPhoneDisplay(epAddress)}
+                                          </span>
+                                        </>
+                                      )}
+                                    </div>
+                                    <div className="h-px bg-border/30 mt-1.5 mb-2" />
                                   </div>
                                 );
+
                               }
 
 
