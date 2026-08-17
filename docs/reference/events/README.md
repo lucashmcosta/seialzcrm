@@ -4,7 +4,7 @@ Catálogo dos eventos que o Seialz **consome** (webhooks/fila inbound) e **emite
 
 ## 1. Outbox — eventos emitidos (`integration_events`)
 
-Publicados por triggers (`fn_publish_integration_event`, `fn_emit_opportunity_won_event`) com `idempotency_key` ([ADR-0006](../../decisions/0006-event-idempotency.md)); `fn_fanout_event` cria `integration_jobs` por subscription ativa; `integration-worker` entrega (handlers em `_shared/integration-handlers/`, registry `{integration_slug}:{target_action}`).
+Publicados por triggers (`fn_publish_integration_event`, `fn_emit_opportunity_won_event`, `fn_emit_nammux_post_win_document`) com `idempotency_key` ([ADR-0006](../../decisions/0006-event-idempotency.md)); `fn_fanout_event` cria `integration_jobs` por subscription ativa; `integration-worker` entrega (handlers em `_shared/integration-handlers/`, registry `{integration_slug}:{target_action}`). Documentos novos de uma oportunidade já ganha geram replay focado conforme a [ADR-0010](../../decisions/0010-post-win-document-sync.md).
 
 | event_type | Origem (trigger) | Volume em prod (2026-07-05) |
 |---|---|---|
@@ -13,7 +13,7 @@ Publicados por triggers (`fn_publish_integration_event`, `fn_emit_opportunity_wo
 | `opportunity.stage_changed` | UPDATE de etapa | 19.155 |
 | `opportunity.created` | INSERT em `opportunities` | 10.454 |
 | `contact.created` | INSERT em `contacts` | 10.122 |
-| `opportunity.won` | won → `fn_build_opportunity_won_payload` (payload rico p/ Nammux) | 127 |
+| `opportunity.won` | won ou documento pós-venda → `fn_build_opportunity_won_payload` (payload rico p/ Nammux) | 127 |
 | `contact.updated` | UPDATE em `contacts` | 5 |
 
 Convenção: `{aggregate_type}.{created|updated}` + especializações (`message.outbound_sent`, `opportunity.stage_changed`, `opportunity.won`). Idempotência: `{aggregate}:{id}:{event_type}:{epoch}`.

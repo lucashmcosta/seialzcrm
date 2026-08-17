@@ -64,6 +64,19 @@ Invocar `nammux-reconcile-opportunities` primeiro com:
 
 Revisar a lista e repetir com `dry_run: false`. A reconciliação usa eventos canônicos de replay e reaproveita os vínculos existentes.
 
+## Documentos adicionados depois da venda
+
+`trg_emit_nammux_post_win_document` publica automaticamente um replay focado
+quando um documento é inserido diretamente em uma oportunidade já ganha e já
+enviada ao Nammux. O comportamento respeita
+`include_opportunity_attachments`, usa chave idempotente por documento e não
+faz I/O de rede na transação de upload.
+
+Na migration de ativação, documentos históricos elegíveis recebem o mesmo
+replay focado e idempotente usado pelo fluxo contínuo. Documentos vinculados
+apenas ao contato não são roteados automaticamente nesta fase, evitando
+propagação acidental para vários processos do mesmo contato.
+
 ## Critérios de liberação
 
 - Nenhum evento ou log de uma organização é visível por outra.

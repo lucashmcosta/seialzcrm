@@ -15,8 +15,7 @@ async function shadowIngestSuvSign(opts: {
 }) {
   const { supabase, req, payload, rawHeaders, orgId, signatureValid } = opts;
   const traceId = crypto.randomUUID();
-  const externalId =
-    payload?.data?.document?.id ?? payload?.event_id ?? null;
+  const externalId = payload?.data?.document?.id ?? payload?.event_id ?? null;
   const eventType = payload?.event ?? "unknown";
   const idemKey = `suvsign:${externalId ?? "no-id"}:${eventType}`;
 
@@ -51,7 +50,10 @@ async function shadowIngestSuvSign(opts: {
         handler_key: "suvsign.v1",
       });
 
-    if (error && error.code !== "23505" /* unique_violation = duplicata esperada */) {
+    if (
+      error &&
+      error.code !== "23505" /* unique_violation = duplicata esperada */
+    ) {
       console.error(JSON.stringify({
         level: "error",
         msg: "inbox_v2.shadow_insert_failed",
@@ -88,7 +90,6 @@ async function shadowIngestSuvSign(opts: {
   }
 }
 
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -98,7 +99,7 @@ const corsHeaders = {
 async function verifyHmac(
   body: string,
   signature: string,
-  secret: string
+  secret: string,
 ): Promise<boolean> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -106,7 +107,7 @@ async function verifyHmac(
     encoder.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
   const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
   const computed = Array.from(new Uint8Array(sig))
@@ -129,7 +130,7 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
   const rawBody = await req.text();
@@ -159,7 +160,10 @@ Deno.serve(async (req) => {
   if (!connector_id) {
     return new Response(
       JSON.stringify({ error: "connector_id is required in metadata" }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
@@ -173,10 +177,18 @@ Deno.serve(async (req) => {
   const webhookSecret = orgConfig?.webhook_secret;
 
   if (!webhookSecret) {
-    console.error("No webhook_secret configured for connector_id:", connector_id);
+    console.error(
+      "No webhook_secret configured for connector_id:",
+      connector_id,
+    );
     return new Response(
-      JSON.stringify({ error: "Webhook secret not configured for this connector" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        error: "Webhook secret not configured for this connector",
+      }),
+      {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
@@ -186,7 +198,10 @@ Deno.serve(async (req) => {
     console.error("HMAC validation failed for connector_id:", connector_id);
     return new Response(
       JSON.stringify({ error: "Invalid signature" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
@@ -198,7 +213,7 @@ Deno.serve(async (req) => {
       {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 
@@ -215,13 +230,16 @@ Deno.serve(async (req) => {
       {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 
   const orgId = opportunity.organization_id;
   const document = payload.data?.document || {};
   const signatories = payload.data?.signatories || [];
+  const externalDocumentId = document.id == null
+    ? null
+    : String(document.id).trim() || null;
 
   // ============================================================
   // Inbox v2 — shadow ingest (best-effort, NUNCA quebra legado)
@@ -230,7 +248,9 @@ Deno.serve(async (req) => {
   // ============================================================
   {
     const rawHeaders: Record<string, string> = {};
-    req.headers.forEach((v, k) => { rawHeaders[k] = v; });
+    req.headers.forEach((v, k) => {
+      rawHeaders[k] = v;
+    });
     // Não aguardamos para não impactar latência do legado; falhas são logadas internamente.
     shadowIngestSuvSign({
       supabase,
@@ -242,7 +262,47 @@ Deno.serve(async (req) => {
     }).catch(() => {});
   }
 
+  // SuvSign callbacks are delivered at least once. Reusing the stable provider
+  // document id prevents duplicate PDFs, activities and Nammux replay events.
+  if (externalDocumentId) {
+    const { data: existingDocument, error: existingDocumentError } =
+      await supabase
+        .from("documents")
+        .select("id")
+        .eq("organization_id", orgId)
+        .eq("external_source", "suvsign")
+        .eq("external_ref", externalDocumentId)
+        .maybeSingle();
 
+    if (existingDocumentError) {
+      console.error(
+        "Error checking duplicated SuvSign document:",
+        existingDocumentError,
+      );
+      return new Response(
+        JSON.stringify({ error: "Failed to check document idempotency" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    if (existingDocument) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          duplicate: true,
+          opportunity_id: opportunity.id,
+          document_id: existingDocument.id,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+  }
 
   // --- Download signed PDF ---
   const fileUrl = document.file_url;
@@ -253,23 +313,33 @@ Deno.serve(async (req) => {
       {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 
   // SSRF guard: restrict file_url to known SuvSign hosts
-  const ALLOWED_FILE_HOSTS = ["suvsign.com", "suvsign.com.br", "amazonaws.com", "vpysvlbfsvomwrgbpybc.supabase.co"];
+  const ALLOWED_FILE_HOSTS = [
+    "suvsign.com",
+    "suvsign.com.br",
+    "amazonaws.com",
+    "vpysvlbfsvomwrgbpybc.supabase.co",
+  ];
   try {
     const parsed = new URL(fileUrl);
     if (parsed.protocol !== "https:") throw new Error("non-https file_url");
     const host = parsed.hostname.toLowerCase();
-    const allowed = ALLOWED_FILE_HOSTS.some((h) => host === h || host.endsWith("." + h));
+    const allowed = ALLOWED_FILE_HOSTS.some((h) =>
+      host === h || host.endsWith("." + h)
+    );
     if (!allowed) throw new Error(`disallowed file_url host: ${host}`);
   } catch (err) {
     console.error("Rejected file_url:", fileUrl, err);
     return new Response(
       JSON.stringify({ error: "Invalid file_url" }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
@@ -287,15 +357,17 @@ Deno.serve(async (req) => {
       {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 
   // --- Upload PDF to storage ---
-  const timestamp = Date.now();
+  const storageId = externalDocumentId
+    ? externalDocumentId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 128)
+    : String(Date.now());
   const fileName = `${document.title || "documento"}_assinado.pdf`
     .replace(/[^a-zA-Z0-9._-]/g, "_");
-  const storagePath = `${opportunity.id}/${timestamp}_${fileName}`;
+  const storagePath = `${opportunity.id}/suvsign_${storageId}_${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from("attachments")
@@ -311,24 +383,64 @@ Deno.serve(async (req) => {
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 
   // --- Create attachment record ---
-  const { error: attachError } = await supabase.from("documents").insert({
-    organization_id: orgId,
-    entity_type: "opportunity",
-    entity_id: opportunity.id,
-    file_name: `${document.title || "Documento"} - Assinado.pdf`,
-    storage_path: storagePath,
-    bucket: "attachments",
-    mime_type: "application/pdf",
-    size_bytes: pdfBuffer.byteLength,
-  });
+  const { data: insertedDocument, error: attachError } = await supabase
+    .from("documents")
+    .insert({
+      organization_id: orgId,
+      entity_type: "opportunity",
+      entity_id: opportunity.id,
+      file_name: `${document.title || "Documento"} - Assinado.pdf`,
+      storage_path: storagePath,
+      bucket: "attachments",
+      mime_type: "application/pdf",
+      size_bytes: pdfBuffer.byteLength,
+      external_source: externalDocumentId ? "suvsign" : null,
+      external_ref: externalDocumentId,
+    })
+    .select("id")
+    .single();
 
   if (attachError) {
     console.error("Error creating attachment record:", attachError);
+    await supabase.storage.from("attachments").remove([storagePath]);
+
+    // A concurrent duplicate may win between the preflight lookup and insert.
+    if (attachError.code === "23505" && externalDocumentId) {
+      const { data: existingDocument } = await supabase
+        .from("documents")
+        .select("id")
+        .eq("organization_id", orgId)
+        .eq("external_source", "suvsign")
+        .eq("external_ref", externalDocumentId)
+        .maybeSingle();
+      if (existingDocument) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            duplicate: true,
+            opportunity_id: opportunity.id,
+            document_id: existingDocument.id,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+    }
+
+    return new Response(
+      JSON.stringify({ error: "Failed to create document record" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 
   // --- Create timeline activity ---
@@ -338,9 +450,9 @@ Deno.serve(async (req) => {
 
   const completedAt = document.completed_at
     ? new Date(document.completed_at).toLocaleString("pt-BR", {
-        dateStyle: "long",
-        timeStyle: "short",
-      })
+      dateStyle: "long",
+      timeStyle: "short",
+    })
     : "";
 
   const { error: activityError } = await supabase.from("activities").insert({
@@ -349,7 +461,9 @@ Deno.serve(async (req) => {
     contact_id: contact_id || null,
     activity_type: "system",
     title: `Documento assinado: ${document.title || "Sem título"}`,
-    body: `Assinado${completedAt ? ` em ${completedAt}` : ""}${signatoryNames ? ` por ${signatoryNames}` : ""}`,
+    body: `Assinado${completedAt ? ` em ${completedAt}` : ""}${
+      signatoryNames ? ` por ${signatoryNames}` : ""
+    }`,
   });
 
   if (activityError) {
@@ -357,14 +471,18 @@ Deno.serve(async (req) => {
   }
 
   console.log(
-    `SuvSign webhook processed: document ${document.id} for opportunity ${opportunity.id}`
+    `SuvSign webhook processed: document ${document.id} for opportunity ${opportunity.id}`,
   );
 
   return new Response(
-    JSON.stringify({ ok: true, opportunity_id: opportunity.id }),
+    JSON.stringify({
+      ok: true,
+      opportunity_id: opportunity.id,
+      document_id: insertedDocument.id,
+    }),
     {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-    }
+    },
   );
 });

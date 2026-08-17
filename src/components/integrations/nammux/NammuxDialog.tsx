@@ -711,7 +711,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
               <section className="space-y-2">
                 <h3 className="text-sm font-semibold">Documentos</h3>
                 <p className="text-xs text-muted-foreground">
-                  Opções preparadas para envio futuro de documentos ao Nammux.
+                  Controla os documentos enviados ao ganhar e os novos anexos da oportunidade enviados depois da venda.
                 </p>
                 <ToggleRow
                   label="Incluir Contact Attachments"
@@ -721,7 +721,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                 />
                 <ToggleRow
                   label="Incluir Opportunity Attachments"
-                  description="Anexos vinculados à oportunidade no payload."
+                  description="Inclui anexos da oportunidade e sincroniza automaticamente novos anexos após a venda."
                   checked={form.include_opportunity_attachments}
                   onChange={(v) => setForm((p) => ({ ...p, include_opportunity_attachments: v }))}
                 />
