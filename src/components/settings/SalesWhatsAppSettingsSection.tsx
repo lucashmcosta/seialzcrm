@@ -128,6 +128,28 @@ export function SalesWhatsAppSettingsSection() {
     });
   }, [routes]);
 
+  /**
+   * Resumo apenas derivado dos números já carregados — nenhuma query nova.
+   * "Ativos" = habilitados para uso na Route Comercial (vínculo ativo),
+   * independentemente do estado da conexão (exibido por linha).
+   */
+  const summary = useMemo(() => {
+    const activeCount = numbers.filter((n) => n.linkActive).length;
+    const byProvider = new Map<string, number>();
+    numbers.forEach((n) => {
+      const key = PROVIDER_OPTIONS.find((o) => o.value === n.provider)?.label
+        ?? (n.providerRaw ?? n.provider ?? '—');
+      byProvider.set(key, (byProvider.get(key) ?? 0) + 1);
+    });
+    return {
+      total: numbers.length,
+      activeCount,
+      providers: Array.from(byProvider.entries()),
+      defaultNumber: numbers.find((n) => n.isRouteActive)?.addressMasked ?? null,
+    };
+  }, [numbers]);
+
+
   const submitProvision = async (lineId: string) => {
     try {
       await provisionEndpoint.mutateAsync({
@@ -146,10 +168,10 @@ export function SalesWhatsAppSettingsSection() {
   };
 
   return (
-    <Card className="p-5 space-y-5">
+    <Card className="p-6 space-y-5">
       {/* ---------------------------------------------------------- cabeçalho */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-2.5">
           <ChatCircle className="h-5 w-5 text-primary" weight="duotone" />
           <div>
             <h3 className="text-sm font-semibold text-foreground">Números do WhatsApp Comercial</h3>
@@ -161,14 +183,46 @@ export function SalesWhatsAppSettingsSection() {
         <div className="flex items-center gap-2 shrink-0">
           {canManage && primaryLineId && (
             <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Vincular número
+              <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar número
             </Button>
           )}
-          <Button variant="ghost" size="icon" onClick={() => refetch()} title="Atualizar status">
-            <ArrowsClockwise className="h-4 w-4" />
+          <Button size="sm" variant="ghost" onClick={() => refetch()} title="Atualizar status">
+            <ArrowsClockwise className="h-3.5 w-3.5 mr-1" /> Atualizar
           </Button>
         </div>
       </div>
+
+      {/* ------------------------------------------------ resumo da operação */}
+      {!isLoading && !error && numbers.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-md border border-border/70 bg-muted/40 px-4 py-3">
+          <span className="text-xs text-muted-foreground">
+            <span className="font-data text-sm font-semibold text-foreground">{summary.activeCount}</span>
+            {' '}
+            {summary.activeCount === 1 ? 'número ativo' : 'números ativos'}
+            {summary.total !== summary.activeCount && (
+              <span className="text-muted-foreground"> de {summary.total}</span>
+            )}
+          </span>
+          {summary.providers.length > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {summary.providers.map(([label, count]) => `${count} ${label}`).join(' · ')}
+            </span>
+          )}
+          {summary.defaultNumber && (
+            <span className="text-xs text-muted-foreground">
+              Padrão:{' '}
+              <span className="font-data font-medium text-foreground">{summary.defaultNumber}</span>
+            </span>
+          )}
+          <span className="text-xs text-muted-foreground">
+            Roteamento:{' '}
+            <span className="font-medium text-foreground">
+              {status?.rules.resolverV2 ? 'Automático' : 'Padrão'}
+            </span>
+          </span>
+        </div>
+      )}
+
 
       {isLoading && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -195,22 +249,17 @@ export function SalesWhatsAppSettingsSection() {
       {/* --------------------------------------------- LISTA ÚNICA DE NÚMEROS */}
       {!isLoading && !error && (
         <section className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Modo de roteamento
-            </div>
-            <div className="text-xs font-medium text-foreground">
-              {status?.rules.resolverV2 ? 'Automático' : 'Padrão'}
-            </div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Números vinculados
           </div>
-
 
           {numbers.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               Nenhum número disponível para as conversas comerciais.
             </p>
           ) : (
-            <ul className="space-y-1">
+            <ul className="space-y-2">
+
               {numbers.map((ep) => {
                 const state = STATE_LABEL[ep.technicalStatus] ?? STATE_LABEL.DISCONNECTED;
                 const blockedTitle = ep.activationBlockedReason
@@ -232,18 +281,29 @@ export function SalesWhatsAppSettingsSection() {
                 return (
                   <li
                     key={ep.endpointId}
-                    className="flex items-center gap-3 rounded-md border border-border px-3 py-2"
+                    className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-border/70 bg-card px-4 py-3 transition-colors hover:border-border"
                   >
-                    <span className="font-data text-sm font-semibold text-foreground shrink-0 w-[9.5rem]">
-                      {ep.addressMasked ?? '—'}
-                    </span>
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <span className="font-data text-sm font-semibold leading-none text-foreground">
+                        {ep.addressMasked ?? '—'}
+                      </span>
+                      {ep.displayName && (
+                        <span className="truncate text-[11px] text-muted-foreground">
+                          {ep.displayName}
+                        </span>
+                      )}
+                    </div>
 
-                    <span className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="flex flex-1 flex-wrap items-center gap-2">
                       <ProviderChip provider={ep.providerRaw} />
                       <StateChip ok={state.ok} label={state.label} title={blockedTitle} />
                       {ep.isRouteActive && (
-                        <Badge variant="secondary" className="text-[10px]">
-                          Padrão de conversas sem histórico
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px]"
+                          title="Padrão de conversas sem histórico"
+                        >
+                          Padrão
                         </Badge>
                       )}
                     </span>
@@ -251,7 +311,7 @@ export function SalesWhatsAppSettingsSection() {
                     <span className="flex items-center gap-1.5 shrink-0">
                       {canConnect && needsConnection && (
                         <Button
-                          size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                          size="sm" variant="outline" className="h-7 px-2 text-[11px]"
                           onClick={() => setConnectTarget({
                             instanceName: ep.instanceName as string,
                             endpointId: ep.endpointId,
@@ -261,9 +321,8 @@ export function SalesWhatsAppSettingsSection() {
                         </Button>
                       )}
                     </span>
-
-
                   </li>
+
                 );
               })}
             </ul>
@@ -328,7 +387,7 @@ export function SalesWhatsAppSettingsSection() {
                   onClick={() => submitProvision(primaryLineId)}
                 >
                   {provisionEndpoint.isPending && <SpinnerGap className="h-3.5 w-3.5 mr-1 animate-spin" />}
-                  Vincular
+                  Adicionar
                 </Button>
               </div>
             </div>

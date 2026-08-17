@@ -447,19 +447,26 @@ export function IntegrationsSettings() {
 
         {/* WhatsApp Comercial agora tem entrada própria em Configurações — aqui fica apenas o atalho. */}
         {(selectedCategory === 'whatsapp' || selectedCategory === 'all') && (
-          <Card id="whatsapp-comercial" className="scroll-mt-6 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="text-base font-semibold">WhatsApp Comercial</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Route Comercial usada nas conversas de vendas e mapeamento de números.
-                </p>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => navigate('/settings/whatsapp-comercial')}>
-                Abrir WhatsApp Comercial
-              </Button>
+          <div
+            id="whatsapp-comercial"
+            className="scroll-mt-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 px-4 py-3"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">WhatsApp Comercial</p>
+              <p className="text-xs text-muted-foreground">
+                Gerencie os números comerciais utilizados pelo CRM.
+              </p>
             </div>
-          </Card>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => navigate('/settings/whatsapp-comercial')}
+            >
+              Abrir módulo →
+            </Button>
+          </div>
+
         )}
 
 

@@ -6,11 +6,11 @@ import { SalesWhatsAppSettingsSection } from '@/components/settings/SalesWhatsAp
  */
 export default function SalesWhatsAppPage() {
   return (
-    <section id="whatsapp-comercial" className="space-y-4">
+    <section id="whatsapp-comercial" className="w-full max-w-5xl space-y-5">
       <div>
-        <h3 className="text-base font-semibold">WhatsApp Comercial</h3>
+        <h3 className="text-lg font-semibold tracking-tight">WhatsApp Comercial</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Route Comercial usada nas conversas de vendas e mapeamento de números.
+          Gerencie números, provedores e o roteamento utilizado nas conversas comerciais.
         </p>
       </div>
       <SalesWhatsAppSettingsSection />
