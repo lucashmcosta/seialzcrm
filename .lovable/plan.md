@@ -18,38 +18,39 @@ No `blockHeader` (`MessagesList.tsx`, ~2340-2360): as duas linhas (`WhatsApp •
 WhatsApp • Evolution • (11) 5028-7020
 ```
 
-Canal/provider em `text-[11px] font-medium text-foreground`, número em `font-data text-[11px] text-muted-foreground`, separadores `•` em `text-muted-foreground/50`, `pb-1` no lugar do bloco de duas linhas. Menos ~13px de altura por container.
+Canal/provider em `text-[11px] font-medium text-foreground`, `•` em `text-muted-foreground/50`, número em `font-data text-[11px] text-muted-foreground`. Abaixo do cabeçalho, uma régua extremamente sutil (`h-px bg-border/30 mt-1.5 mb-2`) separa cabeçalho e mensagens. Menos ~13px de altura por container.
 
 ## 3. Eventos da timeline sempre como separador discreto
 
-Hoje o texto "Contato auto-atribuído via round-robin" chega pela query de `activities` (`activity_type = 'note'`, criado por trigger sem usuário) e é renderizado no card amarelo de nota interna.
+Hoje "Contato auto-atribuído via round-robin" chega pela query de `activities` (`activity_type = 'note'`, `title = 'Atribuicao automatica'`, gravado por trigger) e cai no card amarelo de nota interna.
 
-Ajuste puramente visual: notas sem autor (`created_by_user_id === null`) são classificadas como evento de sistema e renderizadas com `TimelineEventMarker` (`──── Evento ────`), igual a "Conversa criada" e "Ver mais mensagens". Notas escritas por pessoas continuam no card amarelo, inalteradas.
+Classificação por TIPO do evento (nunca por autor): a mesma query de notas passa a ler também `title`, e uma lista de títulos/tipos sistêmicos conhecidos (`Atribuicao automatica`, distribuição/round-robin, automações) é renderizada como `TimelineEventMarker` (`──── Evento ────`). Notas internas escritas por pessoas continuam exatamente como hoje, no card amarelo.
 
-Também padronizo a pílula de migração de endpoint (`bg-muted/70 rounded-full shadow-sm`, ~2418) para o mesmo `TimelineEventMarker`, com a linha de auditoria como `value`. Nenhum evento é adicionado, removido ou reordenado.
+Também padronizo a pílula de migração de endpoint (`bg-muted/70 rounded-full shadow-sm`, ~2418) para o mesmo `TimelineEventMarker`, com a linha de auditoria como `value`. Nenhum evento é adicionado, removido ou reordenado; nenhum filtro de query muda (mesma tabela, mesmos `eq`/`is`).
 
 ## 4. Acabamento dos containers (mais Kommo)
 
 No `TimelineBlock` (`className` passado em `MessagesList.tsx` ~2715):
 
 - borda mais discreta: `border-border/70` → `border-border/40`
-- fundo levemente mais sutil e uniforme: `bg-muted/50` → `bg-muted/40`
-- sombra suave em vez de borda dura: acrescenta `shadow-sm`
+- fundo levemente mais limpo: `bg-muted/50` → `bg-muted/30`
+- sombra suave: acrescenta `shadow-sm`
 - padding equilibrado: `px-2 py-2` → `px-3 py-2.5`
 - menos espaço entre containers: `mt-4` → `mt-2.5`
-- cantos: `rounded-lg` → `rounded-xl`, reforçando a sensação de cartões empilhados
+- `rounded-lg` mantido (sem `rounded-xl`), para leitura mais corporativa
 
 Espaçamento interno entre bolhas (`space-y-3` / agrupamento) permanece exatamente como está.
 
-## 5. Lista de conversas — refinos
+## 5. Lista de conversas — altura menor, uma linha de meta
 
 Em `ChatListItem`:
 
-- linha 2 (status · responsável) ganha `mt-1` e ícones/pontos alinhados por `items-center` consistente
-- badges (`RouteBadge`, ponto de não lidas, "Atenção") passam a compartilhar a mesma altura visual e `gap-1.5`
-- "Atenção" vira chip discreto na mesma linha do status, evitando a terceira linha e o pulo de altura entre itens
+- meta em linha única sempre que couber: `🟢 Aberta · ⚠ Atenção · Responsável`, com `truncate` no responsável — o bloco separado de "Atenção" (terceira linha) é removido e vira chip inline em `text-destructive`
 - padding do item `py-3 pr-4 pl-3` → `py-2.5 px-3`, borda `border-border` → `border-border/60`
-- horário relativo em `text-[11px] text-muted-foreground` para não competir com o nome
+- badges (`RouteBadge`, ponto de não lidas, chip de atenção) com mesma altura visual e `gap-1.5`, todos `items-center`
+- horário relativo em `text-[11px] text-muted-foreground`, alinhado ao topo da linha do nome
+- ícones padronizados em 12px, mesmo peso e mesma cor `muted-foreground`
+
 
 Nenhuma mudança de clique, seleção, filtro, ordenação ou queries da lista.
 
