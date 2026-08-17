@@ -281,18 +281,29 @@ export function SalesWhatsAppSettingsSection() {
                 return (
                   <li
                     key={ep.endpointId}
-                    className="flex items-center gap-3 rounded-md border border-border px-3 py-2"
+                    className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-border/70 bg-card px-4 py-3 transition-colors hover:border-border"
                   >
-                    <span className="font-data text-sm font-semibold text-foreground shrink-0 w-[9.5rem]">
-                      {ep.addressMasked ?? '—'}
-                    </span>
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <span className="font-data text-sm font-semibold leading-none text-foreground">
+                        {ep.addressMasked ?? '—'}
+                      </span>
+                      {ep.displayName && (
+                        <span className="truncate text-[11px] text-muted-foreground">
+                          {ep.displayName}
+                        </span>
+                      )}
+                    </div>
 
-                    <span className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="flex flex-1 flex-wrap items-center gap-2">
                       <ProviderChip provider={ep.providerRaw} />
                       <StateChip ok={state.ok} label={state.label} title={blockedTitle} />
                       {ep.isRouteActive && (
-                        <Badge variant="secondary" className="text-[10px]">
-                          Padrão de conversas sem histórico
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px]"
+                          title="Padrão de conversas sem histórico"
+                        >
+                          Padrão
                         </Badge>
                       )}
                     </span>
@@ -300,7 +311,7 @@ export function SalesWhatsAppSettingsSection() {
                     <span className="flex items-center gap-1.5 shrink-0">
                       {canConnect && needsConnection && (
                         <Button
-                          size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                          size="sm" variant="outline" className="h-7 px-2 text-[11px]"
                           onClick={() => setConnectTarget({
                             instanceName: ep.instanceName as string,
                             endpointId: ep.endpointId,
@@ -310,9 +321,8 @@ export function SalesWhatsAppSettingsSection() {
                         </Button>
                       )}
                     </span>
-
-
                   </li>
+
                 );
               })}
             </ul>
