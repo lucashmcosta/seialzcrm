@@ -265,7 +265,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
       textValue={value.contact_name}
       className={(state) =>
         cn(
-          'group relative flex items-center gap-3 border-b border-border py-3 pr-4 pl-3 select-none cursor-pointer',
+          'group relative flex items-center gap-3 border-b border-border/60 py-2.5 px-3 select-none cursor-pointer',
           state.isFocused && 'outline-2 -outline-offset-2 outline-ring',
           state.isSelected && 'bg-accent',
           typeof className === 'function' ? className(state) : className
@@ -275,7 +275,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
       <Avatar fallbackText={value.contact_name} size="md" />
       <div className="flex flex-col min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
@@ -293,33 +293,35 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="text-xs text-muted-foreground">
-              {formatRelativeTime(value.updated_at, locale)}
-            </span>
-          </div>
+          <span className="shrink-0 text-[11px] text-muted-foreground leading-5">
+            {formatRelativeTime(value.updated_at, locale)}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          {/* Status dot */}
+        {/* Linha única de meta: status · atenção · responsável */}
+        <div className="flex items-center gap-1.5 mt-1 min-w-0">
           <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', status.dotColor)} />
-          <span className={cn('text-[10px] font-medium', status.color)}>
+          <span className={cn('text-[10px] font-medium shrink-0', status.color)}>
             {locale === 'pt-BR' ? status.label : status.labelEn}
           </span>
+          {value.needs_human_attention && (
+            <>
+              <span className="text-[10px] text-muted-foreground/60 shrink-0">·</span>
+              <span className="inline-flex items-center gap-1 shrink-0 text-destructive">
+                <WarningCircle className="h-3 w-3" />
+                <span className="text-[10px] font-medium">Atenção</span>
+              </span>
+            </>
+          )}
           {value.assigned_user_name && (
             <>
-              <span className="text-[10px] text-muted-foreground">·</span>
-              <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
+              <span className="text-[10px] text-muted-foreground/60 shrink-0">·</span>
+              <span className="text-[10px] text-muted-foreground truncate">
                 {value.assigned_user_name}
               </span>
             </>
           )}
         </div>
-        {value.needs_human_attention && (
-          <div className="flex items-center gap-1 text-destructive mt-0.5">
-            <WarningCircle className="h-3 w-3" />
-            <span className="text-[10px] font-medium">Atenção</span>
-          </div>
-        )}
+
       </div>
     </ListBoxItem>
   );
