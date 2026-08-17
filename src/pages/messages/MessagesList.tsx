@@ -1159,7 +1159,7 @@ function DesktopMessagesList() {
       if (thread?.contact_id && organization?.id) {
         const { data: notesData } = await supabase
           .from('activities')
-          .select('id, body, occurred_at, created_by_user_id, users:created_by_user_id(full_name)')
+          .select('id, title, body, occurred_at, created_by_user_id, users:created_by_user_id(full_name)')
           .eq('organization_id', organization.id)
           .eq('contact_id', thread.contact_id)
           .eq('activity_type', 'note')
@@ -1169,12 +1169,14 @@ function DesktopMessagesList() {
         setInlineNotes(
           (notesData || []).map((n: any) => ({
             id: n.id,
+            title: n.title ?? null,
             body: n.body,
             occurred_at: n.occurred_at,
             created_by_user_id: n.created_by_user_id,
             author_name: n.users?.full_name || null,
           }))
         );
+
       } else {
         setInlineNotes([]);
       }
