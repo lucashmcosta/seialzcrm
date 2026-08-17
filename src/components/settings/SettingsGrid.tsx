@@ -25,6 +25,7 @@ import {
   Headset,
   ChatCircleDots,
   CheckSquare,
+  WhatsappLogo,
 } from '@phosphor-icons/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
