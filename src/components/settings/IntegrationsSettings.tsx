@@ -446,17 +446,21 @@ export function IntegrationsSettings() {
           </section>
         )}
 
-        {/* Fase 2.5 — WhatsApp Comercial (Route/número ativo/endpoints) — somente leitura */}
+        {/* WhatsApp Comercial agora tem entrada própria em Configurações — aqui fica apenas o atalho. */}
         {(selectedCategory === 'whatsapp' || selectedCategory === 'all') && (
-          <section id="whatsapp-comercial" className="scroll-mt-6 space-y-4">
-            <div>
-              <h3 className="text-base font-semibold">WhatsApp Comercial</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Route Comercial usada nas conversas de vendas e mapeamento de números.
-              </p>
+          <Card id="whatsapp-comercial" className="scroll-mt-6 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold">WhatsApp Comercial</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Route Comercial usada nas conversas de vendas e mapeamento de números.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => navigate('/settings/whatsapp-comercial')}>
+                Abrir WhatsApp Comercial
+              </Button>
             </div>
-            <SalesWhatsAppSettingsSection />
-          </section>
+          </Card>
         )}
 
 
