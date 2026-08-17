@@ -692,6 +692,7 @@ const App = () => (
             <Route path="tags" element={<TagsSettings />} />
             <Route path="documents" element={<DocumentsSettings />} />
             <Route path="integrations" element={<IntegrationsSettings />} />
+            <Route path="whatsapp-comercial" element={<SalesWhatsAppPage />} />
             <Route path="integrations/meta" element={<MetaIntegrationPage />} />
             <Route path="customer-service" element={<CustomerServiceSettings />} />
             <Route path="webchat" element={<WebchatSettings />} />
