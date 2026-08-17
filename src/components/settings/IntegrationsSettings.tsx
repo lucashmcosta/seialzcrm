@@ -20,7 +20,6 @@ import {
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
-import { SalesWhatsAppSettingsSection } from './SalesWhatsAppSettingsSection';
 import { TelephonyAvailabilitySettings } from './TelephonyAvailabilitySettings';
 import { KommoMigrationDialog } from './KommoMigrationDialog';
 import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaLeadAdsDialog';
