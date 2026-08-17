@@ -2756,7 +2756,7 @@ function DesktopMessagesList() {
                                   messageNodes={segment.messageNodes}
                                   isCurrent={segment.key === currentBlockKey}
                                   locale={locale}
-                                  className="w-full rounded-lg border border-border/70 bg-muted/50 px-2 py-2 mt-4"
+                                  className="w-full rounded-lg border border-border/40 bg-muted/30 shadow-sm px-3 py-2.5 mt-2.5"
                                 />
                               )
                             );
