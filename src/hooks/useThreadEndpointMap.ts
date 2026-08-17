@@ -2,13 +2,11 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Returns a map of threadId -> endpointId for the given thread IDs.
+ * Returns a map of threadId -> `message_threads.primary_endpoint_id`.
  *
- * Fonte primária: `message_threads.primary_endpoint_id`.
- * Fallback SOMENTE de exibição: quando a coluna está nula, usa o
- * `endpoint_id` da última mensagem da thread (`last_message_id`), para o
- * badge do número ficar consistente entre todos os números comerciais.
- * Nenhuma escrita, nenhuma decisão de roteamento — leitura pura.
+ * Contrato preservado: este mapa alimenta o composer/envio, portanto é
+ * ESTRITAMENTE `primary_endpoint_id`. Para o badge visual da lista de
+ * conversas use `useThreadBadgeEndpoints` (prioriza a última mensagem).
  */
 export function useThreadEndpointMap(
   threadIds: string[],
@@ -28,7 +26,7 @@ export function useThreadEndpointMap(
     (async () => {
       const { data, error } = await supabase
         .from('message_threads')
-        .select('id, primary_endpoint_id, last_message_id')
+        .select('id, primary_endpoint_id')
         .in('id', threadIds);
 
       if (cancelled) return;
@@ -38,32 +36,9 @@ export function useThreadEndpointMap(
       }
 
       const next: Record<string, string | null> = {};
-      const pendingByMessageId: Record<string, string> = {};
       for (const row of (data ?? []) as any[]) {
-        const primary = row.primary_endpoint_id ?? null;
-        next[row.id] = primary;
-        if (!primary && row.last_message_id) {
-          pendingByMessageId[row.last_message_id] = row.id;
-        }
+        next[row.id] = row.primary_endpoint_id ?? null;
       }
-
-      const missingMessageIds = Object.keys(pendingByMessageId);
-      if (missingMessageIds.length > 0) {
-        const { data: msgs, error: msgError } = await supabase
-          .from('messages')
-          .select('id, endpoint_id')
-          .in('id', missingMessageIds);
-        if (cancelled) return;
-        if (msgError) {
-          console.warn('[useThreadEndpointMap] fallback load failed', msgError.message);
-        } else {
-          for (const row of (msgs ?? []) as any[]) {
-            const threadId = pendingByMessageId[row.id];
-            if (threadId && row.endpoint_id) next[threadId] = row.endpoint_id;
-          }
-        }
-      }
-
       setMap(next);
     })();
     return () => {
@@ -74,4 +49,3 @@ export function useThreadEndpointMap(
 
   return map;
 }
-

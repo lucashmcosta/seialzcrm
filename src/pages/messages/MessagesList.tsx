@@ -98,6 +98,7 @@ import { useAI } from '@/hooks/useAI';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
+import { useThreadBadgeEndpoints } from '@/hooks/useThreadBadgeEndpoints';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
@@ -704,6 +705,9 @@ function DesktopMessagesList() {
   const { endpoints: orgEndpoints, officialNumbers, hasMultiple: hasMultipleEndpoints } = useOrgWhatsAppEndpoints(organization?.id);
   const threadIdsForEndpointMap = (threads ?? []).map((t) => t.id);
   const threadEndpointMap = useThreadEndpointMap(threadIdsForEndpointMap, hasMultipleEndpoints);
+  // Badge da lista lateral (somente exibição): endpoint da última mensagem,
+  // com `primary_endpoint_id` como fallback.
+  const threadBadgeEndpoints = useThreadBadgeEndpoints(threadIdsForEndpointMap, hasMultipleEndpoints);
   const endpointById: Record<string, typeof orgEndpoints[number]> = Object.fromEntries(orgEndpoints.map((e) => [e.id, e]));
 
   // PR4: business_context da thread selecionada. Quando 'sales', o composer
@@ -1993,18 +1997,14 @@ function DesktopMessagesList() {
                         value={thread}
                         locale={locale as 'pt-BR' | 'en-US'}
                         onHide={handleHideThread}
-                        endpointAddress={
-                          endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.external_address ?? null
-                        }
-                        endpointPurpose={
-                          endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.purpose ?? null
-                        }
-                        endpointProvider={
-                          endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.provider ?? null
-                        }
-                        endpointIsActive={
-                          endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.is_active ?? null
-                        }
+                        /* Badge visual: última mensagem -> primary_endpoint_id.
+                           Resolvido em `useThreadBadgeEndpoints`, que lê
+                           `communication_endpoints` sem filtro por provider
+                           (Evolution não tem sender_sid/status). */
+                        endpointAddress={threadBadgeEndpoints[thread.id]?.address ?? null}
+                        endpointPurpose={null}
+                        endpointProvider={threadBadgeEndpoints[thread.id]?.provider ?? null}
+                        endpointIsActive={threadBadgeEndpoints[thread.id]?.isActive ?? null}
                         officialNumbers={officialNumbers}
                       />
                     ))}
