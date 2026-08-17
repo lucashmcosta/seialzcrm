@@ -249,22 +249,17 @@ export function SalesWhatsAppSettingsSection() {
       {/* --------------------------------------------- LISTA ÚNICA DE NÚMEROS */}
       {!isLoading && !error && (
         <section className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Modo de roteamento
-            </div>
-            <div className="text-xs font-medium text-foreground">
-              {status?.rules.resolverV2 ? 'Automático' : 'Padrão'}
-            </div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Números vinculados
           </div>
-
 
           {numbers.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               Nenhum número disponível para as conversas comerciais.
             </p>
           ) : (
-            <ul className="space-y-1">
+            <ul className="space-y-2">
+
               {numbers.map((ep) => {
                 const state = STATE_LABEL[ep.technicalStatus] ?? STATE_LABEL.DISCONNECTED;
                 const blockedTitle = ep.activationBlockedReason
