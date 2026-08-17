@@ -387,7 +387,7 @@ export function SalesWhatsAppSettingsSection() {
                   onClick={() => submitProvision(primaryLineId)}
                 >
                   {provisionEndpoint.isPending && <SpinnerGap className="h-3.5 w-3.5 mr-1 animate-spin" />}
-                  Vincular
+                  Adicionar
                 </Button>
               </div>
             </div>
