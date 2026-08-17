@@ -244,6 +244,7 @@ const Trash = lazyWithRetry("Trash", () => import("./pages/settings/Trash"), "Tr
 const DocumentsSettings = lazyWithRetry("DocumentsSettings", () => import("./components/settings/DocumentsSettings"), "DocumentsSettings");
 const CustomerServiceSettings = lazyWithRetry("CustomerServiceSettings", () => import("./components/settings/CustomerServiceSettings"), "CustomerServiceSettings");
 const WebchatSettings = lazyWithRetry("WebchatSettings", () => import("./components/settings/WebchatSettings"), "WebchatSettings");
+const SalesWhatsAppPage = lazyWithRetry("SalesWhatsAppPage", () => import("./pages/settings/SalesWhatsAppPage"));
 const Profile = lazyWithRetry("Profile", () => import("./pages/Profile"));
 const NotFound = lazyWithRetry("NotFound", () => import("./pages/NotFound"));
 
@@ -691,6 +692,7 @@ const App = () => (
             <Route path="tags" element={<TagsSettings />} />
             <Route path="documents" element={<DocumentsSettings />} />
             <Route path="integrations" element={<IntegrationsSettings />} />
+            <Route path="whatsapp-comercial" element={<SalesWhatsAppPage />} />
             <Route path="integrations/meta" element={<MetaIntegrationPage />} />
             <Route path="customer-service" element={<CustomerServiceSettings />} />
             <Route path="webchat" element={<WebchatSettings />} />
