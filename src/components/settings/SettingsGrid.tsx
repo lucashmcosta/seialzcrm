@@ -75,9 +75,10 @@ const settingsGroups: SettingsGroup[] = [
     ],
   },
   {
-    title: 'Integrações & Canais',
-    description: 'Conecte ferramentas externas e canais de comunicação',
+    title: 'Comunicação',
+    description: 'Canais de comunicação e integrações externas',
     items: [
+      { icon: WhatsappLogo, label: 'WhatsApp Comercial', description: 'Gerencie números, roteamento e provedores do WhatsApp Comercial.', to: 'whatsapp-comercial', permission: 'canManageIntegrations' },
       { icon: Link, label: 'Integrações', description: 'Conecte com ferramentas que você já usa', to: 'integrations', permission: 'canManageIntegrations' },
       { icon: ChatCircleText, label: 'WhatsApp Templates', description: 'Gerencie modelos de mensagem do WhatsApp', to: 'whatsapp-templates', permission: 'canManageIntegrations', flag: 'hasWhatsApp' },
       { icon: ChatCircleText, label: 'Respostas Rápidas', description: 'Snippets internos para respostas na janela aberta do WhatsApp', to: 'whatsapp-snippets', permission: 'canManageSettings', flag: 'hasWhatsApp' },
