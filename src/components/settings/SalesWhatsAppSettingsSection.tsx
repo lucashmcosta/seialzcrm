@@ -168,10 +168,10 @@ export function SalesWhatsAppSettingsSection() {
   };
 
   return (
-    <Card className="p-5 space-y-5">
+    <Card className="p-6 space-y-5">
       {/* ---------------------------------------------------------- cabeçalho */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-2.5">
           <ChatCircle className="h-5 w-5 text-primary" weight="duotone" />
           <div>
             <h3 className="text-sm font-semibold text-foreground">Números do WhatsApp Comercial</h3>
@@ -183,14 +183,46 @@ export function SalesWhatsAppSettingsSection() {
         <div className="flex items-center gap-2 shrink-0">
           {canManage && primaryLineId && (
             <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Vincular número
+              <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar número
             </Button>
           )}
-          <Button variant="ghost" size="icon" onClick={() => refetch()} title="Atualizar status">
-            <ArrowsClockwise className="h-4 w-4" />
+          <Button size="sm" variant="ghost" onClick={() => refetch()} title="Atualizar status">
+            <ArrowsClockwise className="h-3.5 w-3.5 mr-1" /> Atualizar
           </Button>
         </div>
       </div>
+
+      {/* ------------------------------------------------ resumo da operação */}
+      {!isLoading && !error && numbers.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-md border border-border/70 bg-muted/40 px-4 py-3">
+          <span className="text-xs text-muted-foreground">
+            <span className="font-data text-sm font-semibold text-foreground">{summary.activeCount}</span>
+            {' '}
+            {summary.activeCount === 1 ? 'número ativo' : 'números ativos'}
+            {summary.total !== summary.activeCount && (
+              <span className="text-muted-foreground"> de {summary.total}</span>
+            )}
+          </span>
+          {summary.providers.length > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {summary.providers.map(([label, count]) => `${count} ${label}`).join(' · ')}
+            </span>
+          )}
+          {summary.defaultNumber && (
+            <span className="text-xs text-muted-foreground">
+              Padrão:{' '}
+              <span className="font-data font-medium text-foreground">{summary.defaultNumber}</span>
+            </span>
+          )}
+          <span className="text-xs text-muted-foreground">
+            Roteamento:{' '}
+            <span className="font-medium text-foreground">
+              {status?.rules.resolverV2 ? 'Automático' : 'Padrão'}
+            </span>
+          </span>
+        </div>
+      )}
+
 
       {isLoading && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
