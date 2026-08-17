@@ -2463,17 +2463,14 @@ function DesktopMessagesList() {
                               if (isEndpointMigration) {
                                 const migrationAuditLine = formatEndpointMigrationAuditLine(message.metadata, selectedThreadEndpoint);
                                 return (
-                                  <div key={`sys-${message.id}`} className="flex justify-center my-3">
-                                    <div className="max-w-[80%] px-3 py-1.5 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide text-center shadow-sm space-y-0.5">
-                                      <div>{message.content}</div>
-                                      {migrationAuditLine && (
-                                        <div className="font-data text-[10px] normal-case tracking-normal">
-                                          {migrationAuditLine}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
+                                  <TimelineEventMarker
+                                    key={`sys-${message.id}`}
+                                    label={message.content}
+                                    value={migrationAuditLine || null}
+                                    className="my-2"
+                                  />
                                 );
+
                               }
 
                               const isOutbound = message.direction === 'outbound';
