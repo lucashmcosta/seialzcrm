@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Returns a map of threadId -> primary_endpoint_id for the given thread IDs.
- * Used by /messages to display a "via …XXXX" badge per conversation when
- * the organization operates more than one WhatsApp number.
+ * Returns a map of threadId -> endpointId for the given thread IDs.
  *
- * Light query — pulls only the two columns and is gated by `enabled`
- * (false for single-endpoint tenants).
+ * Fonte primária: `message_threads.primary_endpoint_id`.
+ * Fallback SOMENTE de exibição: quando a coluna está nula, usa o
+ * `endpoint_id` da última mensagem da thread (`last_message_id`), para o
+ * badge do número ficar consistente entre todos os números comerciais.
+ * Nenhuma escrita, nenhuma decisão de roteamento — leitura pura.
  */
 export function useThreadEndpointMap(
   threadIds: string[],
@@ -24,22 +25,47 @@ export function useThreadEndpointMap(
       return;
     }
     let cancelled = false;
-    supabase
-      .from('message_threads')
-      .select('id, primary_endpoint_id')
-      .in('id', threadIds)
-      .then(({ data, error }) => {
+    (async () => {
+      const { data, error } = await supabase
+        .from('message_threads')
+        .select('id, primary_endpoint_id, last_message_id')
+        .in('id', threadIds);
+
+      if (cancelled) return;
+      if (error) {
+        console.warn('[useThreadEndpointMap] load failed', error.message);
+        return;
+      }
+
+      const next: Record<string, string | null> = {};
+      const pendingByMessageId: Record<string, string> = {};
+      for (const row of (data ?? []) as any[]) {
+        const primary = row.primary_endpoint_id ?? null;
+        next[row.id] = primary;
+        if (!primary && row.last_message_id) {
+          pendingByMessageId[row.last_message_id] = row.id;
+        }
+      }
+
+      const missingMessageIds = Object.keys(pendingByMessageId);
+      if (missingMessageIds.length > 0) {
+        const { data: msgs, error: msgError } = await supabase
+          .from('messages')
+          .select('id, endpoint_id')
+          .in('id', missingMessageIds);
         if (cancelled) return;
-        if (error) {
-          console.warn('[useThreadEndpointMap] load failed', error.message);
-          return;
+        if (msgError) {
+          console.warn('[useThreadEndpointMap] fallback load failed', msgError.message);
+        } else {
+          for (const row of (msgs ?? []) as any[]) {
+            const threadId = pendingByMessageId[row.id];
+            if (threadId && row.endpoint_id) next[threadId] = row.endpoint_id;
+          }
         }
-        const next: Record<string, string | null> = {};
-        for (const row of data ?? []) {
-          next[(row as any).id] = (row as any).primary_endpoint_id ?? null;
-        }
-        setMap(next);
-      });
+      }
+
+      setMap(next);
+    })();
     return () => {
       cancelled = true;
     };
@@ -48,3 +74,4 @@ export function useThreadEndpointMap(
 
   return map;
 }
+

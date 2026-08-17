@@ -192,7 +192,31 @@ interface InlineNote {
   occurred_at: string;
   created_by_user_id: string | null;
   author_name?: string;
+  /** Título da activity — usado para classificar eventos de sistema. */
+  title?: string | null;
 }
+
+/**
+ * Títulos de activities gravadas por triggers/automações (não são notas
+ * escritas por pessoas). Classificação por TIPO, nunca por autor.
+ */
+const SYSTEM_ACTIVITY_TITLES = new Set(
+  [
+    'Atribuicao automatica',
+    'Atribuição automática',
+    'Distribuicao automatica',
+    'Distribuição automática',
+    'Round-robin',
+    'Automacao',
+    'Automação',
+  ].map((t) => t.toLowerCase()),
+);
+
+function isSystemActivity(title: string | null | undefined): boolean {
+  if (!title) return false;
+  return SYSTEM_ACTIVITY_TITLES.has(title.trim().toLowerCase());
+}
+
 
 /** Marco histórico do CRM na timeline (puramente apresentacional). */
 interface TimelineEvent {
@@ -241,7 +265,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
       textValue={value.contact_name}
       className={(state) =>
         cn(
-          'group relative flex items-center gap-3 border-b border-border py-3 pr-4 pl-3 select-none cursor-pointer',
+          'group relative flex items-center gap-3 border-b border-border/60 py-2.5 px-3 select-none cursor-pointer',
           state.isFocused && 'outline-2 -outline-offset-2 outline-ring',
           state.isSelected && 'bg-accent',
           typeof className === 'function' ? className(state) : className
@@ -251,7 +275,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
       <Avatar fallbackText={value.contact_name} size="md" />
       <div className="flex flex-col min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
@@ -269,33 +293,35 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="text-xs text-muted-foreground">
-              {formatRelativeTime(value.updated_at, locale)}
-            </span>
-          </div>
+          <span className="shrink-0 text-[11px] text-muted-foreground leading-5">
+            {formatRelativeTime(value.updated_at, locale)}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          {/* Status dot */}
+        {/* Linha única de meta: status · atenção · responsável */}
+        <div className="flex items-center gap-1.5 mt-1 min-w-0">
           <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', status.dotColor)} />
-          <span className={cn('text-[10px] font-medium', status.color)}>
+          <span className={cn('text-[10px] font-medium shrink-0', status.color)}>
             {locale === 'pt-BR' ? status.label : status.labelEn}
           </span>
+          {value.needs_human_attention && (
+            <>
+              <span className="text-[10px] text-muted-foreground/60 shrink-0">·</span>
+              <span className="inline-flex items-center gap-1 shrink-0 text-destructive">
+                <WarningCircle className="h-3 w-3" />
+                <span className="text-[10px] font-medium">Atenção</span>
+              </span>
+            </>
+          )}
           {value.assigned_user_name && (
             <>
-              <span className="text-[10px] text-muted-foreground">·</span>
-              <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
+              <span className="text-[10px] text-muted-foreground/60 shrink-0">·</span>
+              <span className="text-[10px] text-muted-foreground truncate">
                 {value.assigned_user_name}
               </span>
             </>
           )}
         </div>
-        {value.needs_human_attention && (
-          <div className="flex items-center gap-1 text-destructive mt-0.5">
-            <WarningCircle className="h-3 w-3" />
-            <span className="text-[10px] font-medium">Atenção</span>
-          </div>
-        )}
+
       </div>
     </ListBoxItem>
   );
@@ -1135,7 +1161,7 @@ function DesktopMessagesList() {
       if (thread?.contact_id && organization?.id) {
         const { data: notesData } = await supabase
           .from('activities')
-          .select('id, body, occurred_at, created_by_user_id, users:created_by_user_id(full_name)')
+          .select('id, title, body, occurred_at, created_by_user_id, users:created_by_user_id(full_name)')
           .eq('organization_id', organization.id)
           .eq('contact_id', thread.contact_id)
           .eq('activity_type', 'note')
@@ -1145,12 +1171,14 @@ function DesktopMessagesList() {
         setInlineNotes(
           (notesData || []).map((n: any) => ({
             id: n.id,
+            title: n.title ?? null,
             body: n.body,
             occurred_at: n.occurred_at,
             created_by_user_id: n.created_by_user_id,
             author_name: n.users?.full_name || null,
           }))
         );
+
       } else {
         setInlineNotes([]);
       }
@@ -2342,17 +2370,22 @@ function DesktopMessagesList() {
                                     ? `WhatsApp • ${providerShort}`
                                     : 'WhatsApp';
                                 blockHeader = (
-                                  <div className="flex flex-col gap-0 pb-0.5 items-center text-center">
-                                    <span className="text-xs font-medium text-foreground leading-4">
-                                      {channelLine}
-                                    </span>
-                                    {epAddress && (
-                                      <span className="font-data text-[10px] text-muted-foreground leading-[13px]">
-                                        {formatPhoneDisplay(epAddress)}
-                                      </span>
-                                    )}
+                                  <div className="pb-0">
+                                    <div className="flex items-center justify-center gap-1.5 text-[11px] leading-4">
+                                      <span className="font-medium text-foreground">{channelLine}</span>
+                                      {epAddress && (
+                                        <>
+                                          <span className="text-muted-foreground/50">•</span>
+                                          <span className="font-data text-muted-foreground">
+                                            {formatPhoneDisplay(epAddress)}
+                                          </span>
+                                        </>
+                                      )}
+                                    </div>
+                                    <div className="h-px bg-border/30 mt-1.5 mb-2" />
                                   </div>
                                 );
+
                               }
 
 
@@ -2361,7 +2394,23 @@ function DesktopMessagesList() {
                               const renderItem = (() => {
                               if (item._type === 'note') {
                                 const note = item.data;
+                                // Atividades de sistema (round-robin, automações) são
+                                // classificadas pelo TIPO/título e viram separador discreto.
+                                if (isSystemActivity(note.title)) {
+                                  return (
+                                    <TimelineEventMarker
+                                      key={`sysnote-${note.id}`}
+                                      label={note.body || note.title || 'Evento do sistema'}
+                                      time={new Date(note.occurred_at).toLocaleTimeString(locale, {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        hour12: false,
+                                      })}
+                                    />
+                                  );
+                                }
                                 return (
+
                                   <div key={`note-${note.id}`} className="flex justify-center">
                                     <div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700">
                                       <div className="flex items-center gap-1 mb-1">
@@ -2416,17 +2465,14 @@ function DesktopMessagesList() {
                               if (isEndpointMigration) {
                                 const migrationAuditLine = formatEndpointMigrationAuditLine(message.metadata, selectedThreadEndpoint);
                                 return (
-                                  <div key={`sys-${message.id}`} className="flex justify-center my-3">
-                                    <div className="max-w-[80%] px-3 py-1.5 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide text-center shadow-sm space-y-0.5">
-                                      <div>{message.content}</div>
-                                      {migrationAuditLine && (
-                                        <div className="font-data text-[10px] normal-case tracking-normal">
-                                          {migrationAuditLine}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
+                                  <TimelineEventMarker
+                                    key={`sys-${message.id}`}
+                                    label={message.content}
+                                    value={migrationAuditLine || null}
+                                    className="my-2"
+                                  />
                                 );
+
                               }
 
                               const isOutbound = message.direction === 'outbound';
@@ -2712,7 +2758,7 @@ function DesktopMessagesList() {
                                   messageNodes={segment.messageNodes}
                                   isCurrent={segment.key === currentBlockKey}
                                   locale={locale}
-                                  className="w-full rounded-lg border border-border/70 bg-muted/50 px-2 py-2 mt-4"
+                                  className="w-full rounded-lg border border-border/40 bg-muted/30 shadow-sm px-3 py-2.5 mt-2.5"
                                 />
                               )
                             );
