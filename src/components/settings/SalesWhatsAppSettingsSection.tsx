@@ -128,6 +128,28 @@ export function SalesWhatsAppSettingsSection() {
     });
   }, [routes]);
 
+  /**
+   * Resumo apenas derivado dos números já carregados — nenhuma query nova.
+   * "Ativos" = habilitados para uso na Route Comercial (vínculo ativo),
+   * independentemente do estado da conexão (exibido por linha).
+   */
+  const summary = useMemo(() => {
+    const activeCount = numbers.filter((n) => n.linkActive).length;
+    const byProvider = new Map<string, number>();
+    numbers.forEach((n) => {
+      const key = PROVIDER_OPTIONS.find((o) => o.value === n.provider)?.label
+        ?? (n.providerRaw ?? n.provider ?? '—');
+      byProvider.set(key, (byProvider.get(key) ?? 0) + 1);
+    });
+    return {
+      total: numbers.length,
+      activeCount,
+      providers: Array.from(byProvider.entries()),
+      defaultNumber: numbers.find((n) => n.isRouteActive)?.addressMasked ?? null,
+    };
+  }, [numbers]);
+
+
   const submitProvision = async (lineId: string) => {
     try {
       await provisionEndpoint.mutateAsync({
