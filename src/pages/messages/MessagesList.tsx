@@ -100,7 +100,8 @@ import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { useThreadBadgeEndpoints } from '@/hooks/useThreadBadgeEndpoints';
 import { useThreadLastMessagePreviews } from '@/hooks/messages/useThreadLastMessagePreviews';
-import { formatLastMessagePreview } from '@/lib/messagePreview';
+import { formatLastMessagePreview, type LastMessagePreview } from '@/lib/messagePreview';
+import { LastMessagePreviewLine } from '@/components/messages/LastMessagePreview';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
@@ -255,10 +256,14 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   endpointIsActive?: boolean | null;
   officialNumbers?: Set<string>;
   /** Preview da última mensagem válida (apresentacional). */
-  lastMessagePreview?: string | null;
+  lastMessagePreview?: LastMessagePreview | null;
+  /** `messages.direction` da última mensagem (define se mostra checks). */
+  lastMessageDirection?: string | null;
+  /** `messages.whatsapp_status` da última mensagem. */
+  lastMessageStatus?: string | null;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessagePreview, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessagePreview, lastMessageDirection, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -303,11 +308,12 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
           </span>
         </div>
         {/* Preview da última mensagem válida (conceito WhatsApp) */}
-        {lastMessagePreview && (
-          <p className="mt-0.5 text-xs text-muted-foreground truncate whitespace-nowrap">
-            {lastMessagePreview}
-          </p>
-        )}
+        <LastMessagePreviewLine
+          preview={lastMessagePreview ?? null}
+          direction={lastMessageDirection}
+          status={lastMessageStatus}
+        />
+
         {/* Linha única de meta: status · atenção · responsável */}
         <div className="flex items-center gap-1.5 mt-1 min-w-0">
           <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', status.dotColor)} />
@@ -2047,11 +2053,12 @@ function DesktopMessagesList() {
                           formatLastMessagePreview({
                             content: lastMessageByThread[thread.id]?.content ?? thread.last_message,
                             mediaType: lastMessageByThread[thread.id]?.mediaType ?? null,
-                            direction: lastMessageByThread[thread.id]?.direction ?? thread.last_message_direction,
-                            senderUserId: lastMessageByThread[thread.id]?.senderUserId ?? null,
-                            currentUserId: userProfile?.id ?? null,
                           })
                         }
+                        lastMessageDirection={
+                          lastMessageByThread[thread.id]?.direction ?? thread.last_message_direction
+                        }
+                        lastMessageStatus={lastMessageByThread[thread.id]?.status ?? null}
                       />
                     ))}
                   </ListBox>

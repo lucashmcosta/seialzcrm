@@ -7,24 +7,55 @@
 // internas e mensagens deletadas.
 // ============================================================================
 
+export type LastMessagePreviewKind =
+  | 'text'
+  | 'audio'
+  | 'image'
+  | 'video'
+  | 'document'
+  | 'sticker';
+
 export interface LastMessagePreviewInput {
   content?: string | null;
   mediaType?: string | null;
-  direction?: string | null;
-  /** `messages.sender_user_id` — usado só para o prefixo "Você:". */
-  senderUserId?: string | null;
-  /** `users.id` do usuário atual (interno). */
-  currentUserId?: string | null;
 }
 
-const MEDIA_LABELS: Record<string, string> = {
-  audio: '🎤 Áudio',
-  voice: '🎤 Áudio',
-  image: '📷 Foto',
-  photo: '📷 Foto',
-  video: '🎥 Vídeo',
-  document: '📄 Documento',
-  sticker: 'Sticker',
+export interface LastMessagePreview {
+  kind: LastMessagePreviewKind;
+  /** Texto exibido: conteúdo da mensagem (texto) ou rótulo da mídia. */
+  text: string;
+}
+
+const MEDIA_KIND: Record<string, LastMessagePreviewKind> = {
+  audio: 'audio',
+  voice: 'audio',
+  ptt: 'audio',
+  image: 'image',
+  photo: 'image',
+  video: 'video',
+  document: 'document',
+  sticker: 'sticker',
+};
+
+export const MEDIA_LABEL: Record<Exclude<LastMessagePreviewKind, 'text'>, string> = {
+  audio: 'Áudio',
+  image: 'Foto',
+  video: 'Vídeo',
+  document: 'Documento',
+  sticker: 'Figurinha',
+};
+
+/** Marcadores legados gravados no `content` quando não há `media_type`. */
+const LEGACY_MARKERS: Record<string, Exclude<LastMessagePreviewKind, 'text'>> = {
+  'áudio': 'audio',
+  'audio': 'audio',
+  'imagem': 'image',
+  'foto': 'image',
+  'vídeo': 'video',
+  'video': 'video',
+  'documento': 'document',
+  'sticker': 'sticker',
+  'figurinha': 'sticker',
 };
 
 /** Colapsa quebras de linha e espaços em uma única linha. */
@@ -33,40 +64,28 @@ function singleLine(text: string): string {
 }
 
 /**
- * Retorna o texto do preview, ou `null` quando não há mensagem válida
+ * Retorna o preview estruturado, ou `null` quando não há mensagem válida
  * (thread sem mensagem) — nesse caso a linha não deve ser renderizada.
  */
-export function formatLastMessagePreview(input: LastMessagePreviewInput): string | null {
+export function formatLastMessagePreview(
+  input: LastMessagePreviewInput,
+): LastMessagePreview | null {
   const mediaType = (input.mediaType || '').toLowerCase();
   const rawContent = singleLine(input.content || '');
 
-  let body: string | null = null;
   if (mediaType) {
-    body = MEDIA_LABELS[mediaType] ?? 'Mensagem';
-  } else if (rawContent && rawContent !== '...') {
-    // Mensagens de mídia antigas podem trazer apenas o marcador no conteúdo.
-    const marker = rawContent.match(/^\[(Áudio|Imagem|Vídeo|Documento|Sticker)\]$/i);
-    if (marker) {
-      const key = marker[1].toLowerCase();
-      body =
-        key === 'áudio' ? MEDIA_LABELS.audio
-        : key === 'imagem' ? MEDIA_LABELS.image
-        : key === 'vídeo' ? MEDIA_LABELS.video
-        : key === 'documento' ? MEDIA_LABELS.document
-        : MEDIA_LABELS.sticker;
-    } else {
-      body = rawContent;
-    }
+    const kind = MEDIA_KIND[mediaType];
+    if (kind && kind !== 'text') return { kind, text: MEDIA_LABEL[kind] };
+    return { kind: 'text', text: rawContent || 'Mensagem' };
   }
 
-  if (!body) return null;
+  if (!rawContent || rawContent === '...') return null;
 
-  const isOutbound = input.direction === 'outbound';
-  const isMine =
-    isOutbound &&
-    !!input.currentUserId &&
-    !!input.senderUserId &&
-    input.senderUserId === input.currentUserId;
+  const marker = rawContent.match(/^\[([^\]]+)\]$/);
+  if (marker) {
+    const kind = LEGACY_MARKERS[marker[1].toLowerCase()];
+    if (kind) return { kind, text: MEDIA_LABEL[kind] };
+  }
 
-  return isMine ? `Você: ${body}` : body;
+  return { kind: 'text', text: rawContent };
 }

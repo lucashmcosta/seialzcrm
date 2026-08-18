@@ -3,9 +3,10 @@
 //
 // Somente leitura/apresentação: nada de envio, rota, thread ou realtime novo.
 // Uma única query em `messages` por página visível, seguindo o mesmo padrão de
-// `useThreadBadgeEndpoints`. A chave do efeito deriva dos `last_message_id`,
-// então o realtime existente (que atualiza `message_threads`) faz o preview
-// recarregar sozinho — sem reload de página.
+// `useThreadBadgeEndpoints`. A chave do efeito deriva de `last_message_id` +
+// `updated_at` da thread; como qualquer mudança de status em `messages` dispara
+// UPDATE em `message_threads` (trigger `fn_update_thread_last_message`), o
+// realtime já existente faz o preview e os checks recarregarem sem reload.
 // ============================================================================
 
 import { useEffect, useState } from 'react';
@@ -16,10 +17,12 @@ export interface ThreadLastMessage {
   mediaType: string | null;
   direction: string | null;
   senderUserId: string | null;
+  status: string | null;
+  errorCode: string | null;
 }
 
 export function useThreadLastMessagePreviews(
-  threads: Array<{ id: string; last_message_id?: string | null }>,
+  threads: Array<{ id: string; last_message_id?: string | null; updated_at?: string | null }>,
   enabled: boolean,
 ): Record<string, ThreadLastMessage> {
   const [map, setMap] = useState<Record<string, ThreadLastMessage>>({});
@@ -28,7 +31,14 @@ export function useThreadLastMessagePreviews(
     .filter((t) => !!t.last_message_id)
     .map((t) => `${t.id}:${t.last_message_id}`)
     .sort();
-  const key = enabled ? pairs.join(',') : '';
+  // Chave inclui updated_at para refletir transições sent → delivered → read.
+  const key = enabled
+    ? threads
+        .filter((t) => !!t.last_message_id)
+        .map((t) => `${t.id}:${t.last_message_id}:${t.updated_at ?? ''}`)
+        .sort()
+        .join(',')
+    : '';
 
   useEffect(() => {
     if (!enabled || pairs.length === 0) {
@@ -47,7 +57,7 @@ export function useThreadLastMessagePreviews(
 
       const { data, error } = await supabase
         .from('messages')
-        .select('id, content, media_type, direction, sender_user_id')
+        .select('id, content, media_type, direction, sender_user_id, whatsapp_status, error_code')
         .in('id', messageIds);
 
       if (cancelled) return;
@@ -63,6 +73,8 @@ export function useThreadLastMessagePreviews(
           mediaType: m.media_type ?? null,
           direction: m.direction ?? null,
           senderUserId: m.sender_user_id ?? null,
+          status: m.whatsapp_status ?? null,
+          errorCode: m.error_code ?? null,
         };
       }
 
