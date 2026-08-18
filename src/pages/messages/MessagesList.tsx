@@ -2684,6 +2684,8 @@ function DesktopMessagesList() {
                               return {
                                 key: item._type === 'message' ? `m-${item.data.id}` : `n-${item.data.id}`,
                                 blockIndex: block.blockIndex,
+                                // ÚNICA condição de corte do container visual.
+                                endpointBreak: descriptor?.endpointBreak === true,
                                 kind: (descriptor?.kind ?? 'message') as 'message' | 'note' | 'system',
                                 direction: descriptor?.direction ?? null,
                                 separator,
@@ -2691,6 +2693,7 @@ function DesktopMessagesList() {
                                 blockHeader,
                                 renderItem,
                               };
+
                             });
 
                             // Segunda fase (puramente visual): mensagens do mesmo
