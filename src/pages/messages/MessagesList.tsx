@@ -255,10 +255,14 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   endpointIsActive?: boolean | null;
   officialNumbers?: Set<string>;
   /** Preview da última mensagem válida (apresentacional). */
-  lastMessagePreview?: string | null;
+  lastMessagePreview?: LastMessagePreview | null;
+  /** `messages.direction` da última mensagem (define se mostra checks). */
+  lastMessageDirection?: string | null;
+  /** `messages.whatsapp_status` da última mensagem. */
+  lastMessageStatus?: string | null;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessagePreview, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessagePreview, lastMessageDirection, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
