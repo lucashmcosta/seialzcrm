@@ -134,7 +134,7 @@ export function EvolutionProvisionPanel() {
         description: 'Leia o QR Code no WhatsApp para concluir a conexão.',
       });
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error('Não foi possível criar a sessão', { description: safeDetail(e) });
     }
   };
 
@@ -144,7 +144,9 @@ export function EvolutionProvisionPanel() {
       setQr({ instanceName, base64: r.base64 ?? null });
       if (!r.base64) toast.message('Já conectado', { description: 'Nenhum QR necessário.' });
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error('Não foi possível gerar o QR Code. Tente novamente.', {
+        description: safeDetail(e),
+      });
     }
   };
 
