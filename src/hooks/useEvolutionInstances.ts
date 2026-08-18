@@ -13,6 +13,7 @@ export interface EvolutionInstanceRow {
   instance_id_remote: string | null;
   integration: string;
   last_known_state: EvolutionConnectionState | null;
+  provisioning_status: string | null;
   last_state_checked_at: string | null;
   last_qr_expires_at: string | null;
   created_at: string;
