@@ -16,6 +16,7 @@
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { featureFlagEnabled } from "./feature-flags.ts";
+import { canUserUseReplyEndpoint } from "./reply-endpoint-selection.ts";
 
 export const MANUAL_REPLY_FLAG = "sales_manual_reply_endpoint_v1";
 
@@ -28,7 +29,8 @@ export type ManualReplyErrorCode =
   | "MANUAL_REPLY_ENDPOINT_OFFLINE"
   | "MANUAL_REPLY_ENDPOINT_IDENTITY_UNKNOWN"
   | "MANUAL_REPLY_ENDPOINT_IDENTITY_MISMATCH"
-  | "MANUAL_REPLY_ENDPOINT_CROSS_ORG";
+  | "MANUAL_REPLY_ENDPOINT_CROSS_ORG"
+  | "REPLY_ENDPOINT_PERSONAL_FORBIDDEN";
 
 export type ManualReplyProvider = "twilio" | "meta_cloud_api" | "evolution_api";
 
