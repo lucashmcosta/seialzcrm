@@ -117,6 +117,8 @@ import { AttachMediaDialog, type AttachMedia } from '@/components/documents/Atta
 import { isAttachableMedia } from '@/lib/mediaToFile';
 import { computeMessageGroups, computeContextBlocks, type GroupingItem } from '@/lib/messageGrouping';
 import { TimelineBlock } from '@/components/messages/timeline/TimelineBlock';
+import { useResizableListWidth } from '@/hooks/useResizableListWidth';
+
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
