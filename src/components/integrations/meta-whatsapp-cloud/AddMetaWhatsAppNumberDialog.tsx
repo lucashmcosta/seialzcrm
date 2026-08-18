@@ -175,27 +175,15 @@ export function AddMetaWhatsAppNumberDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Finalidade *</Label>
-            <RadioGroup
-              value={purpose}
-              onValueChange={(v) => setPurpose(v as Purpose)}
-              className="flex gap-4"
-            >
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="customer_service" id="purpose-cs" />
-                <Label htmlFor="purpose-cs" className="font-normal cursor-pointer">
-                  Atendimento / CS (/inbox)
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="commercial" id="purpose-commercial" />
-                <Label htmlFor="purpose-commercial" className="font-normal cursor-pointer">
-                  Comercial (/messages)
-                </Label>
-              </div>
-            </RadioGroup>
-          </div>
+          <EndpointDestinationStep
+            organizationId={organizationId}
+            destination={purpose}
+            onDestinationChange={setPurpose}
+            assignedUserId={assignedUserId}
+            onAssignedUserChange={setAssignedUserId}
+            disabled={addMutation.isPending}
+          />
+
         </div>
 
         <DialogFooter className="gap-2">
