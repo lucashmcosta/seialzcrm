@@ -27,6 +27,10 @@ import {
   type ManagerEndpoint, type SalesProvider,
 } from '@/hooks/settings/useSalesRouteManager';
 import { SalesWhatsAppConnectDialog } from '@/components/settings/SalesWhatsAppConnectDialog';
+import {
+  EndpointDestinationStep, DESTINATION_LABEL,
+  type EndpointDestination,
+} from '@/components/settings/EndpointDestinationStep';
 import { ProviderChip } from '@/components/messages/route/RouteIndicators';
 import {
   ChatCircle, ArrowsClockwise, WarningCircle, SpinnerGap, Plus, QrCode,
@@ -45,6 +49,7 @@ const BLOCKED_LABEL: Record<ActivationBlockedReason, string> = {
   NOT_CONNECTED: 'Conecte o WhatsApp deste número antes de ativá-lo',
   IDENTITY_UNKNOWN: 'Identidade do número ainda não confirmada',
   IDENTITY_MISMATCH: 'O WhatsApp conectado é de outro número',
+  PERSONAL_NOT_ELIGIBLE: 'Número pessoal não pode ser o padrão da rota',
 };
 
 /**
@@ -101,6 +106,8 @@ export function SalesWhatsAppSettingsSection() {
 
   const [showForm, setShowForm] = useState(false);
   const [provider, setProvider] = useState<SalesProvider>('meta');
+  const [destination, setDestination] = useState<EndpointDestination>('commercial');
+  const [assignedUserId, setAssignedUserId] = useState<string | null>(null);
   const [address, setAddress] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [instanceName, setInstanceName] = useState('');
@@ -116,12 +123,11 @@ export function SalesWhatsAppSettingsSection() {
     [status?.evolutionInstances],
   );
 
-  /** Route padrão para vincular um novo número (a primeira Route Comercial). */
-  const primaryLineId = routes[0]?.lineId ?? null;
-
   const numbers = useMemo<NumberItem[]>(() => {
     const flat: NumberItem[] = [];
-    routes.forEach((r) => r.endpoints.forEach((ep) => flat.push({ ...ep, lineId: r.lineId })));
+    routes.forEach((r) => r.endpoints.forEach((ep) => flat.push({
+      ...ep, lineId: r.lineId, inboxKey: r.inboxKey ?? null,
+    })));
     return flat.sort((a, b) => {
       if (a.isRouteActive !== b.isRouteActive) return a.isRouteActive ? -1 : 1;
       return (a.addressMasked ?? '').localeCompare(b.addressMasked ?? '');
@@ -150,18 +156,21 @@ export function SalesWhatsAppSettingsSection() {
   }, [numbers]);
 
 
-  const submitProvision = async (lineId: string) => {
+  const submitProvision = async () => {
     try {
+      // A Route é resolvida pelo backend a partir do destino escolhido.
       await provisionEndpoint.mutateAsync({
-        lineId,
         provider,
         address: address.trim(),
+        destination,
+        assignedUserId: destination === 'vendor_personal' ? assignedUserId : null,
         displayName: displayName.trim() || null,
         instanceName: provider === 'evolution' ? instanceName.trim() || null : null,
       });
-      toast.success('Número vinculado ao WhatsApp Comercial');
+      toast.success(`Número vinculado ao destino ${DESTINATION_LABEL[destination]}`);
       setShowForm(false);
       setAddress(''); setDisplayName(''); setInstanceName('');
+      setDestination('commercial'); setAssignedUserId(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao vincular número');
     }
@@ -181,7 +190,7 @@ export function SalesWhatsAppSettingsSection() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {canManage && primaryLineId && (
+          {canManage && (
             <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar número
             </Button>
@@ -328,8 +337,16 @@ export function SalesWhatsAppSettingsSection() {
             </ul>
           )}
 
-          {showForm && canManage && primaryLineId && (
-            <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2">
+          {showForm && canManage && (
+            <div className="rounded-md border border-border bg-muted/40 p-3 space-y-3">
+              <EndpointDestinationStep
+                organizationId={orgId}
+                destination={destination}
+                onDestinationChange={setDestination}
+                assignedUserId={assignedUserId}
+                onAssignedUserChange={setAssignedUserId}
+                disabled={provisionEndpoint.isPending}
+              />
               <Row label="Provedor">
                 <Select value={provider} onValueChange={(v) => setProvider(v as SalesProvider)}>
                   <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
@@ -382,9 +399,10 @@ export function SalesWhatsAppSettingsSection() {
                   disabled={
                     provisionEndpoint.isPending ||
                     address.trim().length < 8 ||
-                    (provider === 'evolution' && !instanceName.trim())
+                    (provider === 'evolution' && !instanceName.trim()) ||
+                    (destination === 'vendor_personal' && !assignedUserId)
                   }
-                  onClick={() => submitProvision(primaryLineId)}
+                  onClick={() => submitProvision()}
                 >
                   {provisionEndpoint.isPending && <SpinnerGap className="h-3.5 w-3.5 mr-1 animate-spin" />}
                   Adicionar

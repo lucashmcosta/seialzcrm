@@ -16,7 +16,8 @@ export type ActivationBlockedReason =
   | 'INSTANCE_NOT_LINKED'
   | 'NOT_CONNECTED'
   | 'IDENTITY_UNKNOWN'
-  | 'IDENTITY_MISMATCH';
+  | 'IDENTITY_MISMATCH'
+  | 'PERSONAL_NOT_ELIGIBLE';
 
 /**
  * Estado técnico do endpoint. Vem SEMPRE de `sales-route-operations/status`,
@@ -33,6 +34,8 @@ export type EndpointTechnicalStatus =
   | 'NOT_LINKED'
   | 'PROVIDER_MANAGED';
 
+export type EndpointDestinationValue = 'commercial' | 'customer_service' | 'vendor_personal';
+
 export interface ManagerEndpoint {
   endpointId: string;
   linkActive: boolean;
@@ -41,6 +44,10 @@ export interface ManagerEndpoint {
   displayName: string | null;
   provider: SalesProvider | null;
   providerRaw: string | null;
+  /** Finalidade do número (destino). Fonte: communication_endpoints.purpose. */
+  purpose: string | null;
+  assignedUserId: string | null;
+  assignedUserName: string | null;
   technicalStatus: EndpointTechnicalStatus;
   instanceName: string | null;
   /** Apenas UX. A proteção real é revalidada server-side no clique. */
@@ -71,6 +78,7 @@ export interface ConnectInstanceResult {
 export interface ManagerRoute {
   lineId: string;
   name: string | null;
+  inboxKey: string | null;
   routeSlug: string | null;
   isActive: boolean | null;
   activeEndpointId: string | null;
@@ -125,9 +133,12 @@ export function useSalesRouteManager(organizationId?: string | null) {
 
   const provisionEndpoint = useMutation({
     mutationFn: (input: {
-      lineId: string;
+      /** Opcional: quando ausente, o backend resolve a Route pelo destino. */
+      lineId?: string | null;
       provider: SalesProvider;
       address: string;
+      destination: EndpointDestinationValue;
+      assignedUserId?: string | null;
       displayName?: string | null;
       instanceName?: string | null;
     }) => call<{ result: unknown }>({ op: 'provisionEndpoint', organizationId, ...input }),
