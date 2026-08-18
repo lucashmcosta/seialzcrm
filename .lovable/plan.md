@@ -44,31 +44,56 @@ Não é diferença de código — é diferença de **dado**. Os dois endpoints E
 Sem passo 1 e sem passo 2, caem no passo 3 (`DEFAULT_INBOUND_SETTINGS`), onde `auto_create_opportunity: false`. Resultado: contato é criado (default `true`), oportunidade não.
 
 ### Forma mais simples de reutilizar exatamente a mesma configuração
-Gravar em `communication_endpoints.inbound_settings` do endpoint Evolution **a mesma configuração efetiva do 7067** (o passo 1 da cadeia que já existe). Zero código novo, zero lógica nova, zero alteração de webhook: o Evolution passa a resolver `source="endpoint"` com o mesmo JSON do 7067.
+Gravar em `communication_endpoints.inbound_settings` **a mesma configuração efetiva do 7067** (o passo 1 da cadeia que já existe) — mas fazendo isso **no provisionamento da Fase 3**, não em migração por número. Zero lógica nova nos webhooks: o Evolution resolve `source="endpoint"` com o mesmo JSON do 7067.
 
 Alternativa descartada: apontar `organization_integration_id` do endpoint Evolution para a integração Meta `46231cd1…` — isso misturaria credenciais de provedores diferentes e quebraria os guards de provider.
 
 ## Plano de implementação
 
-### Etapa 1 — Migração de dado (uma tabela, uma coluna)
-Copiar a configuração efetiva do 7067 para o `inbound_settings` do endpoint Evolution `3ed219e0…` (Central), lendo o valor da `organization_integrations` do 7067 dentro da própria migração (sem literal duplicado):
+### Etapa 1 — Herança padrão no provisionamento (comportamento permanente)
+Alterar a RPC `public.provision_line_endpoint` (criada na Fase 3): no momento em que ela **insere** um novo `communication_endpoints`, preencher `inbound_settings` com a configuração de entrada efetiva de referência da própria organização, quando o endpoint nasce sem ela.
 
-- fonte: `whatsapp_inbound_settings` da oi do endpoint `bf04ce63…`
-- destino: `communication_endpoints.inbound_settings` do endpoint Evolution da Central
-- condição: aplicar só onde `inbound_settings IS NULL` (idempotente)
-- nada mais é alterado: `purpose`, `is_active`, `organization_integration_id`, `messaging_lines`, `active_endpoint_id`, rotas e Atendimento ficam intocados.
-
-Pós-condições exigidas antes de seguir:
+Resolução da referência, dentro da RPC (helper `public.fn_default_inbound_settings(p_organization_id, p_purpose)`):
 
 ```text
-EVOLUTION_EFFECTIVE_SETTINGS_MATCH_7067=PASS
+1. inbound_settings do endpoint WhatsApp ativo de referência da org
+   (mesmo purpose, provider meta_cloud_api → hoje o 7067 para Comercial)
+2. whatsapp_inbound_settings da organization_integrations desse endpoint
+   → é o caminho real hoje, pois o 7067 tem inbound_settings NULL
+3. fallback { auto_create_contact: true, default_lifecycle_stage: 'lead',
+             auto_create_opportunity: true, default_stage_id: null }
+```
+
+Regras da herança:
+- aplica-se a **qualquer novo endpoint** provisionado (Evolution, Twilio, Meta) que não traga `inbound_settings` — Evolution Comercial passa a nascer igual ao 7067 automaticamente, sem migração futura;
+- a referência é sempre da **mesma organização** e do **mesmo `purpose`** (Comercial herda de Comercial, Atendimento de Atendimento) — nunca cruza org nem finalidade;
+- só grava na **criação**; endpoints existentes não são reescritos pela RPC;
+- quando existir tela própria de configuração, ela passa a editar `inbound_settings` do endpoint e a herança deixa de ter efeito naturalmente.
+
+Nada mais muda: `purpose`, `assigned_user_id`, `active_endpoint_id`, rotação, vínculos e Atendimento seguem com o comportamento aprovado na Fase 3.
+
+### Etapa 2 — Migração excepcional do 7020 já existente
+Uma única migração de dado, marcada como excepcional, para o endpoint Evolution `3ed219e0…` (Central, +55 11 5028-7020) criado antes da Etapa 1:
+
+- fonte: configuração efetiva do 7067 (`whatsapp_inbound_settings` da oi `46231cd1…`), lida na própria migração — sem literal duplicado;
+- destino: `communication_endpoints.inbound_settings` do endpoint `3ed219e0…`;
+- condição: só onde `inbound_settings IS NULL` (idempotente);
+- o endpoint Evolution da Viagi (piloto de julho) fica **fora** desta migração.
+
+Pós-condições exigidas:
+
+```text
+EVOLUTION_7020_EFFECTIVE_SETTINGS_MATCH_7067=PASS
 ENDPOINTS_OUTROS_ALTERADOS=0
 ACTIVE_ENDPOINT_CHANGED=NO
 ORG_INTEGRATION_ID_CHANGED=NO
 ```
 
-### Etapa 2 — Verificação funcional
-Reexecutar a leitura da cadeia (`endpoint → integração → default`) e confirmar `source="endpoint"` com o mesmo JSON do 7067. Um inbound real no 7020 Evolution deve criar contato `lifecycle_stage=lead` + oportunidade na primeira etapa do pipeline, com dono = dono do contato.
+### Etapa 3 — Verificação funcional
+- Provisionar um endpoint Evolution Comercial de teste e confirmar que ele nasce com `inbound_settings` igual à efetiva do 7067 (sem migração).
+- Confirmar `source="endpoint"` na resolução do 7020.
+- Um inbound real no 7020 deve criar contato `lifecycle_stage=lead` + oportunidade na primeira etapa do pipeline, com dono = dono do contato.
+
 
 ### Etapa 3 — Backfill das oportunidades não criadas
 
