@@ -65,7 +65,18 @@ Resolução da referência, dentro da RPC (helper `public.fn_default_inbound_set
              auto_create_opportunity: true, default_stage_id: null }
 ```
 
-Hoje isso resolve exatamente na configuração do 7067 (único endpoint Comercial ativo da Central com integração configurada); amanhã resolve em Evolution ou Twilio sem nenhuma alteração de código.
+**Determinismo (ordem estável de candidatos)** — aplicada igualmente nos passos 1 e 2, para nunca depender da ordem física das linhas:
+
+```text
+1º  endpoint que é active_endpoint_id da messaging_line whatsapp
+    correspondente ao purpose (Comercial → linha sales,
+    Atendimento → linha customer_service)
+2º  demais endpoints ativos do mesmo purpose, ordenados por
+    created_at ASC, id ASC   (LIMIT 1)
+```
+
+Hoje isso resolve exatamente na configuração do 7067 (endpoint Comercial ativo e padrão da Route da Central); amanhã resolve em Evolution ou Twilio sem nenhuma alteração de código, e com múltiplas configurações a escolha permanece previsível.
+
 
 
 Regras da herança:
