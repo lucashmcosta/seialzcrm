@@ -99,6 +99,8 @@ import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { useThreadBadgeEndpoints } from '@/hooks/useThreadBadgeEndpoints';
+import { useThreadLastMessagePreviews } from '@/hooks/messages/useThreadLastMessagePreviews';
+import { formatLastMessagePreview } from '@/lib/messagePreview';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
@@ -252,9 +254,11 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   /** Estado real do endpoint de resposta (ativo/inativo). */
   endpointIsActive?: boolean | null;
   officialNumbers?: Set<string>;
+  /** Preview da última mensagem válida (apresentacional). */
+  lastMessagePreview?: string | null;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessagePreview, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -298,6 +302,12 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
             {formatRelativeTime(value.updated_at, locale)}
           </span>
         </div>
+        {/* Preview da última mensagem válida (conceito WhatsApp) */}
+        {lastMessagePreview && (
+          <p className="mt-0.5 text-xs text-muted-foreground truncate whitespace-nowrap">
+            {lastMessagePreview}
+          </p>
+        )}
         {/* Linha única de meta: status · atenção · responsável */}
         <div className="flex items-center gap-1.5 mt-1 min-w-0">
           <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', status.dotColor)} />
@@ -1783,6 +1793,14 @@ function DesktopMessagesList() {
       })()
     : visibleThreadsWithSelectedRaw;
 
+  // Preview da última mensagem (lote, apenas leitura/apresentação).
+  const lastMessageByThread = useThreadLastMessagePreviews(
+    visibleThreadsWithSelected ?? [],
+    true,
+  );
+
+
+
   // Fase Final — vazio contextual da lista: distingue "sem conversas" de
   // "busca/filtro sem resultado". Não altera nenhuma query.
   const hasActiveListFilters =
@@ -1801,7 +1819,7 @@ function DesktopMessagesList() {
 
     const { data: row, error } = await supabase
       .from('message_threads')
-      .select('id, contact_id, status, updated_at, created_at, last_message_at, whatsapp_last_inbound_at, last_inbound_at, needs_human_attention, assigned_user_id, primary_endpoint_id, last_message_content, last_message_direction')
+      .select('id, contact_id, status, updated_at, created_at, last_message_at, whatsapp_last_inbound_at, last_inbound_at, needs_human_attention, assigned_user_id, primary_endpoint_id, last_message_id, last_message_content, last_message_direction')
       .eq('organization_id', organization.id)
       .eq('id', threadId)
       .maybeSingle();
@@ -1824,6 +1842,7 @@ function DesktopMessagesList() {
       contact_name: (contact as any)?.full_name || (contact as any)?.phone || 'Desconhecido',
       contact_phone: (contact as any)?.phone ?? null,
       last_message: (row as any).last_message_content || '...',
+      last_message_id: (row as any).last_message_id ?? null,
       last_message_direction: (row as any).last_message_direction ?? null,
       updated_at: (row as any).updated_at,
       last_message_at: (row as any).last_message_at ?? null,
@@ -2024,6 +2043,15 @@ function DesktopMessagesList() {
                         endpointProvider={threadBadgeEndpoints[thread.id]?.provider ?? null}
                         endpointIsActive={threadBadgeEndpoints[thread.id]?.isActive ?? null}
                         officialNumbers={officialNumbers}
+                        lastMessagePreview={
+                          formatLastMessagePreview({
+                            content: lastMessageByThread[thread.id]?.content ?? thread.last_message,
+                            mediaType: lastMessageByThread[thread.id]?.mediaType ?? null,
+                            direction: lastMessageByThread[thread.id]?.direction ?? thread.last_message_direction,
+                            senderUserId: lastMessageByThread[thread.id]?.senderUserId ?? null,
+                            currentUserId: userProfile?.id ?? null,
+                          })
+                        }
                       />
                     ))}
                   </ListBox>
