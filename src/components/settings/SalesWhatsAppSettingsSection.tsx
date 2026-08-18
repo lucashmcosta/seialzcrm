@@ -93,6 +93,7 @@ function StateChip({ ok, label, title }: { ok: boolean; label: string; title?: s
 /** Item achatado: o número carrega a Route à qual pertence. */
 interface NumberItem extends ManagerEndpoint {
   lineId: string;
+  inboxKey: string | null;
 }
 
 export function SalesWhatsAppSettingsSection() {
