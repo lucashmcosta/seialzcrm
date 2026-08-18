@@ -53,16 +53,20 @@ Alternativa descartada: apontar `organization_integration_id` do endpoint Evolut
 ### Etapa 1 — Herança padrão no provisionamento (comportamento permanente)
 Alterar a RPC `public.provision_line_endpoint` (criada na Fase 3): no momento em que ela **insere** um novo `communication_endpoints`, preencher `inbound_settings` com a configuração de entrada efetiva de referência da própria organização, quando o endpoint nasce sem ela.
 
-Resolução da referência, dentro da RPC (helper `public.fn_default_inbound_settings(p_organization_id, p_purpose)`):
+Resolução da referência, dentro da RPC (helper `public.fn_default_inbound_settings(p_organization_id, p_purpose)`) — **provider-agnóstica**, sem nenhum filtro por `provider`:
 
 ```text
-1. inbound_settings do endpoint WhatsApp ativo de referência da org
-   (mesmo purpose, provider meta_cloud_api → hoje o 7067 para Comercial)
-2. whatsapp_inbound_settings da organization_integrations desse endpoint
-   → é o caminho real hoje, pois o 7067 tem inbound_settings NULL
+1. inbound_settings de um endpoint WhatsApp ATIVO da mesma organização,
+   mesmo purpose, cujo inbound_settings NÃO seja NULL
+2. whatsapp_inbound_settings da organization_integrations de um endpoint
+   WhatsApp ativo da mesma org e mesmo purpose
+   → é o caminho real hoje (o 7067 tem inbound_settings NULL)
 3. fallback { auto_create_contact: true, default_lifecycle_stage: 'lead',
              auto_create_opportunity: true, default_stage_id: null }
 ```
+
+Hoje isso resolve exatamente na configuração do 7067 (único endpoint Comercial ativo da Central com integração configurada); amanhã resolve em Evolution ou Twilio sem nenhuma alteração de código.
+
 
 Regras da herança:
 - aplica-se a **qualquer novo endpoint** provisionado (Evolution, Twilio, Meta) que não traga `inbound_settings` — Evolution Comercial passa a nascer igual ao 7067 automaticamente, sem migração futura;
