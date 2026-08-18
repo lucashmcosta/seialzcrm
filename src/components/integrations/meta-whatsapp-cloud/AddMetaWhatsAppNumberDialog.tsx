@@ -29,7 +29,7 @@ interface Props {
   appId: string;
 }
 
-type Purpose = "customer_service" | "commercial";
+type Purpose = EndpointDestination;
 
 export function AddMetaWhatsAppNumberDialog({
   open,
@@ -43,6 +43,7 @@ export function AddMetaWhatsAppNumberDialog({
   const [phoneE164, setPhoneE164] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [purpose, setPurpose] = useState<Purpose>("customer_service");
+  const [assignedUserId, setAssignedUserId] = useState<string | null>(null);
   const [migrateOpen, setMigrateOpen] = useState(false);
   const [existingInfo, setExistingInfo] = useState<{
     endpointId: string;
@@ -55,7 +56,9 @@ export function AddMetaWhatsAppNumberDialog({
     setPhoneE164("");
     setDisplayName("");
     setPurpose("customer_service");
+    setAssignedUserId(null);
   };
+
 
   const addMutation = useMutation({
     mutationFn: async (opts: { skipMetaValidation?: boolean }) => {
