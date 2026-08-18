@@ -1791,6 +1791,14 @@ function DesktopMessagesList() {
       })()
     : visibleThreadsWithSelectedRaw;
 
+  // Preview da última mensagem (lote, apenas leitura/apresentação).
+  const lastMessageByThread = useThreadLastMessagePreviews(
+    visibleThreadsWithSelected ?? [],
+    true,
+  );
+
+
+
   // Fase Final — vazio contextual da lista: distingue "sem conversas" de
   // "busca/filtro sem resultado". Não altera nenhuma query.
   const hasActiveListFilters =
