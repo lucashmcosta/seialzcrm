@@ -7,7 +7,8 @@
 // `resolveSalesWhatsappThread()` quando TODAS as condições abaixo forem
 // verdadeiras:
 //
-//   1. isSalesEndpoint(endpoint)  → purpose sales/commercial (exceção datada)
+//   1. isSalesEndpoint(endpoint)  → purpose sales/commercial/vendor_personal
+//                                   (exceção datada do endpoint 7020 legado)
 //   2. Route Comercial V2 válida  → messaging_line_endpoints (is_active)
 //                                   → messaging_lines (org, channel,
 //                                     inbox_key='sales', is_active,
