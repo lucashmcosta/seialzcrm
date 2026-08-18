@@ -79,6 +79,16 @@ function linkErrorMessage(raw: string): string {
   return key ? LINK_ERROR[key] : raw;
 }
 
+/**
+ * Detalhe seguro para toast: mostra apenas códigos de erro curtos.
+ * Nunca exibe payload bruto (QR/WA linking code, base64, tokens).
+ */
+function safeDetail(e: unknown): string | undefined {
+  const raw = e instanceof Error ? e.message : typeof e === 'string' ? e : '';
+  const msg = raw.trim();
+  if (!msg || msg.length > 120 || /[+/=]{4,}|^\d+@/.test(msg)) return undefined;
+  return msg;
+}
 
 
 export function EvolutionProvisionPanel() {
@@ -134,7 +144,7 @@ export function EvolutionProvisionPanel() {
         description: 'Leia o QR Code no WhatsApp para concluir a conexão.',
       });
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error('Não foi possível criar a sessão', { description: safeDetail(e) });
     }
   };
 
@@ -144,7 +154,9 @@ export function EvolutionProvisionPanel() {
       setQr({ instanceName, base64: r.base64 ?? null });
       if (!r.base64) toast.message('Já conectado', { description: 'Nenhum QR necessário.' });
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error('Não foi possível gerar o QR Code. Tente novamente.', {
+        description: safeDetail(e),
+      });
     }
   };
 

@@ -82,7 +82,18 @@ function json(
 }
 
 function errFromEvolution(e: EvolutionError): Response {
-  return json(e.status, { error: e.code, message: e.message });
+  return json(e.status ?? 502, { error: e.code, message: e.message });
+}
+
+// Discriminador seguro de EvolutionError: retornos legítimos (EvolutionQrCode)
+// também têm a chave `code` — o `code` do QR é a string bruta de pareamento.
+// Usar apenas `"code" in r` fazia um QR válido ser tratado como erro e
+// vazava o payload do QR como mensagem de erro.
+function isEvolutionError(v: unknown): v is EvolutionError {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return typeof o.code === "string" && typeof o.message === "string" &&
+    typeof o.status === "number";
 }
 
 function validateInstanceName(name: unknown): string | null {
@@ -237,7 +248,7 @@ serve(async (req) => {
           return json(400, { error: "INVALID_INPUT", message: "instanceName" });
         }
         const r = await provider.fetch(name);
-        if (!Array.isArray(r) && "code" in r) return errFromEvolution(r);
+        if (!Array.isArray(r) && isEvolutionError(r)) return errFromEvolution(r);
         return json(200, { instances: r });
       }
       case "create": {
@@ -249,7 +260,7 @@ serve(async (req) => {
           instanceName: name,
           qrcode: body.qrcode ?? true,
         });
-        if ("code" in r) return errFromEvolution(r);
+        if (isEvolutionError(r)) return errFromEvolution(r);
 
         // Se existe uma linha em evolution_instances para essa `name`,
         // persistimos `instance_id_remote` e `last_state_checked_at`.
@@ -325,7 +336,7 @@ serve(async (req) => {
           return json(400, { error: "INVALID_INPUT", message: "instanceName" });
         }
         const r = await provider.connect(name);
-        if ("code" in r) return errFromEvolution(r);
+        if (isEvolutionError(r)) return errFromEvolution(r);
         if (instanceRow) {
           await service
             .from("evolution_instances")
@@ -403,8 +414,8 @@ serve(async (req) => {
           return json(400, { error: "INVALID_INPUT", message: "instanceName" });
         }
         const r = await provider.webhookFind(name);
-        if (r && typeof r === "object" && "code" in r) {
-          return errFromEvolution(r as EvolutionError);
+        if (isEvolutionError(r)) {
+          return errFromEvolution(r);
         }
         return json(200, { webhook: r });
       }
