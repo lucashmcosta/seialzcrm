@@ -300,6 +300,12 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
             {formatRelativeTime(value.updated_at, locale)}
           </span>
         </div>
+        {/* Preview da última mensagem válida (conceito WhatsApp) */}
+        {lastMessagePreview && (
+          <p className="mt-0.5 text-xs text-muted-foreground truncate whitespace-nowrap">
+            {lastMessagePreview}
+          </p>
+        )}
         {/* Linha única de meta: status · atenção · responsável */}
         <div className="flex items-center gap-1.5 mt-1 min-w-0">
           <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', status.dotColor)} />
