@@ -2325,6 +2325,11 @@ function DesktopMessagesList() {
                             })();
 
                             let lastDateKey: string | null = null;
+                            // O cabeçalho do container é emitido na PRIMEIRA
+                            // mensagem de cada bloco (o início do bloco pode
+                            // cair em uma nota/evento, que não leva cabeçalho).
+                            const headerEmittedBlocks = new Set<number>();
+
 
                             const renderedItems = chatItems.map((item, itemIndex) => {
                               const group = groupFlags[itemIndex] ?? { isGroupStart: true, isGroupEnd: true };
