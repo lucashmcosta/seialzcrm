@@ -248,7 +248,7 @@ serve(async (req) => {
           return json(400, { error: "INVALID_INPUT", message: "instanceName" });
         }
         const r = await provider.fetch(name);
-        if (!Array.isArray(r) && "code" in r) return errFromEvolution(r);
+        if (!Array.isArray(r) && isEvolutionError(r)) return errFromEvolution(r);
         return json(200, { instances: r });
       }
       case "create": {
@@ -260,7 +260,7 @@ serve(async (req) => {
           instanceName: name,
           qrcode: body.qrcode ?? true,
         });
-        if ("code" in r) return errFromEvolution(r);
+        if (isEvolutionError(r)) return errFromEvolution(r);
 
         // Se existe uma linha em evolution_instances para essa `name`,
         // persistimos `instance_id_remote` e `last_state_checked_at`.
@@ -336,7 +336,7 @@ serve(async (req) => {
           return json(400, { error: "INVALID_INPUT", message: "instanceName" });
         }
         const r = await provider.connect(name);
-        if ("code" in r) return errFromEvolution(r);
+        if (isEvolutionError(r)) return errFromEvolution(r);
         if (instanceRow) {
           await service
             .from("evolution_instances")
@@ -414,8 +414,8 @@ serve(async (req) => {
           return json(400, { error: "INVALID_INPUT", message: "instanceName" });
         }
         const r = await provider.webhookFind(name);
-        if (r && typeof r === "object" && "code" in r) {
-          return errFromEvolution(r as EvolutionError);
+        if (isEvolutionError(r)) {
+          return errFromEvolution(r);
         }
         return json(200, { webhook: r });
       }
