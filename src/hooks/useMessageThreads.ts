@@ -8,7 +8,6 @@ export interface ChatThread {
   contact_name: string;
   contact_phone: string | null;
   last_message: string | null;
-  last_message_id: string | null;
   last_message_direction: string | null;
   updated_at: string;
   last_message_at: string | null;
@@ -53,7 +52,6 @@ function mapRpcToChatThread(row: RpcThreadRow): ChatThread {
     contact_name: row.contact_name || 'Desconhecido',
     contact_phone: row.contact_phone,
     last_message: row.last_message_content || '...',
-    last_message_id: row.last_message_id ?? null,
     last_message_direction: row.last_message_direction,
     updated_at: row.updated_at,
     last_message_at: row.last_message_at,

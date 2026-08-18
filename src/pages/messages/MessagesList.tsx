@@ -99,9 +99,6 @@ import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { useThreadBadgeEndpoints } from '@/hooks/useThreadBadgeEndpoints';
-import { useThreadLastMessagePreviews } from '@/hooks/messages/useThreadLastMessagePreviews';
-import { formatLastMessagePreview, type LastMessagePreview } from '@/lib/messagePreview';
-import { LastMessagePreviewLine } from '@/components/messages/LastMessagePreview';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
@@ -117,8 +114,6 @@ import { AttachMediaDialog, type AttachMedia } from '@/components/documents/Atta
 import { isAttachableMedia } from '@/lib/mediaToFile';
 import { computeMessageGroups, computeContextBlocks, type GroupingItem } from '@/lib/messageGrouping';
 import { TimelineBlock } from '@/components/messages/timeline/TimelineBlock';
-import { useResizableListWidth } from '@/hooks/useResizableListWidth';
-
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
@@ -257,15 +252,9 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   /** Estado real do endpoint de resposta (ativo/inativo). */
   endpointIsActive?: boolean | null;
   officialNumbers?: Set<string>;
-  /** Preview da última mensagem válida (apresentacional). */
-  lastMessagePreview?: LastMessagePreview | null;
-  /** `messages.direction` da última mensagem (define se mostra checks). */
-  lastMessageDirection?: string | null;
-  /** `messages.whatsapp_status` da última mensagem. */
-  lastMessageStatus?: string | null;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessagePreview, lastMessageDirection, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -277,7 +266,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
       textValue={value.contact_name}
       className={(state) =>
         cn(
-          'group relative flex items-center gap-3 overflow-hidden border-b border-border/60 py-2.5 px-3 select-none cursor-pointer',
+          'group relative flex items-center gap-3 border-b border-border/60 py-2.5 px-3 select-none cursor-pointer',
           state.isFocused && 'outline-2 -outline-offset-2 outline-ring',
           state.isSelected && 'bg-accent',
           typeof className === 'function' ? className(state) : className
@@ -287,7 +276,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
       <Avatar fallbackText={value.contact_name} size="md" />
       <div className="flex flex-col min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 min-w-0">
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
@@ -305,17 +294,10 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
           </div>
-          <span className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground leading-5">
+          <span className="shrink-0 text-[11px] text-muted-foreground leading-5">
             {formatRelativeTime(value.updated_at, locale)}
           </span>
         </div>
-        {/* Preview da última mensagem válida (conceito WhatsApp) */}
-        <LastMessagePreviewLine
-          preview={lastMessagePreview ?? null}
-          direction={lastMessageDirection}
-          status={lastMessageStatus}
-        />
-
         {/* Linha única de meta: status · atenção · responsável */}
         <div className="flex items-center gap-1.5 mt-1 min-w-0">
           <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', status.dotColor)} />
@@ -1801,14 +1783,6 @@ function DesktopMessagesList() {
       })()
     : visibleThreadsWithSelectedRaw;
 
-  // Preview da última mensagem (lote, apenas leitura/apresentação).
-  const lastMessageByThread = useThreadLastMessagePreviews(
-    visibleThreadsWithSelected ?? [],
-    true,
-  );
-
-
-
   // Fase Final — vazio contextual da lista: distingue "sem conversas" de
   // "busca/filtro sem resultado". Não altera nenhuma query.
   const hasActiveListFilters =
@@ -1827,7 +1801,7 @@ function DesktopMessagesList() {
 
     const { data: row, error } = await supabase
       .from('message_threads')
-      .select('id, contact_id, status, updated_at, created_at, last_message_at, whatsapp_last_inbound_at, last_inbound_at, needs_human_attention, assigned_user_id, primary_endpoint_id, last_message_id, last_message_content, last_message_direction')
+      .select('id, contact_id, status, updated_at, created_at, last_message_at, whatsapp_last_inbound_at, last_inbound_at, needs_human_attention, assigned_user_id, primary_endpoint_id, last_message_content, last_message_direction')
       .eq('organization_id', organization.id)
       .eq('id', threadId)
       .maybeSingle();
@@ -1850,7 +1824,6 @@ function DesktopMessagesList() {
       contact_name: (contact as any)?.full_name || (contact as any)?.phone || 'Desconhecido',
       contact_phone: (contact as any)?.phone ?? null,
       last_message: (row as any).last_message_content || '...',
-      last_message_id: (row as any).last_message_id ?? null,
       last_message_direction: (row as any).last_message_direction ?? null,
       updated_at: (row as any).updated_at,
       last_message_at: (row as any).last_message_at ?? null,
@@ -1903,26 +1876,12 @@ function DesktopMessagesList() {
     }
   }, [permissions.viewAllThreads, effectiveFilter]);
 
-  // Largura ajustável da coluna de conversas (apresentacional, persistida)
-  const listResize = useResizableListWidth({
-    storageKey: 'seialz:commercial:list-width',
-    defaultWidth: 400,
-    minWidth: 320,
-    maxWidth: 520,
-  });
 
   return (
     <Layout>
-      {/* Hotfix: `h-screen` (100vh) excedia a altura útil de <main> (100vh - topbar),
-          empurrando o rodapé da lista — onde vive o botão "Carregar mais" — para
-          fora da área visível. `h-full` casa exatamente com o container do Layout. */}
-      <div className="h-full min-h-0 overflow-hidden flex">
-        {/* Left Panel - Chat List (largura ajustável) */}
-        <div
-          style={{ width: listResize.width }}
-          className="flex-shrink-0 flex flex-col bg-card h-full overflow-hidden"
-        >
-
+      <div className="h-screen overflow-hidden flex">
+        {/* Left Panel - Chat List (fixed width) */}
+        <div className="w-[400px] flex-shrink-0 border-r border-border flex flex-col bg-card h-full overflow-hidden">
             {/* Header */}
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
@@ -1998,7 +1957,7 @@ function DesktopMessagesList() {
             </div>
 
             {/* Chat List */}
-            <ScrollArea className="min-h-0 flex-1">
+            <ScrollArea className="flex-1">
               {threadsLoading ? (
                 <div className="p-4 space-y-4">
                   {[1, 2, 3, 4].map((i) => (
@@ -2065,16 +2024,6 @@ function DesktopMessagesList() {
                         endpointProvider={threadBadgeEndpoints[thread.id]?.provider ?? null}
                         endpointIsActive={threadBadgeEndpoints[thread.id]?.isActive ?? null}
                         officialNumbers={officialNumbers}
-                        lastMessagePreview={
-                          formatLastMessagePreview({
-                            content: lastMessageByThread[thread.id]?.content ?? thread.last_message,
-                            mediaType: lastMessageByThread[thread.id]?.mediaType ?? null,
-                          })
-                        }
-                        lastMessageDirection={
-                          lastMessageByThread[thread.id]?.direction ?? thread.last_message_direction
-                        }
-                        lastMessageStatus={lastMessageByThread[thread.id]?.status ?? null}
                       />
                     ))}
                   </ListBox>
@@ -2097,27 +2046,6 @@ function DesktopMessagesList() {
               )}
             </ScrollArea>
         </div>
-
-        {/* Divisória redimensionável (apresentacional) */}
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Ajustar largura da lista de conversas"
-          tabIndex={0}
-          onPointerDown={listResize.startResize}
-          onDoubleClick={listResize.reset}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowLeft') { e.preventDefault(); listResize.nudge(-16); }
-            if (e.key === 'ArrowRight') { e.preventDefault(); listResize.nudge(16); }
-          }}
-          className={cn(
-            'relative w-1.5 shrink-0 h-full cursor-col-resize bg-border/60 transition-colors',
-            'hover:bg-primary/40 focus-visible:outline-none focus-visible:bg-primary/50',
-            listResize.isResizing && 'bg-primary/60',
-          )}
-        />
-
-
 
         {/* Right Panel - Chat */}
         <div className="flex-1 flex flex-col bg-background h-full overflow-hidden">
