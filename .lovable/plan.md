@@ -39,18 +39,19 @@ Auditoria concluída (leitura de código, funções no banco e dados). Nada impl
 
 ## Plano técnico (fases, sem implementar agora)
 
-**F1 — Permissão de resposta (nenhum comportamento novo hoje, pois não existe endpoint pessoal)**
-1. Migração: `fn_can_user_use_reply_endpoint(_organization_id, _user_id, _endpoint_id) returns boolean` — true se o endpoint é elegível ao Comercial **e** (`purpose <> 'vendor_personal'` **ou** `assigned_user_id = _user_id`). Sem cláusula de grant: número pessoal é do dono e de mais ninguém. Ajustar `fn_guard_user_reply_endpoint` para recusar grant em endpoint `vendor_personal` quando `NEW.user_id <> assigned_user_id`.
-2. Backend: `manual-reply-endpoint.ts` chama a nova RPC (erro `REPLY_ENDPOINT_PERSONAL_FORBIDDEN`, 409); `reply-endpoint-selection.ts` aplica a mesma checagem no caminho `derived` e devolve `blocked` em vez de trocar de número.
-3. UI: `allowedForUser` por opção; item 🔒 com rótulo `Pessoal · <nome>`; composer bloqueado nos casos 2 e 3 com os textos acordados.
-4. Testes: casos 1/2/3 + cross-org + endpoint de Atendimento + tentativa de grant de número pessoal para outro usuário (deve ser recusada).
-
-**F2 — `vendor_personal` roteável (mesma thread)**
+**F1 — `vendor_personal` roteável (mesma thread canônica)**
 1. Migração: trigger de `business_context` mapear `vendor_personal → 'sales'`.
 2. `isSalesEndpoint()` aceitar `vendor_personal` (mantendo a exceção datada do endpoint 7020 legado).
-3. Ensaio em transação com ROLLBACK: inbound simulado por endpoint pessoal cai na thread canônica existente do contato, sem criar thread nova, sem alterar `active_endpoint_id`.
+3. Ensaio em transação com ROLLBACK: inbound simulado por endpoint pessoal cai na thread canônica existente do contato, sem criar thread nova, sem alterar `active_endpoint_id`, e a trigger `fn_guard_sales_thread_canonical` continua permitindo o update.
+4. Validação: uma única thread por contato, regressão Comercial (7067/7020) inalterada.
 
-**F3 — Destino no provisionamento**
+**F2 — Permissão de resposta (composer + validação server-side)**
+1. Migração: `fn_can_user_use_reply_endpoint(_organization_id, _user_id, _endpoint_id) returns boolean` — true se o endpoint é elegível ao Comercial **e** (`purpose <> 'vendor_personal'` **ou** `assigned_user_id = _user_id`). Sem cláusula de grant. Ajustar `fn_guard_user_reply_endpoint` para recusar **qualquer** grant cujo endpoint tenha `purpose = 'vendor_personal'`.
+2. Backend: `manual-reply-endpoint.ts` chama a nova RPC (erro `REPLY_ENDPOINT_PERSONAL_FORBIDDEN`, 409); `reply-endpoint-selection.ts` aplica a mesma checagem no caminho `derived` e devolve `blocked` em vez de trocar de número.
+3. UI: `allowedForUser` por opção; item 🔒 `Pessoal · <nome>` mantido visível como contexto (thread e histórico intactos); composer bloqueado nos casos 2 e 3 com os textos acordados; liberação só após escolha explícita.
+4. Testes: casos 1/2/3 + cross-org + endpoint de Atendimento + tentativa de grant em endpoint pessoal (deve ser recusada sempre).
+
+**F3 — Destino no provisionamento (Comercial / Atendimento / Pessoal)**
 1. Migração: `provision_line_endpoint(p_organization_id, p_line_id, p_provider, p_address, p_purpose, p_display_name, p_instance_name, p_assigned_user_id)` — aceita `inbox_key IN ('sales','customer_service')`, recusa purpose incompatível com a linha, exige `p_assigned_user_id` (validado em `user_organizations` + usuário ativo) quando purpose é `vendor_personal` e grava esse dono no endpoint (a permissão vem daí, sem criar grant), **nunca** altera `active_endpoint_id`. `provision_sales_endpoint` permanece intacta.
 2. `rotate_messaging_line_endpoint`: aceitar `inbox_key IN ('sales','customer_service')`, mantendo `ROTATION_ENDPOINT_IN_USE`, admin-only e log em `messaging_line_rotations`.
 3. Edge: nova op `link_instance_to_destination` em `sales-route-operations` resolvendo a linha pelo destino.
