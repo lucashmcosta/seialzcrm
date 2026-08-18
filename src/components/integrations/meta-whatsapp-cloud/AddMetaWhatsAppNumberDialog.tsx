@@ -119,6 +119,7 @@ export function AddMetaWhatsAppNumberDialog({
   const canSubmit =
     !!phoneNumberId.trim() &&
     /^\+\d{8,15}$/.test(phoneE164.trim()) &&
+    (purpose !== "vendor_personal" || !!assignedUserId) &&
     !addMutation.isPending;
 
   return (
