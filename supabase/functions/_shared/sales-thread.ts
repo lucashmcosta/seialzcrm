@@ -70,7 +70,11 @@ export async function isSalesEndpoint(
   }
 
   const purpose = String((data as { purpose?: string | null } | null)?.purpose ?? "").toLowerCase();
-  return purpose === "sales" || purpose === "commercial";
+  // Fase 1 do contrato de números pessoais: `vendor_personal` opera DENTRO da
+  // conversa Comercial canônica (mesma thread). A restrição de QUEM pode
+  // responder é feita por `assigned_user_id` na seleção de endpoint (Fase 2),
+  // nunca criando thread separada.
+  return purpose === "sales" || purpose === "commercial" || purpose === "vendor_personal";
 }
 
 /**
