@@ -1913,7 +1913,10 @@ function DesktopMessagesList() {
 
   return (
     <Layout>
-      <div className="h-screen overflow-hidden flex">
+      {/* Hotfix: `h-screen` (100vh) excedia a altura útil de <main> (100vh - topbar),
+          empurrando o rodapé da lista — onde vive o botão "Carregar mais" — para
+          fora da área visível. `h-full` casa exatamente com o container do Layout. */}
+      <div className="h-full min-h-0 overflow-hidden flex">
         {/* Left Panel - Chat List (largura ajustável) */}
         <div
           style={{ width: listResize.width }}
