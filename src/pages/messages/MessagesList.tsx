@@ -2388,7 +2388,7 @@ function DesktopMessagesList() {
                                         </>
                                       )}
                                     </div>
-                                    <div className="h-px bg-border/50 mt-1.5 mb-2" />
+                                    <div className="h-px bg-border/70 mt-1.5 mb-2" />
                                   </div>
                                 );
 
@@ -2793,7 +2793,7 @@ function DesktopMessagesList() {
                                   messageNodes={segment.messageNodes}
                                   isCurrent={segment.key === currentBlockKey}
                                   locale={locale}
-                                  className="w-full rounded-lg border border-border/65 bg-muted/55 shadow-sm px-3 py-2.5 mt-2.5"
+                                  className="w-full rounded-lg border border-border/80 bg-muted/85 shadow-sm px-3 py-2.5 mt-2.5"
                                 />
                               )
                             );
