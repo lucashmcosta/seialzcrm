@@ -16,6 +16,9 @@ import {
   metaWhatsAppService,
 } from "@/services/metaWhatsAppService";
 import { MigrateEndpointDialog } from "./MigrateEndpointDialog";
+import {
+  EndpointDestinationStep, type EndpointDestination,
+} from "@/components/settings/EndpointDestinationStep";
 
 interface Props {
   open: boolean;
