@@ -13,6 +13,7 @@ import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { resolveSalesReplyRoute } from "./route-resolver.ts";
 import { resolveManualReplyEndpoint } from "./manual-reply-endpoint.ts";
 import {
+  canUserUseReplyEndpoint,
   normalizeReplySelection,
   type ReplyEndpointChoice,
   type ReplyEndpointSelection,
@@ -184,6 +185,21 @@ export async function resolveProvider(
       requireFeatureFlag: !explicitDerivedSelection,
     });
     if (route.applicable && route.sendEndpointId && route.provider) {
+      // Fase 2 — números pessoais: em `derived` o servidor revalida a permissão
+      // do usuário sobre o endpoint resolvido. Nunca troca de número: recusa.
+      if (payload.userId) {
+        const allowed = await canUserUseReplyEndpoint(supabase, {
+          organizationId: payload.organizationId,
+          userId: payload.userId,
+          endpointId: route.sendEndpointId,
+        });
+        if (!allowed) {
+          throw new DispatchResolveError(
+            "REPLY_ENDPOINT_PERSONAL_FORBIDDEN",
+            "Este número é pessoal de outro usuário. Escolha um número permitido para responder.",
+          );
+        }
+      }
       payload.endpointId = route.sendEndpointId;
       payload.manualReplyEndpointId = undefined;
       payload.replyEndpointChoice = route.choice ?? "derived";
