@@ -305,7 +305,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
           </div>
-          <span className="shrink-0 text-[11px] text-muted-foreground leading-5">
+          <span className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground leading-5">
             {formatRelativeTime(value.updated_at, locale)}
           </span>
         </div>
