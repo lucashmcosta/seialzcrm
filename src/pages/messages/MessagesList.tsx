@@ -2047,11 +2047,12 @@ function DesktopMessagesList() {
                           formatLastMessagePreview({
                             content: lastMessageByThread[thread.id]?.content ?? thread.last_message,
                             mediaType: lastMessageByThread[thread.id]?.mediaType ?? null,
-                            direction: lastMessageByThread[thread.id]?.direction ?? thread.last_message_direction,
-                            senderUserId: lastMessageByThread[thread.id]?.senderUserId ?? null,
-                            currentUserId: userProfile?.id ?? null,
                           })
                         }
+                        lastMessageDirection={
+                          lastMessageByThread[thread.id]?.direction ?? thread.last_message_direction
+                        }
+                        lastMessageStatus={lastMessageByThread[thread.id]?.status ?? null}
                       />
                     ))}
                   </ListBox>
