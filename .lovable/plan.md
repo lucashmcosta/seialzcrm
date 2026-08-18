@@ -44,22 +44,23 @@ Não é áudio, anexo, horário, direção nem agrupamento de bolhas: `GROUP_GAP
 
 Somente apresentação, dois arquivos.
 
-`src/lib/messageGrouping.ts` — reduzir `continuesBlock` a:
-- quebra se `curr.dateBreak`;
-- quebra se `curr.endpointBreak` (troca real de número);
-- nada mais.
+`src/lib/messageGrouping.ts` — reduzir `continuesBlock` a UMA única condição:
+- quebra somente se `curr.endpointBreak` (troca real do número usado na conversa);
+- nada mais quebra: nem `dateBreak`, nem `endpointId`/`provider` crus, nem identidade outbound, nem `kind`.
 
-Ou seja: remover as checagens de identidade outbound (`outbound.senderType/senderId`), de `endpointId` cru, de `provider` e do `kind`. O parâmetro `outbound` e sua propagação em `computeContextBlocks` deixam de ser necessários. `computeMessageGroups` (agrupamento interno de bolhas, com gap de 5 min, reply, falha, autor) fica intacto.
+O parâmetro `outbound` e sua propagação em `computeContextBlocks` deixam de ser necessários. `computeMessageGroups` (agrupamento interno de bolhas, com gap de 5 min, reply, falha, autor) fica intacto.
 
 `src/pages/messages/MessagesList.tsx`:
-- notas, activities e eventos de sistema continuam renderizados fora do cartão, mas passam a receber o `blockIndex` do bloco corrente; na montagem dos `segments`, ao encontrar uma mensagem, reaproveitar o último segmento `block` de mesmo `blockIndex` em vez de exigir que ele seja o segmento imediatamente anterior — assim uma nota no meio não parte o container em dois cartões com o mesmo cabeçalho.
-- o `blockHeader` continua sendo emitido apenas no `isBlockStart`, o que passa a significar "início da conversa, virada de dia ou troca de número".
+- o separador de data (`TimelineEventMarker` com HOJE/ONTEM/data) continua sendo renderizado no ponto cronológico correto, mas passa a aparecer DENTRO do container corrente, como marcador entre as mensagens — sem abrir cartão novo. Na montagem dos `segments`, o separador deixa de ser empurrado como `loose` quando existe um bloco corrente: ele entra em `messageNodes` do bloco.
+- notas, activities e eventos de sistema seguem o mesmo tratamento: recebem o `blockIndex` do bloco corrente e não partem o cartão; ao encontrar a próxima mensagem, reaproveitar o último segmento `block` de mesmo `blockIndex` em vez de exigir que ele seja o segmento imediatamente anterior.
+- o `blockHeader` continua sendo emitido apenas no `isBlockStart`, que passa a significar exclusivamente "início da conversa ou troca de número".
 
-Consequência: um cabeçalho por número (e por dia), sem repetição; colapso por altura, ancoragem de scroll, envio, roteamento, paginação e realtime inalterados.
+Consequência: exatamente um container por número (7020 … 7067 …), atravessando dias, notas, eventos e trocas de operador; a data permanece visível como marcador cronológico interno. Colapso por altura, ancoragem de scroll, envio, roteamento, paginação e realtime inalterados.
 
-Testes a ajustar em `tests/message-grouping.test.ts`: os casos "troca de operador abre novo bloco", "entrada de IA abre novo bloco", "troca de provider abre novo bloco", "troca de endpoint abre novo bloco" (sem troca de número) e "evento de sistema e nota interna são blocos próprios" passam a esperar continuidade; permanecem os casos de `dateBreak` e `endpointBreak`.
+Testes a ajustar em `tests/message-grouping.test.ts`: os casos "troca de operador", "entrada de IA", "troca de provider", "troca de endpoint" (sem troca de número), "evento de sistema e nota interna são blocos próprios" e o de `dateBreak` passam a esperar continuidade; permanece apenas `endpointBreak` como quebra.
+
 
 ## Verificação
 
 - `tsgo` limpo e suíte de testes atualizada.
-- Validação visual sua em `/commercial` na thread do Bruno: um único container por número/dia, sem cabeçalhos 7020 repetidos.
+- Validação visual sua em `/commercial` na thread do Bruno: um único container por número (7020 / 7067), separador de data dentro do container, sem cabeçalhos 7020 repetidos.
