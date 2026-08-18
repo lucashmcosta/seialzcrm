@@ -152,12 +152,24 @@ describe('computeContextBlocks', () => {
     expect(r.map((b) => b.blockIndex)).toEqual([0, 0, 0, 0, 0]);
   });
 
+  it('mensagem → evento de sistema → nota → mensagem permanece um único bloco', () => {
+    const r = computeContextBlocks([
+      msg(),
+      { ...msg({ timestamp: T0 + 1000 }), kind: 'system' },
+      { ...msg({ timestamp: T0 + 2000 }), kind: 'note', direction: 'internal' },
+      msg({ timestamp: T0 + 3000 }),
+    ]);
+    expect(r.map((b) => b.isBlockStart)).toEqual([true, false, false, false]);
+    expect(r.map((b) => b.blockIndex)).toEqual([0, 0, 0, 0]);
+  });
+
   it('troca real de número (endpointBreak) abre novo bloco', () => {
     const r = computeContextBlocks([msg(), msg({ endpointBreak: true }), msg()]);
     expect(r.map((b) => b.isBlockStart)).toEqual([true, true, false]);
     expect(r.map((b) => b.blockIndex)).toEqual([0, 1, 1]);
     expect(r.map((b) => b.isBlockEnd)).toEqual([true, false, true]);
   });
+
 });
 
 

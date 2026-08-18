@@ -2325,10 +2325,10 @@ function DesktopMessagesList() {
                             })();
 
                             let lastDateKey: string | null = null;
-                            // O cabeçalho do container é emitido na PRIMEIRA
-                            // mensagem de cada bloco (o início do bloco pode
-                            // cair em uma nota/evento, que não leva cabeçalho).
-                            const headerEmittedBlocks = new Set<number>();
+                            // O cabeçalho é calculado para toda mensagem; a fase
+                            // de segmentos decide onde ele é realmente exibido
+                            // (apenas na criação de um container visual).
+
 
 
                             const renderedItems = chatItems.map((item, itemIndex) => {
@@ -2362,11 +2362,10 @@ function DesktopMessagesList() {
                               // Puramente visual — nenhum dado novo é buscado.
                               let blockHeader: JSX.Element | null = null;
                               if (
-                                !headerEmittedBlocks.has(block.blockIndex) &&
                                 item._type === 'message' &&
                                 descriptor?.kind === 'message'
                               ) {
-                                headerEmittedBlocks.add(block.blockIndex);
+
 
                                 const epId = descriptor.endpointId ?? null;
                                 const epAddress = epId ? endpointNumbers[epId]?.address ?? null : null;
@@ -2685,6 +2684,8 @@ function DesktopMessagesList() {
                               return {
                                 key: item._type === 'message' ? `m-${item.data.id}` : `n-${item.data.id}`,
                                 blockIndex: block.blockIndex,
+                                // ÚNICA condição de corte do container visual.
+                                endpointBreak: descriptor?.endpointBreak === true,
                                 kind: (descriptor?.kind ?? 'message') as 'message' | 'note' | 'system',
                                 direction: descriptor?.direction ?? null,
                                 separator,
@@ -2692,6 +2693,7 @@ function DesktopMessagesList() {
                                 blockHeader,
                                 renderItem,
                               };
+
                             });
 
                             // Segunda fase (puramente visual): mensagens do mesmo
@@ -2710,12 +2712,14 @@ function DesktopMessagesList() {
                                   messageNodes: JSX.Element[];
                                 };
                             const segments: Segment[] = [];
-                            // Segmento de bloco corrente por blockIndex: separadores
-                            // de data, notas, activities e eventos de sistema entram
-                            // NELE (marcadores internos) e não encerram o container.
+                            // Um container nasce APENAS na troca real de número
+                            // (endpointBreak) ou quando ainda não há container.
+                            // Separadores de data, notas, activities e eventos de
+                            // sistema entram NELE como marcadores internos.
                             let currentBlock: Extract<Segment, { type: 'block' }> | null = null;
+                            let visualBlockSeq = 0;
                             for (const r of renderedItems) {
-                              if (currentBlock && currentBlock.blockIndex !== r.blockIndex) {
+                              if (currentBlock && r.endpointBreak) {
                                 currentBlock = null;
                               }
 
@@ -2742,17 +2746,19 @@ function DesktopMessagesList() {
                               } else {
                                 const created: Extract<Segment, { type: 'block' }> = {
                                   type: 'block',
-                                  key: `block-${r.blockIndex}-${r.key}`,
-                                  blockIndex: r.blockIndex,
+                                  key: `block-${visualBlockSeq}-${r.key}`,
+                                  blockIndex: visualBlockSeq,
                                   hasInbound: isInbound,
                                   hasOutbound: !isInbound,
                                   headerNodes: r.blockHeader ? [r.blockHeader] : [],
                                   messageNodes: [r.renderItem],
                                 };
+                                visualBlockSeq += 1;
                                 segments.push(created);
                                 currentBlock = created;
                               }
                             }
+
 
 
                             // Colapso automático de containers encerrados: o último
