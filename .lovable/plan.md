@@ -95,7 +95,7 @@ ORG_INTEGRATION_ID_CHANGED=NO
 - Um inbound real no 7020 deve criar contato `lifecycle_stage=lead` + oportunidade na primeira etapa do pipeline, com dono = dono do contato.
 
 
-### Etapa 3 — Backfill das oportunidades não criadas
+### Etapa 4 — Backfill das oportunidades não criadas
 
 Levantamento real (contatos com inbound recebido em endpoint Evolution):
 
@@ -115,14 +115,17 @@ Regras do backfill — exatamente as do 7067, replicando `autoCreateOpportunityI
 Escopo proposto: **somente a Central (29 contatos sem nenhuma oportunidade)**, a partir de 14/08/2026, quando o Evolution 7020 entrou. Os 406 da Viagi são do piloto de julho e ficam fora por padrão.
 
 ### Ordem de execução
-1. migração de dado (Etapa 1) + pós-condições;
-2. verificação funcional (Etapa 2);
-3. dry-run do backfill (lista dos 29 contatos, etapa e dono resolvidos) para sua aprovação;
-4. commit do backfill somente após aprovação do dry-run.
+1. Etapa 1 — herança padrão na RPC de provisionamento;
+2. Etapa 2 — migração excepcional do 7020 + pós-condições;
+3. Etapa 3 — verificação funcional;
+4. dry-run do backfill (lista dos 29 contatos, etapa e dono resolvidos) para sua aprovação;
+5. commit do backfill somente após aprovação do dry-run.
 
 ## Confirmações
 - NOVA_LOGICA_EVOLUTION=NO (nenhuma função de webhook é alterada)
-- SCHEMA_CHANGE_REQUIRED=NO (apenas UPDATE de dado em `communication_endpoints.inbound_settings`)
+- FUTURE_MIGRATIONS_NEEDED_PER_NUMBER=NO (herança acontece no provisionamento)
+- SCHEMA_CHANGE_REQUIRED=YES (apenas `CREATE OR REPLACE` da RPC de provisionamento + novo helper; nenhuma tabela ou coluna alterada)
+
 - META_ENDPOINTS_TOUCHED=NO
 - ACTIVE_ENDPOINT_CHANGE=NO
 - ATENDIMENTO_CHANGE=NO
