@@ -1,133 +1,118 @@
-# Auditoria read-only — Destino de números (Meta vs Evolution) e plano mínimo
+# Auditoria read-only — Como o Meta pensou `vendor_personal` (número pessoal)
 
-Somente leitura: nada foi alterado. Evidências de código, funções SQL e dados reais.
+Somente leitura (código, migrações, funções no banco, docs). Nada foi alterado.
 
-## 1. Como o Meta implementa a seleção de destino
+## 1. `vendor_personal` no Meta — origem e usos
 
-Fluxo do dropdown "Finalidade":
+Origem (mesma migração, mesmo bloco): `supabase/migrations/20260530010202_...sql:63-88` adiciona **juntas** em `communication_endpoints`:
+`purpose` (CHECK `commercial|customer_service|vendor_personal|other`) **e** `assigned_user_id uuid REFERENCES public.users(id) ON DELETE SET NULL`.
 
-- Componente: `src/components/integrations/meta-whatsapp-cloud/AddMetaWhatsAppNumberDialog.tsx` (linhas 42, 176-196). Hoje só oferece **duas** opções renderizadas: `customer_service` (Atendimento /inbox) e `commercial` (Comercial /messages). Não existe opção "Pessoal" nem "Outro" no radio — o tipo aceita `vendor_personal | other` (`src/services/metaWhatsAppService.ts:23`), mas a UI não os expõe.
-- Service: `metaWhatsAppService.connect/addWaba` → Edge Function `meta-whatsapp-connect` (body `endpointPurpose`).
-- Persistência: `supabase/functions/meta-whatsapp-connect/index.ts:626` e `:1014` gravam **apenas** `communication_endpoints.purpose` (default `customer_service`). Constraint: `purpose IN ('commercial','customer_service','vendor_personal','other')`.
-- Tabelas alteradas: `organization_integrations`, `communication_endpoints`, `meta_app_credentials`, `organization_phone_numbers`. **Nenhum insert em `messaging_lines` / `messaging_line_endpoints`** (grep sem resultados nessa função).
-- Inbound depois: `purpose` alimenta o trigger `fn_message_threads_autofill_business_context` (`commercial|sales` → `business_context='sales'`; `customer_service|support` → `customer_service`; qualquer outro valor → `other`, que fica em limbo). Para o caminho canônico Comercial, `_shared/sales-canonical-gate.ts` exige as 3 condições: purpose de vendas + **link ativo em `messaging_line_endpoints` com `messaging_lines.inbox_key='sales'`** + flag `conv_route_resolver_v2`.
-- Outbound: `_shared/dispatch-whatsapp-send.ts:225-251` deriva purpose e resolve `messaging_lines.active_endpoint_id`; no frontend `src/lib/composerEndpoint.ts` filtra o pool por `purpose` (`SALES_PURPOSES = commercial, vendor_personal` / `CS_PURPOSES = customer_service, support, other`).
+Onde é lido hoje:
+- `supabase/migrations/20260530173348_...sql:262-282` — `get_default_queue_for_thread(thread_id)`:
+  `customer_service` → fila `customer_service`; **`vendor_personal` → fila `commercial` + `suggested_user_id = communication_endpoints.assigned_user_id`**; resto → `commercial`. Esta é a evidência mais direta da intenção: número pessoal **não** cria fila/conversa própria; entra no Comercial com o dono sugerido pelo endpoint.
+- `src/lib/endpointPurpose.ts:7` — `SALES_PURPOSES = ['commercial','vendor_personal']` (mesmo pool de resposta do Comercial).
+- `src/hooks/inbox/inboxScope.ts:6,20` — `EXCLUDED_PURPOSES = ['commercial','vendor_personal']`: pessoal é explicitamente **excluído** do Atendimento.
+- `src/hooks/useThreadSendEndpoint.ts:42`, `src/lib/dispatchWhatsAppSend.ts:410`, `supabase/functions/_shared/dispatch-whatsapp-send.ts:240` — `commercial | vendor_personal` → linha `commercial`.
+- `supabase/functions/twilio-whatsapp-send/index.ts:216,265,465` — pessoal tratado igual a comercial nos guards de janela/compliance.
+- Backfill `supabase/migrations/20260703181459_...sql:62` — `vendor_personal` → `business_context = 'sales'`.
+- UI Meta: `MetaAdditionalEndpointsSection.tsx:40,150` (“Pessoal (/messages)”) e `AddMetaWabaDialog.tsx:208` **expõem** `vendor_personal`; o dialog de número novo (`AddMetaWhatsAppNumberDialog.tsx`) não.
+- Docs: `docs/product/channel-boundaries.md:22`, `docs/modules/messages/README.md:7`, `docs/integrations/evolution-api/ENDPOINT_PURPOSE_RULE.md:16` (“Linha pessoal de vendedor → `vendor_personal`”). **Não existe ADR dedicado.**
 
-Conclusão: o dropdown do Meta **não é só visual** (controla `business_context` e o pool de outbound), mas **não é suficiente**: a entrada na Route (Comercial ou Atendimento) exige um vínculo em `messaging_line_endpoints` que a UI Meta não cria. Hoje esse vínculo só nasce por `provision_sales_endpoint` (Comercial) ou por SQL manual.
+META_VENDOR_PERSONAL_ORIGINAL_INTENT=número de WhatsApp de um vendedor específico, operando **dentro do Comercial** (mesma fila /messages, mesmo pool de envio), com o dono identificado por `communication_endpoints.assigned_user_id`. Nunca foi desenhado como canal/inbox separado.
 
-## 2. Suporte atual a "Pessoal"
+## 2. Thread: mesma ou separada?
 
-PERSONAL_NUMBER_MODEL_EXISTS=PARTIAL
+Função canônica: `supabase/functions/_shared/sales-thread.ts:7-12` (comentário normativo do resolver):
+`identidade da conversa = organization_id + contact_id + channel + business_context='sales'` e, textualmente, **“`primary_endpoint_id` NÃO faz parte da identidade. Ele é o último número usado”**. O lookup (linhas 98-110) filtra por `contact_id` + `business_context='sales'` + status aberto e, se o endpoint mudou, apenas **rotaciona** `primary_endpoint_id` (linhas 136-162).
 
-Já existe:
-- `communication_endpoints.purpose = 'vendor_personal'` na constraint, e `SALES_PURPOSES` inclui `vendor_personal` (`src/lib/endpointPurpose.ts:7`).
-- `communication_endpoints.assigned_user_id uuid` (coluna existe; **não é lida por nenhum código de WhatsApp** — os únicos usos de `assigned_user_id` fora de contatos/threads estão na telefonia, `telephony-*`).
-- `messaging_lines.owner_user_id uuid` (coluna existe; nenhuma linha atual usa — ver dados no item 3).
-- `user_reply_endpoints` (permissão usuário ↔ endpoint) com trigger `fn_guard_user_reply_endpoint`, que **hoje só aceita endpoints elegíveis ao Comercial** (`fn_is_sales_eligible_endpoint` exige `inbox_key='sales'`).
+Índices em `message_threads` (banco):
+- `message_threads_unique_open_per_contact_endpoint` — UNIQUE `(organization_id, contact_id, channel, primary_endpoint_id)` WHERE aberto e `primary_endpoint_id IS NOT NULL`;
+- `message_threads_unique_open_per_contact_legacy` — UNIQUE `(organization_id, contact_id, channel)` WHERE aberto e `primary_endpoint_id IS NULL`.
 
-Falta:
-- Nenhuma UI cria endpoint `vendor_personal`.
-- Nenhuma regra de inbound trata número pessoal (o trigger de `business_context` joga `vendor_personal` para `other` → thread invisível em /messages e /inbox — exatamente o incidente documentado em `docs/integrations/evolution-api/ENDPOINT_PURPOSE_RULE.md`).
-- Nenhuma Route pessoal (`inbox_key` só aceita `sales|customer_service`).
-- `assigned_user_id` não é validado (sem trigger de org/usuário ativo) nem usado em outbound.
+Ou seja: o **caminho legado** permite uma thread aberta por endpoint (fragmentação); o **caminho canônico V2** consolida por contato. `purpose`, `assigned_user_id` e `owner_user_id` **não** participam de nenhuma identidade nem de nenhum índice.
 
-## 3. Atendimento
+META_PERSONAL_EXPECTED_SAME_THREAD=YES (mesma thread Comercial do contato; o número pessoal só rotaciona `primary_endpoint_id`)
 
-Dados reais de `messaging_lines`:
+META_PERSONAL_ACTUAL_BEHAVIOR_TODAY=thread **separada e em limbo**. Dois motivos concretos: (a) `isSalesEndpoint()` (`_shared/sales-thread.ts:72-73`) só aceita `purpose ∈ {sales, commercial}` → `vendor_personal` reprova a condição 1 do gate e cai no legado, cuja unique inclui `primary_endpoint_id`; (b) o trigger atual `fn_message_threads_autofill_business_context` classifica qualquer purpose fora de sales/commercial/customer_service/support como **`other`**, e `other` não aparece em /messages nem em /inbox (incidente já documentado em `ENDPOINT_PURPOSE_RULE.md`).
 
-| org | inbox_key | ativa | active_endpoint_id |
+## 3. Por que 7067 ↔ 7020 fica na mesma thread
+
+Porque ambos os endpoints têm `purpose='commercial'`, estão vinculados por `messaging_line_endpoints` ativa à mesma Route `inbox_key='sales'` e a org tem a flag `conv_route_resolver_v2` ON — as 3 condições de `_shared/sales-canonical-gate.ts:151-160`. Com o gate liberado, o inbound usa `resolveSalesWhatsappThread`, que procura a thread por contato/contexto e só troca o `primary_endpoint_id` (rotação), sem criar thread nova.
+
+COMMERCIAL_THREAD_KEY=`(organization_id, contact_id, channel='whatsapp', business_context='sales', status aberto)` — o endpoint é atributo mutável da thread, não chave.
+
+## 4. Autorização do número pessoal (outbound)
+
+Peças existentes:
+- `user_reply_endpoints` (UNIQUE `organization_id, user_id, endpoint_id`) = grant explícito “usuário X pode responder por endpoint Y”.
+- `fn_guard_user_reply_endpoint` (definição atual no banco): valida (1) usuário pertence à org, (2) endpoint é da org e `channel='whatsapp'`, (3) `fn_is_sales_eligible_endpoint` → endpoint ativo vinculado a Route ativa `inbox_key='sales'`. **Não** compara `NEW.user_id` com `communication_endpoints.assigned_user_id`.
+- Seleção/precedência: `_shared/reply-endpoint-selection.ts` (manual > derived da última mensagem válida > `messaging_lines.active_endpoint_id`), com o servidor como fonte de verdade; composer filtra o pool por `purpose` (`src/lib/composerEndpoint.ts` + `SALES_PURPOSES`).
+
+META_PERSONAL_OUTBOUND_AUTH_MODEL=mesma thread + vários endpoints possíveis + **autorização por grant em `user_reply_endpoints`** (o número pessoal apareceria no “Responder por” somente de quem tem grant). A intenção era exatamente essa; o que **falta** é a regra que amarra o grant ao dono: hoje nada impede conceder o número pessoal do Junior para a Maria, porque `assigned_user_id` não é consultado em lugar nenhum do fluxo WhatsApp.
+
+## 5. Visibilidade da thread
+
+Não existe ACL por endpoint dentro da thread, nem escopo por mensagem: RLS de `message_threads`/`messages` é por organização (+ filtros de UI por `business_context`/`assigned_user_id` da thread, que é o **responsável do CRM**, não o dono do número). Nenhuma policy referencia `communication_endpoints.assigned_user_id`.
+
+META_PERSONAL_THREAD_VISIBILITY_MODEL=conversa compartilhada (todo o time Comercial vê o histórico completo, inclusive as mensagens trocadas pelo número pessoal); a restrição é **apenas sobre qual número cada usuário pode usar para responder**.
+
+## 6. Inbound por endpoint pessoal — intenção vs implementação
+
+DESIGN INTENDED: `business_context='sales'` — comprovado por dois artefatos independentes: o backfill `20260703181459:62` (`'vendor_personal' → 'sales'`) e `get_default_queue_for_thread` (fila `commercial`).
+
+CURRENT IMPLEMENTATION GAP: o trigger em produção não tem a branch `vendor_personal`; cai no `ELSIF v_purpose IS NOT NULL THEN 'other'`. Some, portanto, de /messages e de /inbox. Somado ao `isSalesEndpoint()` que não reconhece `vendor_personal`, é **incompletude do modelo pessoal** (nunca finalizado) — não uma decisão de separar o canal.
+
+## 7. `communication_endpoints.assigned_user_id`
+
+ASSIGNED_USER_ID_INTENT=dono operacional do número (criada na mesma migração de `vendor_personal`, com FK para `users` e `ON DELETE SET NULL`; consumida por `get_default_queue_for_thread` como `suggested_user_id`).
+
+ASSIGNED_USER_ID_META_USAGE_TODAY=**nenhuma**. `meta-whatsapp-connect` grava só `purpose` (linhas 626 e 1014); a busca por `assigned_user_id` fora de contatos/threads só retorna as funções de telefonia (`telephony-*`). Nem inbound nem outbound de WhatsApp leem a coluna, e não há trigger validando org/atividade do usuário apontado.
+
+## 8. `messaging_lines.owner_user_id`
+
+Adicionada em `supabase/migrations/20260812044651_...sql:8-11` (Fase 1 — Routes V2), nullable, **sem backfill** (o backfill só preencheu `inbox_key`/`route_slug`) e **sem nenhum leitor** em código ou função. É placeholder de “Route pessoal”, posterior ao desenho Meta de 2026-05.
+
+OWNER_USER_ID_ORIGINAL_INTENT=marcar uma Route como pertencente a um usuário (ideia exploratória da Fase 1 Routes), nunca ativada.
+
+PERSONAL_LINE_REQUIRED_BY_META_DESIGN=NO — o desenho Meta é **endpoint pessoal dentro da Route Comercial compartilhada**, com autorização por usuário. Criar Routes pessoais no Evolution seria escopo novo, não continuidade do desenho.
+
+## 9. Cenário concreto (pelo desenho Meta original)
+
+Contato João; endpoints: 7067 e 7020 Comercial compartilhados, 9999 pessoal do Junior (`assigned_user_id=Junior`), 8888 pessoal da Maria.
+
+| Evento | Thread | Quem vê | Quem pode responder com qual número |
 |---|---|---|---|
-| Central (40ae…a95f) | sales | sim | bf04ce63… (7067) |
-| Central | customer_service | sim | c09bd713… (7027) |
-| Viagi (b246…896a) | customer_service | sim | 03bdcb91… |
-| Viagi | sales | sim | 34d9ec9d… |
-| Viagi | sales | **não** | 11111111-e701… (piloto) |
+| João envia para 7067 | thread Comercial única de João (`business_context='sales'`), `primary_endpoint_id=7067` | todo o time Comercial | qualquer vendedor por 7067/7020; Junior também por 9999; Maria também por 8888 |
+| Junior responde por 9999 | **mesma** thread; `primary_endpoint_id` rotaciona para 9999 | todo o time | idem acima (o pessoal não “trava” a conversa) |
+| João responde para 9999 | **mesma** thread (identidade não usa endpoint); derived passa a apontar 9999 | todo o time | Junior por 9999; outros por 7067/7020 ou pelo próprio pessoal |
+| Maria abre a conversa | mesma thread, histórico completo visível | todo o time | Maria por 7067/7020/8888 |
+| Maria tenta usar 9999 | mesma thread | — | **bloqueado** (sem grant em `user_reply_endpoints`; deveria ser recusado também por `assigned_user_id ≠ Maria`) |
+| Maria responde por 8888 | mesma thread; rotaciona para 8888 | todo o time | permitido (é o pessoal dela) |
 
-- Inbound Atendimento: não passa pelo gate canônico (condição 1 barra purpose não-vendas); cai no caminho legado por `primary_endpoint_id` e é classificado por `purpose='customer_service'` → `business_context='customer_service'` → escopo do /inbox (`src/hooks/inbox/inboxScope.ts`).
-- Outbound Atendimento: mesma resolução por linha (`dispatch-whatsapp-send`), pool filtrado por `CS_PURPOSES`.
-- Nada no schema impede provider `evolution_api` no Atendimento (constraint de provider aceita). O bloqueio é **de código**: `provision_sales_endpoint` recusa linha não-sales (`PROVISION_NOT_SALES_ROUTE`, linha 151) e `sales-route-operations` filtra `inbox_key='sales'` (linhas 261 e 907).
+## 10. Resultado
 
-EVOLUTION_CAN_ROUTE_TO_CUSTOMER_SERVICE_TODAY=PARTIAL (possível só por SQL manual; nenhuma via UI/RPC)
+- META_VENDOR_PERSONAL_ORIGINAL_INTENT=número pessoal do vendedor dentro do Comercial, dono em `assigned_user_id`
+- META_PERSONAL_EXPECTED_SAME_THREAD=YES
+- META_PERSONAL_ACTUAL_BEHAVIOR_TODAY=thread separada e em limbo (`business_context='other'`, fora de /messages e /inbox), pois `vendor_personal` não é reconhecido por `isSalesEndpoint()` nem pelo trigger de contexto
+- COMMERCIAL_THREAD_KEY=`organization_id + contact_id + channel + business_context='sales'` (+ status aberto); endpoint não é chave
+- META_PERSONAL_OUTBOUND_AUTH_MODEL=mesma thread, múltiplos endpoints, grant por usuário em `user_reply_endpoints` (sem amarração ao dono hoje)
+- META_PERSONAL_THREAD_VISIBILITY_MODEL=thread compartilhada; restrição só no número de resposta; sem ACL por endpoint/mensagem
+- ASSIGNED_USER_ID_INTENT=dono do número pessoal / sugestão de responsável
+- ASSIGNED_USER_ID_META_USAGE_TODAY=nenhuma (Meta não grava; WhatsApp não lê; sem validação)
+- OWNER_USER_ID_ORIGINAL_INTENT=placeholder de Route pessoal na Fase 1 Routes, nunca usado
+- PERSONAL_LINE_REQUIRED_BY_META_DESIGN=NO
+- META_PERSONAL_IMPLEMENTATION_STATUS=PARTIAL (constraint, coluna de dono, pool de purposes, exclusão do Atendimento e fila sugerida existem; roteamento, gravação do dono, autorização por dono e UI não existem)
 
-## 4. Comercial
+**Conclusão: A** — o desenho original do Meta era **MESMA THREAD + restrição de endpoint por usuário**. A hipótese B (thread separada) é contrariada pelo resolver canônico, pelo backfill `vendor_personal → sales` e por `get_default_queue_for_thread`; a única separação observada hoje vem da unique legada por `primary_endpoint_id`, que é justamente o comportamento que o V2 substitui.
 
-Fluxo funcionando: instância Evolution (`evolution_instances`, estado `open` + `owner_number_digits`) → `sales-route-operations` op de link → RPC `provision_sales_endpoint` → cria/reusa `communication_endpoints` → link em `messaging_line_endpoints` → gate canônico + resolver V2 no inbound/outbound.
+### O que falta para terminar o modelo A corretamente (sem implementar agora)
 
-EVOLUTION_CURRENT_FLOW_HARDCODED_TO_COMMERCIAL=YES
+1. **Reconhecer `vendor_personal` como Comercial no inbound**: incluir `vendor_personal` em `isSalesEndpoint()` (`_shared/sales-thread.ts`) — passa a condição 1 do gate e a conversa cai na thread canônica.
+2. **Trigger de contexto**: `fn_message_threads_autofill_business_context` mapear `vendor_personal → 'sales'` (alinha ao backfill de 2026-07-03 e tira a thread do limbo).
+3. **Gravar o dono**: provisionamento (Meta e Evolution) preencher `communication_endpoints.assigned_user_id` quando `purpose='vendor_personal'`, com validação de que o usuário pertence à org e está ativo.
+4. **Amarrar autorização ao dono**: `fn_guard_user_reply_endpoint` recusar grant quando o endpoint é `vendor_personal` e `NEW.user_id <> assigned_user_id`; e criar o grant do dono automaticamente no provisionamento.
+5. **Vínculo de Route**: o endpoint pessoal precisa entrar em `messaging_line_endpoints` da Route `sales` (é o que `fn_is_sales_eligible_endpoint` exige) — **sem** criar Route pessoal e **sem** virar `active_endpoint_id` (número ativo do time continua sendo escolha explícita).
+6. **UI**: expor “Pessoal” + seleção obrigatória de usuário no fluxo de novo número (Meta já tem o valor em dois dialogs; Evolution não tem nada), e o “Responder por” listar o pessoal apenas para o dono (já sai de graça do grant).
+7. **Não mexer** em: threads/endpoints existentes, `owner_user_id` de `messaging_lines`, Atendimento, rotação de número ativo.
 
-Pontos hardcoded:
-- `provision_sales_endpoint`: `IF v_line.inbox_key IS DISTINCT FROM 'sales' THEN RAISE PROVISION_NOT_SALES_ROUTE` (linha 151) e `purpose` fixo `'commercial'` no INSERT do endpoint (linha 235).
-- `supabase/functions/sales-route-operations/index.ts:261` e `:907` — busca a linha apenas com `.eq("inbox_key","sales")`.
-- `src/components/integrations/evolution-whatsapp/EvolutionProvisionPanel.tsx` — texto e ação "vincular ao WhatsApp Comercial", sem escolha de destino; erro `SALES_ROUTE_NOT_FOUND`.
-- `rotate_messaging_line_endpoint`: `ROTATION_NOT_SALES_ROUTE` (só troca ativo em rota de vendas).
-- `fn_is_sales_eligible_endpoint` / `fn_guard_user_reply_endpoint`: permissão por usuário só existe para Comercial.
-
-## 5. Contrato de destino proposto
-
-```text
-destination = { type: "commercial" | "customer_service" | "personal", userId?: uuid }
-```
-
-Mapeamento no modelo atual (sem inventar conceito novo):
-
-| destino | purpose do endpoint | Route (messaging_lines) | dono |
-|---|---|---|---|
-| commercial | `commercial` | linha `inbox_key='sales'` compartilhada | — |
-| customer_service | `customer_service` | linha `inbox_key='customer_service'` | — |
-| personal | `vendor_personal` | linha `inbox_key='sales'` com `owner_user_id = userId` | `communication_endpoints.assigned_user_id = userId` + grant em `user_reply_endpoints` |
-
-Encaixe: **commercial** encaixa 100%. **customer_service** encaixa no schema, exige generalizar a RPC (hoje bloqueia por `inbox_key`). **personal** reaproveita colunas já existentes (`assigned_user_id`, `owner_user_id`) e a tabela `user_reply_endpoints`; precisa de (a) tratamento de `vendor_personal` no trigger de `business_context` (hoje vira `other` = limbo) e (b) validação de dono. Não é preciso novo `inbox_key` nem nova tabela.
-
-SCHEMA_CHANGE_REQUIRED=SIM, porém mínimo (funções/triggers, sem novas tabelas nem novas colunas).
-
-## 6. UX alvo do Evolution (4 passos)
-
-Passo 1 — destino: cartões `Comercial` / `Atendimento` / `Pessoal`; em Pessoal, select obrigatório de usuário da org. Passo 2 — criar instância. Passo 3 — QR. Passo 4 — quando `open`: ler identidade, criar/reusar endpoint, vincular ao destino escolhido automaticamente, sem "tornar ativo" (rotação continua ação explícita e separada).
-
-## 7. Guardas — já existem vs faltam
-
-Já existem: org correta (`current_user_org_ids` + `can_manage_integrations_in_org`), número normalizado (só dígitos) e lock advisory por org+número, provider-aware (famílias + `PROVISION_ADDRESS_ACTIVE_ON_OTHER_PROVIDER`), posse do número (instância `open` + `owner_number_digits` batendo), endpoint ativo, link sem apagar histórico (reativa a mesma row), `ROTATION_ENDPOINT_IN_USE` impedindo endpoint ativo em duas rotas, desconexão que nunca apaga threads/mensagens, `fn_guard_user_reply_endpoint` validando usuário↔org.
-
-Faltam: validar que o `userId` do destino Pessoal pertence à org e está ativo; impedir reatribuição silenciosa de número pessoal a outro usuário; impedir que um endpoint `customer_service` entre em linha `sales` e vice-versa (hoje a RPC nem chega a comparar purpose vs `inbox_key`); tratamento de `vendor_personal` no trigger de `business_context`.
-
-## 8. Compatibilidade
-
-Nada reclassifica endpoints existentes: todas as mudanças propostas atuam apenas em **novos** vínculos/inserts. Central (7067 Meta comercial, 7020 Evolution comercial, 7020 Meta histórico inativo, 7027 Atendimento) e Viagi permanecem intactos. Sem backfill, sem UPDATE em massa, sem alteração de `active_endpoint_id`.
-
-## 9. Resultado
-
-- META_DESTINATION_MODEL=`communication_endpoints.purpose` escolhido na UI (só commercial/customer_service), sem criar vínculo de Route
-- EVOLUTION_CURRENT_DESTINATION_MODEL=inexistente; sempre Comercial (`purpose='commercial'` fixo na RPC)
-- PERSONAL_NUMBER_MODEL_EXISTS=PARTIAL (colunas e permissões existem; nenhuma regra de roteamento nem UI)
-- CUSTOMER_SERVICE_MODEL_EXISTS=YES (linha `inbox_key='customer_service'` ativa nas duas orgs)
-- EVOLUTION_CAN_ROUTE_TO_COMMERCIAL=YES (100% por UI)
-- EVOLUTION_CAN_ROUTE_TO_CUSTOMER_SERVICE=NO por UI/RPC (PARTIAL só por SQL manual)
-- EVOLUTION_CAN_ROUTE_TO_PERSONAL=NO
-- SCHEMA_CHANGE_REQUIRED=YES (mínimo: RPC generalizada + trigger de `business_context` + guardas; sem novas tabelas/colunas)
-- BACKEND_CHANGE_REQUIRED=YES (`sales-route-operations`, RPC de provisionamento)
-- UI_CHANGE_REQUIRED=YES (passo de destino no Evolution; opcionalmente expor Pessoal no Meta)
-- SAFE_TO_IMPLEMENT=YES, em fases, todas aditivas
-
-| Destino | Meta hoje | Evolution hoje | Backend existe? | UI existe? | O que falta |
-|---|---|---|---|---|---|
-| Comercial | purpose `commercial` (link de Route manual) | completo via `provision_sales_endpoint` | Sim | Sim | nada |
-| Atendimento | purpose `customer_service` (link manual) | não suportado | Parcial (linha existe; RPC bloqueia) | Não | generalizar RPC + destino na UI |
-| Pessoal | não exposto na UI | não suportado | Parcial (colunas + `user_reply_endpoints`) | Não | purpose `vendor_personal` roteável, dono validado, UI |
-
-## Plano mínimo de implementação (por fases, aditivo)
-
-**Fase A — Comercial (nada a fazer)**: apenas incluir o passo de destino na UI com "Comercial" pré-selecionado, mantendo o caminho atual byte-a-byte.
-
-**Fase B — Atendimento**
-1. Migração: nova RPC `provision_line_endpoint(p_organization_id, p_line_id, p_provider, p_address, p_purpose, p_display_name, p_instance_name, p_assigned_user_id)` — cópia endurecida de `provision_sales_endpoint`, aceitando `inbox_key IN ('sales','customer_service')`, gravando `purpose` conforme o destino e recusando purpose incompatível com o `inbox_key` da linha. `provision_sales_endpoint` fica intacta (compat).
-2. `sales-route-operations`: nova op `link_instance_to_destination` que resolve a linha por `inbox_key` derivado do destino e chama a nova RPC. Ops atuais inalteradas.
-3. UI: passo 1 com Comercial/Atendimento.
-
-**Fase C — Pessoal**
-1. Migração: (a) trigger `fn_message_threads_autofill_business_context` passa a mapear `vendor_personal` → `sales` (em vez de `other`), evitando limbo; (b) na nova RPC, destino `personal` exige `p_assigned_user_id` validado contra `user_organizations` + usuário ativo, grava `communication_endpoints.assigned_user_id`, cria/usa linha `inbox_key='sales'` com `owner_user_id = userId`, e insere o grant em `user_reply_endpoints` para esse usuário; (c) guarda impedindo trocar `assigned_user_id` de um endpoint pessoal sem ação explícita.
-2. UI: opção Pessoal + select de usuário obrigatório (usuários da org).
-3. Efeito no "Responder por": o grant já faz o número aparecer só para o dono (`user_reply_endpoints` + `fn_guard_user_reply_endpoint`).
-
-**Fase D — Validação**: smoke por destino (Comercial regressão, Atendimento novo número Evolution caindo em /inbox, Pessoal visível só ao dono), conferindo que os endpoints atuais das duas orgs não mudaram (`purpose`, `is_active`, `active_endpoint_id`).
-
-Nenhuma alteração será feita antes da sua aprovação.
+Nada será implementado antes da sua aprovação.
