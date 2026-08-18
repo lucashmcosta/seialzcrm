@@ -72,6 +72,7 @@ export function AddMetaWhatsAppNumberDialog({
         systemUserToken: "",
         mode: "additional",
         endpointPurpose: purpose,
+        assignedUserId: purpose === "vendor_personal" ? (assignedUserId ?? undefined) : undefined,
         displayName: displayName.trim() || undefined,
         skipMetaValidation: opts.skipMetaValidation,
       });
