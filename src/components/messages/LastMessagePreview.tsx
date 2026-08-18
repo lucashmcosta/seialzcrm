@@ -81,7 +81,7 @@ export function LastMessagePreviewLine({ preview, direction, status, className }
     >
       {isOutbound && <StatusIcon status={status} />}
       <MediaIcon kind={preview.kind} />
-      <span className="truncate whitespace-nowrap">{preview.text}</span>
+      <span className="min-w-0 truncate whitespace-nowrap">{preview.text}</span>
     </p>
   );
 }
