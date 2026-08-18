@@ -40,10 +40,10 @@ Auditoria concluída (leitura de código, funções no banco e dados). Nada impl
 ## Plano técnico (fases, sem implementar agora)
 
 **F1 — Permissão de resposta (nenhum comportamento novo hoje, pois não existe endpoint pessoal)**
-1. Migração: `fn_can_user_use_reply_endpoint(_organization_id, _user_id, _endpoint_id) returns boolean` — true se o endpoint é elegível ao Comercial **e** (`purpose <> 'vendor_personal'` **ou** `assigned_user_id = _user_id` **ou** existe grant em `user_reply_endpoints`). Ajustar `fn_guard_user_reply_endpoint` para aceitar endpoints pessoais (hoje ele só aceita elegíveis ao Comercial — o pessoal passará a ser elegível em F2).
+1. Migração: `fn_can_user_use_reply_endpoint(_organization_id, _user_id, _endpoint_id) returns boolean` — true se o endpoint é elegível ao Comercial **e** (`purpose <> 'vendor_personal'` **ou** `assigned_user_id = _user_id`). Sem cláusula de grant: número pessoal é do dono e de mais ninguém. Ajustar `fn_guard_user_reply_endpoint` para recusar grant em endpoint `vendor_personal` quando `NEW.user_id <> assigned_user_id`.
 2. Backend: `manual-reply-endpoint.ts` chama a nova RPC (erro `REPLY_ENDPOINT_PERSONAL_FORBIDDEN`, 409); `reply-endpoint-selection.ts` aplica a mesma checagem no caminho `derived` e devolve `blocked` em vez de trocar de número.
 3. UI: `allowedForUser` por opção; item 🔒 com rótulo `Pessoal · <nome>`; composer bloqueado nos casos 2 e 3 com os textos acordados.
-4. Testes: casos 1/2/3 + cross-org + endpoint de Atendimento + delegação por grant.
+4. Testes: casos 1/2/3 + cross-org + endpoint de Atendimento + tentativa de grant de número pessoal para outro usuário (deve ser recusada).
 
 **F2 — `vendor_personal` roteável (mesma thread)**
 1. Migração: trigger de `business_context` mapear `vendor_personal → 'sales'`.
