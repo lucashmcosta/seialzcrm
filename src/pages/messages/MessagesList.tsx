@@ -2712,12 +2712,14 @@ function DesktopMessagesList() {
                                   messageNodes: JSX.Element[];
                                 };
                             const segments: Segment[] = [];
-                            // Segmento de bloco corrente por blockIndex: separadores
-                            // de data, notas, activities e eventos de sistema entram
-                            // NELE (marcadores internos) e não encerram o container.
+                            // Um container nasce APENAS na troca real de número
+                            // (endpointBreak) ou quando ainda não há container.
+                            // Separadores de data, notas, activities e eventos de
+                            // sistema entram NELE como marcadores internos.
                             let currentBlock: Extract<Segment, { type: 'block' }> | null = null;
+                            let visualBlockSeq = 0;
                             for (const r of renderedItems) {
-                              if (currentBlock && currentBlock.blockIndex !== r.blockIndex) {
+                              if (currentBlock && r.endpointBreak) {
                                 currentBlock = null;
                               }
 
@@ -2744,17 +2746,19 @@ function DesktopMessagesList() {
                               } else {
                                 const created: Extract<Segment, { type: 'block' }> = {
                                   type: 'block',
-                                  key: `block-${r.blockIndex}-${r.key}`,
-                                  blockIndex: r.blockIndex,
+                                  key: `block-${visualBlockSeq}-${r.key}`,
+                                  blockIndex: visualBlockSeq,
                                   hasInbound: isInbound,
                                   hasOutbound: !isInbound,
                                   headerNodes: r.blockHeader ? [r.blockHeader] : [],
                                   messageNodes: [r.renderItem],
                                 };
+                                visualBlockSeq += 1;
                                 segments.push(created);
                                 currentBlock = created;
                               }
                             }
+
 
 
                             // Colapso automático de containers encerrados: o último
