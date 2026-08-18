@@ -117,6 +117,8 @@ import { AttachMediaDialog, type AttachMedia } from '@/components/documents/Atta
 import { isAttachableMedia } from '@/lib/mediaToFile';
 import { computeMessageGroups, computeContextBlocks, type GroupingItem } from '@/lib/messageGrouping';
 import { TimelineBlock } from '@/components/messages/timeline/TimelineBlock';
+import { useResizableListWidth } from '@/hooks/useResizableListWidth';
+
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
@@ -285,7 +287,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
       <Avatar fallbackText={value.contact_name} size="md" />
       <div className="flex flex-col min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
@@ -303,7 +305,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
           </div>
-          <span className="shrink-0 text-[11px] text-muted-foreground leading-5">
+          <span className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground leading-5">
             {formatRelativeTime(value.updated_at, locale)}
           </span>
         </div>
@@ -1901,12 +1903,23 @@ function DesktopMessagesList() {
     }
   }, [permissions.viewAllThreads, effectiveFilter]);
 
+  // Largura ajustável da coluna de conversas (apresentacional, persistida)
+  const listResize = useResizableListWidth({
+    storageKey: 'seialz:commercial:list-width',
+    defaultWidth: 400,
+    minWidth: 320,
+    maxWidth: 520,
+  });
 
   return (
     <Layout>
       <div className="h-screen overflow-hidden flex">
-        {/* Left Panel - Chat List (fixed width) */}
-        <div className="w-[400px] flex-shrink-0 border-r border-border flex flex-col bg-card h-full overflow-hidden">
+        {/* Left Panel - Chat List (largura ajustável) */}
+        <div
+          style={{ width: listResize.width }}
+          className="flex-shrink-0 flex flex-col bg-card h-full overflow-hidden"
+        >
+
             {/* Header */}
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
@@ -2081,6 +2094,27 @@ function DesktopMessagesList() {
               )}
             </ScrollArea>
         </div>
+
+        {/* Divisória redimensionável (apresentacional) */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Ajustar largura da lista de conversas"
+          tabIndex={0}
+          onPointerDown={listResize.startResize}
+          onDoubleClick={listResize.reset}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowLeft') { e.preventDefault(); listResize.nudge(-16); }
+            if (e.key === 'ArrowRight') { e.preventDefault(); listResize.nudge(16); }
+          }}
+          className={cn(
+            'relative w-1.5 shrink-0 h-full cursor-col-resize bg-border/60 transition-colors',
+            'hover:bg-primary/40 focus-visible:outline-none focus-visible:bg-primary/50',
+            listResize.isResizing && 'bg-primary/60',
+          )}
+        />
+
+
 
         {/* Right Panel - Chat */}
         <div className="flex-1 flex flex-col bg-background h-full overflow-hidden">
