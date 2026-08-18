@@ -4,7 +4,7 @@
 // Não renderiza nada quando a feature está OFF / fora do escopo Comercial.
 // ============================================================================
 
-import { CaretDown, Check, SpinnerGap, WhatsappLogo } from '@phosphor-icons/react';
+import { CaretDown, Check, Lock, SpinnerGap, WhatsappLogo } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -20,6 +20,10 @@ import { last4, providerLabel } from './RouteIndicators';
 import type { ManualReplyOption, ManualReplyState } from '@/hooks/messages/useManualReplyEndpoint';
 
 function optionLabel(option: ManualReplyOption): string {
+  // Números pessoais mostram o contexto do dono — nunca escondemos o endpoint.
+  if (option.isPersonal) {
+    return `••••${last4(option.address)} · Pessoal${option.ownerName ? ` · ${option.ownerName}` : ''}`;
+  }
   return `••••${last4(option.address)} · ${providerLabel(option.provider)}`;
 }
 
@@ -47,6 +51,7 @@ export function ManualReplySelector({ state }: { state: ManualReplyState }) {
 
   const current = state.selectedOption;
   const isManual = state.selectionSource === 'manual';
+  const currentBlocked = !!current && !current.allowedForUser;
   const currentLabel = current
     ? optionLabel(current)
     : state.selectedEndpointId
@@ -79,7 +84,11 @@ export function ManualReplySelector({ state }: { state: ManualReplyState }) {
               current && 'text-foreground',
             )}
           >
-            <WhatsappLogo size={12} weight="fill" className="text-emerald-500" />
+            {currentBlocked ? (
+              <Lock size={12} weight="fill" className="text-amber-500" />
+            ) : (
+              <WhatsappLogo size={12} weight="fill" className="text-emerald-500" />
+            )}
             {currentLabel}
             <CaretDown size={10} />
           </Button>
@@ -109,9 +118,18 @@ export function ManualReplySelector({ state }: { state: ManualReplyState }) {
           {state.options.map((option) => (
             <DropdownMenuItem
               key={option.endpointId}
-              disabled={!option.available}
+              disabled={!option.available || !option.allowedForUser}
               className="text-xs"
               onSelect={() => {
+                if (!option.allowedForUser) {
+                  toast({
+                    variant: 'destructive',
+                    description: option.isPersonal
+                      ? 'Este número é pessoal de outro usuário. Escolha um número permitido para responder.'
+                      : 'Você não tem permissão para responder por este número.',
+                  });
+                  return;
+                }
                 if (!option.available) {
                   toast({
                     variant: 'destructive',
@@ -125,9 +143,15 @@ export function ManualReplySelector({ state }: { state: ManualReplyState }) {
                 );
               }}
             >
-              <WhatsappLogo size={12} weight="fill" className="text-emerald-500" />
+              {option.allowedForUser ? (
+                <WhatsappLogo size={12} weight="fill" className="text-emerald-500" />
+              ) : (
+                <Lock size={12} weight="fill" className="text-amber-500" />
+              )}
               <span className="flex-1">{optionLabel(option)}</span>
-              {!option.available ? (
+              {!option.allowedForUser ? (
+                <span className="text-[10px] text-muted-foreground">bloqueado</span>
+              ) : !option.available ? (
                 <span className="text-[10px] text-muted-foreground">indisponível</span>
               ) : option.endpointId === current?.endpointId ? (
                 <Check size={12} />
@@ -136,6 +160,13 @@ export function ManualReplySelector({ state }: { state: ManualReplyState }) {
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+      {state.composerBlocked ? (
+        <span className="text-[11px] text-amber-700 dark:text-amber-400">
+          {state.composerBlockReason === 'none_allowed'
+            ? 'Nenhum número permitido para responder nesta conversa.'
+            : 'Escolha um número permitido para responder.'}
+        </span>
+      ) : null}
     </div>
   );
 }
