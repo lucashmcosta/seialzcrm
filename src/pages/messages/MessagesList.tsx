@@ -306,7 +306,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
             )}
           </div>
           <span className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground leading-5">
-            {formatRelativeTime(value.updated_at, locale)}
+            TESTE-HORA
           </span>
         </div>
         {/* Preview da última mensagem válida (conceito WhatsApp) */}
