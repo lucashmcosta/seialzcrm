@@ -2325,10 +2325,10 @@ function DesktopMessagesList() {
                             })();
 
                             let lastDateKey: string | null = null;
-                            // O cabeçalho do container é emitido na PRIMEIRA
-                            // mensagem de cada bloco (o início do bloco pode
-                            // cair em uma nota/evento, que não leva cabeçalho).
-                            const headerEmittedBlocks = new Set<number>();
+                            // O cabeçalho é calculado para toda mensagem; a fase
+                            // de segmentos decide onde ele é realmente exibido
+                            // (apenas na criação de um container visual).
+
 
 
                             const renderedItems = chatItems.map((item, itemIndex) => {
