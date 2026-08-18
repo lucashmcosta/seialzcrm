@@ -13186,6 +13186,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      fn_default_inbound_settings: {
+        Args: { p_organization_id: string; p_purpose: string }
+        Returns: Json
+      }
       fn_emit_nammux_contact_updated: {
         Args: { _contact_id: string }
         Returns: undefined
