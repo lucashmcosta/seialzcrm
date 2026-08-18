@@ -130,6 +130,23 @@ export async function resolveManualReplyEndpoint(
     );
   }
 
+  // 3.1 Permissão do usuário sobre ESTE endpoint (Fase 2 — números pessoais).
+  //     Comercial: liberado a todo usuário da org. `vendor_personal`: somente
+  //     `communication_endpoints.assigned_user_id`. Sem grants, fail-closed.
+  const allowed = await canUserUseReplyEndpoint(supabase, {
+    organizationId: input.organizationId,
+    userId: input.userId,
+    endpointId: manualId,
+  });
+  if (!allowed) {
+    return fail(
+      "REPLY_ENDPOINT_PERSONAL_FORBIDDEN",
+      "Este número é pessoal de outro usuário. Escolha um número permitido para responder.",
+    );
+  }
+
+
+
   // 4. Endpoint em si: org, canal, atividade, provider conhecido.
   const { data: ep, error: epErr } = await supabase
     .from("communication_endpoints")
