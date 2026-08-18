@@ -109,3 +109,40 @@ export async function fetchLastValidMessageEndpointId(
   const row = (data ?? null) as LastValidMessageRow | null;
   return { endpointId: row?.endpoint_id ?? null, error: null };
 }
+
+// ============================================================================
+// Fase 2 — Autorização de resposta por endpoint (números pessoais).
+//
+// Contrato aprovado:
+//   • endpoint comercial       → qualquer usuário do Comercial da org;
+//   • endpoint vendor_personal → SOMENTE communication_endpoints.assigned_user_id;
+//   • `user_reply_endpoints` NÃO participa do modelo de números pessoais.
+//
+// A decisão é do banco (`fn_can_user_use_reply_endpoint`, SECURITY DEFINER), que
+// é a MESMA função consultada pela UI. Fail-closed: erro de lookup ⇒ negado.
+// ============================================================================
+
+export const REPLY_ENDPOINT_PERSONAL_FORBIDDEN = "REPLY_ENDPOINT_PERSONAL_FORBIDDEN";
+export const REPLY_ENDPOINT_NONE_ALLOWED = "REPLY_ENDPOINT_NONE_ALLOWED";
+
+// deno-lint-ignore no-explicit-any
+type RpcDb = { rpc: (fn: string, args: Record<string, unknown>) => Promise<any> };
+
+export async function canUserUseReplyEndpoint(
+  db: RpcDb,
+  args: { organizationId: string; userId: string; endpointId: string },
+): Promise<boolean> {
+  const { data, error } = await db.rpc("fn_can_user_use_reply_endpoint", {
+    _organization_id: args.organizationId,
+    _user_id: args.userId,
+    _endpoint_id: args.endpointId,
+  });
+  if (error) {
+    console.error("[reply-endpoint] permission_lookup_error", {
+      endpoint_id: args.endpointId,
+      error,
+    });
+    return false;
+  }
+  return data === true;
+}
