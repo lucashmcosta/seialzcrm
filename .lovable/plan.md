@@ -63,4 +63,4 @@ Testes a ajustar em `tests/message-grouping.test.ts`: os casos "troca de operado
 ## Verificação
 
 - `tsgo` limpo e suíte de testes atualizada.
-- Validação visual sua em `/commercial` na thread do Bruno: um único container por número/dia, sem cabeçalhos 7020 repetidos.
+- Validação visual sua em `/commercial` na thread do Bruno: um único container por número (7020 / 7067), separador de data dentro do container, sem cabeçalhos 7020 repetidos.
