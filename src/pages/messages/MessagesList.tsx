@@ -1302,11 +1302,28 @@ function DesktopMessagesList() {
     }
   };
 
+  // Fase 2 — números pessoais: o composer é bloqueado quando o endpoint
+  // selecionado (manual ou derivado) não é permitido ao usuário atual. A troca
+  // de número é sempre explícita; o backend revalida no envio.
+  const replyEndpointBlocked = manualReply.composerBlocked;
+  const guardReplyEndpointAllowed = () => {
+    if (!replyEndpointBlocked) return true;
+    toast({
+      variant: 'destructive',
+      description:
+        manualReply.composerBlockReason === 'none_allowed'
+          ? 'Nenhum número permitido para responder nesta conversa.'
+          : 'Escolha um número permitido para responder.',
+    });
+    return false;
+  };
+
   const handleSendMessage = async () => {
     if (isNoteMode) {
       handleSendNote();
       return;
     }
+    if (!guardReplyEndpointAllowed()) return;
     if (!organization?.id || !messageText.trim() || !selectedThread) return;
 
     // Gate janela 24h: bloqueia envio livre APENAS quando o endpoint efetivo
@@ -1559,6 +1576,7 @@ function DesktopMessagesList() {
     opts?: { forceMediaType?: 'document' | 'image' | 'audio' | 'video' },
   ) => {
     if (!organization?.id || !selectedThread) return;
+    if (!guardReplyEndpointAllowed()) return;
 
     setMediaUploading(true);
     setShowMediaPreview(false);
@@ -2930,6 +2948,8 @@ function DesktopMessagesList() {
                                 ref={textareaRef}
                                 placeholder={outOfWindow
                                   ? outOfWindowCopy
+                                  : replyEndpointBlocked && !isNoteMode
+                                  ? (manualReply.composerBlockedPlaceholder ?? 'Escolha um número permitido para responder.')
                                   : isNoteMode
                                     ? (locale === 'pt-BR' ? 'Escreva uma nota interna...' : 'Write an internal note...')
                                     : (locale === 'pt-BR' ? "Digite uma mensagem ou '/' para respostas rápidas" : "Type a message or '/' for quick replies")}
@@ -2982,7 +3002,7 @@ function DesktopMessagesList() {
                                   }
                                 }}
                                 rows={1}
-                                disabled={outOfWindow}
+                                disabled={outOfWindow || (replyEndpointBlocked && !isNoteMode)}
                                 className={`w-full resize-none min-h-[40px] max-h-[150px] pr-10 ${textareaOverflow ? 'overflow-y-auto' : 'overflow-hidden'}`}
                               />
 
@@ -3028,7 +3048,12 @@ function DesktopMessagesList() {
                             </div>
                             <Button
                               onClick={handleSendMessage}
-                              disabled={outOfWindow || submitting || !messageText.trim()}
+                              disabled={
+                                outOfWindow ||
+                                submitting ||
+                                !messageText.trim() ||
+                                (replyEndpointBlocked && !isNoteMode)
+                              }
                               size="icon"
                               className={cn(
                                 "shrink-0",
