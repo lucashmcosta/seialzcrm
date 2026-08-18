@@ -16,10 +16,10 @@ Auditoria concluída (leitura de código, funções no banco e dados). Nada impl
 2. Visibilidade inalterada: todo o time Comercial lê a conversa inteira. Sem ACL por mensagem, sem inbox pessoal, sem Route pessoal.
 3. Autorização de **resposta** por endpoint:
    - endpoint `commercial` → permitido a qualquer usuário do Comercial (como hoje);
-   - endpoint `vendor_personal` → permitido **exclusivamente** ao usuário em `communication_endpoints.assigned_user_id`. Não há delegação: grants em `user_reply_endpoints` não concedem acesso a número pessoal de outro usuário.
+   - endpoint `vendor_personal` → permitido **exclusivamente** ao usuário em `communication_endpoints.assigned_user_id`. **Endpoint `vendor_personal` NÃO utiliza grants**: qualquer tentativa de criar grant em `user_reply_endpoints` para um endpoint pessoal é recusada, e `user_reply_endpoints` deixa de participar do modelo de números pessoais. A autorização vem exclusivamente de `assigned_user_id`.
 4. Composer:
    - **Caso 1** último endpoint permitido → seleção derived automática, composer liberado;
-   - **Caso 2** último endpoint é pessoal de outro → seletor mostra `🔒 ••••9999 · Pessoal · Junior` (contexto, não selecionável), composer **bloqueado**, placeholder "Escolha um número permitido para responder."; nenhuma troca automática;
+   - **Caso 2** último endpoint é pessoal de outro → o contexto da última mensagem **permanece visível na thread** e o seletor continua mostrando `🔒 9999 · Pessoal · Junior` (contexto, não selecionável). Thread e histórico ficam exatamente iguais; apenas o composer é **bloqueado**, com placeholder "Escolha um número permitido para responder." O composer só libera após o usuário escolher explicitamente um endpoint permitido. Não esconder o endpoint, não limpar o contexto, nunca trocar de número automaticamente;
    - **Caso 3** nenhum endpoint permitido → composer bloqueado com "Você não possui nenhum número autorizado para responder esta conversa."
 5. Backend é a autoridade: em `derived` ele reconsulta a última mensagem **e** revalida a permissão do usuário sobre aquele endpoint; se não permitido, recusa (nunca escolhe outro número).
 
