@@ -53,6 +53,7 @@ function mapRpcToChatThread(row: RpcThreadRow): ChatThread {
     contact_name: row.contact_name || 'Desconhecido',
     contact_phone: row.contact_phone,
     last_message: row.last_message_content || '...',
+    last_message_id: row.last_message_id ?? null,
     last_message_direction: row.last_message_direction,
     updated_at: row.updated_at,
     last_message_at: row.last_message_at,
