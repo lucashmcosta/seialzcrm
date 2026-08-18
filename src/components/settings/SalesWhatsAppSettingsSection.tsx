@@ -307,6 +307,20 @@ export function SalesWhatsAppSettingsSection() {
                     <span className="flex flex-1 flex-wrap items-center gap-2">
                       <ProviderChip provider={ep.providerRaw} />
                       <StateChip ok={state.ok} label={state.label} title={blockedTitle} />
+                      {/* Destino do número (apresentação; fonte: purpose). */}
+                      {ep.purpose === 'vendor_personal' ? (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          Pessoal{ep.assignedUserName ? ` · ${ep.assignedUserName}` : ''}
+                        </Badge>
+                      ) : ep.purpose === 'customer_service' || ep.inboxKey === 'customer_service' ? (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          Atendimento
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          Comercial
+                        </Badge>
+                      )}
                       {ep.isRouteActive && (
                         <Badge
                           variant="secondary"
