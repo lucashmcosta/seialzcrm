@@ -27,6 +27,7 @@ import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDial
 import { NammuxDialog } from '@/components/integrations/nammux/NammuxDialog';
 import { MetaWhatsAppCloudDialog } from '@/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog';
 import { EvolutionWhatsAppDialog } from '@/components/integrations/evolution-whatsapp/EvolutionWhatsAppDialog';
+import { EvolutionIntegrationCard } from '@/components/integrations/evolution-whatsapp/EvolutionIntegrationCard';
 import { AIProviderCard } from './AIProviderCard';
 import { useAIProviders } from '@/hooks/useAIProviders';
 import { usePermissions } from '@/hooks/usePermissions';
