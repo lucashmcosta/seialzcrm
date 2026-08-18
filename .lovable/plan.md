@@ -16,7 +16,7 @@ Auditoria concluída (leitura de código, funções no banco e dados). Nada impl
 2. Visibilidade inalterada: todo o time Comercial lê a conversa inteira. Sem ACL por mensagem, sem inbox pessoal, sem Route pessoal.
 3. Autorização de **resposta** por endpoint:
    - endpoint `commercial` → permitido a qualquer usuário do Comercial (como hoje);
-   - endpoint `vendor_personal` → permitido **somente** a `communication_endpoints.assigned_user_id`, e adicionalmente a quem tiver grant explícito em `user_reply_endpoints` (delegação consciente).
+   - endpoint `vendor_personal` → permitido **exclusivamente** ao usuário em `communication_endpoints.assigned_user_id`. Não há delegação: grants em `user_reply_endpoints` não concedem acesso a número pessoal de outro usuário.
 4. Composer:
    - **Caso 1** último endpoint permitido → seleção derived automática, composer liberado;
    - **Caso 2** último endpoint é pessoal de outro → seletor mostra `🔒 ••••9999 · Pessoal · Junior` (contexto, não selecionável), composer **bloqueado**, placeholder "Escolha um número permitido para responder."; nenhuma troca automática;
