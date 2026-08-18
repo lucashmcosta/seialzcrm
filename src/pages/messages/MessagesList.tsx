@@ -2388,7 +2388,7 @@ function DesktopMessagesList() {
                                         </>
                                       )}
                                     </div>
-                                    <div className="h-px bg-border/30 mt-1.5 mb-2" />
+                                    <div className="h-px bg-border/50 mt-1.5 mb-2" />
                                   </div>
                                 );
 
