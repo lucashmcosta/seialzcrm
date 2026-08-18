@@ -2710,28 +2710,37 @@ function DesktopMessagesList() {
                                   messageNodes: JSX.Element[];
                                 };
                             const segments: Segment[] = [];
+                            // Segmento de bloco corrente por blockIndex: separadores
+                            // de data, notas, activities e eventos de sistema entram
+                            // NELE (marcadores internos) e não encerram o container.
+                            let currentBlock: Extract<Segment, { type: 'block' }> | null = null;
                             for (const r of renderedItems) {
-                              const loose: JSX.Element[] = [];
-                              if (r.separator) loose.push(r.separator);
-                              
-                              if (loose.length) {
-                                segments.push({ type: 'loose', key: `loose-${r.key}`, nodes: loose });
+                              if (currentBlock && currentBlock.blockIndex !== r.blockIndex) {
+                                currentBlock = null;
+                              }
+
+                              if (r.separator) {
+                                if (currentBlock) currentBlock.messageNodes.push(r.separator);
+                                else segments.push({ type: 'loose', key: `loose-${r.key}`, nodes: [r.separator] });
                               }
 
                               const isInsideCard = r.kind === 'message';
                               if (!isInsideCard) {
-                                segments.push({ type: 'loose', key: `item-${r.key}`, nodes: [r.renderItem] });
+                                if (currentBlock) currentBlock.messageNodes.push(r.renderItem);
+                                else segments.push({ type: 'loose', key: `item-${r.key}`, nodes: [r.renderItem] });
                                 continue;
                               }
 
                               const isInbound = r.direction === 'inbound';
-                              const last = segments[segments.length - 1];
-                              if (last && last.type === 'block' && last.blockIndex === r.blockIndex) {
-                                last.messageNodes.push(r.renderItem);
-                                last.hasInbound = last.hasInbound || isInbound;
-                                last.hasOutbound = last.hasOutbound || !isInbound;
+                              if (currentBlock) {
+                                currentBlock.messageNodes.push(r.renderItem);
+                                currentBlock.hasInbound = currentBlock.hasInbound || isInbound;
+                                currentBlock.hasOutbound = currentBlock.hasOutbound || !isInbound;
+                                if (r.blockHeader && currentBlock.headerNodes.length === 0) {
+                                  currentBlock.headerNodes.push(r.blockHeader);
+                                }
                               } else {
-                                segments.push({
+                                const created: Extract<Segment, { type: 'block' }> = {
                                   type: 'block',
                                   key: `block-${r.blockIndex}-${r.key}`,
                                   blockIndex: r.blockIndex,
@@ -2739,9 +2748,12 @@ function DesktopMessagesList() {
                                   hasOutbound: !isInbound,
                                   headerNodes: r.blockHeader ? [r.blockHeader] : [],
                                   messageNodes: [r.renderItem],
-                                });
+                                };
+                                segments.push(created);
+                                currentBlock = created;
                               }
                             }
+
 
                             // Colapso automático de containers encerrados: o último
                             // container (atual) permanece sempre expandido.
