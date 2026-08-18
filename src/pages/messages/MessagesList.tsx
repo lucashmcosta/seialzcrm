@@ -2362,10 +2362,12 @@ function DesktopMessagesList() {
                               // Puramente visual — nenhum dado novo é buscado.
                               let blockHeader: JSX.Element | null = null;
                               if (
-                                block.isBlockStart &&
+                                !headerEmittedBlocks.has(block.blockIndex) &&
                                 item._type === 'message' &&
                                 descriptor?.kind === 'message'
                               ) {
+                                headerEmittedBlocks.add(block.blockIndex);
+
                                 const epId = descriptor.endpointId ?? null;
                                 const epAddress = epId ? endpointNumbers[epId]?.address ?? null : null;
                                 const epProvider = epId ? endpointNumbers[epId]?.provider ?? null : null;
