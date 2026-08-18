@@ -127,13 +127,12 @@ Escopo proposto: **somente a Central (29 contatos sem nenhuma oportunidade)**, a
 
 ## Confirmações
 - NOVA_LOGICA_EVOLUTION=NO (nenhuma função de webhook é alterada)
+- PROVIDER_DEPENDENT_LOOKUP=NO (helper provider-agnóstico)
 - FUTURE_MIGRATIONS_NEEDED_PER_NUMBER=NO (herança acontece no provisionamento)
 - SCHEMA_CHANGE_REQUIRED=YES (apenas `CREATE OR REPLACE` da RPC de provisionamento + novo helper; nenhuma tabela ou coluna alterada)
-
 - META_ENDPOINTS_TOUCHED=NO
 - ACTIVE_ENDPOINT_CHANGE=NO
 - ATENDIMENTO_CHANGE=NO
-- BACKFILL_VIAGI_INCLUDED=NO (a confirmar se você quiser incluir)
+- BACKFILL_SCOPE=CENTRAL_ONLY
+- BACKFILL_VIAGI_INCLUDED=NO
 
-## Pergunta aberta
-Backfill deve cobrir também os 264 contatos do piloto Viagi (julho), ou apenas a Central?
