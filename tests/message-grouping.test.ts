@@ -98,7 +98,7 @@ import { computeContextBlocks } from '../src/lib/messageGrouping';
 const starts = (items: GroupingItem[]) => computeContextBlocks(items).map((b) => b.isBlockStart);
 
 describe('computeContextBlocks', () => {
-  it('mantém um único bloco para o mesmo operador/número/provider', () => {
+  it('mantém um único bloco para o mesmo número', () => {
     const base = { endpointId: 'e1', provider: 'meta_cloud_api' };
     expect(starts([msg(base), msg({ ...base, timestamp: T0 + 1000 })])).toEqual([true, false]);
   });
@@ -111,49 +111,36 @@ describe('computeContextBlocks', () => {
     expect(starts([msg(), msg({ direction: 'inbound', senderId: null, senderType: null })])).toEqual([true, false]);
   });
 
-  it('inbound entre duas outbound do mesmo operador mantém o cartão', () => {
-    expect(
-      starts([
-        msg(),
-        msg({ direction: 'inbound', senderId: null, senderType: null, timestamp: T0 + 1000 }),
-        msg({ timestamp: T0 + 2000 }),
-      ]),
-    ).toEqual([true, false, false]);
+  it('troca de operador NÃO abre novo bloco', () => {
+    expect(starts([msg(), msg({ senderId: 'u2' })])).toEqual([true, false]);
   });
 
-  it('troca de operador abre novo bloco', () => {
-    expect(starts([msg(), msg({ senderId: 'u2' })])).toEqual([true, true]);
+  it('sender_user_id ausente NÃO abre novo bloco', () => {
+    expect(starts([msg({ senderId: null }), msg({ senderId: 'u1' })])).toEqual([true, false]);
   });
 
-  it('troca de operador através de um inbound abre novo bloco', () => {
-    expect(
-      starts([
-        msg(),
-        msg({ direction: 'inbound', senderId: null, senderType: null }),
-        msg({ senderId: 'u2' }),
-      ]),
-    ).toEqual([true, false, true]);
+  it('entrada de IA NÃO abre novo bloco', () => {
+    expect(starts([msg(), msg({ senderType: 'agent', senderId: 'a1' })])).toEqual([true, false]);
   });
 
-  it('entrada de IA abre novo bloco', () => {
-    expect(starts([msg(), msg({ senderType: 'agent', senderId: 'a1' })])).toEqual([true, true]);
+  it('troca de endpoint_id sem troca de número NÃO abre novo bloco', () => {
+    expect(starts([msg({ endpointId: 'e1' }), msg({ endpointId: 'e2' })])).toEqual([true, false]);
   });
 
-
-  it('troca de endpoint abre novo bloco', () => {
-    expect(starts([msg({ endpointId: 'e1' }), msg({ endpointId: 'e2' })])).toEqual([true, true]);
-  });
-
-  it('troca de provider abre novo bloco', () => {
+  it('troca de provider NÃO abre novo bloco', () => {
     expect(
       starts([
         msg({ endpointId: 'e1', provider: 'meta_cloud_api' }),
         msg({ endpointId: 'e1', provider: 'evolution_api' }),
       ]),
-    ).toEqual([true, true]);
+    ).toEqual([true, false]);
   });
 
-  it('evento de sistema e nota interna são blocos próprios', () => {
+  it('virada de dia NÃO abre novo bloco', () => {
+    expect(starts([msg(), msg({ dateBreak: true })])).toEqual([true, false]);
+  });
+
+  it('nota interna e evento de sistema NÃO abrem novo bloco', () => {
     const r = computeContextBlocks([
       msg(),
       { ...msg(), kind: 'system' },
@@ -161,15 +148,18 @@ describe('computeContextBlocks', () => {
       { ...msg(), kind: 'note', direction: 'internal' },
       msg(),
     ]);
-    expect(r.map((b) => b.isBlockStart)).toEqual([true, true, true, true, true]);
-    expect(r.map((b) => b.isBlockEnd)).toEqual([true, true, true, true, true]);
-    expect(r.map((b) => b.blockIndex)).toEqual([0, 1, 2, 3, 4]);
+    expect(r.map((b) => b.isBlockStart)).toEqual([true, false, false, false, false]);
+    expect(r.map((b) => b.blockIndex)).toEqual([0, 0, 0, 0, 0]);
   });
 
-  it('separador de data e troca de número abrem novo bloco', () => {
-    expect(starts([msg(), msg({ dateBreak: true }), msg({ endpointBreak: true })])).toEqual([true, true, true]);
+  it('troca real de número (endpointBreak) abre novo bloco', () => {
+    const r = computeContextBlocks([msg(), msg({ endpointBreak: true }), msg()]);
+    expect(r.map((b) => b.isBlockStart)).toEqual([true, true, false]);
+    expect(r.map((b) => b.blockIndex)).toEqual([0, 1, 1]);
+    expect(r.map((b) => b.isBlockEnd)).toEqual([true, false, true]);
   });
 });
+
 
 describe('resolveBlockCollapseByHeight', () => {
   const h = (n: number, px: number) => Array.from({ length: n }, () => px);
