@@ -2388,7 +2388,7 @@ function DesktopMessagesList() {
                                         </>
                                       )}
                                     </div>
-                                    <div className="h-px bg-border/50 mt-1.5 mb-2" />
+                                    <div className="h-px bg-border/70 mt-1.5 mb-2" />
                                   </div>
                                 );
 
@@ -2647,21 +2647,31 @@ function DesktopMessagesList() {
                                       <MessageFailureInline errorCode={message.error_code} />
                                     )}
 
-                                    {/* Footer — apenas horário/status no fim do grupo
-                                        (identidade fica no cabeçalho do bloco;
-                                         áudio-only renderiza dentro do player) */}
-                                    {!(message.media_type === 'audio') && isGroupEnd && (
-                                      <div className="mt-1 flex items-center justify-end gap-1">
-                                        <span className="text-[11px] leading-[14px] text-muted-foreground/70 whitespace-nowrap">
-                                          {new Date(message.sent_at).toLocaleTimeString(locale, {
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                            hour12: false,
-                                          })}
-                                        </span>
-                                        {isOutbound && renderStatusIcon(message)}
-                                      </div>
-                                    )}
+                                    {/* Footer — operador humano (quando houver), horário e status
+                                        no fim do grupo (áudio-only renderiza dentro do player) */}
+                                    {!(message.media_type === 'audio') && isGroupEnd && (() => {
+                                      const humanSenderName =
+                                        isOutbound &&
+                                        message.sender_type === 'user' &&
+                                        message.sender_user_id &&
+                                        message.sender_name?.trim()
+                                          ? message.sender_name.trim()
+                                          : null;
+                                      return (
+                                        <div className="mt-1 flex items-center justify-end gap-1 min-w-0">
+                                          <span className="text-[11px] leading-[14px] text-muted-foreground/70 truncate">
+                                            {humanSenderName ? `${humanSenderName} · ` : ''}
+                                            {new Date(message.sent_at).toLocaleTimeString(locale, {
+                                              hour: '2-digit',
+                                              minute: '2-digit',
+                                              hour12: false,
+                                            })}
+                                          </span>
+                                          {isOutbound && renderStatusIcon(message)}
+                                        </div>
+                                      );
+                                    })()}
+
 
                                   </div>
                                   
@@ -2783,7 +2793,7 @@ function DesktopMessagesList() {
                                   messageNodes={segment.messageNodes}
                                   isCurrent={segment.key === currentBlockKey}
                                   locale={locale}
-                                  className="w-full rounded-lg border border-border/65 bg-muted/55 shadow-sm px-3 py-2.5 mt-2.5"
+                                  className="w-full rounded-lg border border-border/80 bg-muted/85 shadow-sm px-3 py-2.5 mt-2.5"
                                 />
                               )
                             );
