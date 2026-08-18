@@ -258,7 +258,7 @@ serve(async (req) => {
           .from("messaging_lines")
           .select("id, name, key, inbox_key, channel, route_slug, is_active, active_endpoint_id")
           .eq("organization_id", orgId)
-          .eq("inbox_key", "sales")
+          .in("inbox_key", ["sales", "customer_service"])
           .eq("channel", "whatsapp");
 
         const lineIds = (lines ?? []).map((l: { id: string }) => l.id);
@@ -279,9 +279,23 @@ serve(async (req) => {
         const { data: eps } = endpointIds.length
           ? await caller
             .from("communication_endpoints")
-            .select("id, external_address, display_name, provider, status, is_active")
+            .select("id, external_address, display_name, provider, status, is_active, purpose, assigned_user_id")
             .in("id", endpointIds)
           : { data: [] as unknown[] };
+
+        // Nome do dono (apenas apresentação de números pessoais).
+        const ownerIds = Array.from(new Set(
+          ((eps ?? []) as { assigned_user_id: string | null }[])
+            .map((e) => e.assigned_user_id).filter((x): x is string => !!x),
+        ));
+        const { data: owners } = ownerIds.length
+          ? await service.from("users").select("id, full_name").in("id", ownerIds)
+          : { data: [] as unknown[] };
+        const ownerNameById = new Map(
+          ((owners ?? []) as { id: string; full_name: string | null }[])
+            .map((u) => [u.id, u.full_name ?? null]),
+        );
+
 
         const { data: instances } = await service
           .from("evolution_instances")
@@ -338,6 +352,7 @@ serve(async (req) => {
           routes: (lines ?? []).map((l: Record<string, unknown>) => ({
             lineId: l.id,
             name: l.name,
+            inboxKey: l.inbox_key,
             routeSlug: l.route_slug,
             isActive: l.is_active,
             activeEndpointId: l.active_endpoint_id,
@@ -410,6 +425,9 @@ serve(async (req) => {
                   }
                 }
 
+                const purpose = (ep?.purpose as string | null) ?? null;
+                const assignedUserId = (ep?.assigned_user_id as string | null) ?? null;
+
                 return {
                   endpointId: k.endpoint_id,
                   linkActive,
@@ -418,12 +436,20 @@ serve(async (req) => {
                   displayName: (ep?.display_name as string | null) ?? null,
                   provider: logical,
                   providerRaw: (ep?.provider as string | null) ?? null,
+                  purpose,
+                  assignedUserId,
+                  assignedUserName: assignedUserId
+                    ? (ownerNameById.get(assignedUserId) ?? null)
+                    : null,
                   technicalStatus,
                   instanceName: logical === "evolution"
                     ? (instanceByEndpoint.get(k.endpoint_id)?.instance_name ?? null)
                     : null,
-                  activationEligible,
-                  activationBlockedReason,
+                  // Número pessoal nunca pode ser padrão da Route compartilhada.
+                  activationEligible: purpose === "vendor_personal" ? false : activationEligible,
+                  activationBlockedReason: purpose === "vendor_personal"
+                    ? "PERSONAL_NOT_ELIGIBLE"
+                    : activationBlockedReason,
                 };
               }),
           })),
@@ -440,12 +466,43 @@ serve(async (req) => {
       }
 
       // ----------------------------------------------------- PROVISION (ATÔMICO)
+      //
+      // Destino explícito (contrato Fase 3): 'commercial' | 'customer_service'
+      // | 'vendor_personal'. A Route é resolvida pelo destino; a RPC valida
+      // compatibilidade purpose x inbox_key e NUNCA altera o número padrão.
       case "provisionEndpoint": {
         const provider = normalizeProvider(body.provider) as SalesProvider | null;
         if (!provider) return json(400, { error: "PROVISION_PROVIDER_UNSUPPORTED" });
-        if (typeof body.lineId !== "string" || typeof body.address !== "string") {
-          return json(400, { error: "INVALID_INPUT", message: "lineId/address" });
+        if (typeof body.address !== "string") {
+          return json(400, { error: "INVALID_INPUT", message: "address" });
         }
+
+        const destination = typeof body.destination === "string" ? body.destination : "commercial";
+        if (!["commercial", "customer_service", "vendor_personal"].includes(destination)) {
+          return json(400, { error: "PROVISION_PURPOSE_UNSUPPORTED" });
+        }
+        const assignedUserId = typeof body.assignedUserId === "string" ? body.assignedUserId : null;
+        if (destination === "vendor_personal" && !assignedUserId) {
+          return json(400, { error: "PROVISION_ASSIGNED_USER_REQUIRED" });
+        }
+
+        // Route destino: explícita (lineId) ou resolvida pelo inbox_key.
+        const wantedInbox = destination === "customer_service" ? "customer_service" : "sales";
+        let lineId = typeof body.lineId === "string" ? body.lineId : null;
+        if (!lineId) {
+          const { data: line } = await caller
+            .from("messaging_lines")
+            .select("id")
+            .eq("organization_id", orgId)
+            .eq("channel", "whatsapp")
+            .eq("inbox_key", wantedInbox)
+            .eq("is_active", true)
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          lineId = (line?.id as string | undefined) ?? null;
+        }
+        if (!lineId) return json(400, { error: "PROVISION_LINE_NOT_FOUND" });
 
         // Evolution: identidade real ANTES da RPC — a RPC exige
         // owner_number_digits e falha (rollback total) em divergência.
@@ -456,13 +513,15 @@ serve(async (req) => {
           if (!sync.connected) return json(409, { error: "PROVISION_EVOLUTION_NOT_CONNECTED" });
         }
 
-        const { data, error } = await caller.rpc("provision_sales_endpoint", {
+        const { data, error } = await caller.rpc("provision_line_endpoint", {
           p_organization_id: orgId,
-          p_line_id: body.lineId,
+          p_line_id: lineId,
           p_provider: provider,
           p_address: body.address,
+          p_purpose: destination,
           p_display_name: typeof body.displayName === "string" ? body.displayName : null,
           p_instance_name: typeof body.instanceName === "string" ? body.instanceName : null,
+          p_assigned_user_id: destination === "vendor_personal" ? assignedUserId : null,
         });
         if (error) {
           logEvolution("warn", { fn: FN, requestId, orgId, code: "PROVISION_FAILED", message: error.message });

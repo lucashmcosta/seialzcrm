@@ -13595,6 +13595,19 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: string
       }
+      provision_line_endpoint: {
+        Args: {
+          p_address: string
+          p_assigned_user_id?: string
+          p_display_name?: string
+          p_instance_name?: string
+          p_line_id: string
+          p_organization_id: string
+          p_provider: string
+          p_purpose: string
+        }
+        Returns: Json
+      }
       provision_sales_endpoint: {
         Args: {
           p_address: string

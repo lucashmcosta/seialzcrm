@@ -20,6 +20,8 @@ interface ConnectBody {
   appSecret?: string;     // per-integration — obrigatório em conexão nova
   verifyToken?: string;   // per-integration — obrigatório em conexão nova
   endpointPurpose?: "commercial" | "customer_service" | "vendor_personal" | "other";
+  /** Obrigatório quando endpointPurpose = 'vendor_personal' (dono do número pessoal). */
+  assignedUserId?: string;
   displayName?: string;
   skipMetaValidation?: boolean;
   // 'primary' (default): comportamento original — sobrescreve connected_account/config_values
@@ -972,10 +974,20 @@ serve(async (req) => {
       }
     }
 
+    // Destino (Fase 3): commercial | customer_service | vendor_personal | other.
+    // Número pessoal exige dono explícito; o vínculo com a Route é feito
+    // exclusivamente por `provision_line_endpoint` (nunca troca o padrão).
+    const endpointPurpose = body.endpointPurpose ?? "customer_service";
+    if (endpointPurpose === "vendor_personal" && !body.assignedUserId) {
+      return err(400, "assigned_user_required", {
+        message: "Selecione o usuário responsável pelo número pessoal.",
+      });
+    }
+
     // Upsert communication_endpoint (provider='meta-cloud', identificado pelo phone_number_id)
     const { data: existingEp } = await admin
       .from("communication_endpoints")
-      .select("id")
+      .select("id, purpose, assigned_user_id")
       .eq("organization_id", body.organizationId)
       .eq("provider", "meta_cloud_api")
       .eq("sender_sid", body.phoneNumberId)
@@ -1002,6 +1014,25 @@ serve(async (req) => {
       }
     }
 
+    // Nunca reclassificar a finalidade de um endpoint já existente.
+    if (
+      existingEp?.id && existingEp.purpose &&
+      (existingEp.purpose as string) !== endpointPurpose
+    ) {
+      return err(409, "endpoint_purpose_conflict", {
+        message: "Este número já está cadastrado com outra finalidade. Remova-o antes de mudar o destino.",
+        existing_purpose: existingEp.purpose,
+      });
+    }
+    if (
+      existingEp?.id && endpointPurpose === "vendor_personal" &&
+      existingEp.assigned_user_id && existingEp.assigned_user_id !== body.assignedUserId
+    ) {
+      return err(409, "assigned_user_conflict", {
+        message: "Este número pessoal já pertence a outro usuário.",
+      });
+    }
+
     const endpointPayload = {
       organization_id: body.organizationId,
       organization_integration_id: orgIntegrationId,
@@ -1011,7 +1042,8 @@ serve(async (req) => {
       sender_sid: body.phoneNumberId,
       external_address: body.phoneE164,
       display_name: body.displayName ?? meta.verified_name ?? meta.display_phone_number,
-      purpose: body.endpointPurpose ?? "customer_service",
+      purpose: endpointPurpose,
+      assigned_user_id: endpointPurpose === "vendor_personal" ? body.assignedUserId : null,
       is_active: true,
       status: "online",
       quality_rating: meta.quality_rating ?? null,
@@ -1045,10 +1077,51 @@ serve(async (req) => {
       endpointId = ins.id;
     }
 
+    // Vínculo com a Route do destino (Comercial / Atendimento / Pessoal).
+    // A RPC valida compatibilidade purpose x inbox_key e NUNCA altera o
+    // número padrão da Route. Falha aqui não invalida o endpoint criado.
+    let routeLink: unknown = null;
+    let routeLinkError: string | null = null;
+    if (["commercial", "customer_service", "vendor_personal"].includes(endpointPurpose)) {
+      const wantedInbox = endpointPurpose === "customer_service" ? "customer_service" : "sales";
+      const { data: line } = await admin
+        .from("messaging_lines")
+        .select("id")
+        .eq("organization_id", body.organizationId)
+        .eq("channel", "whatsapp")
+        .eq("inbox_key", wantedInbox)
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (!line?.id) {
+        routeLinkError = "route_not_found";
+      } else {
+        const { data: prov, error: provErr } = await supabaseUser.rpc("provision_line_endpoint", {
+          p_organization_id: body.organizationId,
+          p_line_id: line.id,
+          p_provider: "meta",
+          p_address: body.phoneE164,
+          p_purpose: endpointPurpose,
+          p_display_name: body.displayName ?? null,
+          p_instance_name: null,
+          p_assigned_user_id: endpointPurpose === "vendor_personal"
+            ? (body.assignedUserId ?? null)
+            : null,
+        });
+        if (provErr) routeLinkError = provErr.message;
+        else routeLink = prov;
+      }
+    }
+
+
     return new Response(JSON.stringify({
       ok: true,
       organization_integration_id: orgIntegrationId,
       endpoint_id: endpointId,
+      endpoint_purpose: endpointPurpose,
+      route_link: routeLink,
+      route_link_error: routeLinkError,
       meta: {
         display_phone_number: meta.display_phone_number,
         verified_name: meta.verified_name,

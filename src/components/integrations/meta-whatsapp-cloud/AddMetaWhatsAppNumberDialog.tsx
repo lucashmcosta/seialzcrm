@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
 import { ArrowsClockwise } from "@phosphor-icons/react";
 import {
   EndpointAlreadyRegisteredError,
@@ -16,6 +16,9 @@ import {
   metaWhatsAppService,
 } from "@/services/metaWhatsAppService";
 import { MigrateEndpointDialog } from "./MigrateEndpointDialog";
+import {
+  EndpointDestinationStep, type EndpointDestination,
+} from "@/components/settings/EndpointDestinationStep";
 
 interface Props {
   open: boolean;
@@ -26,7 +29,7 @@ interface Props {
   appId: string;
 }
 
-type Purpose = "customer_service" | "commercial";
+type Purpose = EndpointDestination;
 
 export function AddMetaWhatsAppNumberDialog({
   open,
@@ -40,6 +43,7 @@ export function AddMetaWhatsAppNumberDialog({
   const [phoneE164, setPhoneE164] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [purpose, setPurpose] = useState<Purpose>("customer_service");
+  const [assignedUserId, setAssignedUserId] = useState<string | null>(null);
   const [migrateOpen, setMigrateOpen] = useState(false);
   const [existingInfo, setExistingInfo] = useState<{
     endpointId: string;
@@ -52,7 +56,9 @@ export function AddMetaWhatsAppNumberDialog({
     setPhoneE164("");
     setDisplayName("");
     setPurpose("customer_service");
+    setAssignedUserId(null);
   };
+
 
   const addMutation = useMutation({
     mutationFn: async (opts: { skipMetaValidation?: boolean }) => {
@@ -66,6 +72,7 @@ export function AddMetaWhatsAppNumberDialog({
         systemUserToken: "",
         mode: "additional",
         endpointPurpose: purpose,
+        assignedUserId: purpose === "vendor_personal" ? (assignedUserId ?? undefined) : undefined,
         displayName: displayName.trim() || undefined,
         skipMetaValidation: opts.skipMetaValidation,
       });
@@ -112,6 +119,7 @@ export function AddMetaWhatsAppNumberDialog({
   const canSubmit =
     !!phoneNumberId.trim() &&
     /^\+\d{8,15}$/.test(phoneE164.trim()) &&
+    (purpose !== "vendor_personal" || !!assignedUserId) &&
     !addMutation.isPending;
 
   return (
@@ -175,27 +183,15 @@ export function AddMetaWhatsAppNumberDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Finalidade *</Label>
-            <RadioGroup
-              value={purpose}
-              onValueChange={(v) => setPurpose(v as Purpose)}
-              className="flex gap-4"
-            >
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="customer_service" id="purpose-cs" />
-                <Label htmlFor="purpose-cs" className="font-normal cursor-pointer">
-                  Atendimento / CS (/inbox)
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="commercial" id="purpose-commercial" />
-                <Label htmlFor="purpose-commercial" className="font-normal cursor-pointer">
-                  Comercial (/messages)
-                </Label>
-              </div>
-            </RadioGroup>
-          </div>
+          <EndpointDestinationStep
+            organizationId={organizationId}
+            destination={purpose}
+            onDestinationChange={setPurpose}
+            assignedUserId={assignedUserId}
+            onAssignedUserChange={setAssignedUserId}
+            disabled={addMutation.isPending}
+          />
+
         </div>
 
         <DialogFooter className="gap-2">
