@@ -2095,6 +2095,27 @@ function DesktopMessagesList() {
             </ScrollArea>
         </div>
 
+        {/* Divisória redimensionável (apresentacional) */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Ajustar largura da lista de conversas"
+          tabIndex={0}
+          onPointerDown={listResize.startResize}
+          onDoubleClick={listResize.reset}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowLeft') { e.preventDefault(); listResize.nudge(-16); }
+            if (e.key === 'ArrowRight') { e.preventDefault(); listResize.nudge(16); }
+          }}
+          className={cn(
+            'relative w-1.5 shrink-0 h-full cursor-col-resize bg-border/60 transition-colors',
+            'hover:bg-primary/40 focus-visible:outline-none focus-visible:bg-primary/50',
+            listResize.isResizing && 'bg-primary/60',
+          )}
+        />
+
+
+
         {/* Right Panel - Chat */}
         <div className="flex-1 flex flex-col bg-background h-full overflow-hidden">
             {selectedThread ? (
