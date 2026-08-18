@@ -2043,6 +2043,15 @@ function DesktopMessagesList() {
                         endpointProvider={threadBadgeEndpoints[thread.id]?.provider ?? null}
                         endpointIsActive={threadBadgeEndpoints[thread.id]?.isActive ?? null}
                         officialNumbers={officialNumbers}
+                        lastMessagePreview={
+                          formatLastMessagePreview({
+                            content: lastMessageByThread[thread.id]?.content ?? thread.last_message,
+                            mediaType: lastMessageByThread[thread.id]?.mediaType ?? null,
+                            direction: lastMessageByThread[thread.id]?.direction ?? thread.last_message_direction,
+                            senderUserId: lastMessageByThread[thread.id]?.senderUserId ?? null,
+                            currentUserId: userProfile?.id ?? null,
+                          })
+                        }
                       />
                     ))}
                   </ListBox>
