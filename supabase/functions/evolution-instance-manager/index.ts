@@ -82,7 +82,18 @@ function json(
 }
 
 function errFromEvolution(e: EvolutionError): Response {
-  return json(e.status, { error: e.code, message: e.message });
+  return json(e.status ?? 502, { error: e.code, message: e.message });
+}
+
+// Discriminador seguro de EvolutionError: retornos legítimos (EvolutionQrCode)
+// também têm a chave `code` — o `code` do QR é a string bruta de pareamento.
+// Usar apenas `"code" in r` fazia um QR válido ser tratado como erro e
+// vazava o payload do QR como mensagem de erro.
+function isEvolutionError(v: unknown): v is EvolutionError {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return typeof o.code === "string" && typeof o.message === "string" &&
+    typeof o.status === "number";
 }
 
 function validateInstanceName(name: unknown): string | null {
