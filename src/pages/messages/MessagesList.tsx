@@ -1901,12 +1901,23 @@ function DesktopMessagesList() {
     }
   }, [permissions.viewAllThreads, effectiveFilter]);
 
+  // Largura ajustável da coluna de conversas (apresentacional, persistida)
+  const listResize = useResizableListWidth({
+    storageKey: 'seialz:commercial:list-width',
+    defaultWidth: 400,
+    minWidth: 320,
+    maxWidth: 520,
+  });
 
   return (
     <Layout>
       <div className="h-screen overflow-hidden flex">
-        {/* Left Panel - Chat List (fixed width) */}
-        <div className="w-[400px] flex-shrink-0 border-r border-border flex flex-col bg-card h-full overflow-hidden">
+        {/* Left Panel - Chat List (largura ajustável) */}
+        <div
+          style={{ width: listResize.width }}
+          className="flex-shrink-0 flex flex-col bg-card h-full overflow-hidden"
+        >
+
             {/* Header */}
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
