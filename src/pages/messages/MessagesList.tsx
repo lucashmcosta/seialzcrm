@@ -1824,6 +1824,7 @@ function DesktopMessagesList() {
       contact_name: (contact as any)?.full_name || (contact as any)?.phone || 'Desconhecido',
       contact_phone: (contact as any)?.phone ?? null,
       last_message: (row as any).last_message_content || '...',
+      last_message_id: (row as any).last_message_id ?? null,
       last_message_direction: (row as any).last_message_direction ?? null,
       updated_at: (row as any).updated_at,
       last_message_at: (row as any).last_message_at ?? null,
