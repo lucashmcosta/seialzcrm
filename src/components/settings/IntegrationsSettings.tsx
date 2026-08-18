@@ -528,6 +528,23 @@ export function IntegrationsSettings() {
                 return renderKommoCard(integration, connection, isConnected, isBeta);
               }
 
+              // Evolution: sem toggle (is_enabled não reflete estado real); badge derivado das instâncias.
+              if (integration.slug === 'evolution-whatsapp') {
+                return (
+                  <EvolutionIntegrationCard
+                    key={integration.id}
+                    integration={integration}
+                    onOpen={() => {
+                      if (connection) {
+                        handleConfigure(integration, connection);
+                      } else {
+                        handleConnect(integration);
+                      }
+                    }}
+                  />
+                );
+              }
+
               return (
                 <Card key={integration.id} className="p-4">
                   <div className="flex items-start justify-between gap-3">
