@@ -16,6 +16,7 @@
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { featureFlagEnabled } from "./feature-flags.ts";
+import { canUserUseReplyEndpoint } from "./reply-endpoint-selection.ts";
 
 export const MANUAL_REPLY_FLAG = "sales_manual_reply_endpoint_v1";
 
@@ -28,7 +29,8 @@ export type ManualReplyErrorCode =
   | "MANUAL_REPLY_ENDPOINT_OFFLINE"
   | "MANUAL_REPLY_ENDPOINT_IDENTITY_UNKNOWN"
   | "MANUAL_REPLY_ENDPOINT_IDENTITY_MISMATCH"
-  | "MANUAL_REPLY_ENDPOINT_CROSS_ORG";
+  | "MANUAL_REPLY_ENDPOINT_CROSS_ORG"
+  | "REPLY_ENDPOINT_PERSONAL_FORBIDDEN";
 
 export type ManualReplyProvider = "twilio" | "meta_cloud_api" | "evolution_api";
 
@@ -129,6 +131,23 @@ export async function resolveManualReplyEndpoint(
       "Número não pertence à configuração Comercial ativa desta organização.",
     );
   }
+
+  // 3.1 Permissão do usuário sobre ESTE endpoint (Fase 2 — números pessoais).
+  //     Comercial: liberado a todo usuário da org. `vendor_personal`: somente
+  //     `communication_endpoints.assigned_user_id`. Sem grants, fail-closed.
+  const allowed = await canUserUseReplyEndpoint(supabase, {
+    organizationId: input.organizationId,
+    userId: input.userId,
+    endpointId: manualId,
+  });
+  if (!allowed) {
+    return fail(
+      "REPLY_ENDPOINT_PERSONAL_FORBIDDEN",
+      "Este número é pessoal de outro usuário. Escolha um número permitido para responder.",
+    );
+  }
+
+
 
   // 4. Endpoint em si: org, canal, atividade, provider conhecido.
   const { data: ep, error: epErr } = await supabase

@@ -23,7 +23,11 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSalesFeatureFlags } from './useSalesFeatureFlags';
 import { useThreadLastEndpoint } from './useThreadLastEndpoint';
-import { filterWhatsAppCandidates, toManualReplyOptions } from '@/lib/manualReplySelection';
+import {
+  composerBlockReason,
+  filterWhatsAppCandidates,
+  toManualReplyOptions,
+} from '@/lib/manualReplySelection';
 import {
   deriveSelectedEndpoint,
   replySelectionPayload,
@@ -38,6 +42,12 @@ export interface ManualReplyOption {
   provider: string | null;
   /** endpoint ativo no provider/registro — quando false, seleção é bloqueada */
   available: boolean;
+  /** número pessoal (`purpose = vendor_personal`) */
+  isPersonal: boolean;
+  assignedUserId: string | null;
+  ownerName: string | null;
+  /** permissão do usuário atual (server-side: `fn_can_user_use_reply_endpoint`) */
+  allowedForUser: boolean;
 }
 
 export type ManualReplyUiState =
@@ -63,6 +73,11 @@ export interface ManualReplyState {
   /** payload de envio: `{ source, endpointId }`; undefined quando a feature está OFF */
   replyEndpointSelection: ReplyEndpointSelection | undefined;
   isMutating: boolean;
+  /** true quando o endpoint selecionado não é permitido ao usuário atual */
+  composerBlocked: boolean;
+  composerBlockReason: 'personal_other_user' | 'none_allowed' | null;
+  /** placeholder acordado para o composer bloqueado */
+  composerBlockedPlaceholder: string | null;
   errorMessage: string | null;
   selectEndpoint: (endpointId: string) => Promise<void>;
   /** volta para a seleção derivada (endpoint da última mensagem da conversa) */
@@ -92,6 +107,10 @@ export function humanizeManualReplyError(raw: unknown): string {
     return 'Esta conversa não aceita escolha manual de número.';
   if (msg.includes('MANUAL_REPLY_ENDPOINT_INACTIVE'))
     return 'Número indisponível no momento. Escolha outro número.';
+  if (msg.includes('REPLY_ENDPOINT_PERSONAL_FORBIDDEN'))
+    return 'Este número é pessoal de outro usuário. Escolha um número permitido para responder.';
+  if (msg.includes('REPLY_ENDPOINT_NONE_ALLOWED'))
+    return 'Nenhum número permitido para responder nesta conversa.';
   if (msg.includes('MANUAL_REPLY_ENDPOINT_CROSS_ORG'))
     return 'Número de outra organização.';
   if (msg.includes('MANUAL_REPLY_ENDPOINT_OFFLINE'))
@@ -118,13 +137,13 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
 
   // ---- números Comerciais elegíveis da ORGANIZAÇÃO (sem gate por usuário) ----
   const optionsQuery = useQuery<ManualReplyOption[]>({
-    queryKey: ['sales-reply-endpoints', organizationId ?? null],
+    queryKey: ['sales-reply-endpoints', organizationId ?? null, userId ?? null],
     enabled,
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('communication_endpoints')
-        .select('id, external_address, display_name, provider, is_active, channel')
+        .select('id, external_address, display_name, provider, is_active, channel, purpose, assigned_user_id')
         .eq('organization_id', organizationId!)
         .eq('channel', 'whatsapp')
         .eq('is_active', true);
@@ -145,7 +164,33 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
         }),
       );
 
-      return toManualReplyOptions(candidates, eligibility);
+      // Permissão por usuário (Fase 2 — números pessoais). Validador único
+      // compartilhado com o backend; fail-closed em qualquer erro.
+      const allowed = await Promise.all(
+        candidates.map(async (ep) => {
+          const { data: ok } = await supabase.rpc('fn_can_user_use_reply_endpoint', {
+            _organization_id: organizationId!,
+            _user_id: userId!,
+            _endpoint_id: ep.id,
+          });
+          return ok === true;
+        }),
+      );
+
+      // Nome do dono, para exibir "Pessoal · Junior" sem esconder o contexto.
+      const ownerIds = Array.from(
+        new Set(candidates.map((ep) => ep.assigned_user_id).filter((v): v is string => !!v)),
+      );
+      const ownerNames: Record<string, string | null> = {};
+      if (ownerIds.length > 0) {
+        const { data: owners } = await supabase
+          .from('users')
+          .select('id, full_name')
+          .in('id', ownerIds);
+        for (const o of owners ?? []) ownerNames[o.id] = o.full_name ?? null;
+      }
+
+      return toManualReplyOptions(candidates, eligibility, { allowed, ownerNames });
     },
   });
 
@@ -209,10 +254,25 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
 
   const [localError, setLocalError] = useState<string | null>(null);
 
+  const blockReason = useMemo(
+    () =>
+      uiState === 'ready'
+        ? composerBlockReason(findOption(selection.endpointId), options)
+        : null,
+    [uiState, findOption, selection.endpointId, options],
+  );
+
   const selectEndpoint = useCallback(
     async (endpointId: string) => {
       if (!threadId) return;
       const option = options.find((o) => o.endpointId === endpointId);
+      if (option && !option.allowedForUser) {
+        const msg = option.isPersonal
+          ? `Este número é pessoal${option.ownerName ? ` de ${option.ownerName}` : ''}. Escolha um número permitido para responder.`
+          : 'Você não tem permissão para responder por este número.';
+        setLocalError(msg);
+        throw new Error(msg);
+      }
       if (!option || !option.available) {
         const msg = 'Número indisponível no momento. Escolha outro número.';
         setLocalError(msg);
@@ -245,6 +305,10 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
     derivedOption: findOption(derivedEndpointId),
     replyEndpointSelection: replySelectionPayload(enabled, selection),
     isMutating: false,
+    composerBlocked: blockReason !== null,
+    composerBlockReason: blockReason,
+    composerBlockedPlaceholder:
+      blockReason !== null ? 'Escolha um número permitido para responder.' : null,
     errorMessage: readError ? humanizeManualReplyError(readError) : localError,
     selectEndpoint,
     useDerived,

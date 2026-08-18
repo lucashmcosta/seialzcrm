@@ -13169,6 +13169,14 @@ export type Database = {
         Args: { _opportunity_id: string }
         Returns: Json
       }
+      fn_can_user_use_reply_endpoint: {
+        Args: {
+          _endpoint_id: string
+          _organization_id: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
       fn_capi_dispatch_event: {
         Args: {
           p_contact_id?: string
