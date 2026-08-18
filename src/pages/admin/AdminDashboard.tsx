@@ -1,9 +1,23 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { AdminLayout } from '@/components/admin/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Buildings, Users, CurrencyDollar, Pulse, Prohibit } from '@phosphor-icons/react';
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { AdminLayout } from "@/components/admin/AdminLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Buildings, Users, CurrencyDollar, Pulse, Prohibit } from "@phosphor-icons/react";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 interface KPIData {
   totalOrgs: number;
@@ -13,7 +27,7 @@ interface KPIData {
   mrr: number;
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
 export default function AdminDashboard() {
   const [kpis, setKpis] = useState<KPIData>({
@@ -33,35 +47,27 @@ export default function AdminDashboard() {
 
   const fetchKPIs = async () => {
     try {
-      const { data: orgs } = await supabase
-        .from('organizations')
-        .select('id, created_at, suspended_at');
+      const { data: orgs } = await supabase.from("organizations").select("id, created_at, suspended_at");
 
-      const { data: metrics } = await supabase
-        .from('organization_usage_metrics')
-        .select('last_user_activity_at');
+      const { data: metrics } = await supabase.from("organization_usage_metrics").select("last_user_activity_at");
 
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      const activeOrgs = metrics?.filter(m => 
-        m.last_user_activity_at && new Date(m.last_user_activity_at) > thirtyDaysAgo
-      ).length || 0;
+      const activeOrgs =
+        metrics?.filter((m) => m.last_user_activity_at && new Date(m.last_user_activity_at) > thirtyDaysAgo).length ||
+        0;
 
-      const suspendedOrgs = orgs?.filter(o => o.suspended_at).length || 0;
+      const suspendedOrgs = orgs?.filter((o) => o.suspended_at).length || 0;
 
-      const { count: totalUsers } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true });
+      const { count: totalUsers } = await supabase.from("users").select("*", { count: "exact", head: true });
 
       const { data: subscriptions } = await supabase
-        .from('subscriptions')
-        .select('price_per_seat, status, plan_name')
-        .eq('status', 'active');
+        .from("subscriptions")
+        .select("price_per_seat, status, plan_name")
+        .eq("status", "active");
 
-      const mrr = subscriptions?.reduce((sum, sub) => 
-        sum + (Number(sub.price_per_seat) || 0), 0
-      ) || 0;
+      const mrr = subscriptions?.reduce((sum, sub) => sum + (Number(sub.price_per_seat) || 0), 0) || 0;
 
       // Growth data (last 6 months)
       const growthData = [];
@@ -70,25 +76,27 @@ export default function AdminDashboard() {
         date.setMonth(date.getMonth() - i);
         const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
         const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-        
-        const count = orgs?.filter(o => {
-          const created = new Date(o.created_at);
-          return created >= monthStart && created <= monthEnd;
-        }).length || 0;
-        
+
+        const count =
+          orgs?.filter((o) => {
+            const created = new Date(o.created_at);
+            return created >= monthStart && created <= monthEnd;
+          }).length || 0;
+
         growthData.push({
-          month: monthStart.toLocaleDateString('pt-BR', { month: 'short' }),
+          month: monthStart.toLocaleDateString("pt-BR", { month: "short" }),
           orgs: count,
         });
       }
       setOrgGrowthData(growthData);
 
       // Plan distribution
-      const planCounts = subscriptions?.reduce((acc: any, sub) => {
-        const plan = sub.plan_name || 'free';
-        acc[plan] = (acc[plan] || 0) + 1;
-        return acc;
-      }, {}) || {};
+      const planCounts =
+        subscriptions?.reduce((acc: any, sub) => {
+          const plan = sub.plan_name || "free";
+          acc[plan] = (acc[plan] || 0) + 1;
+          return acc;
+        }, {}) || {};
 
       const planData = Object.entries(planCounts).map(([name, value]) => ({
         name: name.charAt(0).toUpperCase() + name.slice(1),
@@ -104,7 +112,7 @@ export default function AdminDashboard() {
         mrr,
       });
     } catch (error) {
-      console.error('Error fetching KPIs:', error);
+      console.error("Error fetching KPIs:", error);
     } finally {
       setLoading(false);
     }
@@ -112,28 +120,28 @@ export default function AdminDashboard() {
 
   const kpiCards = [
     {
-      title: 'Total de Contas',
+      title: "Total de Contas",
       value: kpis.totalOrgs,
       icon: Buildings,
     },
     {
-      title: 'Contas Ativas',
+      title: "Contas Ativas",
       value: kpis.activeOrgs,
       icon: Pulse,
     },
     {
-      title: 'Contas Suspensas',
+      title: "Contas Suspensas",
       value: kpis.suspendedOrgs,
       icon: Prohibit,
     },
     {
-      title: 'Total de Usuários',
+      title: "Total de Usuários",
       value: kpis.totalUsers,
       icon: Users,
     },
     {
-      title: 'MRR',
-      value: `R$ ${kpis.mrr.toLocaleString('pt-BR')}`,
+      title: "MRR",
+      value: `R$ ${kpis.mrr.toLocaleString("pt-BR")}`,
       icon: CurrencyDollar,
     },
   ];
@@ -156,9 +164,7 @@ export default function AdminDashboard() {
                 return (
                   <Card key={kpi.title}>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">
-                        {kpi.title}
-                      </CardTitle>
+                      <CardTitle className="text-sm font-medium">{kpi.title}</CardTitle>
                       <Icon className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
