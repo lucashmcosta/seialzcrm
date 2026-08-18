@@ -275,7 +275,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
       textValue={value.contact_name}
       className={(state) =>
         cn(
-          'group relative flex items-center gap-3 border-b border-border/60 py-2.5 px-3 select-none cursor-pointer',
+          'group relative flex items-center gap-3 overflow-hidden border-b border-border/60 py-2.5 px-3 select-none cursor-pointer',
           state.isFocused && 'outline-2 -outline-offset-2 outline-ring',
           state.isSelected && 'bg-accent',
           typeof className === 'function' ? className(state) : className
