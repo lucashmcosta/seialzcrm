@@ -21,6 +21,8 @@ export interface ConnectInput {
    */
   mode?: "primary" | "additional" | "add_waba";
   endpointPurpose?: "commercial" | "customer_service" | "vendor_personal" | "other";
+  /** Obrigatório quando endpointPurpose='vendor_personal' (dono do número). */
+  assignedUserId?: string;
   displayName?: string;
 }
 
