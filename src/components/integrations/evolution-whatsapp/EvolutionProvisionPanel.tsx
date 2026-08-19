@@ -112,8 +112,15 @@ function safeDetail(e: unknown): string | undefined {
 }
 
 
+/** Destino escolhido explicitamente para uma sessão (nunca inferido). */
+interface ChosenDestination {
+  purpose: EndpointDestination;
+  assignedUserId: string | null;
+}
+
 export function EvolutionProvisionPanel() {
   const { data, isLoading, error, refetch } = useEvolutionProvisionedInstances();
+  const { organization } = useOrganization();
   const create = useCreateEvolutionInstance();
   const remove = useDeleteEvolutionInstance();
   const syncWebhook = useSyncEvolutionWebhook();
@@ -122,6 +129,19 @@ export function EvolutionProvisionPanel() {
   const link = useLinkPendingInstance();
 
   const [qr, setQr] = useState<{ instanceName: string; base64: string | null } | null>(null);
+
+  // Destino por instância. Sem entrada aqui, "Vincular" fica indisponível:
+  // nenhuma sessão é vinculada com destino presumido.
+  const [destinationByInstance, setDestinationByInstance] =
+    useState<Record<string, ChosenDestination>>({});
+
+  // Passo 1 (destino). `mode: 'create'` antecede a criação da sessão;
+  // `mode: 'assign'` define o destino de uma sessão pendente antiga.
+  const [step1, setStep1] = useState<
+    { mode: 'create' } | { mode: 'assign'; instanceId: string } | null
+  >(null);
+  const [draftPurpose, setDraftPurpose] = useState<EndpointDestination>('commercial');
+  const [draftUserId, setDraftUserId] = useState<string | null>(null);
 
   const instances = data?.instances ?? [];
 
