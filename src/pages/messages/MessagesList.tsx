@@ -2043,6 +2043,8 @@ function DesktopMessagesList() {
                         endpointProvider={threadBadgeEndpoints[thread.id]?.provider ?? null}
                         endpointIsActive={threadBadgeEndpoints[thread.id]?.isActive ?? null}
                         officialNumbers={officialNumbers}
+                        lastMessageMediaType={thread.last_message_id ? lastMessageMeta[thread.last_message_id]?.mediaType ?? null : null}
+                        lastMessageStatus={thread.last_message_id ? lastMessageMeta[thread.last_message_id]?.whatsappStatus ?? null : null}
                       />
                     ))}
                   </ListBox>
