@@ -141,19 +141,30 @@ export function useSyncPendingInstanceIdentity() {
 }
 
 /**
- * Vincula a sessão à Route Comercial usando exclusivamente o número real
- * vindo da Evolution. Não torna o número ativo para envio.
+ * Vincula a sessão à Route do destino escolhido, usando exclusivamente o número
+ * real vindo da Evolution. Não torna o número ativo para envio.
+ *
+ * O destino (`purpose`) é SEMPRE enviado explicitamente por esta UI; o default
+ * `commercial` do Edge existe apenas para compatibilidade de callers antigos.
  */
+export interface LinkPendingInstanceInput {
+  instanceId: string;
+  purpose: 'commercial' | 'customer_service' | 'vendor_personal';
+  assignedUserId?: string | null;
+}
+
 export function useLinkPendingInstance() {
   const { organization } = useOrganization();
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (instanceId: string) =>
+    mutationFn: async (input: LinkPendingInstanceInput) =>
       callOp<{ ok: true; ownerMasked: string | null }>({
         op: 'linkPendingInstance',
         organizationId: organization?.id,
-        instanceId,
+        instanceId: input.instanceId,
+        purpose: input.purpose,
+        assignedUserId: input.purpose === 'vendor_personal' ? input.assignedUserId ?? null : null,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['evolution'] });
