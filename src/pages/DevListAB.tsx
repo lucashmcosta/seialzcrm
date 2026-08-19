@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ListBox, ListBoxItem } from "react-aria-components";
 import { Button } from "@/components/ui/button";
-import LastMessagePreview from "@/components/messages/LastMessagePreview";
+import { LastMessagePreview } from "@/components/messages/LastMessagePreview";
 
 // TEMP dev harness to validate list geometry + pagination. Not linked in nav.
 const LONG = "Olá, bom dia! Gostaria de saber se ainda é possível enviar a documentação do processo de cidadania italiana hoje mesmo, porque recebi o e-mail ontem à noite";
