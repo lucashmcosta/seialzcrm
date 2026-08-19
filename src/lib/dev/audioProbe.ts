@@ -236,7 +236,7 @@ export function installAudioProbe() {
   const api = {
     captures,
     report: () => { captures.forEach(printOne); return captures; },
-    json: () => JSON.stringify(captures.map(({ detachRaf, ...rest }) => rest), null, 2),
+    json: () => JSON.stringify(captures.map(({ detachRaf, bulletRef, ...rest }) => rest), null, 2),
   };
   (window as unknown as { __audioProbe: typeof api }).__audioProbe = api;
   // eslint-disable-next-line no-console
