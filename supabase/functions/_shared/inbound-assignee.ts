@@ -17,8 +17,13 @@
 //
 // Os três providers (Meta, Twilio, Evolution) consomem exatamente este helper.
 
+interface RpcCapableClient {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rpc: (fn: string, args?: Record<string, unknown>) => PromiseLike<{ data: any; error: any }>;
+}
+
 export async function resolveInboundSuggestedAssignee(
-  service: { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> },
+  service: RpcCapableClient,
   organizationId: string,
   endpointId: string | null | undefined,
 ): Promise<string | null> {
