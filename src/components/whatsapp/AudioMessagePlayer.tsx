@@ -210,18 +210,16 @@ export function AudioMessagePlayer({
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
-    const seekDuration = progressDuration || duration;
-    if (!audio || !seekDuration) return;
+    if (!audio || !duration) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0]?.clientX ?? 0 : e.clientX;
     const x = clientX - rect.left;
     const pct = Math.max(0, Math.min(1, x / rect.width));
-    try {
-      audio.currentTime = pct * seekDuration;
-    } catch { /* noop */ }
+    audio.currentTime = pct * duration;
     setCurrentTime(audio.currentTime);
   };
+
 
 
   if (!srcOk || hasError) {
