@@ -1,71 +1,51 @@
-# Auditoria READ-ONLY — Atribuição no Comercial e encaixe do número pessoal
+# Ponto canônico da atribuição — número pessoal (`vendor_personal`)
 
-Nada foi alterado. Todas as afirmações abaixo vêm de leitura do banco (pg_proc/pg_trigger/tabelas) e do código das Edge Functions.
+Auditoria read-only concluída. Nada implementado.
 
-## Entrega (formato solicitado)
+## Comparação das opções
 
-```text
-CURRENT_ASSIGNMENT_SOURCE_OF_TRUTH= message_threads.assigned_user_id (conversa) — derivado, na criação, de contacts.owner_user_id
-CONTACT_OWNER_ROLE= contacts.owner_user_id é a raiz da atribuição: herdado por thread e oportunidade
-THREAD_ASSIGNEE_ROLE= message_threads.assigned_user_id (+ original_owner_user_id como snapshot) = responsável operacional da conversa
-OPPORTUNITY_OWNER_ROLE= opportunities.owner_user_id, herdado do contato (trg_opportunities_round_robin) ou setado pelo webhook (oppData.owner_user_id = contactOwnerId)
-NEW_CONTACT_ASSIGNMENT_FLOW= webhook cria contato SEM owner → trigger BEFORE INSERT contacts_round_robin → assign_round_robin(org) → grava owner_user_id; thread criada depois herda esse owner via threads_round_robin
-EXISTING_CONTACT_ASSIGNMENT_FLOW= contato reutilizado mantém owner_user_id; thread canônica é reutilizada (sales-thread.ts) e assigned_user_id NÃO é recalculado
-ROUND_ROBIN_FUNCTION= public.assign_round_robin(uuid) e overload assign_round_robin(uuid, text /*queue*/); triggers trg_contacts_round_robin, trg_threads_round_robin, trg_opportunities_round_robin
-ROUND_ROBIN_ELIGIBLE_USERS= user_organizations com is_active=true AND round_robin_active=true (overload por fila exige queue ∈ round_robin_queues)
-ROUND_ROBIN_STATE_STORAGE= persistido em user_organizations.last_assigned_at (ORDER BY last_assigned_at NULLS FIRST, id + FOR UPDATE SKIP LOCKED) — não é histórico calculado
-MANUAL_ASSIGNMENT_FLOW= RPC reassign_thread(thread, user, reason): exige permissão manage_assignments/can_manage_cs_queue, alvo ativo na org, grava assigned_user_id/assigned_at + last_routing_decision.action='manual_assignment'; não toca contato nem oportunidade
-REASSIGNMENT_RULES= automática só quando o campo está NULL na criação (todas as 3 triggers dão RETURN NEW se já preenchido); depois só muda por ação humana/RPC. Nenhuma mensagem inbound reatribui thread já atribuída
-ENDPOINT_CHANGE_AFFECTS_ASSIGNMENT= NO (sales-thread.ts só atualiza primary_endpoint_id / status / last_inbound_at; nunca assigned_user_id)
-PROVIDER_AFFECTS_ASSIGNMENT= NO (Meta, Twilio e Evolution não gravam assigned_user_id; a decisão é 100% nas triggers do banco)
-META_VENDOR_PERSONAL_ASSIGNMENT_INTENT= existe e está explícita em get_default_queue_for_thread: purpose 'vendor_personal' → queue 'commercial' + suggested_user_id = communication_endpoints.assigned_user_id (dono do número como responsável sugerido, sem sair da fila Comercial)
-PERSONAL_ENDPOINT_OWNER_ALREADY_USED_AS_SUGGESTED_USER= YES na função get_default_queue_for_thread, NO no fluxo real (nenhum consumidor: grep em src/ e supabase/functions/ não encontra chamadas; hoje endpoint.assigned_user_id só é usado para permissão de resposta em fn_can_user_use_reply_endpoint / reply-endpoint-selection.ts / manual-reply-endpoint.ts)
-CENARIO_EXISTING_ASSIGNEE_RECEIVES_ON_PERSONAL_NUMBER= hoje MANTÉM Maria (nenhuma reatribuição por inbound/endpoint). Junior consegue responder pelo 9999 (permissão), mas a thread continua da Maria
-CENARIO_UNASSIGNED_CONTACT_RECEIVES_ON_PERSONAL_NUMBER= hoje cai no round-robin da org (contato novo sem owner) e pode sair para qualquer vendedor elegível, ignorando o dono do número
-RECOMMENDED_PERSONAL_ASSIGNMENT_MODEL= "dono do número = responsável sugerido, sem reatribuição": (1) mantém quem já é responsável; (2) quando não há responsável, o endpoint vendor_personal.assigned_user_id precede o round-robin — exatamente o contrato já expresso em get_default_queue_for_thread. Sem lógica paralela: reaproveita a mesma cadeia contato → thread → oportunidade
-CHANGES_REQUIRED= (a) passar o endpoint de entrada como "sugestão" para a atribuição inicial — na prática, preencher owner_user_id/assigned_user_id com endpoint.assigned_user_id ANTES das triggers de round-robin (webhook ou parâmetro nas triggers), preservando o RETURN NEW quando já há responsável; (b) registrar o evento na timeline com razão própria (ex.: action 'initial_assignment' + reason 'personal_endpoint_owner') em vez do texto de round-robin; (c) nenhuma mudança em permissão de resposta (já pronta)
-COMPATIBILITY_RISK= BAIXO: nada altera threads/contatos já atribuídos; sem impacto em Meta/Twilio (endpoints atuais têm assigned_user_id NULL — confirmado: todos os endpoints sales/commercial em produção estão com assigned_user_id nulo); risco residual = número pessoal cujo dono está inativo/round_robin_active=false (precisa fallback explícito para o round-robin) e o texto de auditoria "Contato auto-atribuído via round-robin" ficar impreciso se não for ajustado
-```
+- **A) função SQL central `(_organization_id, _endpoint_id) → suggested_user_id`** — viável e mínima. Ela é a única dona da regra "dono do endpoint pessoal, se válido"; validação de atividade/org fica em SQL, junto do round-robin.
+- **B) adaptar `get_default_queue_for_thread` para ser consumido na criação** — não serve como ponto único: assinatura é `(_thread_id)`, e a thread só existe **depois** do contato (que é onde `contacts_round_robin` já grava `owner_user_id`). Usá-la na criação exigiria inverter a ordem contato→thread nos três webhooks. Mantida como **read model** e realinhada para chamar a função de A (uma lógica, dois consumidores).
+- **C) camada TS compartilhada** — existe de fato: `_shared/sales-thread.ts` (`resolveSalesWhatsappThread`) é importada pelos três webhooks (Meta `index.ts:18`, Twilio, Evolution). Porém ela roda **após** a criação do contato, então sozinha não cobre o caso 3. Serve como ponto de fiação (wiring) da sugestão, não como dona da regra.
 
-## Como funciona hoje (cadeia real)
+**Escolha: A como fonte de verdade + um único helper TS compartilhado (`_shared/inbound-assignee.ts`) que a consome**, chamado pelos três webhooks apenas no payload de criação do contato (uma linha por webhook, zero lógica duplicada). Observação técnica: não é possível resolver 100% dentro do banco sem tocar nos webhooks, porque `contacts` não conhece o endpoint de entrada e o cliente Supabase (PostgREST) não permite GUC transacional para passá-lo às triggers.
+
+## Entrega
 
 ```text
-inbound (meta-whatsapp-webhook | twilio-whatsapp-webhook | evolution-webhook)
-  → resolve endpoint/org
-  → contato: SELECT por telefone → se não existe, INSERT sem owner
-      trigger contacts_round_robin (BEFORE INSERT)
-        organizations.round_robin_scope ∈ (contacts_only, threads_and_contacts)
-        → assign_round_robin(org) → owner_user_id
-      trigger contacts_round_robin_audit (AFTER INSERT)
-        → activities: "Atribuicao automatica / Contato auto-atribuido via round-robin"
-          (só quando não há JWT de usuário, i.e. service_role)
-  → thread canônica (_shared/sales-thread.ts): reutiliza a canônica ou INSERT
-      trigger threads_round_robin (BEFORE INSERT)
-        assigned_user_id já preenchido → preserva (+ original_owner_user_id)
-        senão herda contacts.owner_user_id
-        senão assign_round_robin(org)
-  → oportunidade (se aplicável): owner_user_id = contactOwnerId
-      trigger trg_opportunities_round_robin como rede de segurança
-  → mudanças posteriores: só reassign_thread (manual_assignment) ou take_over
-      trigger trg_log_thread_assignment_change → thread_assignment_history
+CANONICAL_ASSIGNMENT_POINT= nova função SQL public.fn_resolve_inbound_suggested_assignee(_organization_id uuid, _endpoint_id uuid) returns uuid — única dona da regra; consumida por um helper TS compartilhado (_shared/inbound-assignee.ts) e por get_default_queue_for_thread
+FILES/FUNCTIONS_TO_CHANGE=
+  (SQL) nova fn_resolve_inbound_suggested_assignee
+  (SQL) get_default_queue_for_thread → passa a delegar a essa função (mesma saída de hoje para vendor_personal)
+  (SQL) trg_contacts_round_robin → inalterada na lógica; ganha marcação da própria decisão via set_config transacional ('app.rr_source') para a auditoria distinguir a origem
+  (SQL) trg_contacts_round_robin_audit → texto do evento conforme a origem marcada
+  (TS) novo _shared/inbound-assignee.ts (resolve a sugestão + registra a atividade quando a origem é o número pessoal)
+  (TS) meta-whatsapp-webhook, twilio-whatsapp-webhook, evolution-webhook → apenas fiação: passam endpointId ao helper e incluem owner_user_id no INSERT do contato quando houver sugestão
+  (SEM MUDANÇA) assign_round_robin, trg_threads_round_robin, trg_opportunities_round_robin, reassign_thread, sales-thread.ts, permissões de resposta
+HOW_PERSONAL_OWNER_IS_VALIDATED= dentro da função SQL: endpoint pertence à org, is_active, purpose='vendor_personal', assigned_user_id NOT NULL e esse usuário com user_organizations.is_active=true na mesma org. Qualquer falha → retorna NULL (não é exigido round_robin_active, para não excluir dono legítimo que não participa do sorteio). Endpoint compartilhado (commercial/sales) → NULL sempre
+HOW_ROUND_ROBIN_FALLBACK_WORKS= sugestão NULL ⇒ o INSERT do contato vai sem owner_user_id e o caminho atual roda idêntico: contacts_round_robin → assign_round_robin(org) → thread herda o owner via threads_round_robin. Nenhuma alteração em assign_round_robin nem em user_organizations.last_assigned_at
+HOW_EXISTING_ASSIGNEE_IS_PRESERVED= a sugestão só entra no payload de INSERT de contato novo. Contato existente nunca sofre UPDATE de owner_user_id. Thread existente é reutilizada por resolveSalesWhatsappThread, que não escreve assigned_user_id; e trg_threads_round_robin dá RETURN NEW quando assigned_user_id já existe. Oportunidade continua herdando owner do contato
+HOW_TIMELINE_AUDIT_IS_RECORDED= duas origens distintas: (1) round-robin → activities "Atribuição automática / Contato auto-atribuído via round-robin" (texto atual preservado, agora só quando a trigger realmente sorteou); (2) número pessoal → activities "Atribuição inicial / Contato atribuído ao dono do número pessoal <endpoint>", gravada pelo helper compartilhado. Na thread, quando aplicável, last_routing_decision = {action:'initial_assignment', reason:'personal_endpoint_owner'} → thread_assignment_history via fn_log_thread_assignment_change (action_type já existente na whitelist)
+PROVIDER_DUPLICATION= NO — a regra vive em uma função SQL e em um helper TS; os webhooks só passam endpointId
+COMPATIBILITY_RISK= BAIXO. Sem backfill, sem UPDATE em registros atuais, sem nova tabela/coluna. Todos os endpoints sales/commercial de produção têm assigned_user_id NULL, então a função retorna NULL e o comportamento atual permanece bit-a-bit. Único ponto de atenção: a marcação de origem para a auditoria altera dois triggers de contatos — validar em ensaio com ROLLBACK que o texto de round-robin continua idêntico quando a origem é o sorteio, e que o INSERT do inbound nunca falha por causa da auditoria
 ```
 
-Fatos observados no banco:
-- `assign_round_robin` liga/desliga por `organizations.round_robin_enabled`; escopo por `round_robin_scope`. Em produção: Central Trabalhista e Viagi (`b246ef6f…`) com `round_robin_enabled = true`.
-- `thread_assignment_history` hoje: `take_over` 7.807, `reopen` 670, `manual_assignment` 650, `auto_reassign` 7.
-- Nenhuma diferença Comercial vs Atendimento na atribuição inicial: a única distinção é a fila em `get_default_queue_for_thread` (`customer_service` vs `commercial`) e a permissão `can_manage_cs_queue` em `reassign_thread`.
+## Fluxo resultante (mesma cadeia, sem caminho paralelo)
 
-## Fluxo concreto dos 4 casos
+```text
+inbound (Meta | Twilio | Evolution)
+  → resolve endpoint
+  → _shared/inbound-assignee.ts → fn_resolve_inbound_suggested_assignee(org, endpoint)
+       vendor_personal + dono válido → user_id
+       qualquer outro caso        → NULL
+  → contato: existente? mantém owner (nada a fazer)
+             novo? INSERT com owner_user_id = sugestão (se houver)
+                   sem sugestão → contacts_round_robin (comportamento atual)
+  → thread canônica (sales-thread.ts): reutiliza ou cria; herda owner do contato; nunca reatribui
+  → oportunidade: owner_user_id = owner do contato (inalterado)
+  → timeline: nota de round-robin OU nota de dono do número pessoal
+```
 
-Caso 1 — contato novo, número Comercial compartilhado
-Cria contato sem owner → round-robin da org escolhe vendedor elegível (menor `last_assigned_at`) → thread nova herda esse owner → atividade "auto-atribuído via round-robin". Sem mudanças propostas.
+Fora de escopo: Route/fila/thread pessoal, mudança em permissão de resposta, qualquer reatribuição automática posterior, backfill.
 
-Caso 2 — contato existente com responsável, número Comercial compartilhado
-Contato mantém owner; thread canônica reutilizada; `assigned_user_id` intocado; só `primary_endpoint_id`/`last_inbound_at`/status podem mudar. Sem mudanças propostas.
-
-Caso 3 — contato novo pelo número pessoal do Junior (9999)
-Hoje: round-robin sorteia qualquer vendedor; Junior pode ficar sem a conversa que chegou no próprio número.
-Proposto: `owner_user_id`/`assigned_user_id` = `endpoint.assigned_user_id` (Junior), com fallback para round-robin se Junior estiver inativo. Thread segue canônica Comercial, visível a todo o time; timeline registra "atribuído ao dono do número pessoal".
-
-Caso 4 — contato já atribuído à Maria envia para o 9999 do Junior
-Mantém Maria em contato, thread e oportunidade (regra atual de não reatribuir por inbound). Junior pode responder pelo 9999 (permissão por `assigned_user_id` do endpoint), e a troca de responsável, se desejada, é sempre explícita via `reassign_thread`/take over. Proposta não altera esse caso.
+Nada será implementado antes da sua aprovação.
