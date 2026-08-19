@@ -255,14 +255,18 @@ export function EvolutionProvisionPanel() {
         <div>
           <div className="text-sm font-medium">Números Evolution</div>
           <p className="text-xs text-muted-foreground">
-            Crie uma sessão, conecte pelo QR Code e depois vincule o número em WhatsApp Comercial.
+            Escolha o destino, conecte pelo QR Code e finalize o vínculo do número.
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <Button variant="ghost" size="icon" onClick={() => refetch()} title="Atualizar">
             <ArrowsClockwise className="h-4 w-4" />
           </Button>
-          <Button size="sm" onClick={onCreate} disabled={create.isPending}>
+          <Button
+            size="sm"
+            onClick={() => openStep1({ mode: 'create' })}
+            disabled={create.isPending}
+          >
             {create.isPending
               ? <SpinnerGap className="h-3.5 w-3.5 mr-1 animate-spin" />
               : <Plus className="h-3.5 w-3.5 mr-1" />}
