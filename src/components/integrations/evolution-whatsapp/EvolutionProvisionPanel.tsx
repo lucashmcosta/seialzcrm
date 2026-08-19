@@ -80,7 +80,19 @@ const LINK_ERROR: Record<string, string> = {
   INSTANCE_NOT_CONNECTED: 'A sessão não está conectada. Leia o QR Code novamente.',
   INSTANCE_ALREADY_LINKED: 'Esta sessão já está vinculada.',
   SALES_ROUTE_NOT_FOUND: 'Nenhuma Route de WhatsApp Comercial encontrada nesta organização.',
+  CUSTOMER_SERVICE_ROUTE_NOT_FOUND:
+    'Nenhuma Route de WhatsApp de Atendimento encontrada nesta organização.',
   PROVISION_FORBIDDEN: 'Você não tem permissão para gerenciar integrações nesta organização.',
+  PROVISION_ASSIGNED_USER_REQUIRED: 'Escolha o usuário responsável pelo número pessoal.',
+  PROVISION_ASSIGNED_USER_INVALID:
+    'O usuário escolhido não está ativo nesta organização. Escolha outro responsável.',
+  PROVISION_ASSIGNED_USER_CONFLICT:
+    'Este número pessoal já tem outro responsável. Ajuste o responsável antes de vincular.',
+  PROVISION_PURPOSE_LINE_MISMATCH:
+    'O destino escolhido não corresponde à Route encontrada. Revise a configuração das Routes.',
+  PROVISION_ENDPOINT_PURPOSE_CONFLICT:
+    'Este número já está cadastrado com outro destino nesta organização. ' +
+    'Não é possível reclassificá-lo por aqui.',
 };
 
 function linkErrorMessage(raw: string): string {
