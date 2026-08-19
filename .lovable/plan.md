@@ -34,23 +34,44 @@ EVOLUTION_CHANGES=
      evolution_instances.endpoint_id/provisioning_status='linked' e já exige
      last_known_state='open' + owner_number_digits == número.
 
-TWILIO_CHANGES=
+TWILIO_CHANGES= (opção (a) aprovada — verificação server-side, sem registro intermediário)
   1) UI (src/components/settings/AddWhatsAppEndpointDialog.tsx): adicionar
      EndpointDestinationStep (destino + responsável obrigatório se Pessoal) e remover o
-     INSERT direto em communication_endpoints.
-  2) O submit passa a chamar useSalesRouteManager.provisionEndpoint com
+     INSERT direto em communication_endpoints. Submit chama
+     useSalesRouteManager.provisionEndpoint com
      { provider:'twilio', address, destination, assignedUserId, displayName, senderSid }.
-  3) Edge (op provisionEndpoint): aceitar `senderSid` (+ external_account_id derivado da
-     integração twilio-whatsapp da org) e, APÓS a RPC, gravar apenas
-     sender_sid / external_account_id / organization_integration_id no endpoint retornado.
-     purpose e assigned_user_id continuam gravados exclusivamente pela RPC.
-  4) Ownership: hoje a RPC exige número já "owned" (organization_phone_numbers ou endpoint
-     existente). Como o sender Twilio é cadastrado manualmente, a ausência de lastro
-     resultaria em PROVISION_ADDRESS_NOT_OWNED. Opções, a decidir na implementação:
-     (a) aceitar `senderSid` verificado na API Twilio como prova de posse dentro do
-         mesmo op do Edge (o Edge grava o registro de posse antes de chamar a RPC), ou
-     (b) manter o cadastro do número em organization_phone_numbers no próprio fluxo.
-     Em qualquer caso, purpose/assigned_user_id seguem só pela RPC.
+  2) Edge (op provisionEndpoint, provider='twilio'): antes de qualquer escrita,
+     - carrega a integração twilio-whatsapp ATIVA da org (account_sid + auth_token);
+     - GET https://messaging.twilio.com/v2/Channels/Senders/{senderSid} com as credenciais
+       DA PRÓPRIA ORG; exige que o sender exista, esteja em estado utilizável (ONLINE) e
+       que `sender_id` (whatsapp:+E164) case com o número informado. Falha → erro
+       TWILIO_SENDER_NOT_VERIFIED / TWILIO_SENDER_ADDRESS_MISMATCH e NADA é escrito.
+     - só depois chama a RPC, passando a prova de posse já verificada.
+  3) Migração (única do escopo): `provision_line_endpoint` ganha 2 params opcionais
+     `p_sender_sid text default null`, `p_external_account_id text default null`.
+     Comportamento:
+     - Twilio: se não houver posse por organization_phone_numbers nem endpoint existente,
+       aceita posse APENAS quando p_sender_sid é informado (o Edge é o único chamador com
+       service_role, e ele só o envia após verificar na Twilio);
+     - grava sender_sid / external_account_id / organization_integration_id no MESMO
+       INSERT/UPDATE do endpoint, dentro da mesma transação de purpose + vínculo de Route.
+     - purpose e assigned_user_id continuam gravados exclusivamente pela RPC; nenhuma
+       outra assinatura/rota de chamada existente é alterada (params opcionais).
+  4) Por que este é o caminho mais seguro/idempotente:
+     - ZERO registro intermediário: nada é gravado em organization_phone_numbers (tabela de
+       telefonia/voz — gravar ali criaria um número fantasma na tela de Voz) nem em
+       qualquer tabela ponte. Se a RPC falhar, a transação inteira faz rollback e não
+       sobra endpoint, vínculo, posse ou classificação parcial.
+     - Retry do mesmo fluxo é idempotente: advisory lock por (org, whatsapp, dígitos) +
+       caminho `reused` da RPC; repetir com o mesmo destino é no-op, repetir com destino
+       diferente falha em PROVISION_ENDPOINT_PURPOSE_CONFLICT.
+     - Nunca gera número utilizável mal classificado: só existe endpoint se ele nasceu com
+       purpose correto e vínculo de Route na mesma transação; a RPC nunca toca
+       messaging_lines.active_endpoint_id.
+     - Os 13 endpoints Twilio legados com purpose='other' NÃO são alcançados: nenhum
+       backfill, nenhum UPDATE em massa, e a guarda de purpose impede reclassificação
+       silenciosa (tentar provisionar um deles falha com erro explícito).
+
 
 GENERIC_SCREEN_CHANGES=
   Nenhuma remoção. "WhatsApp Comercial" segue com: lista de números, provider, destino,
@@ -67,23 +88,46 @@ NEW_ENDPOINTS_CAN_STILL_BE_CREATED_AS_PURPOSE_OTHER=NO
   (nenhum caminho de UI restante insere endpoint sem destino explícito; o default
   'other' da coluna deixa de ser alcançável pelos fluxos de criação)
 
-ALL_PROVIDERS_USE_PROVISION_LINE_ENDPOINT=YES
-DESTINATION_SELECTED_INSIDE_INTEGRATION_FLOW=YES
+GATES FINAIS (a comprovar na entrega)
+META_USES_PROVISION_LINE_ENDPOINT=YES
+EVOLUTION_USES_PROVISION_LINE_ENDPOINT=YES
+TWILIO_USES_PROVISION_LINE_ENDPOINT=YES
+EVOLUTION_LEGACY_PROVISION_SALES_USED=NO
+DESTINATION_SELECTED_INSIDE_META_FLOW=YES
+DESTINATION_SELECTED_INSIDE_EVOLUTION_FLOW=YES
+DESTINATION_SELECTED_INSIDE_TWILIO_FLOW=YES
+PERSONAL_REQUIRES_USER=YES
+CUSTOMER_SERVICE_ROUTES_TO_CUSTOMER_SERVICE=YES
+COMMERCIAL_ROUTES_TO_SALES=YES
+PERSONAL_ROUTES_TO_SALES=YES
+PROVISION_CHANGES_ACTIVE_ENDPOINT=NO
 EXISTING_ENDPOINTS_CHANGED=0
-BACKFILL_REQUIRED=NO
+TWILIO_LEGACY_OTHER_ENDPOINTS_CHANGED=0
+BACKFILL_EXECUTED=NO
+TWILIO_SENDER_VERIFIED_SERVER_SIDE=YES
+TWILIO_OWNERSHIP_RETRY_IDEMPOTENT=YES
+TWILIO_PARTIAL_FAILURE_LEAVES_INVALID_ACTIVE_ENDPOINT=NO
+ROUND_ROBIN_CHANGED=NO
+THREAD_MODEL_CHANGED=NO
+ASSIGNMENT_RULES_CHANGED=NO
 
 COMPATIBILITY_RISK=BAIXO
   - Nenhuma migração de dados; nenhuma alteração em round-robin, atribuição, threads,
     oportunidades, inbound, permissões ou active_endpoint_id.
   - Ponto de atenção 1: a RPC proíbe reclassificar purpose de endpoint existente
     (PROVISION_ENDPOINT_PURPOSE_CONFLICT). Vincular instância Evolution a um número que
-    já exista com outro purpose falhará com mensagem clara — comportamento desejado,
-    mas a UI precisa traduzir o erro (mapa LINK_ERROR já existe no painel).
-  - Ponto de atenção 2: Evolution com destino "Atendimento" passa a exigir Route
+    já exista com outro purpose falhará com mensagem clara — a UI traduz o erro
+    (mapa LINK_ERROR já existe no painel).
+  - Ponto de atenção 2: Evolution com destino "Atendimento" exige Route
     (messaging_lines) com inbox_key='customer_service' ativa na org; sem ela o erro é
     PROVISION_LINE_NOT_FOUND (nada é criado automaticamente).
-  - Ponto de atenção 3: o passo Twilio depende da decisão de ownership (item 4 acima);
-    é o único ponto que pode exigir uma chamada extra à API Twilio no Edge.
+  - Ponto de atenção 3: a única migração do escopo adiciona 2 parâmetros OPCIONAIS à
+    RPC (sender_sid / external_account_id); nenhuma assinatura de chamada existente muda.
 ```
 
-Nada implementado. Aprove (e diga a opção de ownership do Twilio, se tiver preferência) que eu executo exatamente este diff.
+## Entrega
+
+Ao final: diff por provider (Meta / Evolution / Twilio), resultado de `tsgo` (typecheck),
+build e `deno check` das functions alteradas, mais o quadro de gates preenchido.
+Parada obrigatória para validação manual antes de publicar.
+
