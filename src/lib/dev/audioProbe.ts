@@ -84,6 +84,19 @@ function reactTimeText(audio: HTMLAudioElement): string {
   return timeLike ? (timeLike.textContent || '').trim() : 'n/a';
 }
 
+/** Finds the progress bullet (only absolutely-positioned inline-styled child) and its track. */
+function findVisual(audio: HTMLAudioElement): { bullet: HTMLElement | null; track: HTMLElement | null; bars: HTMLElement[] } {
+  const root = audio.parentElement;
+  if (!root) return { bullet: null, track: null, bars: [] };
+  const bullet = Array.from(root.querySelectorAll<HTMLElement>('div'))
+    .find((el) => el.style.position === 'absolute' && el.style.left !== '') ?? null;
+  const track = bullet?.parentElement ?? null;
+  const bars = track
+    ? Array.from(track.children).filter((c): c is HTMLElement => c instanceof HTMLElement && c !== bullet)
+    : [];
+  return { bullet, track, bars };
+}
+
 function attach(audio: HTMLAudioElement) {
   if (seen.has(audio)) return;
   seen.add(audio);
@@ -102,6 +115,7 @@ function attach(audio: HTMLAudioElement) {
     paused: [],
     seekable: [],
     buffered: [],
+    bulletReplaced: false,
   };
 
   const bump = (name: string) => { cap.events[name] = (cap.events[name] || 0) + 1; };
@@ -109,11 +123,34 @@ function attach(audio: HTMLAudioElement) {
     .forEach((ev) => audio.addEventListener(ev, () => bump(ev), { passive: true }));
 
   const snapshot = (t: number) => {
+    const { bullet, track, bars } = findVisual(audio);
+
+    if (bullet) {
+      if (cap.bulletRef === undefined) cap.bulletRef = bullet;
+      else if (cap.bulletRef !== bullet) cap.bulletReplaced = true;
+    }
+
+    const bulletRect = bullet?.getBoundingClientRect();
+    const trackRect = track?.getBoundingClientRect();
+    const leftStyle = bullet?.style.left ?? '';
+    const activeBars = bars.filter((b) => {
+      const op = parseFloat(getComputedStyle(b).opacity || '1');
+      return op > 0.5;
+    }).length;
+
     cap.samples.push({
       t,
       currentTime: audio.currentTime,
       reactTime: reactTimeText(audio),
       duration: audio.duration,
+      // `left: X%` is exactly the component's `progress` state, read back from the DOM.
+      progressState: leftStyle.endsWith('%') ? (parseFloat(leftStyle) / 100).toFixed(3) : 'n/a',
+      bulletStyle: bullet ? `left=${leftStyle || 'none'};transform=${bullet.style.transform || 'none'}` : 'n/a',
+      bulletX: bulletRect ? bulletRect.x.toFixed(2) : 'n/a',
+      bulletXRel: bulletRect && trackRect ? (bulletRect.x - trackRect.x).toFixed(2) : 'n/a',
+      waveformWidth: trackRect ? trackRect.width.toFixed(2) : 'n/a',
+      barsActive: bars.length ? `${activeBars}/${bars.length}` : 'n/a',
+      bulletSame: bullet ? (cap.bulletReplaced ? 'REPLACED' : 'same') : 'n/a',
     });
     cap.readyState.push(audio.readyState);
     cap.networkState.push(audio.networkState);
@@ -121,6 +158,7 @@ function attach(audio: HTMLAudioElement) {
     cap.seekable.push(ranges(audio.seekable));
     cap.buffered.push(ranges(audio.buffered));
   };
+
 
   audio.addEventListener('play', () => {
     if (cap.startedAt) return;
