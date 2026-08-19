@@ -322,6 +322,11 @@ export function EvolutionProvisionPanel() {
                   <Badge variant="outline" className="text-[10px]">
                     {i.provisioningStatus === 'linked' ? 'Vinculado' : 'Em provisionamento'}
                   </Badge>
+                  {i.provisioningStatus === 'pending' && destinationReady && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {DESTINATION_LABEL[chosen.purpose]}
+                    </Badge>
+                  )}
                   {finishing && (
                     <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                       <SpinnerGap className="h-3 w-3 animate-spin" /> Finalizando conexão…
@@ -338,7 +343,15 @@ export function EvolutionProvisionPanel() {
                       <QrCode className="h-3 w-3 mr-1" /> Ver QR
                     </Button>
                   )}
-                  {linkable && (
+                  {linkable && !destinationReady && (
+                    <Button
+                      size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                      onClick={() => openStep1({ mode: 'assign', instanceId: i.id })}
+                    >
+                      Escolher destino
+                    </Button>
+                  )}
+                  {linkable && destinationReady && (
                     <Button
                       size="sm" className="h-6 px-2 text-[10px]"
                       disabled={link.isPending}
@@ -347,7 +360,7 @@ export function EvolutionProvisionPanel() {
                       {link.isPending
                         ? <SpinnerGap className="h-3 w-3 mr-1 animate-spin" />
                         : <LinkIcon className="h-3 w-3 mr-1" />}
-                      Vincular ao WhatsApp Comercial
+                      Vincular a {DESTINATION_LABEL[chosen.purpose]}
                     </Button>
                   )}
                   <Button
