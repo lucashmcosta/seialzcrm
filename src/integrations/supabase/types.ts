@@ -13313,6 +13313,10 @@ export type Database = {
         Args: { p_audit_ids: string[]; p_baseline: Json }
         Returns: Record<string, unknown>
       }
+      fn_resolve_inbound_suggested_assignee: {
+        Args: { _endpoint_id: string; _organization_id: string }
+        Returns: string
+      }
       fn_resolve_marketing_campaign_id: {
         Args: {
           _org_id: string
