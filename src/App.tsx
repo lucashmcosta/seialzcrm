@@ -191,7 +191,6 @@ import DocsIndex from "./pages/docs/DocsIndex";
 import DocsModule from "./pages/docs/DocsModule";
 import Health from "./pages/Health";
 import DevHealth from "./pages/DevHealth";
-import DevListAB from "./pages/DevListAB";
 
 const ApiDocs = lazyWithRetry("ApiDocs", () => import("./pages/docs/ApiDocs"));
 
@@ -457,7 +456,6 @@ const App = () => (
           {/* Health / monitoring */}
           <Route path="/health" element={<Health />} />
           <Route path="/dev/health" element={<DevHealth />} />
-          <Route path="/dev/list-ab" element={<DevListAB />} />
 
 
           {/* Public Documentation */}
