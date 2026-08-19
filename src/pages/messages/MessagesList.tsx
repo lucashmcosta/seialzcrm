@@ -708,6 +708,12 @@ function DesktopMessagesList() {
   // Badge da lista lateral (somente exibição): endpoint da última mensagem,
   // com `primary_endpoint_id` como fallback.
   const threadBadgeEndpoints = useThreadBadgeEndpoints(threadIdsForEndpointMap, hasMultipleEndpoints);
+  // Preview da última mensagem (somente exibição): resolve media_type/whatsapp_status
+  // em lote pelos `last_message_id` das threads carregadas.
+  const lastMessageMeta = useThreadLastMessageMeta(
+    (threads ?? []).map((t) => t.last_message_id),
+    true,
+  );
   const endpointById: Record<string, typeof orgEndpoints[number]> = Object.fromEntries(orgEndpoints.map((e) => [e.id, e]));
 
   // PR4: business_context da thread selecionada. Quando 'sales', o composer
