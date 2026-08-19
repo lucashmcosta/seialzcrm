@@ -10,30 +10,6 @@ interface AudioMessagePlayerProps {
   threadId?: string;
   mediaType?: string | null;
 }
-/**
- * Denominador seguro para o progresso visual.
- * Áudios de voz (opus/ogg) chegam sem duração conhecida: `audio.duration` fica
- * Infinity até o download terminar. Nesse caso caímos para seekable/buffered
- * para que a bolinha e as barras avancem durante a reprodução.
- */
-function readProgressDenominator(audio: HTMLAudioElement): number {
-  if (Number.isFinite(audio.duration) && audio.duration > 0) return audio.duration;
-  try {
-    const seekable = audio.seekable;
-    if (seekable.length) {
-      const end = seekable.end(seekable.length - 1);
-      if (Number.isFinite(end) && end > 0) return end;
-    }
-  } catch { /* noop */ }
-  try {
-    const buffered = audio.buffered;
-    if (buffered.length) {
-      const end = buffered.end(buffered.length - 1);
-      if (Number.isFinite(end) && end > 0) return end;
-    }
-  } catch { /* noop */ }
-  return 0;
-}
 
 
 export function AudioMessagePlayer({
@@ -52,7 +28,7 @@ export function AudioMessagePlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [progressDuration, setProgressDuration] = useState(0);
+  
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -76,7 +52,7 @@ export function AudioMessagePlayer({
     setIsLoading(false);
     setCurrentTime(0);
     setDuration(0);
-    setProgressDuration(0);
+
 
     const audio = audioRef.current;
     if (audio) {
@@ -98,7 +74,7 @@ export function AudioMessagePlayer({
     if (audioRef.current) audioRef.current.playbackRate = playbackRate;
   }, [playbackRate]);
 
-  const progress = progressDuration > 0 ? Math.min(1, currentTime / progressDuration) : 0;
+  const progress = duration > 0 ? currentTime / duration : 0;
 
   const formatTime = (seconds: number) => {
     if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
@@ -113,8 +89,6 @@ export function AudioMessagePlayer({
       if (!mountedRef.current) return;
       setCurrentTime(audio.currentTime);
       if (Number.isFinite(audio.duration)) setDuration(audio.duration);
-      setProgressDuration(readProgressDenominator(audio));
-      if (audio.paused || audio.ended) return;
       animFrameRef.current = requestAnimationFrame(tick);
     };
     tick();
@@ -127,20 +101,7 @@ export function AudioMessagePlayer({
 
     const onLoaded = () => {
       if (Number.isFinite(audio.duration)) setDuration(audio.duration);
-      setProgressDuration(readProgressDenominator(audio));
       setIsLoading(false);
-    };
-    const onDurationChange = () => {
-      if (Number.isFinite(audio.duration)) setDuration(audio.duration);
-      setProgressDuration(readProgressDenominator(audio));
-    };
-    const onTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
-      setProgressDuration(readProgressDenominator(audio));
-    };
-    const onPlaying = () => {
-      setIsPlaying(true);
-      startProgress(audio);
     };
     const onEnded = () => {
       setIsPlaying(false);
@@ -167,19 +128,11 @@ export function AudioMessagePlayer({
       }
     };
     const onPause = () => {
-      cancelAnimationFrame(animFrameRef.current);
-      setCurrentTime(audio.currentTime);
       if (!audio.ended) setIsPlaying(false);
     };
 
     audio.addEventListener('loadedmetadata', onLoaded);
     audio.addEventListener('canplay', onLoaded);
-    audio.addEventListener('durationchange', onDurationChange);
-    audio.addEventListener('progress', onDurationChange);
-    audio.addEventListener('timeupdate', onTimeUpdate);
-    audio.addEventListener('play', onPlaying);
-    audio.addEventListener('playing', onPlaying);
-    audio.addEventListener('seeked', onTimeUpdate);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('pause', onPause);
     audio.addEventListener('error', onError);
@@ -187,29 +140,23 @@ export function AudioMessagePlayer({
     return () => {
       audio.removeEventListener('loadedmetadata', onLoaded);
       audio.removeEventListener('canplay', onLoaded);
-      audio.removeEventListener('durationchange', onDurationChange);
-      audio.removeEventListener('progress', onDurationChange);
-      audio.removeEventListener('timeupdate', onTimeUpdate);
-      audio.removeEventListener('play', onPlaying);
-      audio.removeEventListener('playing', onPlaying);
-      audio.removeEventListener('seeked', onTimeUpdate);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('error', onError);
       cancelAnimationFrame(animFrameRef.current);
     };
-  }, [src, srcOk, messageId, threadId, mediaType, startProgress]);
+  }, [src, srcOk, messageId, threadId, mediaType]);
 
   useEffect(() => {
     playbackRequestedRef.current = false;
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
-    setProgressDuration(0);
     setIsLoading(false);
     setHasError(false);
     cancelAnimationFrame(animFrameRef.current);
   }, [src]);
+
 
 
   const isIgnorablePlayError = (err: unknown) => {
@@ -261,18 +208,16 @@ export function AudioMessagePlayer({
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
-    const seekDuration = progressDuration || duration;
-    if (!audio || !seekDuration) return;
+    if (!audio || !duration) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0]?.clientX ?? 0 : e.clientX;
     const x = clientX - rect.left;
     const pct = Math.max(0, Math.min(1, x / rect.width));
-    try {
-      audio.currentTime = pct * seekDuration;
-    } catch { /* noop */ }
+    audio.currentTime = pct * duration;
     setCurrentTime(audio.currentTime);
   };
+
 
 
   if (!srcOk || hasError) {
