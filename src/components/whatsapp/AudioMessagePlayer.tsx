@@ -10,6 +10,31 @@ interface AudioMessagePlayerProps {
   threadId?: string;
   mediaType?: string | null;
 }
+/**
+ * Denominador seguro para o progresso visual.
+ * Áudios de voz (opus/ogg) chegam sem duração conhecida: `audio.duration` fica
+ * Infinity até o download terminar. Nesse caso caímos para seekable/buffered
+ * para que a bolinha e as barras avancem durante a reprodução.
+ */
+function readProgressDenominator(audio: HTMLAudioElement): number {
+  if (Number.isFinite(audio.duration) && audio.duration > 0) return audio.duration;
+  try {
+    const seekable = audio.seekable;
+    if (seekable.length) {
+      const end = seekable.end(seekable.length - 1);
+      if (Number.isFinite(end) && end > 0) return end;
+    }
+  } catch { /* noop */ }
+  try {
+    const buffered = audio.buffered;
+    if (buffered.length) {
+      const end = buffered.end(buffered.length - 1);
+      if (Number.isFinite(end) && end > 0) return end;
+    }
+  } catch { /* noop */ }
+  return 0;
+}
+
 
 export function AudioMessagePlayer({
   src,
