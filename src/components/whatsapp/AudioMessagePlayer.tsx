@@ -54,7 +54,7 @@ export function AudioMessagePlayer({
     setIsLoading(false);
     setCurrentTime(0);
     setDuration(0);
-    setProgressDuration(0);
+
 
     const audio = audioRef.current;
     if (audio) {
