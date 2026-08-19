@@ -34,23 +34,44 @@ EVOLUTION_CHANGES=
      evolution_instances.endpoint_id/provisioning_status='linked' e já exige
      last_known_state='open' + owner_number_digits == número.
 
-TWILIO_CHANGES=
+TWILIO_CHANGES= (opção (a) aprovada — verificação server-side, sem registro intermediário)
   1) UI (src/components/settings/AddWhatsAppEndpointDialog.tsx): adicionar
      EndpointDestinationStep (destino + responsável obrigatório se Pessoal) e remover o
-     INSERT direto em communication_endpoints.
-  2) O submit passa a chamar useSalesRouteManager.provisionEndpoint com
+     INSERT direto em communication_endpoints. Submit chama
+     useSalesRouteManager.provisionEndpoint com
      { provider:'twilio', address, destination, assignedUserId, displayName, senderSid }.
-  3) Edge (op provisionEndpoint): aceitar `senderSid` (+ external_account_id derivado da
-     integração twilio-whatsapp da org) e, APÓS a RPC, gravar apenas
-     sender_sid / external_account_id / organization_integration_id no endpoint retornado.
-     purpose e assigned_user_id continuam gravados exclusivamente pela RPC.
-  4) Ownership: hoje a RPC exige número já "owned" (organization_phone_numbers ou endpoint
-     existente). Como o sender Twilio é cadastrado manualmente, a ausência de lastro
-     resultaria em PROVISION_ADDRESS_NOT_OWNED. Opções, a decidir na implementação:
-     (a) aceitar `senderSid` verificado na API Twilio como prova de posse dentro do
-         mesmo op do Edge (o Edge grava o registro de posse antes de chamar a RPC), ou
-     (b) manter o cadastro do número em organization_phone_numbers no próprio fluxo.
-     Em qualquer caso, purpose/assigned_user_id seguem só pela RPC.
+  2) Edge (op provisionEndpoint, provider='twilio'): antes de qualquer escrita,
+     - carrega a integração twilio-whatsapp ATIVA da org (account_sid + auth_token);
+     - GET https://messaging.twilio.com/v2/Channels/Senders/{senderSid} com as credenciais
+       DA PRÓPRIA ORG; exige que o sender exista, esteja em estado utilizável (ONLINE) e
+       que `sender_id` (whatsapp:+E164) case com o número informado. Falha → erro
+       TWILIO_SENDER_NOT_VERIFIED / TWILIO_SENDER_ADDRESS_MISMATCH e NADA é escrito.
+     - só depois chama a RPC, passando a prova de posse já verificada.
+  3) Migração (única do escopo): `provision_line_endpoint` ganha 2 params opcionais
+     `p_sender_sid text default null`, `p_external_account_id text default null`.
+     Comportamento:
+     - Twilio: se não houver posse por organization_phone_numbers nem endpoint existente,
+       aceita posse APENAS quando p_sender_sid é informado (o Edge é o único chamador com
+       service_role, e ele só o envia após verificar na Twilio);
+     - grava sender_sid / external_account_id / organization_integration_id no MESMO
+       INSERT/UPDATE do endpoint, dentro da mesma transação de purpose + vínculo de Route.
+     - purpose e assigned_user_id continuam gravados exclusivamente pela RPC; nenhuma
+       outra assinatura/rota de chamada existente é alterada (params opcionais).
+  4) Por que este é o caminho mais seguro/idempotente:
+     - ZERO registro intermediário: nada é gravado em organization_phone_numbers (tabela de
+       telefonia/voz — gravar ali criaria um número fantasma na tela de Voz) nem em
+       qualquer tabela ponte. Se a RPC falhar, a transação inteira faz rollback e não
+       sobra endpoint, vínculo, posse ou classificação parcial.
+     - Retry do mesmo fluxo é idempotente: advisory lock por (org, whatsapp, dígitos) +
+       caminho `reused` da RPC; repetir com o mesmo destino é no-op, repetir com destino
+       diferente falha em PROVISION_ENDPOINT_PURPOSE_CONFLICT.
+     - Nunca gera número utilizável mal classificado: só existe endpoint se ele nasceu com
+       purpose correto e vínculo de Route na mesma transação; a RPC nunca toca
+       messaging_lines.active_endpoint_id.
+     - Os 13 endpoints Twilio legados com purpose='other' NÃO são alcançados: nenhum
+       backfill, nenhum UPDATE em massa, e a guarda de purpose impede reclassificação
+       silenciosa (tentar provisionar um deles falha com erro explícito).
+
 
 GENERIC_SCREEN_CHANGES=
   Nenhuma remoção. "WhatsApp Comercial" segue com: lista de números, provider, destino,
