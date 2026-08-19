@@ -76,7 +76,7 @@ export function AudioMessagePlayer({
     if (audioRef.current) audioRef.current.playbackRate = playbackRate;
   }, [playbackRate]);
 
-  const progress = progressDuration > 0 ? Math.min(1, currentTime / progressDuration) : 0;
+  const progress = duration > 0 ? currentTime / duration : 0;
 
   const formatTime = (seconds: number) => {
     if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
