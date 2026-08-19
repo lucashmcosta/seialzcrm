@@ -163,10 +163,59 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
   window.addEventListener("unhandledrejection", (event) => recoverViteDeps(event.reason));
 }
 
-// TEMPORARY (audio progress audit): passive telemetry, only with ?audioProbe=1.
-if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("audioProbe")) {
-  import("./lib/dev/audioProbe").then((m) => m.installAudioProbe()).catch(() => {});
+// TEMPORARY (audio progress audit): passive telemetry.
+// Activation is resilient: ?audioProbe=1, #audioProbe, the parent document's
+// query string (preview runs in an iframe), or a persisted localStorage flag.
+if (typeof window !== "undefined") {
+  const PROBE_KEY = "audioProbe";
+  const hasInSearch = (search: string) => {
+    try {
+      return new URLSearchParams(search).has(PROBE_KEY);
+    } catch {
+      return false;
+    }
+  };
+  const parentSearch = () => {
+    try {
+      if (window.parent && window.parent !== window) return window.parent.location.search;
+    } catch {
+      /* cross-origin parent — ignore */
+    }
+    return "";
+  };
+  const stored = () => {
+    try {
+      return window.localStorage.getItem(PROBE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  };
+
+  const reasons: string[] = [];
+  if (hasInSearch(window.location.search)) reasons.push("search");
+  if (window.location.hash.includes(PROBE_KEY)) reasons.push("hash");
+  if (hasInSearch(parentSearch())) reasons.push("parent-search");
+  if (stored()) reasons.push("localStorage");
+
+  if (reasons.length > 0) {
+    if (reasons.some((r) => r !== "localStorage")) {
+      try {
+        window.localStorage.setItem(PROBE_KEY, "1");
+      } catch {
+        /* ignore */
+      }
+    }
+    // eslint-disable-next-line no-console
+    console.log(`AUDIO_PROBE_ACTIVATION=${reasons.join("+")} URL=${window.location.href}`);
+    import("./lib/dev/audioProbe")
+      .then((m) => m.installAudioProbe(reasons.join("+")))
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("AUDIO_PROBE_LOAD_FAILED", err);
+      });
+  }
 }
+
 
 
 
