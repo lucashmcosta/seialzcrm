@@ -28,6 +28,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { logEvolution, newRequestId } from "../_shared/evolution/logger.ts";
 import { callerKey, rateLimit } from "../_shared/evolution/rate-limit.ts";
+import { resolveInboundSuggestedAssignee } from "../_shared/inbound-assignee.ts";
 import { normalizeEvolutionState } from "../_shared/evolution/state.ts";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
@@ -523,6 +524,7 @@ async function findOrCreateContact(
   fromE164: string,
   profileName: string,
   inbound: InboundSettings,
+  inboundEndpointId?: string | null,
 ): Promise<{ contactId: string | null; contactOwnerId: string | null; created: boolean }> {
   const variations = normalizePhoneForSearch(fromE164);
   const or = variations.map((p) => `phone.eq.${p}`).join(",");
@@ -555,18 +557,28 @@ async function findOrCreateContact(
   if (!identity.ok) {
     return { contactId: null, contactOwnerId: null, created: false };
   }
+  // Owner sugerido: só quando o endpoint de entrada é pessoal com dono válido.
+  // NULL ⇒ payload idêntico ao anterior ⇒ round-robin atual roda igual.
+  const suggestedOwnerId = await resolveInboundSuggestedAssignee(
+    service,
+    organizationId,
+    inboundEndpointId ?? null,
+  );
+  const contactInsert: Record<string, unknown> = {
+    organization_id: organizationId,
+    full_name: identity.fullName,
+    first_name: identity.firstName,
+    last_name: identity.lastName,
+    address_country_code: identity.country,
+    phone: fromE164,
+    source: "whatsapp",
+    lifecycle_stage: inbound.default_lifecycle_stage || "lead",
+  };
+  if (suggestedOwnerId) contactInsert.owner_user_id = suggestedOwnerId;
+
   const { data: created, error } = await service
     .from("contacts")
-    .insert({
-      organization_id: organizationId,
-      full_name: identity.fullName,
-      first_name: identity.firstName,
-      last_name: identity.lastName,
-      address_country_code: identity.country,
-      phone: fromE164,
-      source: "whatsapp",
-      lifecycle_stage: inbound.default_lifecycle_stage || "lead",
-    })
+    .insert(contactInsert)
     .select("id, owner_user_id")
     .single();
   if (error || !created) return { contactId: null, contactOwnerId: null, created: false };
@@ -1084,7 +1096,7 @@ async function ingestInboundMessage(
 
   // 2) Contato
   const { contactId, contactOwnerId, created } = await findOrCreateContact(
-    service, ctx.organizationId, fromE164, parsed.pushName ?? "", settings,
+    service, ctx.organizationId, fromE164, parsed.pushName ?? "", settings, ctx.endpointId,
   );
   if (!contactId) {
     return { messageId: null, threadId: null, error: "no_contact" };

@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
 import { salesCanonicalInboundEnabled } from "../_shared/sales-canonical-gate.ts";
+import { resolveInboundSuggestedAssignee } from "../_shared/inbound-assignee.ts";
 
 
 const corsHeaders = {
@@ -710,18 +711,26 @@ serve(async (req) => {
           })
         }
 
+        // Owner sugerido: só quando o endpoint de entrada é pessoal com dono
+        // válido. NULL ⇒ payload idêntico ao anterior ⇒ round-robin igual.
+        const suggestedOwnerId = await resolveInboundSuggestedAssignee(
+          supabase, orgId!, endpointId,
+        )
+        const contactInsert: Record<string, unknown> = {
+          organization_id: orgId,
+          full_name: identity.fullName,
+          first_name: identity.firstName,
+          last_name: identity.lastName,
+          address_country_code: identity.country,
+          phone: from,
+          source: 'whatsapp',
+          lifecycle_stage: inboundSettings.default_lifecycle_stage || 'lead',
+        }
+        if (suggestedOwnerId) contactInsert.owner_user_id = suggestedOwnerId
+
         const { data: newContact, error: createError } = await supabase
           .from('contacts')
-          .insert({
-            organization_id: orgId,
-            full_name: identity.fullName,
-            first_name: identity.firstName,
-            last_name: identity.lastName,
-            address_country_code: identity.country,
-            phone: from,
-            source: 'whatsapp',
-            lifecycle_stage: inboundSettings.default_lifecycle_stage || 'lead',
-          })
+          .insert(contactInsert)
           .select('id, owner_user_id')
           .single()
 
