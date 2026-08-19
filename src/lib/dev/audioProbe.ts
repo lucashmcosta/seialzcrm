@@ -227,18 +227,47 @@ function printOne(cap: Capture) {
   console.log(lines.join('\n'));
 }
 
-export function installAudioProbe() {
+export function installAudioProbe(activation = 'unknown') {
   const scan = () => document.querySelectorAll('audio').forEach((a) => attach(a as HTMLAudioElement));
   scan();
   const mo = new MutationObserver(scan);
   mo.observe(document.body, { childList: true, subtree: true });
 
+  const diag = () => {
+    const els = Array.from(document.querySelectorAll('audio')) as HTMLAudioElement[];
+    const attached = els.filter((el) => seen.has(el)).length;
+    const lines = [
+      '--- AUDIO_PROBE_DIAG ---',
+      `AUDIO_PROBE_ACTIVATION=${activation}`,
+      `URL=${window.location.href}`,
+      `IN_IFRAME=${window.parent !== window ? 'YES' : 'NO'}`,
+      `AUDIO_ELEMENTS_FOUND=${els.length}`,
+      `AUDIO_ELEMENTS_INSTRUMENTED=${attached}`,
+      `CAPTURES=${captures.length}`,
+      `SRCS=${els.map((el) => el.currentSrc || el.src || '(empty)').join(' | ') || 'none'}`,
+    ];
+    // eslint-disable-next-line no-console
+    console.log(lines.join('\n'));
+    return { found: els.length, instrumented: attached, captures: captures.length };
+  };
+
   const api = {
     captures,
+    activation,
+    diag,
     report: () => { captures.forEach(printOne); return captures; },
     json: () => JSON.stringify(captures.map(({ detachRaf, bulletRef, ...rest }) => rest), null, 2),
+    disable: () => {
+      try { window.localStorage.removeItem('audioProbe'); } catch { /* ignore */ }
+      mo.disconnect();
+      // eslint-disable-next-line no-console
+      console.log('AUDIO_PROBE_DISABLED=YES (reload to fully detach)');
+    },
   };
   (window as unknown as { __audioProbe: typeof api }).__audioProbe = api;
   // eslint-disable-next-line no-console
-  console.log('[audioProbe] armed — press play on an audio, wait ~5s, read the AUDIO_CAPTURE block.');
+  console.log(`AUDIO_PROBE_LOADED activation=${activation} audioElements=${document.querySelectorAll('audio').length}`);
+  // eslint-disable-next-line no-console
+  console.log('[audioProbe] armed — press play on an audio, wait ~5s, read the AUDIO_CAPTURE block. Run __audioProbe.diag() for status.');
 }
+
