@@ -13000,6 +13000,10 @@ export type Database = {
         Args: { _contact_id: string }
         Returns: boolean
       }
+      can_user_manage_integrations_in_org: {
+        Args: { p_organization_id: string; p_user_id: string }
+        Returns: boolean
+      }
       cancel_telephony_transfer_workflow: {
         Args: {
           _expected_version: number
@@ -13613,6 +13617,36 @@ export type Database = {
           p_organization_id: string
           p_provider: string
           p_purpose: string
+        }
+        Returns: Json
+      }
+      provision_line_endpoint_core: {
+        Args: {
+          p_actor_override: string
+          p_address: string
+          p_assigned_user_id?: string
+          p_display_name?: string
+          p_external_account_id?: string
+          p_instance_name?: string
+          p_line_id: string
+          p_organization_id: string
+          p_provider: string
+          p_purpose: string
+          p_sender_sid?: string
+        }
+        Returns: Json
+      }
+      provision_line_endpoint_twilio_verified: {
+        Args: {
+          p_actor_user_id: string
+          p_address: string
+          p_assigned_user_id?: string
+          p_display_name?: string
+          p_external_account_id?: string
+          p_line_id: string
+          p_organization_id: string
+          p_purpose: string
+          p_sender_sid: string
         }
         Returns: Json
       }
