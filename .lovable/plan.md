@@ -123,7 +123,26 @@ COMPATIBILITY_RISK=BAIXO
     PROVISION_LINE_NOT_FOUND (nada é criado automaticamente).
   - Ponto de atenção 3: a única migração do escopo adiciona 2 parâmetros OPCIONAIS à
     RPC (sender_sid / external_account_id); nenhuma assinatura de chamada existente muda.
+
+REGRESSION_REQUIREMENT (bloqueante)
+  - A alteração em provision_line_endpoint é ESTRITAMENTE ADITIVA. Com
+    p_sender_sid IS NULL e p_external_account_id IS NULL, a execução segue o mesmo
+    caminho de hoje, instrução por instrução.
+  - Nenhum IF existente de Meta ou Evolution é editado. Os dois params novos só
+    aparecem em (i) uma cláusula adicional no gate de posse Twilio, alcançada apenas
+    quando o caminho atual já iria levantar PROVISION_ADDRESS_NOT_OWNED, e (ii) duas
+    atribuições no INSERT/UPDATE do endpoint que são no-op quando os params são NULL
+    (COALESCE preservando o valor atual).
+  - Compatibilidade binária: os params entram no FIM da assinatura com DEFAULT NULL,
+    a função é recriada com CREATE OR REPLACE (mesmo nome/ordem dos params atuais),
+    e os GRANTs são reaplicados. Chamadores atuais (Meta, Evolution, tela Comercial)
+    continuam válidos sem alteração de código.
+  - Antes do merge: reexecutar os cenários de Meta e Evolution (ensaio em transação
+    com ROLLBACK, mesmos casos usados na Fase 3) e comparar saída da RPC campo a
+    campo. Qualquer divergência de comportamento em Meta ou Evolution interrompe a
+    implementação para revisão — não há merge parcial.
 ```
+
 
 ## Entrega
 
