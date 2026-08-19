@@ -163,6 +163,13 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
   window.addEventListener("unhandledrejection", (event) => recoverViteDeps(event.reason));
 }
 
+// TEMPORARY (audio progress audit): passive telemetry, only with ?audioProbe=1.
+if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("audioProbe")) {
+  import("./lib/dev/audioProbe").then((m) => m.installAudioProbe()).catch(() => {});
+}
+
+
+
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <Sentry.ErrorBoundary
