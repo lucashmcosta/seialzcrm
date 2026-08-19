@@ -31,6 +31,9 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import {
   useCreateEvolutionInstance,
   useDeleteEvolutionInstance,
   useEvolutionProvisionedInstances,
@@ -39,6 +42,12 @@ import {
   useSyncPendingInstanceIdentity,
 } from '@/hooks/useEvolutionProvisioning';
 import { useConnectInstance } from '@/hooks/useEvolutionInstances';
+import { useOrganization } from '@/hooks/useOrganization';
+import {
+  DESTINATION_LABEL,
+  EndpointDestinationStep,
+  type EndpointDestination,
+} from '@/components/settings/EndpointDestinationStep';
 
 const STATE_LABEL: Record<string, string> = {
   open: 'Conectado',
@@ -71,7 +80,19 @@ const LINK_ERROR: Record<string, string> = {
   INSTANCE_NOT_CONNECTED: 'A sessão não está conectada. Leia o QR Code novamente.',
   INSTANCE_ALREADY_LINKED: 'Esta sessão já está vinculada.',
   SALES_ROUTE_NOT_FOUND: 'Nenhuma Route de WhatsApp Comercial encontrada nesta organização.',
+  CUSTOMER_SERVICE_ROUTE_NOT_FOUND:
+    'Nenhuma Route de WhatsApp de Atendimento encontrada nesta organização.',
   PROVISION_FORBIDDEN: 'Você não tem permissão para gerenciar integrações nesta organização.',
+  PROVISION_ASSIGNED_USER_REQUIRED: 'Escolha o usuário responsável pelo número pessoal.',
+  PROVISION_ASSIGNED_USER_INVALID:
+    'O usuário escolhido não está ativo nesta organização. Escolha outro responsável.',
+  PROVISION_ASSIGNED_USER_CONFLICT:
+    'Este número pessoal já tem outro responsável. Ajuste o responsável antes de vincular.',
+  PROVISION_PURPOSE_LINE_MISMATCH:
+    'O destino escolhido não corresponde à Route encontrada. Revise a configuração das Routes.',
+  PROVISION_ENDPOINT_PURPOSE_CONFLICT:
+    'Este número já está cadastrado com outro destino nesta organização. ' +
+    'Não é possível reclassificá-lo por aqui.',
 };
 
 function linkErrorMessage(raw: string): string {
@@ -91,8 +112,15 @@ function safeDetail(e: unknown): string | undefined {
 }
 
 
+/** Destino escolhido explicitamente para uma sessão (nunca inferido). */
+interface ChosenDestination {
+  purpose: EndpointDestination;
+  assignedUserId: string | null;
+}
+
 export function EvolutionProvisionPanel() {
   const { data, isLoading, error, refetch } = useEvolutionProvisionedInstances();
+  const { organization } = useOrganization();
   const create = useCreateEvolutionInstance();
   const remove = useDeleteEvolutionInstance();
   const syncWebhook = useSyncEvolutionWebhook();
@@ -101,6 +129,19 @@ export function EvolutionProvisionPanel() {
   const link = useLinkPendingInstance();
 
   const [qr, setQr] = useState<{ instanceName: string; base64: string | null } | null>(null);
+
+  // Destino por instância. Sem entrada aqui, "Vincular" fica indisponível:
+  // nenhuma sessão é vinculada com destino presumido.
+  const [destinationByInstance, setDestinationByInstance] =
+    useState<Record<string, ChosenDestination>>({});
+
+  // Passo 1 (destino). `mode: 'create'` antecede a criação da sessão;
+  // `mode: 'assign'` define o destino de uma sessão pendente antiga.
+  const [step1, setStep1] = useState<
+    { mode: 'create' } | { mode: 'assign'; instanceId: string } | null
+  >(null);
+  const [draftPurpose, setDraftPurpose] = useState<EndpointDestination>('commercial');
+  const [draftUserId, setDraftUserId] = useState<string | null>(null);
 
   const instances = data?.instances ?? [];
 
@@ -120,10 +161,29 @@ export function EvolutionProvisionPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instances.map((i) => `${i.id}:${i.connected}:${i.identityKnown}`).join('|')]);
 
+  const openStep1 = (target: { mode: 'create' } | { mode: 'assign'; instanceId: string }) => {
+    const current = target.mode === 'assign' ? destinationByInstance[target.instanceId] : undefined;
+    setDraftPurpose(current?.purpose ?? 'commercial');
+    setDraftUserId(current?.assignedUserId ?? null);
+    setStep1(target);
+  };
+
+  const draftValid = draftPurpose !== 'vendor_personal' || !!draftUserId;
+
   const onLink = async (instanceId: string) => {
+    const chosen = destinationByInstance[instanceId];
+    // Trava de segurança: sem destino explícito, nada é enviado.
+    if (!chosen || (chosen.purpose === 'vendor_personal' && !chosen.assignedUserId)) {
+      openStep1({ mode: 'assign', instanceId });
+      return;
+    }
     try {
-      await link.mutateAsync(instanceId);
-      toast.success('Número vinculado ao WhatsApp Comercial', {
+      await link.mutateAsync({
+        instanceId,
+        purpose: chosen.purpose,
+        assignedUserId: chosen.assignedUserId,
+      });
+      toast.success(`Número vinculado a ${DESTINATION_LABEL[chosen.purpose]}`, {
         description: 'O número não foi tornado ativo para envio.',
       });
     } catch (e) {
@@ -134,11 +194,13 @@ export function EvolutionProvisionPanel() {
     }
   };
 
-
-  const onCreate = async () => {
+  // Passo 2: cria a sessão e o QR (fluxo inalterado), registrando o destino
+  // escolhido no Passo 1 para a instância recém-criada.
+  const onCreate = async (chosen: ChosenDestination) => {
     setQr(null);
     try {
       const r = await create.mutateAsync();
+      setDestinationByInstance((prev) => ({ ...prev, [r.instanceId]: chosen }));
       setQr({ instanceName: r.instanceName, base64: r.qr?.base64 ?? null });
       toast.success('Sessão criada', {
         description: 'Leia o QR Code no WhatsApp para concluir a conexão.',
@@ -146,6 +208,21 @@ export function EvolutionProvisionPanel() {
     } catch (e) {
       toast.error('Não foi possível criar a sessão', { description: safeDetail(e) });
     }
+  };
+
+  const confirmStep1 = async () => {
+    if (!step1 || !draftValid) return;
+    const chosen: ChosenDestination = {
+      purpose: draftPurpose,
+      assignedUserId: draftPurpose === 'vendor_personal' ? draftUserId : null,
+    };
+    if (step1.mode === 'assign') {
+      setDestinationByInstance((prev) => ({ ...prev, [step1.instanceId]: chosen }));
+      setStep1(null);
+      return;
+    }
+    setStep1(null);
+    await onCreate(chosen);
   };
 
   const onRegenerate = async (instanceName: string) => {
@@ -178,14 +255,18 @@ export function EvolutionProvisionPanel() {
         <div>
           <div className="text-sm font-medium">Números Evolution</div>
           <p className="text-xs text-muted-foreground">
-            Crie uma sessão, conecte pelo QR Code e depois vincule o número em WhatsApp Comercial.
+            Escolha o destino, conecte pelo QR Code e finalize o vínculo do número.
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <Button variant="ghost" size="icon" onClick={() => refetch()} title="Atualizar">
             <ArrowsClockwise className="h-4 w-4" />
           </Button>
-          <Button size="sm" onClick={onCreate} disabled={create.isPending}>
+          <Button
+            size="sm"
+            onClick={() => openStep1({ mode: 'create' })}
+            disabled={create.isPending}
+          >
             {create.isPending
               ? <SpinnerGap className="h-3.5 w-3.5 mr-1 animate-spin" />
               : <Plus className="h-3.5 w-3.5 mr-1" />}
@@ -223,6 +304,9 @@ export function EvolutionProvisionPanel() {
           {instances.map((i) => {
             const finishing = i.provisioningStatus === 'pending' && i.connected && !i.identityKnown;
             const linkable = i.provisioningStatus === 'pending' && i.connected && i.identityKnown;
+            const chosen = destinationByInstance[i.id];
+            const destinationReady =
+              !!chosen && (chosen.purpose !== 'vendor_personal' || !!chosen.assignedUserId);
             return (
               <li
                 key={i.id}
@@ -238,6 +322,11 @@ export function EvolutionProvisionPanel() {
                   <Badge variant="outline" className="text-[10px]">
                     {i.provisioningStatus === 'linked' ? 'Vinculado' : 'Em provisionamento'}
                   </Badge>
+                  {i.provisioningStatus === 'pending' && destinationReady && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {DESTINATION_LABEL[chosen.purpose]}
+                    </Badge>
+                  )}
                   {finishing && (
                     <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                       <SpinnerGap className="h-3 w-3 animate-spin" /> Finalizando conexão…
@@ -254,7 +343,15 @@ export function EvolutionProvisionPanel() {
                       <QrCode className="h-3 w-3 mr-1" /> Ver QR
                     </Button>
                   )}
-                  {linkable && (
+                  {linkable && !destinationReady && (
+                    <Button
+                      size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                      onClick={() => openStep1({ mode: 'assign', instanceId: i.id })}
+                    >
+                      Escolher destino
+                    </Button>
+                  )}
+                  {linkable && destinationReady && (
                     <Button
                       size="sm" className="h-6 px-2 text-[10px]"
                       disabled={link.isPending}
@@ -263,7 +360,7 @@ export function EvolutionProvisionPanel() {
                       {link.isPending
                         ? <SpinnerGap className="h-3 w-3 mr-1 animate-spin" />
                         : <LinkIcon className="h-3 w-3 mr-1" />}
-                      Vincular ao WhatsApp Comercial
+                      Vincular a {DESTINATION_LABEL[chosen.purpose]}
                     </Button>
                   )}
                   <Button
@@ -316,6 +413,40 @@ export function EvolutionProvisionPanel() {
           </div>
         </>
       )}
+
+      {/* Passo 1 — destino. Obrigatório e sempre explícito: nenhuma sessão é
+          vinculada com destino presumido. */}
+      <Dialog open={!!step1} onOpenChange={(o) => { if (!o) setStep1(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {step1?.mode === 'assign' ? 'Destino desta sessão' : 'Conectar novo número'}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {step1?.mode === 'assign'
+                ? 'Esta sessão foi criada sem destino definido. Escolha o destino para concluir o vínculo.'
+                : 'Escolha o destino do número. Em seguida você lê o QR Code para conectar.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <EndpointDestinationStep
+            organizationId={organization?.id ?? null}
+            destination={draftPurpose}
+            onDestinationChange={setDraftPurpose}
+            assignedUserId={draftUserId}
+            onAssignedUserChange={setDraftUserId}
+            disabled={create.isPending}
+          />
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setStep1(null)}>Cancelar</Button>
+            <Button onClick={confirmStep1} disabled={!draftValid || create.isPending}>
+              {create.isPending && <SpinnerGap className="h-4 w-4 mr-1 animate-spin" />}
+              {step1?.mode === 'assign' ? 'Confirmar destino' : 'Continuar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
