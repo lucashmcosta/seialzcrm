@@ -103,20 +103,7 @@ export function AudioMessagePlayer({
 
     const onLoaded = () => {
       if (Number.isFinite(audio.duration)) setDuration(audio.duration);
-      setProgressDuration(readProgressDenominator(audio));
       setIsLoading(false);
-    };
-    const onDurationChange = () => {
-      if (Number.isFinite(audio.duration)) setDuration(audio.duration);
-      setProgressDuration(readProgressDenominator(audio));
-    };
-    const onTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
-      setProgressDuration(readProgressDenominator(audio));
-    };
-    const onPlaying = () => {
-      setIsPlaying(true);
-      startProgress(audio);
     };
     const onEnded = () => {
       setIsPlaying(false);
@@ -143,19 +130,11 @@ export function AudioMessagePlayer({
       }
     };
     const onPause = () => {
-      cancelAnimationFrame(animFrameRef.current);
-      setCurrentTime(audio.currentTime);
       if (!audio.ended) setIsPlaying(false);
     };
 
     audio.addEventListener('loadedmetadata', onLoaded);
     audio.addEventListener('canplay', onLoaded);
-    audio.addEventListener('durationchange', onDurationChange);
-    audio.addEventListener('progress', onDurationChange);
-    audio.addEventListener('timeupdate', onTimeUpdate);
-    audio.addEventListener('play', onPlaying);
-    audio.addEventListener('playing', onPlaying);
-    audio.addEventListener('seeked', onTimeUpdate);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('pause', onPause);
     audio.addEventListener('error', onError);
@@ -163,29 +142,23 @@ export function AudioMessagePlayer({
     return () => {
       audio.removeEventListener('loadedmetadata', onLoaded);
       audio.removeEventListener('canplay', onLoaded);
-      audio.removeEventListener('durationchange', onDurationChange);
-      audio.removeEventListener('progress', onDurationChange);
-      audio.removeEventListener('timeupdate', onTimeUpdate);
-      audio.removeEventListener('play', onPlaying);
-      audio.removeEventListener('playing', onPlaying);
-      audio.removeEventListener('seeked', onTimeUpdate);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('error', onError);
       cancelAnimationFrame(animFrameRef.current);
     };
-  }, [src, srcOk, messageId, threadId, mediaType, startProgress]);
+  }, [src, srcOk, messageId, threadId, mediaType]);
 
   useEffect(() => {
     playbackRequestedRef.current = false;
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
-    setProgressDuration(0);
     setIsLoading(false);
     setHasError(false);
     cancelAnimationFrame(animFrameRef.current);
   }, [src]);
+
 
 
   const isIgnorablePlayError = (err: unknown) => {
