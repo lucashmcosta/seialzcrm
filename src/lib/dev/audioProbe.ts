@@ -14,7 +14,19 @@
  * Remove this file (and its loader in main.tsx) once the audit is done.
  */
 
-type Sample = { t: number; currentTime: number; reactTime: string; duration: number };
+type Sample = {
+  t: number;
+  currentTime: number;
+  reactTime: string;
+  duration: number;
+  progressState: string;
+  bulletStyle: string;
+  bulletX: string;
+  bulletXRel: string;
+  waveformWidth: string;
+  barsActive: string;
+  bulletSame: string;
+};
 
 type Capture = {
   index: number;
@@ -30,8 +42,11 @@ type Capture = {
   paused: boolean[];
   seekable: string[];
   buffered: string[];
+  bulletRef?: Element | null;
+  bulletReplaced: boolean;
   detachRaf?: () => void;
 };
+
 
 const captures: Capture[] = [];
 const seen = new WeakSet<HTMLAudioElement>();
@@ -69,6 +84,19 @@ function reactTimeText(audio: HTMLAudioElement): string {
   return timeLike ? (timeLike.textContent || '').trim() : 'n/a';
 }
 
+/** Finds the progress bullet (only absolutely-positioned inline-styled child) and its track. */
+function findVisual(audio: HTMLAudioElement): { bullet: HTMLElement | null; track: HTMLElement | null; bars: HTMLElement[] } {
+  const root = audio.parentElement;
+  if (!root) return { bullet: null, track: null, bars: [] };
+  const bullet = Array.from(root.querySelectorAll<HTMLElement>('div'))
+    .find((el) => el.style.position === 'absolute' && el.style.left !== '') ?? null;
+  const track = bullet?.parentElement ?? null;
+  const bars = track
+    ? Array.from(track.children).filter((c): c is HTMLElement => c instanceof HTMLElement && c !== bullet)
+    : [];
+  return { bullet, track, bars };
+}
+
 function attach(audio: HTMLAudioElement) {
   if (seen.has(audio)) return;
   seen.add(audio);
@@ -87,6 +115,7 @@ function attach(audio: HTMLAudioElement) {
     paused: [],
     seekable: [],
     buffered: [],
+    bulletReplaced: false,
   };
 
   const bump = (name: string) => { cap.events[name] = (cap.events[name] || 0) + 1; };
@@ -94,11 +123,34 @@ function attach(audio: HTMLAudioElement) {
     .forEach((ev) => audio.addEventListener(ev, () => bump(ev), { passive: true }));
 
   const snapshot = (t: number) => {
+    const { bullet, track, bars } = findVisual(audio);
+
+    if (bullet) {
+      if (cap.bulletRef === undefined) cap.bulletRef = bullet;
+      else if (cap.bulletRef !== bullet) cap.bulletReplaced = true;
+    }
+
+    const bulletRect = bullet?.getBoundingClientRect();
+    const trackRect = track?.getBoundingClientRect();
+    const leftStyle = bullet?.style.left ?? '';
+    const activeBars = bars.filter((b) => {
+      const op = parseFloat(getComputedStyle(b).opacity || '1');
+      return op > 0.5;
+    }).length;
+
     cap.samples.push({
       t,
       currentTime: audio.currentTime,
       reactTime: reactTimeText(audio),
       duration: audio.duration,
+      // `left: X%` is exactly the component's `progress` state, read back from the DOM.
+      progressState: leftStyle.endsWith('%') ? (parseFloat(leftStyle) / 100).toFixed(3) : 'n/a',
+      bulletStyle: bullet ? `left=${leftStyle || 'none'};transform=${bullet.style.transform || 'none'}` : 'n/a',
+      bulletX: bulletRect ? bulletRect.x.toFixed(2) : 'n/a',
+      bulletXRel: bulletRect && trackRect ? (bulletRect.x - trackRect.x).toFixed(2) : 'n/a',
+      waveformWidth: trackRect ? trackRect.width.toFixed(2) : 'n/a',
+      barsActive: bars.length ? `${activeBars}/${bars.length}` : 'n/a',
+      bulletSame: bullet ? (cap.bulletReplaced ? 'REPLACED' : 'same') : 'n/a',
     });
     cap.readyState.push(audio.readyState);
     cap.networkState.push(audio.networkState);
@@ -106,6 +158,7 @@ function attach(audio: HTMLAudioElement) {
     cap.seekable.push(ranges(audio.seekable));
     cap.buffered.push(ranges(audio.buffered));
   };
+
 
   audio.addEventListener('play', () => {
     if (cap.startedAt) return;
@@ -151,8 +204,19 @@ function printOne(cap: Capture) {
     `RAF_TICKS=${cap.rafTicks}`,
     `REACT_CURRENT_TIME_STATE=${cap.samples.map((x) => x.reactTime).join(' -> ')}`,
     `COMPUTED_PROGRESS=${cap.samples.map((x) => (Number.isFinite(x.duration) && x.duration > 0 ? (x.currentTime / x.duration).toFixed(3) : '0(duration invalid)')).join(' -> ')}`,
+    `PROGRESS_STATE=${cap.samples.map((x) => x.progressState).join(' -> ')}`,
+    `BULLET_STYLE=${cap.samples.map((x) => x.bulletStyle).join(' | ')}`,
+    `BULLET_X_START=${s(0)?.bulletX}`,
+    `BULLET_X_1S=${s(1)?.bulletX}`,
+    `BULLET_X_3S=${s(2)?.bulletX}`,
+    `BULLET_X_5S=${s(3)?.bulletX}`,
+    `BULLET_X_REL=${cap.samples.map((x) => x.bulletXRel).join(' -> ')}`,
+    `WAVEFORM_WIDTH=${cap.samples.map((x) => x.waveformWidth).join(' -> ')}`,
+    `BARS_ACTIVE=${cap.samples.map((x) => x.barsActive).join(' -> ')}`,
+    `BULLET_DOM_REPLACED=${cap.bulletReplaced ? 'YES' : 'NO'}`,
     `SEEKABLE_RANGES=${cap.seekable.join(' | ')}`,
     `BUFFERED_RANGES=${cap.buffered.join(' | ')}`,
+
     `LOADEDMETADATA_FIRED=${cap.events.loadedmetadata || 0}`,
     `CANPLAY_FIRED=${cap.events.canplay || 0}`,
     `DURATIONCHANGE_FIRED=${cap.events.durationchange || 0}`,
@@ -172,7 +236,7 @@ export function installAudioProbe() {
   const api = {
     captures,
     report: () => { captures.forEach(printOne); return captures; },
-    json: () => JSON.stringify(captures.map(({ detachRaf, ...rest }) => rest), null, 2),
+    json: () => JSON.stringify(captures.map(({ detachRaf, bulletRef, ...rest }) => rest), null, 2),
   };
   (window as unknown as { __audioProbe: typeof api }).__audioProbe = api;
   // eslint-disable-next-line no-console
