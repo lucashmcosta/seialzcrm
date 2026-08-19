@@ -254,9 +254,12 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   /** Estado real do endpoint de resposta (ativo/inativo). */
   endpointIsActive?: boolean | null;
   officialNumbers?: Set<string>;
+  /** Metadados da última mensagem (preview) — resolvidos em lote. */
+  lastMessageMediaType?: string | null;
+  lastMessageStatus?: string | null;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
