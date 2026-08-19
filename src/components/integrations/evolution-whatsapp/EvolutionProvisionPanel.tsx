@@ -413,6 +413,40 @@ export function EvolutionProvisionPanel() {
           </div>
         </>
       )}
+
+      {/* Passo 1 — destino. Obrigatório e sempre explícito: nenhuma sessão é
+          vinculada com destino presumido. */}
+      <Dialog open={!!step1} onOpenChange={(o) => { if (!o) setStep1(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {step1?.mode === 'assign' ? 'Destino desta sessão' : 'Conectar novo número'}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {step1?.mode === 'assign'
+                ? 'Esta sessão foi criada sem destino definido. Escolha o destino para concluir o vínculo.'
+                : 'Escolha o destino do número. Em seguida você lê o QR Code para conectar.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <EndpointDestinationStep
+            organizationId={organization?.id ?? null}
+            destination={draftPurpose}
+            onDestinationChange={setDraftPurpose}
+            assignedUserId={draftUserId}
+            onAssignedUserChange={setDraftUserId}
+            disabled={create.isPending}
+          />
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setStep1(null)}>Cancelar</Button>
+            <Button onClick={confirmStep1} disabled={!draftValid || create.isPending}>
+              {create.isPending && <SpinnerGap className="h-4 w-4 mr-1 animate-spin" />}
+              {step1?.mode === 'assign' ? 'Confirmar destino' : 'Continuar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
