@@ -524,6 +524,7 @@ async function findOrCreateContact(
   fromE164: string,
   profileName: string,
   inbound: InboundSettings,
+  inboundEndpointId?: string | null,
 ): Promise<{ contactId: string | null; contactOwnerId: string | null; created: boolean }> {
   const variations = normalizePhoneForSearch(fromE164);
   const or = variations.map((p) => `phone.eq.${p}`).join(",");
@@ -556,18 +557,28 @@ async function findOrCreateContact(
   if (!identity.ok) {
     return { contactId: null, contactOwnerId: null, created: false };
   }
+  // Owner sugerido: só quando o endpoint de entrada é pessoal com dono válido.
+  // NULL ⇒ payload idêntico ao anterior ⇒ round-robin atual roda igual.
+  const suggestedOwnerId = await resolveInboundSuggestedAssignee(
+    service as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> },
+    organizationId,
+    inboundEndpointId ?? null,
+  );
+  const contactInsert: Record<string, unknown> = {
+    organization_id: organizationId,
+    full_name: identity.fullName,
+    first_name: identity.firstName,
+    last_name: identity.lastName,
+    address_country_code: identity.country,
+    phone: fromE164,
+    source: "whatsapp",
+    lifecycle_stage: inbound.default_lifecycle_stage || "lead",
+  };
+  if (suggestedOwnerId) contactInsert.owner_user_id = suggestedOwnerId;
+
   const { data: created, error } = await service
     .from("contacts")
-    .insert({
-      organization_id: organizationId,
-      full_name: identity.fullName,
-      first_name: identity.firstName,
-      last_name: identity.lastName,
-      address_country_code: identity.country,
-      phone: fromE164,
-      source: "whatsapp",
-      lifecycle_stage: inbound.default_lifecycle_stage || "lead",
-    })
+    .insert(contactInsert)
     .select("id, owner_user_id")
     .single();
   if (error || !created) return { contactId: null, contactOwnerId: null, created: false };
