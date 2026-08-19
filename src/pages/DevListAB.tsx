@@ -40,7 +40,7 @@ export default function DevListAB() {
                   <div className="h-10 mt-4 rounded bg-muted" />
                   <div className="h-7 mt-3 rounded bg-muted" />
                 </div>
-                <ScrollArea className="flex-1">
+                <ScrollArea className={"flex-1 " + (new URLSearchParams(window.location.search).has("blockfix") ? "[&>div]:!block" : "")}>
                   <>
                     <ListBox aria-label="Conversations" selectionMode="single">
                       {THREADS.map((thread) => (
