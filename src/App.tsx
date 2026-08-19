@@ -456,6 +456,8 @@ const App = () => (
           {/* Health / monitoring */}
           <Route path="/health" element={<Health />} />
           <Route path="/dev/health" element={<DevHealth />} />
+          <Route path="/dev/audio-check" element={<DevAudioCheck />} />
+
 
 
           {/* Public Documentation */}
