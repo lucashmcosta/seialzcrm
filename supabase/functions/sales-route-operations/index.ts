@@ -928,17 +928,37 @@ serve(async (req) => {
 
       // ------------------------------------------------- LINK PENDING INSTANCE
       // Vincula uma instância `pending` já conectada e com identidade conhecida
-      // à Route Comercial da própria org. O número NUNCA vem do frontend: é
-      // exclusivamente `owner_number_digits` lido da Evolution. A escrita é
-      // atômica na RPC `provision_sales_endpoint`, que também marca
-      // `provisioning_status='linked'`. Não altera `active_endpoint_id`, não
-      // cria rotações e não toca Meta/Twilio/Atendimento.
+      // à Route do destino escolhido (Comercial, Atendimento ou Pessoal) da
+      // própria org. O número NUNCA vem do frontend: é exclusivamente
+      // `owner_number_digits` lido da Evolution. A escrita é atômica na RPC
+      // `provision_line_endpoint`, que também marca `provisioning_status='linked'`.
+      // Não altera `active_endpoint_id`, não cria rotações e não toca Meta/Twilio.
+      //
+      // COMPATIBILIDADE: `purpose` ausente => 'commercial' (callers antigos).
+      // A UI Evolution nova SEMPRE envia `purpose` explicitamente.
       case "linkPendingInstance": {
         if (!evolutionEnabled) {
           return json(403, { error: "FEATURE_DISABLED", message: EVOLUTION_FLAG });
         }
         const instanceId = typeof body.instanceId === "string" ? body.instanceId : "";
         if (!instanceId) return json(400, { error: "INVALID_INPUT", message: "instanceId" });
+
+        const purpose = typeof body.purpose === "string" && body.purpose
+          ? body.purpose
+          : "commercial";
+        if (!["commercial", "customer_service", "vendor_personal"].includes(purpose)) {
+          return json(400, { error: "INVALID_INPUT", message: "purpose" });
+        }
+        const assignedUserId = typeof body.assignedUserId === "string" && body.assignedUserId
+          ? body.assignedUserId
+          : null;
+        if (purpose === "vendor_personal" && !assignedUserId) {
+          return json(400, { error: "INVALID_INPUT", message: "assignedUserId" });
+        }
+        if (purpose !== "vendor_personal" && assignedUserId) {
+          return json(400, { error: "INVALID_INPUT", message: "assignedUserId" });
+        }
+        const inboxKey = purpose === "customer_service" ? "customer_service" : "sales";
 
         const { data: row } = await service
           .from("evolution_instances")
@@ -958,25 +978,31 @@ serve(async (req) => {
         const digits = digitsOf(row.owner_number_digits as string | null);
         if (digits.length < 8) return json(409, { error: "INSTANCE_IDENTITY_UNKNOWN" });
 
-        // Route Comercial (sales/whatsapp) da própria org.
+        // Route do destino (whatsapp) da própria org.
         const { data: lines } = await service
           .from("messaging_lines")
           .select("id, is_active, created_at")
           .eq("organization_id", orgId)
-          .eq("inbox_key", "sales")
+          .eq("inbox_key", inboxKey)
           .eq("channel", "whatsapp")
           .order("created_at", { ascending: true });
         const line = ((lines ?? []) as { id: string; is_active: boolean | null }[])
           .find((l) => l.is_active === true) ?? (lines ?? [])[0] ?? null;
-        if (!line) return json(409, { error: "SALES_ROUTE_NOT_FOUND" });
+        if (!line) {
+          return json(409, {
+            error: inboxKey === "sales" ? "SALES_ROUTE_NOT_FOUND" : "CUSTOMER_SERVICE_ROUTE_NOT_FOUND",
+          });
+        }
 
-        const { data, error } = await caller.rpc("provision_sales_endpoint", {
+        const { data, error } = await caller.rpc("provision_line_endpoint", {
           p_organization_id: orgId,
           p_line_id: (line as { id: string }).id,
           p_provider: "evolution",
           p_address: `+${digits}`,
+          p_purpose: purpose,
           p_display_name: null,
           p_instance_name: row.instance_name as string,
+          p_assigned_user_id: assignedUserId,
         });
         if (error) {
           logEvolution("warn", {
