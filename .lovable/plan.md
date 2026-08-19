@@ -1,44 +1,36 @@
-# Fiação Evolution — destino do número no próprio fluxo de conexão
+# Passo 1 "Destino" dentro do modal Evolution WhatsApp
 
-Escopo: somente Evolution. Meta e Twilio não são tocados. `provision_sales_endpoint` permanece no banco (apenas deixa de ser chamada pelo Evolution).
+## Auditoria (read-only)
 
-## Experiência
+EVOLUTION_MODAL_RENDER_COMPONENT=`src/components/integrations/evolution-whatsapp/EvolutionWhatsAppDialog.tsx` (aberto por `src/components/settings/IntegrationsSettings.tsx:722`), que renderiza `<EvolutionProvisionPanel />` na linha 361.
 
-Configurações → Integrações → Evolution WhatsApp → **Conectar novo número**:
+CONNECT_NEW_NUMBER_HANDLER=`EvolutionProvisionPanel.tsx` — botão "Conectar novo número" chama `openStep1({ mode: 'create' })`, que abre um `<Dialog>` aninhado (Passo 1) e só depois chama `onCreate()` → `useCreateEvolutionInstance`.
 
-1. **Passo 1 — Destino**: escolher Comercial, Atendimento ou Pessoal. Se Pessoal, escolher o usuário responsável (obrigatório; botão de continuar desabilitado sem isso).
-2. **Passo 2 — QR**: criação da sessão e leitura do QR exatamente como hoje, sem nenhuma alteração.
-3. **Passo 3 — Finalizar**: quando a sessão estiver conectada e com o número já lido do provedor, o botão de vínculo finaliza usando o destino escolhido no Passo 1. O botão passa a exibir o destino (ex.: "Vincular ao Comercial", "Vincular ao Atendimento", "Vincular a Pessoal — Nome").
+DESTINATION_STEP_CURRENTLY_RENDERED_WHERE=`EndpointDestinationStep` está sim dentro de `EvolutionProvisionPanel.tsx` (linhas 419-450), porém dentro de um Dialog aninhado ao Dialog da integração — não como etapa visível no corpo do modal.
 
-Sessões pendentes que já existiam (criadas antes desta mudança, sem destino escolhido) recebem, na própria linha da lista, um seletor de destino compacto antes de habilitar o vínculo. Nada é assumido silenciosamente.
+WHY_NOT_VISIBLE_IN_THIS_MODAL=O módulo servido pelo dev server é a versão ANTIGA do componente: o transform servido em `/src/components/.../EvolutionProvisionPanel.tsx` não contém `step1`, `openStep1` nem `EndpointDestinationStep` — apenas o fluxo antigo (clique cria a sessão direto). Ou seja, o arquivo em disco tem a etapa, mas o preview executa o bundle anterior. Somado a isso, o desenho atual usa Dialog-dentro-de-Dialog, que é frágil e não é o que foi combinado ("dentro deste modal").
 
-## Mapeamento
+IS_WRONG_COMPONENT_BEING_EDITED=NO
 
-| Destino | Route | purpose | assigned_user_id |
-| --- | --- | --- | --- |
-| Comercial | sales | commercial | nulo |
-| Atendimento | customer_service | customer_service | nulo |
-| Pessoal | sales | vendor_personal | usuário escolhido |
+IS_FEATURE_BEHIND_STATE_OR_CONDITION=NO (não há flag; depende apenas de `step1 !== null`)
 
-## Detalhes técnicos
+IS_PREVIEW_RUNNING_OLD_COMPONENT=YES
 
-**Edge `sales-route-operations`, caso `linkPendingInstance`** (única operação alterada):
-- Passa a aceitar `purpose` (`commercial` | `customer_service` | `vendor_personal`) e `assignedUserId` opcional. Sem `purpose`, mantém `commercial` (compatibilidade).
-- Valida entrada: purpose fora da lista → `INVALID_INPUT`; `vendor_personal` sem `assignedUserId` → `INVALID_INPUT`; `assignedUserId` presente com outro purpose → `INVALID_INPUT`.
-- Resolve a Route pela `inbox_key` correspondente (`sales` para commercial/vendor_personal, `customer_service` para Atendimento); erro `SALES_ROUTE_NOT_FOUND` / `CUSTOMER_SERVICE_ROUTE_NOT_FOUND` quando ausente.
-- Troca a chamada `caller.rpc('provision_sales_endpoint', …)` por `caller.rpc('provision_line_endpoint', …)` com `p_purpose` e `p_assigned_user_id`. O número continua vindo exclusivamente de `owner_number_digits`, nunca do frontend.
-- Todas as pré-condições atuais (pending, `open`, identidade conhecida, org própria) permanecem idênticas. `createInstance`, `connect`/QR, `syncWebhook`, `deleteInstance`, healthcheck e webhook não são tocados.
+MINIMAL_FIX=Transformar o Passo 1 em uma seção inline no corpo do próprio modal (sem Dialog aninhado) e forçar a reinvalidação do módulo no preview.
 
-**Frontend**:
-- `src/hooks/useEvolutionProvisioning.ts`: `useLinkPendingInstance` passa a receber `{ instanceId, purpose, assignedUserId }`.
-- `src/components/integrations/evolution-whatsapp/EvolutionProvisionPanel.tsx`: novo passo de destino usando o `EndpointDestinationStep` já existente, estado local `destinationByInstance` (preenchido ao criar a sessão), seletor de fallback para pendentes antigas, rótulo do botão por destino e mensagens de erro novas (`PROVISION_ASSIGNED_USER_REQUIRED`, `PROVISION_ASSIGNED_USER_INVALID`, `PROVISION_PURPOSE_LINE_MISMATCH`, `PROVISION_ENDPOINT_PURPOSE_CONFLICT`, `CUSTOMER_SERVICE_ROUTE_NOT_FOUND`).
+## O que será feito (somente UI)
 
-## Invariantes garantidas
+1. Em `EvolutionProvisionPanel.tsx`, remover o `<Dialog>` aninhado do Passo 1 e renderizar o mesmo conteúdo como um bloco inline, logo abaixo do cabeçalho "Números Evolution":
+   - Título "Passo 1 — Destino do número"
+   - `EndpointDestinationStep` (Comercial / Atendimento / Pessoal + Select de responsável obrigatório quando Pessoal)
+   - Botões "Cancelar" e "Continuar" (Continuar desabilitado sem responsável quando Pessoal)
+2. Fluxo preservado exatamente: Continuar → cria sessão Evolution → mostra QR → conectar → "Vincular a <Destino>".
+3. Sessões pendentes antigas continuam com "Escolher destino", que abre o mesmo bloco inline em modo `assign`.
+4. Ajustar o comentário de cabeçalho do arquivo, que ainda diz que o vínculo é feito em "WhatsApp Comercial".
+5. Rodar typecheck + build e confirmar que o módulo servido pelo dev server passa a conter a etapa (verificação objetiva via requisição ao dev server).
 
-META_CHANGED=NO · TWILIO_CHANGED=NO · EVOLUTION_QR_FLOW_CHANGED=NO · EVOLUTION_CREATE_INSTANCE_CHANGED=NO · EVOLUTION_DELETE_CHANGED=NO · EVOLUTION_HEALTHCHECK_CHANGED=NO · EVOLUTION_WEBHOOK_CHANGED=NO · PROVISION_CHANGES_ACTIVE_ENDPOINT=NO · ROUND_ROBIN_CHANGED=NO · THREAD_MODEL_CHANGED=NO · ASSIGNMENT_RULES_CHANGED=NO
+## Fora de escopo
 
-Nenhuma migração de banco nesta etapa.
+Sem alteração de backend, RPC, Edge Functions, provisionamento ou lógica de QR. Nenhuma mudança na tela "WhatsApp Comercial".
 
-## Verificação antes da sua validação manual
-
-typecheck (`tsgo`), build, `deno check` da função alterada e diff real dos arquivos tocados. Depois disso, paro para sua validação manual — Twilio não começa nesta etapa.
+Depois do diff eu paro para sua validação visual.
