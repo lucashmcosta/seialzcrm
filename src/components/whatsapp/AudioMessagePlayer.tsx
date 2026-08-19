@@ -259,15 +259,19 @@ export function AudioMessagePlayer({
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
-    if (!audio || !duration) return;
+    const seekDuration = progressDuration || duration;
+    if (!audio || !seekDuration) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0]?.clientX ?? 0 : e.clientX;
     const x = clientX - rect.left;
     const pct = Math.max(0, Math.min(1, x / rect.width));
-    audio.currentTime = pct * duration;
+    try {
+      audio.currentTime = pct * seekDuration;
+    } catch { /* noop */ }
     setCurrentTime(audio.currentTime);
   };
+
 
   if (!srcOk || hasError) {
     // Report invalid src once on mount (only when src is provided but unusable).
