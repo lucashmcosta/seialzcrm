@@ -31,6 +31,9 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import {
   useCreateEvolutionInstance,
   useDeleteEvolutionInstance,
   useEvolutionProvisionedInstances,
@@ -39,6 +42,12 @@ import {
   useSyncPendingInstanceIdentity,
 } from '@/hooks/useEvolutionProvisioning';
 import { useConnectInstance } from '@/hooks/useEvolutionInstances';
+import { useOrganization } from '@/hooks/useOrganization';
+import {
+  DESTINATION_LABEL,
+  EndpointDestinationStep,
+  type EndpointDestination,
+} from '@/components/settings/EndpointDestinationStep';
 
 const STATE_LABEL: Record<string, string> = {
   open: 'Conectado',
