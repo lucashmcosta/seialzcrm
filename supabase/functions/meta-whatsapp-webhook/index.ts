@@ -438,7 +438,7 @@ async function resolveInboundSettings(
 
 async function findOrCreateContact(
   supabase: any,
-  endpoint: { organization_id: string },
+  endpoint: { id: string; organization_id: string },
   fromE164: string,
   profileName: string,
   inbound: InboundSettings,
@@ -519,16 +519,24 @@ async function findOrCreateContact(
   }
 
   const contactName = profileName || `WhatsApp ${fromE164}`;
+  // Owner sugerido: só existe quando o endpoint de entrada é pessoal com dono
+  // válido. NULL ⇒ payload idêntico ao anterior ⇒ round-robin atual roda igual.
+  const suggestedOwnerId = await resolveInboundSuggestedAssignee(
+    supabase, endpoint.organization_id, endpoint.id,
+  );
+  const contactInsert: Record<string, unknown> = {
+    organization_id: endpoint.organization_id,
+    full_name: contactName,
+    address_country_code: operatingCountry,
+    phone: fromE164,
+    source: "whatsapp",
+    lifecycle_stage: inbound.default_lifecycle_stage || "lead",
+  };
+  if (suggestedOwnerId) contactInsert.owner_user_id = suggestedOwnerId;
+
   const { data: newContact, error } = await supabase
     .from("contacts")
-    .insert({
-      organization_id: endpoint.organization_id,
-      full_name: contactName,
-      address_country_code: operatingCountry,
-      phone: fromE164,
-      source: "whatsapp",
-      lifecycle_stage: inbound.default_lifecycle_stage || "lead",
-    })
+    .insert(contactInsert)
     .select("id, owner_user_id")
     .single();
 
