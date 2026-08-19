@@ -34,6 +34,45 @@ EVOLUTION_CHANGES=
      evolution_instances.endpoint_id/provisioning_status='linked' e já exige
      last_known_state='open' + owner_number_digits == número.
 
+AUDITORIA DE ASSINATURA (executada, read-only)
+CURRENT_PROVISION_LINE_ENDPOINT_SIGNATURE=
+  public.provision_line_endpoint(p_organization_id uuid, p_line_id uuid, p_provider text,
+  p_address text, p_purpose text, p_display_name text DEFAULT NULL, p_instance_name text
+  DEFAULT NULL, p_assigned_user_id uuid DEFAULT NULL)  → oid 290675, SECURITY DEFINER,
+  VOLATILE, EXECUTE para authenticated + service_role (anon herdado do padrão).
+EXISTING_OVERLOADS=Nenhum. Existe exatamente 1 função com esse nome.
+ADDING_TWO_DEFAULT_PARAMS_CREATES_NEW_OVERLOAD=YES
+  (tipos/quantidade de argumentos fazem parte da identidade; CREATE OR REPLACE com 10
+  params cria função NOVA e deixa a de 8 params viva)
+OLD_CALLS_BECOME_AMBIGUOUS=YES
+  (PostgREST chama por argumentos NOMEADOS; com os 8 nomes atuais as duas candidatas
+  casam → "function is not unique" nos fluxos Meta/Evolution/tela Comercial)
+DEPENDENCIES_ON_CURRENT_FUNCTION=
+  Nenhuma dependência interna (nenhuma outra função/trigger/view referencia a função;
+  pg_depend normal = 0). Chamadores: Edge `meta-whatsapp-connect`,
+  Edge `sales-route-operations` (op provisionEndpoint) e, após esta fase, também
+  op linkPendingInstance.
+
+DECISÃO — caminho mais seguro (sem overload, sem duplicar regra)
+  Padrão CORE + entradas finas:
+  1) Criar `public.provision_line_endpoint_core(<8 params atuais>, p_sender_sid text,
+     p_external_account_id text)` contendo o corpo ATUAL, transplantado sem alteração de
+     regra, mais os 2 pontos aditivos da prova Twilio. Função interna: REVOKE de PUBLIC,
+     EXECUTE apenas para service_role (não é chamável pelo cliente).
+  2) `CREATE OR REPLACE public.provision_line_endpoint(<MESMOS 8 params, mesma ordem,
+     mesmos defaults>)` → passa a ser um wrapper de 1 linha:
+     `RETURN public.provision_line_endpoint_core(..., NULL, NULL);`
+     Mesma identidade (mesmo oid), mesma assinatura, mesmos GRANTs, zero overload,
+     zero ambiguidade. Meta, Evolution e a tela Comercial continuam chamando exatamente
+     como hoje, sem alteração de código.
+  3) `public.provision_line_endpoint_twilio_verified(<8 params atuais>, p_sender_sid text,
+     p_external_account_id text)` → wrapper que exige p_sender_sid NOT NULL e delega ao
+     core. EXECUTE apenas para service_role: somente a Edge (que verificou o sender na
+     API Twilio com as credenciais da org) consegue chamá-la.
+  PROVISIONING_RULES_DUPLICATED=NO — a regra existe uma única vez, no core.
+  Alternativa considerada e descartada: nova função com corpo próprio para Twilio
+  (duplicaria as guardas) e adicionar params à RPC atual (cria overload ambíguo).
+
 TWILIO_CHANGES= (opção (a) aprovada — verificação server-side, sem registro intermediário)
   1) UI (src/components/settings/AddWhatsAppEndpointDialog.tsx): adicionar
      EndpointDestinationStep (destino + responsável obrigatório se Pessoal) e remover o
@@ -46,31 +85,29 @@ TWILIO_CHANGES= (opção (a) aprovada — verificação server-side, sem registr
        DA PRÓPRIA ORG; exige que o sender exista, esteja em estado utilizável (ONLINE) e
        que `sender_id` (whatsapp:+E164) case com o número informado. Falha → erro
        TWILIO_SENDER_NOT_VERIFIED / TWILIO_SENDER_ADDRESS_MISMATCH e NADA é escrito.
-     - só depois chama a RPC, passando a prova de posse já verificada.
-  3) Migração (única do escopo): `provision_line_endpoint` ganha 2 params opcionais
-     `p_sender_sid text default null`, `p_external_account_id text default null`.
-     Comportamento:
-     - Twilio: se não houver posse por organization_phone_numbers nem endpoint existente,
-       aceita posse APENAS quando p_sender_sid é informado (o Edge é o único chamador com
-       service_role, e ele só o envia após verificar na Twilio);
-     - grava sender_sid / external_account_id / organization_integration_id no MESMO
-       INSERT/UPDATE do endpoint, dentro da mesma transação de purpose + vínculo de Route.
-     - purpose e assigned_user_id continuam gravados exclusivamente pela RPC; nenhuma
-       outra assinatura/rota de chamada existente é alterada (params opcionais).
+     - só depois chama `provision_line_endpoint_twilio_verified` com a prova verificada.
+       Provider ≠ twilio continua chamando `provision_line_endpoint` (inalterado).
+  3) Dentro do core, os 2 pontos aditivos:
+     - gate de posse Twilio: aceita p_sender_sid como prova APENAS no ramo que hoje já
+       levantaria PROVISION_ADDRESS_NOT_OWNED (nenhum IF existente é editado);
+     - INSERT/UPDATE do endpoint grava sender_sid / external_account_id /
+       organization_integration_id via COALESCE — no-op quando os params são NULL.
+     purpose e assigned_user_id continuam gravados exclusivamente pelo core.
   4) Por que este é o caminho mais seguro/idempotente:
      - ZERO registro intermediário: nada é gravado em organization_phone_numbers (tabela de
        telefonia/voz — gravar ali criaria um número fantasma na tela de Voz) nem em
-       qualquer tabela ponte. Se a RPC falhar, a transação inteira faz rollback e não
-       sobra endpoint, vínculo, posse ou classificação parcial.
+       qualquer tabela ponte. Se o provisionamento falhar, a transação inteira faz rollback
+       e não sobra endpoint, vínculo, posse ou classificação parcial.
      - Retry do mesmo fluxo é idempotente: advisory lock por (org, whatsapp, dígitos) +
-       caminho `reused` da RPC; repetir com o mesmo destino é no-op, repetir com destino
+       caminho `reused` do core; repetir com o mesmo destino é no-op, repetir com destino
        diferente falha em PROVISION_ENDPOINT_PURPOSE_CONFLICT.
      - Nunca gera número utilizável mal classificado: só existe endpoint se ele nasceu com
-       purpose correto e vínculo de Route na mesma transação; a RPC nunca toca
+       purpose correto e vínculo de Route na mesma transação; nunca toca
        messaging_lines.active_endpoint_id.
      - Os 13 endpoints Twilio legados com purpose='other' NÃO são alcançados: nenhum
        backfill, nenhum UPDATE em massa, e a guarda de purpose impede reclassificação
        silenciosa (tentar provisionar um deles falha com erro explícito).
+
 
 
 GENERIC_SCREEN_CHANGES=
@@ -110,6 +147,13 @@ TWILIO_PARTIAL_FAILURE_LEAVES_INVALID_ACTIVE_ENDPOINT=NO
 ROUND_ROBIN_CHANGED=NO
 THREAD_MODEL_CHANGED=NO
 ASSIGNMENT_RULES_CHANGED=NO
+CURRENT_RPC_SIGNATURE_CHANGED=NO
+META_RPC_CALL_CHANGED=NO
+EVOLUTION_EXISTING_RPC_CALL_CHANGED=NO
+OLD_CALLS_AMBIGUOUS=NO
+TWILIO_HAS_SERVER_VERIFIED_OWNERSHIP=YES
+PROVISIONING_RULES_DUPLICATED=NO
+
 
 COMPATIBILITY_RISK=BAIXO
   - Nenhuma migração de dados; nenhuma alteração em round-robin, atribuição, threads,
@@ -121,26 +165,24 @@ COMPATIBILITY_RISK=BAIXO
   - Ponto de atenção 2: Evolution com destino "Atendimento" exige Route
     (messaging_lines) com inbox_key='customer_service' ativa na org; sem ela o erro é
     PROVISION_LINE_NOT_FOUND (nada é criado automaticamente).
-  - Ponto de atenção 3: a única migração do escopo adiciona 2 parâmetros OPCIONAIS à
-    RPC (sender_sid / external_account_id); nenhuma assinatura de chamada existente muda.
+  - Ponto de atenção 3: a migração NÃO altera a assinatura da RPC atual — cria um core
+    interno (service_role) + uma entrada extra só para Twilio; sem overload da RPC pública.
+
 
 REGRESSION_REQUIREMENT (bloqueante)
-  - A alteração em provision_line_endpoint é ESTRITAMENTE ADITIVA. Com
-    p_sender_sid IS NULL e p_external_account_id IS NULL, a execução segue o mesmo
-    caminho de hoje, instrução por instrução.
-  - Nenhum IF existente de Meta ou Evolution é editado. Os dois params novos só
-    aparecem em (i) uma cláusula adicional no gate de posse Twilio, alcançada apenas
-    quando o caminho atual já iria levantar PROVISION_ADDRESS_NOT_OWNED, e (ii) duas
-    atribuições no INSERT/UPDATE do endpoint que são no-op quando os params são NULL
-    (COALESCE preservando o valor atual).
-  - Compatibilidade binária: os params entram no FIM da assinatura com DEFAULT NULL,
-    a função é recriada com CREATE OR REPLACE (mesmo nome/ordem dos params atuais),
-    e os GRANTs são reaplicados. Chamadores atuais (Meta, Evolution, tela Comercial)
-    continuam válidos sem alteração de código.
-  - Antes do merge: reexecutar os cenários de Meta e Evolution (ensaio em transação
-    com ROLLBACK, mesmos casos usados na Fase 3) e comparar saída da RPC campo a
-    campo. Qualquer divergência de comportamento em Meta ou Evolution interrompe a
-    implementação para revisão — não há merge parcial.
+  - Zero overload: `provision_line_endpoint` mantém EXATAMENTE os 8 params atuais
+    (mesma ordem, mesmos defaults, mesmo tipo de retorno) — CREATE OR REPLACE in-place,
+    mesma identidade, GRANTs reaplicados idênticos. Nenhum DROP.
+  - O corpo atual vai para o core sem alteração de regra; o wrapper delega com
+    (NULL, NULL), portanto o caminho Meta/Evolution é instrução por instrução o de hoje.
+  - Nenhum IF existente de Meta ou Evolution é editado. Os 2 pontos aditivos são
+    inalcançáveis quando p_sender_sid/p_external_account_id são NULL.
+  - Antes do merge: reexecutar os cenários de Meta e Evolution (ensaio em transação com
+    ROLLBACK, mesmos casos da Fase 3) e comparar a saída JSONB campo a campo com a
+    execução atual; além disso, verificar em pg_proc que existe UMA única
+    `provision_line_endpoint`. Qualquer divergência interrompe a implementação para
+    revisão — não há merge parcial.
+
 ```
 
 
