@@ -91,8 +91,6 @@ export function AudioMessagePlayer({
       if (!mountedRef.current) return;
       setCurrentTime(audio.currentTime);
       if (Number.isFinite(audio.duration)) setDuration(audio.duration);
-      setProgressDuration(readProgressDenominator(audio));
-      if (audio.paused || audio.ended) return;
       animFrameRef.current = requestAnimationFrame(tick);
     };
     tick();
