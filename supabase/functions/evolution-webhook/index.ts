@@ -560,7 +560,7 @@ async function findOrCreateContact(
   // Owner sugerido: só quando o endpoint de entrada é pessoal com dono válido.
   // NULL ⇒ payload idêntico ao anterior ⇒ round-robin atual roda igual.
   const suggestedOwnerId = await resolveInboundSuggestedAssignee(
-    service as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> },
+    service,
     organizationId,
     inboundEndpointId ?? null,
   );
