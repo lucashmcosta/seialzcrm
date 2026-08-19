@@ -207,8 +207,14 @@ if (typeof window !== "undefined") {
     }
     // eslint-disable-next-line no-console
     console.log(`AUDIO_PROBE_ACTIVATION=${reasons.join("+")} URL=${window.location.href}`);
+    // eslint-disable-next-line no-console
+    console.log("AUDIO_PROBE_LOADED");
     import("./lib/dev/audioProbe")
-      .then((m) => m.installAudioProbe(reasons.join("+")))
+      .then((m) => {
+        // eslint-disable-next-line no-console
+        console.log("AUDIO_PROBE_IMPORTED");
+        m.installAudioProbe(reasons.join("+"));
+      })
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.error("AUDIO_PROBE_LOAD_FAILED", err);

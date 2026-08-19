@@ -266,7 +266,7 @@ export function installAudioProbe(activation = 'unknown') {
   };
   (window as unknown as { __audioProbe: typeof api }).__audioProbe = api;
   // eslint-disable-next-line no-console
-  console.log(`AUDIO_PROBE_LOADED activation=${activation} audioElements=${document.querySelectorAll('audio').length}`);
+  console.log('AUDIO_PROBE_INSTALLED');
   // eslint-disable-next-line no-console
   console.log('[audioProbe] armed — press play on an audio, wait ~5s, read the AUDIO_CAPTURE block. Run __audioProbe.diag() for status.');
 }
