@@ -161,10 +161,29 @@ export function EvolutionProvisionPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instances.map((i) => `${i.id}:${i.connected}:${i.identityKnown}`).join('|')]);
 
+  const openStep1 = (target: { mode: 'create' } | { mode: 'assign'; instanceId: string }) => {
+    const current = target.mode === 'assign' ? destinationByInstance[target.instanceId] : undefined;
+    setDraftPurpose(current?.purpose ?? 'commercial');
+    setDraftUserId(current?.assignedUserId ?? null);
+    setStep1(target);
+  };
+
+  const draftValid = draftPurpose !== 'vendor_personal' || !!draftUserId;
+
   const onLink = async (instanceId: string) => {
+    const chosen = destinationByInstance[instanceId];
+    // Trava de segurança: sem destino explícito, nada é enviado.
+    if (!chosen || (chosen.purpose === 'vendor_personal' && !chosen.assignedUserId)) {
+      openStep1({ mode: 'assign', instanceId });
+      return;
+    }
     try {
-      await link.mutateAsync(instanceId);
-      toast.success('Número vinculado ao WhatsApp Comercial', {
+      await link.mutateAsync({
+        instanceId,
+        purpose: chosen.purpose,
+        assignedUserId: chosen.assignedUserId,
+      });
+      toast.success(`Número vinculado a ${DESTINATION_LABEL[chosen.purpose]}`, {
         description: 'O número não foi tornado ativo para envio.',
       });
     } catch (e) {
@@ -175,11 +194,13 @@ export function EvolutionProvisionPanel() {
     }
   };
 
-
-  const onCreate = async () => {
+  // Passo 2: cria a sessão e o QR (fluxo inalterado), registrando o destino
+  // escolhido no Passo 1 para a instância recém-criada.
+  const onCreate = async (chosen: ChosenDestination) => {
     setQr(null);
     try {
       const r = await create.mutateAsync();
+      setDestinationByInstance((prev) => ({ ...prev, [r.instanceId]: chosen }));
       setQr({ instanceName: r.instanceName, base64: r.qr?.base64 ?? null });
       toast.success('Sessão criada', {
         description: 'Leia o QR Code no WhatsApp para concluir a conexão.',
@@ -187,6 +208,21 @@ export function EvolutionProvisionPanel() {
     } catch (e) {
       toast.error('Não foi possível criar a sessão', { description: safeDetail(e) });
     }
+  };
+
+  const confirmStep1 = async () => {
+    if (!step1 || !draftValid) return;
+    const chosen: ChosenDestination = {
+      purpose: draftPurpose,
+      assignedUserId: draftPurpose === 'vendor_personal' ? draftUserId : null,
+    };
+    if (step1.mode === 'assign') {
+      setDestinationByInstance((prev) => ({ ...prev, [step1.instanceId]: chosen }));
+      setStep1(null);
+      return;
+    }
+    setStep1(null);
+    await onCreate(chosen);
   };
 
   const onRegenerate = async (instanceName: string) => {
