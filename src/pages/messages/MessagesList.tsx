@@ -99,6 +99,8 @@ import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { useThreadBadgeEndpoints } from '@/hooks/useThreadBadgeEndpoints';
+import { useThreadLastMessageMeta } from '@/hooks/messages/useThreadLastMessageMeta';
+import { LastMessagePreview } from '@/components/messages/LastMessagePreview';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
@@ -252,9 +254,12 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   /** Estado real do endpoint de resposta (ativo/inativo). */
   endpointIsActive?: boolean | null;
   officialNumbers?: Set<string>;
+  /** Metadados da última mensagem (preview) — resolvidos em lote. */
+  lastMessageMediaType?: string | null;
+  lastMessageStatus?: string | null;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -298,6 +303,14 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
             {formatRelativeTime(value.updated_at, locale)}
           </span>
         </div>
+        {/* Preview da última mensagem (estilo WhatsApp) */}
+        <LastMessagePreview
+          className="mt-0.5"
+          content={value.last_message}
+          direction={value.last_message_direction}
+          mediaType={lastMessageMediaType ?? null}
+          whatsappStatus={lastMessageStatus ?? null}
+        />
         {/* Linha única de meta: status · atenção · responsável */}
         <div className="flex items-center gap-1.5 mt-1 min-w-0">
           <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', status.dotColor)} />
@@ -708,6 +721,12 @@ function DesktopMessagesList() {
   // Badge da lista lateral (somente exibição): endpoint da última mensagem,
   // com `primary_endpoint_id` como fallback.
   const threadBadgeEndpoints = useThreadBadgeEndpoints(threadIdsForEndpointMap, hasMultipleEndpoints);
+  // Preview da última mensagem (somente exibição): resolve media_type/whatsapp_status
+  // em lote pelos `last_message_id` das threads carregadas.
+  const lastMessageMeta = useThreadLastMessageMeta(
+    (threads ?? []).map((t) => t.last_message_id),
+    true,
+  );
   const endpointById: Record<string, typeof orgEndpoints[number]> = Object.fromEntries(orgEndpoints.map((e) => [e.id, e]));
 
   // PR4: business_context da thread selecionada. Quando 'sales', o composer
@@ -1801,7 +1820,7 @@ function DesktopMessagesList() {
 
     const { data: row, error } = await supabase
       .from('message_threads')
-      .select('id, contact_id, status, updated_at, created_at, last_message_at, whatsapp_last_inbound_at, last_inbound_at, needs_human_attention, assigned_user_id, primary_endpoint_id, last_message_content, last_message_direction')
+      .select('id, contact_id, status, updated_at, created_at, last_message_at, whatsapp_last_inbound_at, last_inbound_at, needs_human_attention, assigned_user_id, primary_endpoint_id, last_message_id, last_message_content, last_message_direction')
       .eq('organization_id', organization.id)
       .eq('id', threadId)
       .maybeSingle();
@@ -1824,6 +1843,7 @@ function DesktopMessagesList() {
       contact_name: (contact as any)?.full_name || (contact as any)?.phone || 'Desconhecido',
       contact_phone: (contact as any)?.phone ?? null,
       last_message: (row as any).last_message_content || '...',
+      last_message_id: (row as any).last_message_id ?? null,
       last_message_direction: (row as any).last_message_direction ?? null,
       updated_at: (row as any).updated_at,
       last_message_at: (row as any).last_message_at ?? null,
@@ -2024,6 +2044,8 @@ function DesktopMessagesList() {
                         endpointProvider={threadBadgeEndpoints[thread.id]?.provider ?? null}
                         endpointIsActive={threadBadgeEndpoints[thread.id]?.isActive ?? null}
                         officialNumbers={officialNumbers}
+                        lastMessageMediaType={thread.last_message_id ? lastMessageMeta[thread.last_message_id]?.mediaType ?? null : null}
+                        lastMessageStatus={thread.last_message_id ? lastMessageMeta[thread.last_message_id]?.whatsappStatus ?? null : null}
                       />
                     ))}
                   </ListBox>
