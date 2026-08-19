@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
 import { salesCanonicalInboundEnabled } from "../_shared/sales-canonical-gate.ts";
+import { resolveInboundSuggestedAssignee } from "../_shared/inbound-assignee.ts";
 
 
 const corsHeaders = {

@@ -17,6 +17,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { metaWaGetMediaUrl, metaWaDownloadMedia, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
 import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
 import { salesCanonicalInboundEnabled } from "../_shared/sales-canonical-gate.ts";
+import { resolveInboundSuggestedAssignee } from "../_shared/inbound-assignee.ts";
 
 import {
   resolveVerifyTokenForOi,
