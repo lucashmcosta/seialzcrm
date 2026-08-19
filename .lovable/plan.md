@@ -147,6 +147,13 @@ TWILIO_PARTIAL_FAILURE_LEAVES_INVALID_ACTIVE_ENDPOINT=NO
 ROUND_ROBIN_CHANGED=NO
 THREAD_MODEL_CHANGED=NO
 ASSIGNMENT_RULES_CHANGED=NO
+CURRENT_RPC_SIGNATURE_CHANGED=NO
+META_RPC_CALL_CHANGED=NO
+EVOLUTION_EXISTING_RPC_CALL_CHANGED=NO
+OLD_CALLS_AMBIGUOUS=NO
+TWILIO_HAS_SERVER_VERIFIED_OWNERSHIP=YES
+PROVISIONING_RULES_DUPLICATED=NO
+
 
 COMPATIBILITY_RISK=BAIXO
   - Nenhuma migração de dados; nenhuma alteração em round-robin, atribuição, threads,
@@ -162,22 +169,19 @@ COMPATIBILITY_RISK=BAIXO
     RPC (sender_sid / external_account_id); nenhuma assinatura de chamada existente muda.
 
 REGRESSION_REQUIREMENT (bloqueante)
-  - A alteração em provision_line_endpoint é ESTRITAMENTE ADITIVA. Com
-    p_sender_sid IS NULL e p_external_account_id IS NULL, a execução segue o mesmo
-    caminho de hoje, instrução por instrução.
-  - Nenhum IF existente de Meta ou Evolution é editado. Os dois params novos só
-    aparecem em (i) uma cláusula adicional no gate de posse Twilio, alcançada apenas
-    quando o caminho atual já iria levantar PROVISION_ADDRESS_NOT_OWNED, e (ii) duas
-    atribuições no INSERT/UPDATE do endpoint que são no-op quando os params são NULL
-    (COALESCE preservando o valor atual).
-  - Compatibilidade binária: os params entram no FIM da assinatura com DEFAULT NULL,
-    a função é recriada com CREATE OR REPLACE (mesmo nome/ordem dos params atuais),
-    e os GRANTs são reaplicados. Chamadores atuais (Meta, Evolution, tela Comercial)
-    continuam válidos sem alteração de código.
-  - Antes do merge: reexecutar os cenários de Meta e Evolution (ensaio em transação
-    com ROLLBACK, mesmos casos usados na Fase 3) e comparar saída da RPC campo a
-    campo. Qualquer divergência de comportamento em Meta ou Evolution interrompe a
-    implementação para revisão — não há merge parcial.
+  - Zero overload: `provision_line_endpoint` mantém EXATAMENTE os 8 params atuais
+    (mesma ordem, mesmos defaults, mesmo tipo de retorno) — CREATE OR REPLACE in-place,
+    mesma identidade, GRANTs reaplicados idênticos. Nenhum DROP.
+  - O corpo atual vai para o core sem alteração de regra; o wrapper delega com
+    (NULL, NULL), portanto o caminho Meta/Evolution é instrução por instrução o de hoje.
+  - Nenhum IF existente de Meta ou Evolution é editado. Os 2 pontos aditivos são
+    inalcançáveis quando p_sender_sid/p_external_account_id são NULL.
+  - Antes do merge: reexecutar os cenários de Meta e Evolution (ensaio em transação com
+    ROLLBACK, mesmos casos da Fase 3) e comparar a saída JSONB campo a campo com a
+    execução atual; além disso, verificar em pg_proc que existe UMA única
+    `provision_line_endpoint`. Qualquer divergência interrompe a implementação para
+    revisão — não há merge parcial.
+
 ```
 
 
