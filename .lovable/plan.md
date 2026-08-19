@@ -165,8 +165,9 @@ COMPATIBILITY_RISK=BAIXO
   - Ponto de atenção 2: Evolution com destino "Atendimento" exige Route
     (messaging_lines) com inbox_key='customer_service' ativa na org; sem ela o erro é
     PROVISION_LINE_NOT_FOUND (nada é criado automaticamente).
-  - Ponto de atenção 3: a única migração do escopo adiciona 2 parâmetros OPCIONAIS à
-    RPC (sender_sid / external_account_id); nenhuma assinatura de chamada existente muda.
+  - Ponto de atenção 3: a migração NÃO altera a assinatura da RPC atual — cria um core
+    interno (service_role) + uma entrada extra só para Twilio; sem overload da RPC pública.
+
 
 REGRESSION_REQUIREMENT (bloqueante)
   - Zero overload: `provision_line_endpoint` mantém EXATAMENTE os 8 params atuais
