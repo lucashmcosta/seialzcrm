@@ -88,23 +88,46 @@ NEW_ENDPOINTS_CAN_STILL_BE_CREATED_AS_PURPOSE_OTHER=NO
   (nenhum caminho de UI restante insere endpoint sem destino explícito; o default
   'other' da coluna deixa de ser alcançável pelos fluxos de criação)
 
-ALL_PROVIDERS_USE_PROVISION_LINE_ENDPOINT=YES
-DESTINATION_SELECTED_INSIDE_INTEGRATION_FLOW=YES
+GATES FINAIS (a comprovar na entrega)
+META_USES_PROVISION_LINE_ENDPOINT=YES
+EVOLUTION_USES_PROVISION_LINE_ENDPOINT=YES
+TWILIO_USES_PROVISION_LINE_ENDPOINT=YES
+EVOLUTION_LEGACY_PROVISION_SALES_USED=NO
+DESTINATION_SELECTED_INSIDE_META_FLOW=YES
+DESTINATION_SELECTED_INSIDE_EVOLUTION_FLOW=YES
+DESTINATION_SELECTED_INSIDE_TWILIO_FLOW=YES
+PERSONAL_REQUIRES_USER=YES
+CUSTOMER_SERVICE_ROUTES_TO_CUSTOMER_SERVICE=YES
+COMMERCIAL_ROUTES_TO_SALES=YES
+PERSONAL_ROUTES_TO_SALES=YES
+PROVISION_CHANGES_ACTIVE_ENDPOINT=NO
 EXISTING_ENDPOINTS_CHANGED=0
-BACKFILL_REQUIRED=NO
+TWILIO_LEGACY_OTHER_ENDPOINTS_CHANGED=0
+BACKFILL_EXECUTED=NO
+TWILIO_SENDER_VERIFIED_SERVER_SIDE=YES
+TWILIO_OWNERSHIP_RETRY_IDEMPOTENT=YES
+TWILIO_PARTIAL_FAILURE_LEAVES_INVALID_ACTIVE_ENDPOINT=NO
+ROUND_ROBIN_CHANGED=NO
+THREAD_MODEL_CHANGED=NO
+ASSIGNMENT_RULES_CHANGED=NO
 
 COMPATIBILITY_RISK=BAIXO
   - Nenhuma migração de dados; nenhuma alteração em round-robin, atribuição, threads,
     oportunidades, inbound, permissões ou active_endpoint_id.
   - Ponto de atenção 1: a RPC proíbe reclassificar purpose de endpoint existente
     (PROVISION_ENDPOINT_PURPOSE_CONFLICT). Vincular instância Evolution a um número que
-    já exista com outro purpose falhará com mensagem clara — comportamento desejado,
-    mas a UI precisa traduzir o erro (mapa LINK_ERROR já existe no painel).
-  - Ponto de atenção 2: Evolution com destino "Atendimento" passa a exigir Route
+    já exista com outro purpose falhará com mensagem clara — a UI traduz o erro
+    (mapa LINK_ERROR já existe no painel).
+  - Ponto de atenção 2: Evolution com destino "Atendimento" exige Route
     (messaging_lines) com inbox_key='customer_service' ativa na org; sem ela o erro é
     PROVISION_LINE_NOT_FOUND (nada é criado automaticamente).
-  - Ponto de atenção 3: o passo Twilio depende da decisão de ownership (item 4 acima);
-    é o único ponto que pode exigir uma chamada extra à API Twilio no Edge.
+  - Ponto de atenção 3: a única migração do escopo adiciona 2 parâmetros OPCIONAIS à
+    RPC (sender_sid / external_account_id); nenhuma assinatura de chamada existente muda.
 ```
 
-Nada implementado. Aprove (e diga a opção de ownership do Twilio, se tiver preferência) que eu executo exatamente este diff.
+## Entrega
+
+Ao final: diff por provider (Meta / Evolution / Twilio), resultado de `tsgo` (typecheck),
+build e `deno check` das functions alteradas, mais o quadro de gates preenchido.
+Parada obrigatória para validação manual antes de publicar.
+
