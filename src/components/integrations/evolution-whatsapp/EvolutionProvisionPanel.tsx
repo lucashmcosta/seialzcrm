@@ -304,6 +304,9 @@ export function EvolutionProvisionPanel() {
           {instances.map((i) => {
             const finishing = i.provisioningStatus === 'pending' && i.connected && !i.identityKnown;
             const linkable = i.provisioningStatus === 'pending' && i.connected && i.identityKnown;
+            const chosen = destinationByInstance[i.id];
+            const destinationReady =
+              !!chosen && (chosen.purpose !== 'vendor_personal' || !!chosen.assignedUserId);
             return (
               <li
                 key={i.id}
