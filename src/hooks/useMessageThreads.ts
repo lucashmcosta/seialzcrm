@@ -8,6 +8,7 @@ export interface ChatThread {
   contact_name: string;
   contact_phone: string | null;
   last_message: string | null;
+  last_message_id: string | null;
   last_message_direction: string | null;
   updated_at: string;
   last_message_at: string | null;
