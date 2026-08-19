@@ -27,9 +27,11 @@ export function AudioMessagePlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [progressDuration, setProgressDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
+
   const [waveformData] = useState(() =>
     Array.from({ length: 45 }, () => Math.random() * 0.5 + 0.2)
   );
