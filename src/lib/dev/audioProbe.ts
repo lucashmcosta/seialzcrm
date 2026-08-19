@@ -14,7 +14,19 @@
  * Remove this file (and its loader in main.tsx) once the audit is done.
  */
 
-type Sample = { t: number; currentTime: number; reactTime: string; duration: number };
+type Sample = {
+  t: number;
+  currentTime: number;
+  reactTime: string;
+  duration: number;
+  progressState: string;
+  bulletStyle: string;
+  bulletX: string;
+  bulletXRel: string;
+  waveformWidth: string;
+  barsActive: string;
+  bulletSame: string;
+};
 
 type Capture = {
   index: number;
@@ -30,8 +42,11 @@ type Capture = {
   paused: boolean[];
   seekable: string[];
   buffered: string[];
+  bulletRef?: Element | null;
+  bulletReplaced: boolean;
   detachRaf?: () => void;
 };
+
 
 const captures: Capture[] = [];
 const seen = new WeakSet<HTMLAudioElement>();
