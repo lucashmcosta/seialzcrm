@@ -1096,7 +1096,7 @@ async function ingestInboundMessage(
 
   // 2) Contato
   const { contactId, contactOwnerId, created } = await findOrCreateContact(
-    service, ctx.organizationId, fromE164, parsed.pushName ?? "", settings,
+    service, ctx.organizationId, fromE164, parsed.pushName ?? "", settings, ctx.endpointId,
   );
   if (!contactId) {
     return { messageId: null, threadId: null, error: "no_contact" };
