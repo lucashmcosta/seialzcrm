@@ -1,4 +1,4 @@
-import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from "react";
+import { Suspense, lazy, useEffect, useState, type ComponentType, type LazyExoticComponent } from "react";
 import * as Sentry from "@sentry/react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Toaster } from "@/components/ui/toaster";
@@ -12,7 +12,8 @@ import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
 import { SiteI18nProvider } from "@/i18n/SiteI18nProvider";
-import { detectLocale } from "@/i18n/config";
+import { detectLocale, type Locale } from "@/i18n/config";
+import { resolveInitialLocale } from "@/i18n/geoLocale";
 import { DEFAULT_LOCALE, LOCALE_TO_SLUG, SLUG_TO_LOCALE } from "@/i18n/config";
 import { CallHandlersBoundary } from "@/components/calls/CallHandlersBoundary";
 import { hardRefreshApp } from "@/hooks/useVersionCheck";
@@ -347,14 +348,26 @@ function RootRedirect() {
     hash.includes('access_token=') ||
     hash.includes('type=magiclink') ||
     hash.includes('type=recovery');
+
+  // Idioma inicial da home: preferência salva → país do IP → navigator → default.
+  const [locale, setLocale] = useState<Locale | null>(null);
+  useEffect(() => {
+    if (hasImp) return;
+    let active = true;
+    resolveInitialLocale()
+      .then((l) => { if (active) setLocale(l); })
+      .catch(() => { if (active) setLocale(detectLocale()); });
+    return () => { active = false; };
+  }, [hasImp]);
+
   if (hasImp) {
     window.location.replace('/impersonate/callback' + search + hash);
     return null;
   }
-  const locale = detectLocale();
-  const slug = LOCALE_TO_SLUG[locale];
-  return <Navigate to={`/${slug}`} replace />;
+  if (!locale) return <PageLoader />;
+  return <Navigate to={`/${LOCALE_TO_SLUG[locale]}`} replace />;
 }
+
 
 // Guard for /:locale/* — valida o slug e redireciona para PT-BR se inválido
 function LocaleGuard({ children }: { children: React.ReactNode }) {
