@@ -8,8 +8,10 @@ import {
   persistLocale,
   swapLocaleInPath,
 } from "./config";
+import { consumeGeoRefinementPending, resolveGeoLocale } from "./geoLocale";
 import { Namespace, getDict, resolveKey } from "./dictionaries";
 import { SiteI18nContext } from "./useSiteI18n";
+
 
 /**
  * Provider do site público. Deriva o locale do segmento `:locale` da URL.
@@ -33,6 +35,27 @@ export function SiteI18nProvider({ children }: { children: ReactNode }) {
       document.documentElement.lang = locale;
     }
   }, [locale]);
+
+  // Refino por IP: o redirect da raiz é imediato (sem rede) e sinaliza aqui.
+  // Se o país indicar outro idioma, trocamos a rota depois do primeiro paint.
+  useEffect(() => {
+    if (!consumeGeoRefinementPending()) return;
+    let active = true;
+    resolveGeoLocale()
+      .then((geo) => {
+        if (!active || !geo || geo === locale) return;
+        persistLocale(geo);
+        navigate(swapLocaleInPath(location.pathname, geo) + location.search + location.hash, {
+          replace: true,
+        });
+      })
+      .catch(() => { /* ignore */ });
+    return () => { active = false; };
+    // Roda uma única vez por montagem do site público.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
 
   const setLocale = useCallback(
     (next: Locale) => {

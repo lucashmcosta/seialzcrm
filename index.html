@@ -17,9 +17,15 @@
     <link rel="manifest" href="/manifest.webmanifest" />
 
     <!-- Google Fonts - Inter/Outfit/Share Tech Mono (app) + Sora/Space Mono (brand · landing) -->
+    <!-- Carregado de forma NÃO bloqueante (media=print + onload) para tirar o CSS
+         das fontes do caminho crítico de renderização. Fallback em <noscript>. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@300;400;500;600&family=Share+Tech+Mono&family=Sora:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@300;400;500;600&family=Share+Tech+Mono&family=Sora:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@300;400;500;600&family=Share+Tech+Mono&family=Sora:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    </noscript>
+
 
     
     

@@ -107,3 +107,61 @@ export async function resolveInitialLocale(): Promise<Locale> {
 
   return detectLocale();
 }
+
+/** Flag que sinaliza ao provider do site que o refino por IP ainda pode rodar. */
+const GEO_PENDING_KEY = "seialz.site.geoPending";
+
+/**
+ * Locale inicial resolvido de forma SÍNCRONA (sem rede): preferência salva →
+ * geo já cacheado na sessão → navigator → default. Usado no redirect da raiz
+ * para não bloquear o primeiro paint.
+ */
+export function initialLocaleSync(): Locale {
+  if (typeof window === "undefined") return DEFAULT_LOCALE;
+  return storedPreference() ?? cachedGeoLocale() ?? detectLocale();
+}
+
+/** Só refina por IP quando não há preferência explícita nem geo em cache. */
+export function markGeoRefinementPending(): void {
+  if (typeof window === "undefined") return;
+  if (storedPreference() || cachedGeoLocale()) return;
+  try {
+    window.sessionStorage.setItem(GEO_PENDING_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+export function consumeGeoRefinementPending(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (window.sessionStorage.getItem(GEO_PENDING_KEY) !== "1") return false;
+    window.sessionStorage.removeItem(GEO_PENDING_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Faz o lookup por IP em background (nunca lança, timeout curto) e devolve o
+ * locale do país, ou `null` quando indisponível.
+ */
+export async function resolveGeoLocale(): Promise<Locale | null> {
+  if (typeof window === "undefined") return null;
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const country = await fetchCountry(controller.signal);
+    const geo = localeFromCountry(country);
+    if (geo) {
+      cacheGeoLocale(geo);
+      return geo;
+    }
+  } catch {
+    /* ignore */
+  } finally {
+    window.clearTimeout(timer);
+  }
+  return null;
+}

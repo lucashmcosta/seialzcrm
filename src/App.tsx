@@ -13,7 +13,8 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "
 import { PageLoader } from "./components/common/PageLoader";
 import { SiteI18nProvider } from "@/i18n/SiteI18nProvider";
 import { detectLocale, type Locale } from "@/i18n/config";
-import { resolveInitialLocale } from "@/i18n/geoLocale";
+import { initialLocaleSync, markGeoRefinementPending } from "@/i18n/geoLocale";
+
 import { DEFAULT_LOCALE, LOCALE_TO_SLUG, SLUG_TO_LOCALE } from "@/i18n/config";
 import { CallHandlersBoundary } from "@/components/calls/CallHandlersBoundary";
 import { hardRefreshApp } from "@/hooks/useVersionCheck";
@@ -349,24 +350,19 @@ function RootRedirect() {
     hash.includes('type=magiclink') ||
     hash.includes('type=recovery');
 
-  // Idioma inicial da home: preferência salva → país do IP → navigator → default.
-  const [locale, setLocale] = useState<Locale | null>(null);
-  useEffect(() => {
-    if (hasImp) return;
-    let active = true;
-    resolveInitialLocale()
-      .then((l) => { if (active) setLocale(l); })
-      .catch(() => { if (active) setLocale(detectLocale()); });
-    return () => { active = false; };
-  }, [hasImp]);
-
   if (hasImp) {
     window.location.replace('/impersonate/callback' + search + hash);
     return null;
   }
-  if (!locale) return <PageLoader />;
+
+  // Idioma inicial da home resolvido SEM rede (preferência salva → geo em cache
+  // → navigator → default). O refino por IP acontece depois, dentro do
+  // SiteI18nProvider, para não bloquear o primeiro paint.
+  const locale = initialLocaleSync();
+  markGeoRefinementPending();
   return <Navigate to={`/${LOCALE_TO_SLUG[locale]}`} replace />;
 }
+
 
 
 // Guard for /:locale/* — valida o slug e redireciona para PT-BR se inválido
