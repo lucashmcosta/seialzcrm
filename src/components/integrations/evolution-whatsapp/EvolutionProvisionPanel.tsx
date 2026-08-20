@@ -2,15 +2,17 @@
 // Painel de provisionamento de números Evolution.
 //
 // Porta de entrada OFICIAL (card "Evolution WhatsApp" em Configurações >
-// Integrações). Aqui o usuário cria uma nova sessão, lê o QR e acompanha o
-// estado real. O vínculo do número com a Route Comercial continua sendo feito
-// em WhatsApp Comercial (INTEGRAÇÃO ≠ CONFIGURAÇÃO ≠ REGRA).
+// Integrações). Todo o fluxo acontece DENTRO deste modal:
+//   Passo 1 — Destino (Comercial / Atendimento / Pessoal + responsável)
+//   Passo 2 — QR Code
+//   Passo 3 — Vínculo do número no destino escolhido
 //
 // Garantias:
 //  - Nenhuma credencial é exibida, criada ou duplicada no cliente.
 //  - Excluir uma sessão em uso é bloqueado pelo servidor (409).
 //  - Nada aqui altera número ativo, rotações ou o módulo Atendimento.
 // ============================================================================
+
 
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -31,10 +33,8 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
-import {
   useCreateEvolutionInstance,
+
   useDeleteEvolutionInstance,
   useEvolutionProvisionedInstances,
   useLinkPendingInstance,
@@ -275,6 +275,41 @@ export function EvolutionProvisionPanel() {
         </div>
       </div>
 
+      {/* Passo 1 — Destino. Inline, no corpo deste modal (sem Dialog aninhado).
+          Obrigatório e sempre explícito: nenhuma sessão é criada/vinculada com
+          destino presumido. */}
+      {step1 && (
+        <div className="rounded-md border border-primary/40 bg-muted/30 p-4 space-y-3">
+          <div>
+            <div className="text-sm font-medium">
+              {step1.mode === 'assign' ? 'Destino desta sessão' : 'Passo 1 — Destino do número'}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {step1.mode === 'assign'
+                ? 'Esta sessão foi criada sem destino definido. Escolha o destino para concluir o vínculo.'
+                : 'Escolha o destino do número. Em seguida você lê o QR Code para conectar.'}
+            </p>
+          </div>
+
+          <EndpointDestinationStep
+            organizationId={organization?.id ?? null}
+            destination={draftPurpose}
+            onDestinationChange={setDraftPurpose}
+            assignedUserId={draftUserId}
+            onAssignedUserChange={setDraftUserId}
+            disabled={create.isPending}
+          />
+
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setStep1(null)}>Cancelar</Button>
+            <Button size="sm" onClick={confirmStep1} disabled={!draftValid || create.isPending}>
+              {create.isPending && <SpinnerGap className="h-4 w-4 mr-1 animate-spin" />}
+              {step1.mode === 'assign' ? 'Confirmar destino' : 'Continuar'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {error && (
         <Alert variant="destructive">
           <WarningCircle className="h-4 w-4" />
@@ -413,40 +448,6 @@ export function EvolutionProvisionPanel() {
           </div>
         </>
       )}
-
-      {/* Passo 1 — destino. Obrigatório e sempre explícito: nenhuma sessão é
-          vinculada com destino presumido. */}
-      <Dialog open={!!step1} onOpenChange={(o) => { if (!o) setStep1(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {step1?.mode === 'assign' ? 'Destino desta sessão' : 'Conectar novo número'}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              {step1?.mode === 'assign'
-                ? 'Esta sessão foi criada sem destino definido. Escolha o destino para concluir o vínculo.'
-                : 'Escolha o destino do número. Em seguida você lê o QR Code para conectar.'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <EndpointDestinationStep
-            organizationId={organization?.id ?? null}
-            destination={draftPurpose}
-            onDestinationChange={setDraftPurpose}
-            assignedUserId={draftUserId}
-            onAssignedUserChange={setDraftUserId}
-            disabled={create.isPending}
-          />
-
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setStep1(null)}>Cancelar</Button>
-            <Button onClick={confirmStep1} disabled={!draftValid || create.isPending}>
-              {create.isPending && <SpinnerGap className="h-4 w-4 mr-1 animate-spin" />}
-              {step1?.mode === 'assign' ? 'Confirmar destino' : 'Continuar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
