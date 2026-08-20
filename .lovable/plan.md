@@ -1,59 +1,27 @@
-# Sentry SEIALZ-23 — "Degraded UI Performance" em /auth/signin
+# ReferenceError: React is not defined — SalesRoutePanel
 
-## Diagnóstico
+## Diagnóstico (verificado)
 
-O evento não é um erro de código. É um **detector de performance** do Sentry:
-1 evento, 0 usuários afetados, 8 dias atrás. O que ele mediu:
+- O evento do Sentry é de `2026-08-13T06:49:53–06:50:01`.
+- O arquivo `src/components/messages/route/SalesRoutePanel.tsx` usa `React.forwardRef` (linha 25), e o JSX do `Row` fica na linha 31 — exatamente o frame reportado.
+- O `import React from 'react'` foi adicionado nesse arquivo em `2026-08-13 06:50:03`, ou seja, ~2 segundos **depois** do último evento capturado.
 
-- `browser.DNS` de `https://crm.seialz.com` levou **541ms** (resolução DNS do
-  próprio domínio, no primeiro acesso do visitante — cache DNS frio).
-- Isso empurrou o TTFB para 636ms e o LCP para 1.773s.
-- Na mesma trace aparecem dois recursos pesados e bloqueantes:
-  `/assets/index-*.css` (287ms) e `/assets/index-*.js` (623ms).
+Conclusão: esse erro específico já está corrigido no código atual. Não há regressão pendente nesse arquivo.
 
-Não existe stack trace nem exceção: não há bug para corrigir. O DNS do próprio
-domínio não é controlável pelo frontend. O que dá para melhorar de fato é o
-caminho crítico do primeiro carregamento, e o que dá para fazer no Sentry é
-parar de tratar esse detector como issue acionável.
+## Verificação de risco residual (verificada)
 
-## O que será feito
+- Varredura em `src/`: nenhum outro arquivo usa `React.<valor>` em runtime (`forwardRef`, `memo`, hooks, `lazy`, `createElement`, `Fragment`…) sem importar `React`. As únicas ocorrências sem import são comentários (`src/App.tsx`) ou uso apenas de tipo (`React.ReactNode`).
+- `tsgo --noEmit -p tsconfig.app.json` passa sem erros.
 
-### 1. Encurtar o caminho crítico do primeiro paint (`index.html`)
+## Proposta mínima (opcional, 2 arquivos)
 
-- Adicionar `preconnect` para o domínio do Supabase (`VITE_SUPABASE_URL`), que
-  hoje só é resolvido depois do JS carregar — hoje só existe preconnect para
-  as fontes do Google.
-- Tornar o CSS das Google Fonts **não bloqueante** (padrão
-  `media="print" onload="this.media='all'"` com `<noscript>` de fallback),
-  mantendo exatamente as mesmas famílias e pesos. Isso remove os 287ms de
-  render-blocking sem mudar tipografia.
+Padronizar as duas referências de tipo que hoje dependem do namespace global:
 
-Nada de troca de fonte, nada de self-host nesta etapa.
+1. `src/components/messages/route/SalesConversationHeader.tsx` — trocar `React.ReactNode` por `ReactNode` com `import type { ReactNode } from 'react'`.
+2. `src/components/messages/route/SalesConversationMeta.tsx` — mesma troca.
 
-### 2. Reduzir o peso do bundle inicial (`vite.config.ts`)
+Nenhuma mudança de comportamento, nenhum efeito em runtime. Só remove a dependência do namespace `React` implícito nesses arquivos.
 
-- Adicionar `build.rollupOptions.output.manualChunks` separando `react`/
-  `react-dom`/`react-router` e `@supabase/supabase-js` do chunk de entrada.
-  O `index-*.js` de 623ms hoje é um bundle único; separar vendor permite que
-  ele seja cacheado entre deploys (`/assets/*` já é `immutable`).
+## Alternativa
 
-Sem mexer em rotas, lazy loading ou `retryImport`.
-
-### 3. Silenciar o detector no Sentry (`src/instrument.ts`)
-
-- No `beforeSend`, descartar eventos cujo tipo é detector de performance de
-  navegação sem exceção associada (DNS/consecutive-http e similares em
-  pageload). Motivo registrado em comentário: latência de DNS do domínio raiz
-  não é acionável no código do app; regressões reais de LCP/TTFB continuam
-  visíveis em Web Vitals / Insights, que não são filtrados.
-
-## Fora de escopo
-
-- Nenhuma mudança de backend, RLS, edge function, migração ou integração.
-- Nenhuma mudança em `/auth/signin` (lógica, layout ou auth).
-- Nenhuma alteração de `vercel.json` (headers de cache já estão corretos).
-
-## Verificação
-
-`tsgo` + `bun run build` verdes, e confirmação de que o HTML gerado mantém as
-mesmas fontes e que o build emite os chunks vendor separados.
+Se preferir, não mexemos em nada: basta resolver/ignorar a issue no Sentry, já que ela pertence a um release anterior à correção.
