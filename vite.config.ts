@@ -73,7 +73,27 @@ export default defineConfig(({ mode }) => {
       // emits .map files so the Sentry plugin can upload them. When the
       // plugin is disabled we skip maps entirely to keep builds lean.
       sourcemap: sentryEnabled ? "hidden" : false,
+      rollupOptions: {
+        output: {
+          // Quebra o bundle de entrada (era ~1.6s de parse/execução na home,
+          // gerando um long animation frame de 2.7s detectado pelo Sentry)
+          // em chunks paralelos e cacheáveis entre deploys.
+          manualChunks(id) {
+            if (!id.includes("node_modules")) return undefined;
+            if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom)[\\/]/.test(id)) {
+              return "vendor-react";
+            }
+            if (id.includes("@supabase")) return "vendor-supabase";
+            if (id.includes("@sentry")) return "vendor-sentry";
+            if (id.includes("framer-motion") || id.includes("motion-dom") || id.includes("motion-utils")) {
+              return "vendor-motion";
+            }
+            return undefined;
+          },
+        },
+      },
     },
+
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
