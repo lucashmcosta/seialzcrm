@@ -5,6 +5,7 @@
 // Provider NÃO aparece aqui — apenas no painel/modal técnico.
 // ============================================================================
 
+import type { ReactNode } from 'react';
 import { RouteBadge, NO_ROUTE_SUBTEXT, type EndpointState } from './RouteIndicators';
 
 interface Props {
@@ -14,7 +15,7 @@ interface Props {
   provider?: string | null;
   endpointState: EndpointState;
   /** Chips de janela (24h / CTWA) renderizados ao final da linha 3. */
-  windowChips?: React.ReactNode;
+  windowChips?: ReactNode;
 }
 
 export function SalesConversationMeta({

@@ -6,6 +6,7 @@
 // Provider e histórico de endpoints ficam apenas no modal técnico.
 // ============================================================================
 
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Info } from '@phosphor-icons/react';
 import { Avatar } from '@/components/base/avatar/avatar';
@@ -22,9 +23,9 @@ interface Props extends SalesRouteContextProps {
   fallbackAddress?: string | null;
   fallbackProvider?: string | null;
   /** Chips de janela (24h / CTWA). */
-  windowChips?: React.ReactNode;
+  windowChips?: ReactNode;
   /** Botões/menu de ação à direita. */
-  actions?: React.ReactNode;
+  actions?: ReactNode;
   detailsLabel?: string;
   onOpenDetails?: () => void;
 }
