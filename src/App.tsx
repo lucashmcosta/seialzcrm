@@ -1,4 +1,4 @@
-import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from "react";
+import { Suspense, lazy, useEffect, useState, type ComponentType, type LazyExoticComponent } from "react";
 import * as Sentry from "@sentry/react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Toaster } from "@/components/ui/toaster";
@@ -12,7 +12,8 @@ import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
 import { SiteI18nProvider } from "@/i18n/SiteI18nProvider";
-import { detectLocale } from "@/i18n/config";
+import { detectLocale, type Locale } from "@/i18n/config";
+import { resolveInitialLocale } from "@/i18n/geoLocale";
 import { DEFAULT_LOCALE, LOCALE_TO_SLUG, SLUG_TO_LOCALE } from "@/i18n/config";
 import { CallHandlersBoundary } from "@/components/calls/CallHandlersBoundary";
 import { hardRefreshApp } from "@/hooks/useVersionCheck";
@@ -349,8 +350,8 @@ function RootRedirect() {
     hash.includes('type=recovery');
 
   // Idioma inicial da home: preferência salva → país do IP → navigator → default.
-  const [locale, setLocale] = React.useState<Locale | null>(null);
-  React.useEffect(() => {
+  const [locale, setLocale] = useState<Locale | null>(null);
+  useEffect(() => {
     if (hasImp) return;
     let active = true;
     resolveInitialLocale()
