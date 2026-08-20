@@ -8,8 +8,10 @@ import {
   persistLocale,
   swapLocaleInPath,
 } from "./config";
+import { consumeGeoRefinementPending, resolveGeoLocale } from "./geoLocale";
 import { Namespace, getDict, resolveKey } from "./dictionaries";
 import { SiteI18nContext } from "./useSiteI18n";
+
 
 /**
  * Provider do site público. Deriva o locale do segmento `:locale` da URL.
