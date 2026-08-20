@@ -1,21 +1,34 @@
-# "Rendered more hooks than during the previous render" — PowerDialer
+# SEIALZ-26 "Blocking Operation" em `/` — diagnóstico e correção mínima
 
-## Diagnóstico (verificado)
+## O que o Sentry reportou (verificado nas imagens)
 
-- O stack aponta para `src/hooks/usePowerDialer.ts` e `src/components/outbound/PowerDialerGlobalConsole.tsx`. **Nenhum desses arquivos existe no projeto** e não há histórico deles no repositório (`git log` vazio, busca por `PowerDialer` em `src/` sem resultados).
-- O erro foi disparado durante **Hot Module Replacement**: as últimas frames são `Object.scheduleRefresh` → `/@react-refresh:228` → `performReactRefresh`. Isso só acontece no dev server / preview, nunca em produção.
-- Todas as frames de React estão em `/node_modules/.vite/deps/chunk-*.js`, caminho que também só existe em dev.
-- `eslint` com `react-hooks/rules-of-hooks` roda limpo em todo o `src/` — nenhuma violação de ordem de hooks no código atual.
+Não é um erro de código: é um **detector de performance** (level `warning`, 1 evento, 0 usuários afetados).
 
-Conclusão: é ruído de HMR de um código que não está mais no projeto. Não há bug a corrigir.
+- `pageload — /` = 3,60 s
+- `ui.long-animation-frame` = **2.706 ms** (a thread principal travada de uma vez)
+- FCP 3.600 ms / LCP 3.792 ms / TTFB 620 ms
+- Assets no caminho crítico: `index-*.js` 1,60 s, `index-*.css` 790 ms, `fonts.googleapis.com/css2` 77 ms + 699 ms, `manifest.webmanifest` 672 ms
 
-## Por que o filtro do Sentry não pegou
+## Causa (confirmada no código)
 
-`src/instrument.ts` já descarta eventos cujas frames apontam para `/node_modules/.vite/deps/` — esse filtro foi adicionado em `2026-07-29`. O evento em questão é anterior a isso (ou de um release sem o filtro), então já está coberto hoje.
+A rota `/` é pública (redirect para a landing), mas paga o custo do app inteiro antes do primeiro paint:
 
-## Ação proposta
+1. `index.html` carrega o CSS do Google Fonts com `<link rel="stylesheet">` **bloqueante**, com 5 famílias e muitos pesos (Inter, Outfit, Share Tech Mono, Sora, Space Mono).
+2. `src/App.tsx` monta, já na raiz, toda a árvore de providers e dependências do CRM (`QueryClientProvider`, `TooltipProvider`, `TelephonyProvider`, `AuthProvider`, `OrganizationProvider`, Sentry, `framer-motion`) — tudo dentro do bundle único `index-*.js`, sem `manualChunks` em `vite.config.ts`. Isso é o long animation frame de 2,7 s (parse + execução do bundle).
+3. `RootRedirect` ainda espera o `resolveInitialLocale()` (lookup de IP, até 1,2 s) mostrando `PageLoader` antes de navegar para `/pt-br`.
 
-1. Resolver/ignorar a issue no Sentry — pertence a código removido e a um caminho dev-only já filtrado.
-2. (Opcional, 1 arquivo) Reforçar o filtro em `src/instrument.ts`: descartar também eventos cuja stack contenha frames de `/@react-refresh` ou `/@vite/client`, cobrindo erros de HMR que cheguem sem frames de `.vite/deps`. Mudança isolada no `beforeSend`, sem efeito em runtime da aplicação.
+## Correção proposta (mínima, só apresentação/carregamento)
 
-Nenhuma alteração em banco, edge functions, RLS ou lógica de negócio.
+1. **Fontes não bloqueantes** (`index.html`): manter `preconnect`, carregar o CSS das fontes com `media="print" onload="this.media='all'"` + `<noscript>` de fallback, e reduzir a lista de pesos para os efetivamente usados. Elimina o CSS de fonte do caminho crítico.
+2. **Split de bundle** (`vite.config.ts`): adicionar `build.rollupOptions.output.manualChunks` separando `react`/`react-dom`/`react-router`, `@supabase/supabase-js`, `@sentry/react` e `framer-motion`. Quebra o `index-*.js` de 1,6 s em chunks paralelos e cacheáveis, encurtando o long animation frame.
+3. **Não esperar o geo-IP na raiz** (`src/App.tsx`): redirecionar imediatamente para o slug do `detectLocale()` (navigator/preferência salva) e deixar o ajuste por IP acontecer depois, dentro do `SiteI18nProvider`, sem bloquear o paint. Remove até 1,2 s do FCP.
+
+Nada de banco, RLS, edge functions ou regra de negócio. Sem mudança de layout ou de conteúdo visual.
+
+## Opcional (só se você quiser)
+
+Ajustar `beforeSend` em `src/instrument.ts` para não enviar o detector `Blocking Operation` quando ele vier apenas de latência de rede/DNS na primeira visita — mantendo os erros reais e as regressões de Web Vitals. Fica de fora por padrão, porque a correção acima já deve derrubar o detector.
+
+## Validação
+
+`tsgo` + build, e comparar no build o tamanho do chunk de entrada antes/depois. Depois do deploy, confirmar no Sentry que o evento não reaparece em `/`.
