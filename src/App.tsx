@@ -13,7 +13,8 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "
 import { PageLoader } from "./components/common/PageLoader";
 import { SiteI18nProvider } from "@/i18n/SiteI18nProvider";
 import { detectLocale, type Locale } from "@/i18n/config";
-import { resolveInitialLocale } from "@/i18n/geoLocale";
+import { initialLocaleSync, markGeoRefinementPending } from "@/i18n/geoLocale";
+
 import { DEFAULT_LOCALE, LOCALE_TO_SLUG, SLUG_TO_LOCALE } from "@/i18n/config";
 import { CallHandlersBoundary } from "@/components/calls/CallHandlersBoundary";
 import { hardRefreshApp } from "@/hooks/useVersionCheck";
