@@ -2,15 +2,17 @@
 // Painel de provisionamento de números Evolution.
 //
 // Porta de entrada OFICIAL (card "Evolution WhatsApp" em Configurações >
-// Integrações). Aqui o usuário cria uma nova sessão, lê o QR e acompanha o
-// estado real. O vínculo do número com a Route Comercial continua sendo feito
-// em WhatsApp Comercial (INTEGRAÇÃO ≠ CONFIGURAÇÃO ≠ REGRA).
+// Integrações). Todo o fluxo acontece DENTRO deste modal:
+//   Passo 1 — Destino (Comercial / Atendimento / Pessoal + responsável)
+//   Passo 2 — QR Code
+//   Passo 3 — Vínculo do número no destino escolhido
 //
 // Garantias:
 //  - Nenhuma credencial é exibida, criada ou duplicada no cliente.
 //  - Excluir uma sessão em uso é bloqueado pelo servidor (409).
 //  - Nada aqui altera número ativo, rotações ou o módulo Atendimento.
 // ============================================================================
+
 
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
