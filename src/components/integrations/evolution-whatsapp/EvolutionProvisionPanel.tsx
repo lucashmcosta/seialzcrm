@@ -275,6 +275,41 @@ export function EvolutionProvisionPanel() {
         </div>
       </div>
 
+      {/* Passo 1 — Destino. Inline, no corpo deste modal (sem Dialog aninhado).
+          Obrigatório e sempre explícito: nenhuma sessão é criada/vinculada com
+          destino presumido. */}
+      {step1 && (
+        <div className="rounded-md border border-primary/40 bg-muted/30 p-4 space-y-3">
+          <div>
+            <div className="text-sm font-medium">
+              {step1.mode === 'assign' ? 'Destino desta sessão' : 'Passo 1 — Destino do número'}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {step1.mode === 'assign'
+                ? 'Esta sessão foi criada sem destino definido. Escolha o destino para concluir o vínculo.'
+                : 'Escolha o destino do número. Em seguida você lê o QR Code para conectar.'}
+            </p>
+          </div>
+
+          <EndpointDestinationStep
+            organizationId={organization?.id ?? null}
+            destination={draftPurpose}
+            onDestinationChange={setDraftPurpose}
+            assignedUserId={draftUserId}
+            onAssignedUserChange={setDraftUserId}
+            disabled={create.isPending}
+          />
+
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setStep1(null)}>Cancelar</Button>
+            <Button size="sm" onClick={confirmStep1} disabled={!draftValid || create.isPending}>
+              {create.isPending && <SpinnerGap className="h-4 w-4 mr-1 animate-spin" />}
+              {step1.mode === 'assign' ? 'Confirmar destino' : 'Continuar'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {error && (
         <Alert variant="destructive">
           <WarningCircle className="h-4 w-4" />
