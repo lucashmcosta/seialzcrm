@@ -347,14 +347,26 @@ function RootRedirect() {
     hash.includes('access_token=') ||
     hash.includes('type=magiclink') ||
     hash.includes('type=recovery');
+
+  // Idioma inicial da home: preferência salva → país do IP → navigator → default.
+  const [locale, setLocale] = React.useState<Locale | null>(null);
+  React.useEffect(() => {
+    if (hasImp) return;
+    let active = true;
+    resolveInitialLocale()
+      .then((l) => { if (active) setLocale(l); })
+      .catch(() => { if (active) setLocale(detectLocale()); });
+    return () => { active = false; };
+  }, [hasImp]);
+
   if (hasImp) {
     window.location.replace('/impersonate/callback' + search + hash);
     return null;
   }
-  const locale = detectLocale();
-  const slug = LOCALE_TO_SLUG[locale];
-  return <Navigate to={`/${slug}`} replace />;
+  if (!locale) return <PageLoader />;
+  return <Navigate to={`/${LOCALE_TO_SLUG[locale]}`} replace />;
 }
+
 
 // Guard for /:locale/* — valida o slug e redireciona para PT-BR se inválido
 function LocaleGuard({ children }: { children: React.ReactNode }) {
