@@ -116,6 +116,108 @@ async function verifyHmac(
   return computed === signature;
 }
 
+// deno-lint-ignore no-explicit-any
+async function ensureContactContractOwnershipAndDelivery(
+  supabase: any,
+  params: { documentId: string; organizationId: string; contactId: string },
+) {
+  const { data: currentDocument, error: documentError } = await supabase
+    .from("documents")
+    .select("id, entity_type, entity_id, external_source, external_ref")
+    .eq("id", params.documentId)
+    .eq("organization_id", params.organizationId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (documentError || !currentDocument) {
+    return {
+      ok: false,
+      error: `document_lookup_failed: ${
+        documentError?.message || "document_not_found"
+      }`,
+    };
+  }
+
+  if (
+    currentDocument.external_source !== "suvsign" ||
+    !currentDocument.external_ref
+  ) {
+    return { ok: false, error: "document_is_not_a_confirmed_suvsign_contract" };
+  }
+
+  if (
+    currentDocument.entity_type === "contact" &&
+    String(currentDocument.entity_id) !== String(params.contactId)
+  ) {
+    return { ok: false, error: "contract_already_belongs_to_another_contact" };
+  }
+
+  if (currentDocument.entity_type === "opportunity") {
+    const { data: originalOpportunity, error: originalOpportunityError } =
+      await supabase
+        .from("opportunities")
+        .select("id, contact_id")
+        .eq("id", currentDocument.entity_id)
+        .eq("organization_id", params.organizationId)
+        .is("deleted_at", null)
+        .maybeSingle();
+
+    if (originalOpportunityError || !originalOpportunity) {
+      return {
+        ok: false,
+        error: `original_opportunity_lookup_failed: ${
+          originalOpportunityError?.message || "opportunity_not_found"
+        }`,
+      };
+    }
+
+    if (String(originalOpportunity.contact_id) !== String(params.contactId)) {
+      return {
+        ok: false,
+        error: "contract_opportunity_belongs_to_another_contact",
+      };
+    }
+  } else if (currentDocument.entity_type !== "contact") {
+    return { ok: false, error: "unsupported_contract_owner_type" };
+  }
+
+  let ownershipError = null;
+  if (currentDocument.entity_type !== "contact") {
+    const ownershipResult = await supabase
+      .from("documents")
+      .update({ entity_type: "contact", entity_id: params.contactId })
+      .eq("id", params.documentId)
+      .eq("organization_id", params.organizationId)
+      .eq("entity_type", "opportunity")
+      .eq("entity_id", currentDocument.entity_id);
+    ownershipError = ownershipResult.error;
+  }
+
+  if (ownershipError) {
+    return {
+      ok: false,
+      error: `ownership_update_failed: ${ownershipError.message}`,
+    };
+  }
+
+  const { data: replayResult, error: replayError } = await supabase.rpc(
+    "fn_enqueue_nammux_contact_contract_replays_v1",
+    {
+      _document_id: params.documentId,
+      _replay_reason: "document_added_after_win",
+    },
+  );
+
+  if (replayError) {
+    return {
+      ok: false,
+      error: `nammux_replay_enqueue_failed: ${replayError.message}`,
+    };
+  }
+
+  return { ok: true, replayResult };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -219,7 +321,7 @@ Deno.serve(async (req) => {
 
   const { data: opportunity, error: oppError } = await supabase
     .from("opportunities")
-    .select("id, organization_id, title")
+    .select("id, organization_id, contact_id, title")
     .eq("id", deal_id)
     .maybeSingle();
 
@@ -235,6 +337,47 @@ Deno.serve(async (req) => {
   }
 
   const orgId = opportunity.organization_id;
+  const ownerContactId = opportunity.contact_id || contact_id || null;
+  if (!ownerContactId) {
+    return new Response(
+      JSON.stringify({ error: "Opportunity has no contact" }),
+      {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+  if (contact_id && String(contact_id) !== String(ownerContactId)) {
+    return new Response(
+      JSON.stringify({
+        error: "contact_id does not match opportunity contact",
+      }),
+      {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  const { data: ownerContact, error: ownerContactError } = await supabase
+    .from("contacts")
+    .select("id")
+    .eq("id", ownerContactId)
+    .eq("organization_id", orgId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (ownerContactError || !ownerContact) {
+    return new Response(
+      JSON.stringify({
+        error: "Opportunity contact not found in organization",
+      }),
+      {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
   const document = payload.data?.document || {};
   const signatories = payload.data?.signatories || [];
   const externalDocumentId = document.id == null
@@ -268,7 +411,7 @@ Deno.serve(async (req) => {
     const { data: existingDocument, error: existingDocumentError } =
       await supabase
         .from("documents")
-        .select("id")
+        .select("id, entity_type, entity_id")
         .eq("organization_id", orgId)
         .eq("external_source", "suvsign")
         .eq("external_ref", externalDocumentId)
@@ -289,12 +432,35 @@ Deno.serve(async (req) => {
     }
 
     if (existingDocument) {
+      const delivery = await ensureContactContractOwnershipAndDelivery(
+        supabase,
+        {
+          documentId: existingDocument.id,
+          organizationId: orgId,
+          contactId: ownerContactId,
+        },
+      );
+      if (!delivery.ok) {
+        console.error(
+          "Failed to reconcile duplicated SuvSign contract:",
+          delivery.error,
+        );
+        return new Response(
+          JSON.stringify({ error: "Failed to reconcile contract delivery" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
       return new Response(
         JSON.stringify({
           ok: true,
           duplicate: true,
           opportunity_id: opportunity.id,
+          contact_id: ownerContactId,
           document_id: existingDocument.id,
+          nammux_replays: delivery.replayResult,
         }),
         {
           status: 200,
@@ -367,7 +533,7 @@ Deno.serve(async (req) => {
     : String(Date.now());
   const fileName = `${document.title || "documento"}_assinado.pdf`
     .replace(/[^a-zA-Z0-9._-]/g, "_");
-  const storagePath = `${opportunity.id}/suvsign_${storageId}_${fileName}`;
+  const storagePath = `${ownerContactId}/suvsign_${storageId}_${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from("attachments")
@@ -392,8 +558,8 @@ Deno.serve(async (req) => {
     .from("documents")
     .insert({
       organization_id: orgId,
-      entity_type: "opportunity",
-      entity_id: opportunity.id,
+      entity_type: "contact",
+      entity_id: ownerContactId,
       file_name: `${document.title || "Documento"} - Assinado.pdf`,
       storage_path: storagePath,
       bucket: "attachments",
@@ -419,12 +585,33 @@ Deno.serve(async (req) => {
         .eq("external_ref", externalDocumentId)
         .maybeSingle();
       if (existingDocument) {
+        const delivery = await ensureContactContractOwnershipAndDelivery(
+          supabase,
+          {
+            documentId: existingDocument.id,
+            organizationId: orgId,
+            contactId: ownerContactId,
+          },
+        );
+        if (!delivery.ok) {
+          return new Response(
+            JSON.stringify({
+              error: "Failed to reconcile concurrent contract delivery",
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
         return new Response(
           JSON.stringify({
             ok: true,
             duplicate: true,
             opportunity_id: opportunity.id,
+            contact_id: ownerContactId,
             document_id: existingDocument.id,
+            nammux_replays: delivery.replayResult,
           }),
           {
             status: 200,
@@ -458,7 +645,7 @@ Deno.serve(async (req) => {
   const { error: activityError } = await supabase.from("activities").insert({
     organization_id: orgId,
     opportunity_id: opportunity.id,
-    contact_id: contact_id || null,
+    contact_id: ownerContactId,
     activity_type: "system",
     title: `Documento assinado: ${document.title || "Sem título"}`,
     body: `Assinado${completedAt ? ` em ${completedAt}` : ""}${
@@ -470,6 +657,27 @@ Deno.serve(async (req) => {
     console.error("Error creating activity:", activityError);
   }
 
+  const delivery = await ensureContactContractOwnershipAndDelivery(supabase, {
+    documentId: insertedDocument.id,
+    organizationId: orgId,
+    contactId: ownerContactId,
+  });
+  if (!delivery.ok) {
+    console.error(
+      "Failed to enqueue signed contract for Nammux:",
+      delivery.error,
+    );
+    return new Response(
+      JSON.stringify({
+        error: "Contract saved but Nammux delivery could not be enqueued",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
   console.log(
     `SuvSign webhook processed: document ${document.id} for opportunity ${opportunity.id}`,
   );
@@ -478,7 +686,9 @@ Deno.serve(async (req) => {
     JSON.stringify({
       ok: true,
       opportunity_id: opportunity.id,
+      contact_id: ownerContactId,
       document_id: insertedDocument.id,
+      nammux_replays: delivery.replayResult,
     }),
     {
       status: 200,

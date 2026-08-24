@@ -1,6 +1,6 @@
 # ADR 0010 — Documentos pós-venda via outbox do Nammux
 
-**Status:** Aceito.
+**Status:** Aceito, com exceção explícita para contratos SuvSign do contato.
 
 ## Contexto
 
@@ -24,8 +24,11 @@ mais de uma oportunidade/processo e o mesmo arquivo nem sempre pertence a todos.
   `seialz:opportunity.won:{org}:{opportunity}:replay:document:{document}`.
 - A opção existente `include_opportunity_attachments` controla também o envio
   pós-venda.
-- Documentos de `contact`/`contact_document` ficam fora desta fase até existir
-  política explícita de roteamento por processo.
+- Documentos comuns de `contact`/`contact_document` continuam fora do fan-out.
+  A única exceção é o contrato assinado confirmado por
+  `external_source='suvsign'`: ele pertence ao contato e é reenviado para todas
+  as oportunidades ganhas desse contato, pois um único contrato rege os
+  respectivos processos.
 - Erros do automatismo são registrados em `nammux_sync_events` e não invalidam o
   documento criado.
 - Callbacks SuvSign passam a preencher e consultar
@@ -40,8 +43,10 @@ mais de uma oportunidade/processo e o mesmo arquivo nem sempre pertence a todos.
 - O worker existente conserva retries e dead letter; o trigger não aumenta o
   acoplamento entre upload e disponibilidade do Nammux.
 - Reentregas do mesmo evento/documento são seguras.
-- Documentos históricos elegíveis são enfileirados na ativação; documentos de
-  contato continuam exigindo roteamento explícito.
+- Documentos históricos elegíveis são enfileirados na ativação. Contratos
+  SuvSign possuem backfill próprio, restrito por organização e idempotente por
+  documento + oportunidade; os demais documentos de contato continuam sem
+  propagação automática.
 
 ## Rollback
 
