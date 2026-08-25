@@ -13198,6 +13198,10 @@ export type Database = {
         Args: { _contact_id: string }
         Returns: undefined
       }
+      fn_enqueue_nammux_contact_contract_replays_v1: {
+        Args: { _document_id: string; _replay_reason?: string }
+        Returns: Json
+      }
       fn_feature_flag_enabled: {
         Args: { _flag_key: string; _organization_id?: string }
         Returns: boolean
@@ -13592,6 +13596,14 @@ export type Database = {
       merge_sales_threads: {
         Args: { p_batch: string; p_loser: string; p_winner: string }
         Returns: undefined
+      }
+      nammux_contact_contract_audit_v1: {
+        Args: { _organization_id: string }
+        Returns: Json
+      }
+      nammux_contact_contract_backfill_v1: {
+        Args: { _apply?: boolean; _organization_id: string }
+        Returns: Json
       }
       normalize_identity_digits: { Args: { _value: string }; Returns: string }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
