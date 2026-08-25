@@ -226,7 +226,7 @@ export default function Profile() {
               <CardContent className="space-y-4">
                 {/* Language */}
                 <div className="space-y-2">
-                  <Label htmlFor="locale">{t('settings.language')}</Label>
+                  <Label htmlFor="locale">{t('profile.language')}</Label>
                   <Select value={userLocale} onValueChange={setUserLocale}>
                     <SelectTrigger id="locale">
                       <SelectValue />
@@ -240,7 +240,7 @@ export default function Profile() {
 
                 {/* Timezone */}
                 <div className="space-y-2">
-                  <Label htmlFor="timezone">{t('settings.timezone')}</Label>
+                  <Label htmlFor="timezone">{t('profile.timezone')}</Label>
                   <Select value={timezone} onValueChange={setTimezone}>
                     <SelectTrigger id="timezone">
                       <SelectValue />
