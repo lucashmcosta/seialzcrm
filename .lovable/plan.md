@@ -32,36 +32,53 @@ Confirmado: **dois phone_number_ids Meta distintos**, mesmo `error_data.details`
 
 Estas etapas exigem **enviar mensagens de teste** — por isso estão aqui e não foram executadas.
 
-### Etapa T1 — Sonda de upload isolada (sem envio ao cliente)
-Script local (não em produção) que, para um arquivo real que falhou:
-- inspeciona o binário: tamanho, MIME declarado, MIME real, container, codec, sample rate, canais, duração (pergunta 3A);
-- reproduz o `POST /{phone_number_id}/media` exatamente como o Edge faz (multipart, `messaging_product=whatsapp`, `type=<mime>`, filename), registrando URL, versão, campos, Content-Type do part e resposta completa sanitizada (3B);
-- repete o upload variando **apenas** o valor do `type`/Content-Type do part: `audio/ogg` puro vs `audio/ogg; codecs=opus`, e com/sem extensão `.ogg` no filename.
+### T1 — Matriz controlada de upload **+ envio** (perguntas 3, 4, 5)
 
-Hipótese a testar aqui: o `details` cita `audio/ogg; codecs=opus`; se o parâmetro composto estiver atrapalhando o sniffing da Meta, o upload com `audio/ogg` puro passa.
+Nenhuma variante termina no `POST /media`: hoje o `/media` **já aceita e devolve `media_id`** exatamente nos casos que depois falham, então media_id não é sinal de sucesso. Cada variante roda o ciclo completo:
 
-### Etapa T2 — Envio controlado para número interno (perguntas 5 e 6)
-Mesmo conteúdo de áudio, mesmo endpoint, para **um número interno de teste**, nas variantes:
-- A: OGG/Opus como o produto gera hoje;
-- B: OGG/Opus recodificado limpo por ffmpeg (`-c:a libopus -ar 48000 -ac 1`);
-- C: MP3 `audio/mpeg`;
-- D: M4A/AAC `audio/mp4` (opcional).
+1. `POST /{phone_number_id}/media` (multipart igual ao Edge: `messaging_product=whatsapp`, `type`, `file`);
+2. captura `media_id`;
+3. `POST /{phone_number_id}/messages` com `audio: { id: media_id }` para **um número interno de teste**;
+4. aguarda o status final no webhook;
+5. captura `error_code` e `error_data.details`.
 
-Cada variante roda nos **dois** phone_number_ids (`1248455741664884` e `1285032381352183`). Registro por teste: upload response, media_id, payload `/messages`, wamid, status final do webhook e `error_data.details`.
+Matriz mínima, com o mesmo conteúdo de áudio (um arquivo real que falhou hoje):
 
-### Etapa T3 — Comparação com mídia que funciona (pergunta 4)
-No mesmo endpoint e período, comparar o upload de um documento/imagem entregue com o do áudio que falhou, campo a campo, para localizar a etapa exata da divergência (o envio já usa `audio: { id }`, nunca link — confirmado em `meta-whatsapp-send/index.ts:928-943`).
+| # | arquivo | filename | Content-Type do part | campo `type` |
+|---|---|---|---|---|
+| A | original atual | `.ogg` | `audio/ogg` | `audio/ogg` |
+| B | original atual | `.ogg` | `audio/ogg; codecs=opus` | `audio/ogg; codecs=opus` |
+| C | recodificado ffmpeg (`libopus`, 48 kHz, mono) | `.ogg` | `audio/ogg` | `audio/ogg` |
+| D | MP3 | `.mp3` | `audio/mpeg` | `audio/mpeg` |
+| E | M4A/AAC (opcional) | `.m4a` | `audio/mp4` | `audio/mp4` | 
 
-### Etapa T4 — Saúde Meta (pergunta 8)
-Chamar `meta-wa-diagnose` (read-only, já existe) para `quality_rating`, `status`, `messaging_limit_tier`, `throughput`, `account_review_status`, `business_verification_status` dos dois números e da WABA, procurando restrição de mídia.
+E só entra se for confirmado como formato aceito no caminho de áudio da Cloud API; caso contrário é registrado como "não aplicável" em vez de gerar ruído.
 
-## Classificação (pergunta 10) — parcial
+A variante B existe para checar se o parâmetro composto é o que o produto realmente envia hoje: o `details` da Meta cita `audio/ogg; codecs=opus`, mas o `mime_type` persistido em `messages` é `audio/ogg` puro. O teste registra exatamente o que foi transmitido em cada caso, sem supor.
 
-Com a evidência atual já é possível **eliminar**: B (nosso payload está correto: `messaging_product`, `type`, `audio:{id}`, bytes por upload), C (dois phone_number_ids diferentes falham igual) e, salvo o que T4 mostrar, restrição de conta.
+**T2 — mesma matriz nos dois números** (pergunta 6): toda variante roda pelo `1248455741664884` (7067) e pelo `1285032381352183` (7027), para o mesmo número interno de destino.
 
-Restam **A** (algo no byte-stream que a Meta passou a não reconhecer) e **E** (regressão do processamento de mídia da Meta), com D possível se T4 apontar a WABA/App. A evidência temporal (zero mudanças nossas, arquivos estruturalmente idênticos antes e depois, virada abrupta em 26/08) pesa para **E**, mas T1/T2 são o que separa A de E: se o OGG recodificado limpo passar, é A; se nenhum OGG passar e MP3 passar, é E com contorno de formato; se nada de áudio passar, é D/E e vira caso de suporte Meta.
+**Registro por tentativa** (resultados brutos, sem resumir): SHA-256 do arquivo, tamanho, saída de `ffprobe`, filename, Content-Type real do part, valor de `type`, resposta completa do `/media`, `media_id`, payload sanitizado do `/messages`, `wamid`, status final, `error_code`, `error_data.details`.
 
-**Nenhuma correção definitiva será proposta antes de T1–T4.**
+**T3 — mídia que funciona (pergunta 4)**: no mesmo endpoint, comparar campo a campo o upload de um documento/imagem entregue com o do áudio que falhou, para localizar a etapa exata da divergência. O envio já usa `audio: { id }`, nunca link (`meta-whatsapp-send/index.ts:928-943`).
+
+**T4 — saúde Meta (pergunta 8), antes de fechar a classificação**: `meta-wa-diagnose` (read-only, já existe) para `quality_rating`, `status`, `messaging_limit_tier`, `throughput`, `account_review_status`, `business_verification_status` dos dois números e da WABA, procurando restrição de mídia.
+
+## Classificação (pergunta 10) — aberta
+
+**Nada é eliminado ainda — inclusive B (payload/upload do Seialz) permanece em aberto.** O `media_id` devolvido pelo `/media` não prova que nosso multipart está correto; a mensagem da Meta é compatível com regressão de sniffing, byte-stream/container, filename/extensão, Content-Type do part, campo `type` ou divergência entre MIME declarado e bytes recebidos. A leitura será feita pela matriz:
+
+- original falha + OGG recodificado funciona → bytes/container gerados hoje (A);
+- todo OGG falha + MP3 funciona nos dois pnids → regressão/incompatibilidade atual da Meta com OGG/Opus nesse caminho (E);
+- todos os formatos falham → investigar WABA/App/Meta (D);
+- comportamento diferente entre 7067 e 7027 → phone_number_id/configuração (C);
+- mudar só MIME/filename resolve → multipart/payload nosso (B).
+
+**Nenhuma mitigação será proposta antes de T1–T4 fecharem.**
+
+## Pendência para começar
+Preciso do **número interno de destino** (E.164) que pode receber os áudios de teste. Sem ele não disparo nada.
+
 
 ## Fora de escopo nesta etapa
 Sem fallback, sem transcode em produção, sem mudança de roteamento, sem alteração no gravador, sem mudança de versão da Graph API, sem migração de schema. A persistência de `error_data.details` em `messages` fica como melhoria de observabilidade a decidir **depois** do fechamento.
