@@ -122,20 +122,28 @@ async function warmEncoder(): Promise<void> {
 }
 
 // Validate the recorded blob before allowing send.
-// Meta requires a real OGG Opus stream (OggS + OpusHead identification header).
+// Meta requires a real OGG Opus stream (OggS + OpusHead identification header)
+// AND a stream with no zero-length packet — a trailing empty packet makes Meta
+// reclassify the upload as application/octet-stream (error 131053).
 async function validateOggOpus(blob: Blob): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (!blob || blob.size < 2048) return { ok: false, reason: 'muito curto' };
-  // OpusHead should be in the first Ogg page — scan a generous 4KB window.
-  const head = new Uint8Array(await blob.slice(0, 4096).arrayBuffer());
-  const hasOggS = head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53;
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const hasOggS = bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53;
   if (!hasOggS) return { ok: false, reason: 'sem cabeçalho OggS' };
+  // OpusHead should be in the first Ogg page — scan a generous 4KB window.
+  const head = bytes.subarray(0, 4096);
   const needle = [0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64]; // "OpusHead"
+  let hasOpusHead = false;
   outer: for (let i = 0; i <= head.length - needle.length; i++) {
     for (let j = 0; j < needle.length; j++) if (head[i + j] !== needle[j]) continue outer;
-    return { ok: true };
+    hasOpusHead = true;
+    break;
   }
-  return { ok: false, reason: 'sem OpusHead' };
+  if (!hasOpusHead) return { ok: false, reason: 'sem OpusHead' };
+  // Tail check — fail closed if the sanitizer could not produce a clean stream.
+  return isSendableOggOpus(bytes);
 }
+
 
 type RecorderKind = 'opus-ogg' | 'native-ogg' | 'native-mp4' | 'native-webm';
 
