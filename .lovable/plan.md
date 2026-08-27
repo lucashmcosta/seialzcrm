@@ -52,23 +52,56 @@ O arquivo sempre teve o pacote vazio. Decoders tolerantes (navegador, WhatsApp a
 
 1. Novo utilitário `src/lib/sanitizeOggOpus.ts`, puro e sem dependências:
    - varre as páginas Ogg do Blob gravado;
-   - se a **última** página terminar com lacing `0`, remove esse valor, decrementa `page_segments` e recalcula o CRC32 Ogg (polinômio `0x04c11db7`, campo zerado antes do cálculo) daquela página;
+   - remove o lacing `0` final, decrementa `page_segments` e recalcula o CRC32 Ogg (polinômio `0x04c11db7`, MSB-first, init 0, campo zerado antes do cálculo) apenas daquela página;
    - preserva todo o resto do arquivo byte a byte; se não houver defeito, devolve o Blob original.
 2. `AudioRecorder.tsx` aplica o sanitizer no `onstop`, antes de `setAudioBlob`.
-3. `validateOggOpus` ganha uma checagem de cauda: rejeita o envio se, após o sanitizer, ainda existir pacote de comprimento zero ou a última página não tiver EOS.
-4. Telemetria: novo evento `audio_record_ogg_tail_fixed` em `audio_record_events` (mesmo caminho fire-and-forget de `src/lib/audioTelemetry.ts`) para medir a incidência real, e documentação em `docs/operations/audio-telemetry.md`.
+3. `validateOggOpus` ganha uma checagem de cauda (`isSendableOggOpus`): rejeita o envio se, após o sanitizer, ainda existir pacote de comprimento zero ou a última página não tiver EOS.
+4. Telemetria: novos eventos `audio_record_ogg_tail_fixed` e `audio_record_ogg_structure_invalid` em `audio_record_events` (mesmo caminho fire-and-forget de `src/lib/audioTelemetry.ts`, sem check constraint a alterar), documentados em `docs/operations/audio-telemetry.md`.
+
+### Salvaguardas exigidas (conservadorismo estrito)
+
+A correção só acontece quando **todas** estas condições são verdadeiras; qualquer desvio devolve o Blob intacto com um código de motivo, sem tentativa de reparo genérico:
+
+- assinatura `OggS` no offset 0 e `stream_structure_version = 0` em todas as páginas;
+- cadeia de páginas percorrida integralmente e terminando **exatamente** no fim do buffer (rejeita truncado, com lixo no fim ou header incompleto);
+- última página identificada com segurança (fim da cadeia, não por busca de padrão);
+- última página com flag EOS (`header_type & 0x04`);
+- último lacing value = `0`;
+- `page_segments >= 2` (não transformamos a página numa segment table vazia);
+- lacing anterior ao `0` **não** é `255` — nesse caso o `0` termina legitimamente um pacote múltiplo de 255 e é preservado;
+- remoção não altera nenhum byte de payload (um lacing `0` contribui com zero bytes de corpo, logo todos os offsets e bytes de áudio permanecem idênticos);
+- CRC recalculado apenas da página final modificada.
+
+Motivos retornados: `fixed_trailing_empty_packet`, `already_valid`, `not_ogg`, `structure_invalid`, `last_page_not_eos`, `trailing_zero_is_packet_terminator`, `unsafe_single_segment_page`. Estrutura inválida **não** é corrigida: o envio falha na validação e o evento vai para telemetria.
+
+**Idempotência**: após a correção o último lacing passa a ser diferente de zero, então uma segunda execução retorna `already_valid` e o mesmo buffer, sem remover bytes nem recalcular CRC de novo.
+
+### Testes automatizados (`tests/sanitize-ogg-opus.test.ts`, vitest)
+
+Fixtures Ogg sintéticas construídas no próprio teste (com CRC correto), cobrindo:
+
+- OGG com pacote vazio final → corrige, `changed = true`;
+- OGG já válido → retorna o buffer inalterado (identidade byte a byte);
+- OGG truncado / corrompido (header cortado, lixo no fim, versão != 0) → `structure_invalid`, sem alteração;
+- página final sem EOS → `last_page_not_eos`, sem alteração;
+- CRC de todas as páginas após a correção → válido (recomputado e comparado);
+- lacing `0` precedido de `255` → preservado;
+- payload Opus antes e depois → byte a byte idêntico (comparação do corpo concatenado);
+- sanitizer executado duas vezes → resultado idêntico ao da primeira execução.
 
 Sem `ffmpeg`, sem transcode em produção, sem mudar bitrate/sample rate/canais, sem tocar em roteamento, endpoints ou schema.
 
 ## Detalhes técnicos
 
-- Escopo: `src/lib/sanitizeOggOpus.ts` (novo), `src/components/whatsapp/AudioRecorder.tsx`, `src/lib/audioTelemetry.ts`, `docs/operations/audio-telemetry.md`.
+- Escopo: `src/lib/sanitizeOggOpus.ts` (novo), `tests/sanitize-ogg-opus.test.ts` (novo), `src/components/whatsapp/AudioRecorder.tsx`, `src/lib/audioTelemetry.ts`, `docs/operations/audio-telemetry.md`.
 - Nenhuma alteração no guard `415 unsupported_audio_mime` de `meta-whatsapp-send`, nem em Edge Functions.
 - Não trocamos de biblioteca: `opus-media-recorder` continua produzindo Opus 48 kHz mono válido; só a finalização do container é corrigida.
-- Áudios antigos já armazenados continuam defeituosos; um reprocessamento retroativo, se desejado, é decisão separada.
+- Sem reprocessamento de áudios históricos nesta entrega.
 
 ## Validação após implementar
 
+- Rodar a suíte de testes do sanitizer.
 - Gravar no Chrome e no Safari, confirmar que o Blob resultante não tem lacing `0` final e passa `ffmpeg -f null -` sem erro.
-- Enviar pelo 7067 (Meta) e confirmar `delivered` sem 131053.
+- Enviar gravação nova pelo **7067** e pelo **7027** (Meta) e confirmar `delivered`/`read` sem 131053.
 - Acompanhar `audio_record_events` por 48h: `131053 = 0`, `invalid_ogg ≈ 0`, incidência de `ogg_tail_fixed` esperada em ~100% das gravações do polyfill.
+
