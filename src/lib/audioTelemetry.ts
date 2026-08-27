@@ -6,7 +6,11 @@ export type AudioTelemetryEvent =
   | 'audio_record_invalid_ogg'
   | 'audio_record_fallback_mp4'
   | 'audio_record_fallback_webm_document'
-  | 'audio_record_polyfill_init_error';
+  | 'audio_record_polyfill_init_error'
+  /** Trailing zero-length Opus packet removed from the OGG container. */
+  | 'audio_record_ogg_tail_fixed'
+  /** OGG container failed the conservative structural checks; left untouched. */
+  | 'audio_record_ogg_structure_invalid';
 
 export interface AudioTelemetryContext {
   endpointId?: string | null;
