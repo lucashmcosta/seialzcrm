@@ -1,45 +1,34 @@
-# Publicar a correção do áudio 131053 e validar em produção
+# Validação em produção da correção 131053 — 7067 confirmado
 
-A falha de 21:34:54 UTC no 7067 fica descartada como evidência: foi produção rodando o código antigo. Nenhuma investigação nova.
+## Evidência do envio de agora (7067 Meta, endpoint `bf04ce63…`)
 
-## 1. Estado do preview (verificado agora, read-only)
-
-- `src/lib/sanitizeOggOpus.ts` existe, exporta `sanitizeOggOpusBlob` e `isSendableOggOpus`.
-- `AudioRecorder.tsx:277` chama `sanitizeOggOpusBlob(blob)` no `onstop`, antes de `setAudioBlob`; validação de envio delega a `isSendableOggOpus` (linha 146).
-- Telemetria nova: `audio_record_ogg_tail_fixed` e `audio_record_ogg_structure_invalid` declarados em `src/lib/audioTelemetry.ts` e emitidos no recorder.
-- Testes: `tests/sanitize-ogg-opus.test.ts` — 13/13 passando.
-- Build: sem erros no log de build.
-
-## 2. Publicar
-
-Publicar exatamente esta versão do preview em produção. Nenhuma alteração de código antes ou depois do deploy.
-
-## 3. Validação em produção (após o deploy)
-
-Gravar áudio NOVO diretamente em produção (não reaproveitar gravação anterior) e enviar:
-
-- um envio pelo 7067 (Meta);
-- um envio pelo 7027 (Meta).
-
-Para cada envio, registrar, via consulta read-only:
-
-| campo | origem |
+| campo | valor |
 |---|---|
-| timestamp | `messages.created_at` |
-| message_id | `messages.id` |
-| wamid | `messages.provider_message_id` |
-| evento sanitizer | `audio_record_events` com `event = 'audio_record_ogg_tail_fixed'` na mesma janela |
-| status final | `messages.status` |
-| error_code / error_data.details | `messages.error_code`, `messages.error_data` |
+| gravação sanitizada | 21:43:36 UTC — `audio_record_ogg_tail_fixed`, reason `fixed_trailing_empty_packet`, 50.268 → 50.267 bytes, `audio/ogg`, chrome |
+| envio | 21:43:38 UTC |
+| message_id | `f9dff329-e659-4447-bc47-539880990219` |
+| wamid | `wamid.HBgNNTUxMTk2NDI5ODYyMRUCABEYEkYyQURBOTU3Q0FDMjk0RTk4RgA=` |
+| status | **delivered** |
+| error_code / error_message | nulo / vazio |
 
-Observação sobre janela: se o número estiver fora da janela de 24h, o erro esperado é 131047 (janela), não 131053 — nesse caso o teste de mídia conta como aprovado e o envio deve ser refeito dentro de uma conversa com inbound recente para obter `delivered/read`.
+Critério de aceite do 7067: atendido — áudio novo pós-deploy, sanitizer executado, sem pacote OGG vazio, `delivered`, sem 131053.
 
-## 4. Critério de aceite
+A falha 21:34:54 (`c5c56cc7…`, 131053) fica descartada: não há evento `audio_record_ogg_tail_fixed` para aquela gravação (só `audio_record_success` às 21:34:57), confirmando que era o código antigo.
 
-- áudio gerado após o deploy;
-- evento `audio_record_ogg_tail_fixed` presente para a gravação;
-- arquivo sem pacote OGG de comprimento zero (garantido por `isSendableOggOpus` antes do envio);
-- status `delivered` ou `read`;
-- zero ocorrências de 131053.
+## 7027 Meta (endpoint `c09bd713…`) — parcial
 
-Se os dois números passarem: correção considerada concluída; segue apenas acompanhamento de `audio_record_events` e de `error_code = 131053` por 48h, sem mudanças de código.
+Dois envios com sanitizer executado (21:31:48 e 21:35:18, ambos `fixed_trailing_empty_packet`):
+
+- `3a968fad-a97c-4964-b6f9-5f5110d5c675` — 21:31:53 — wamid `…ABEYEjZGODZGNjk4MjVFOTc3NDhFNQA=` — status `sent`
+- `781e7d7a-ea36-4040-ba36-73c5a9e104cb` — 21:35:22 — wamid `…ABEYEjRDNkI4NjhCQzY0QTU5QUU5RQA=` — status `sent`
+
+Sem 131053 e sem qualquer `error_code` — a mídia foi aceita pela Meta. Falta apenas o callback `delivered`/`read`, que depende do destinatário abrir/receber.
+
+## Próximo passo (sem alteração de código)
+
+1. Fazer um envio de áudio novo no 7027 para um contato que confirme recebimento, e reconsultar o status até `delivered`/`read`.
+2. Se confirmar, correção encerrada; seguir só com acompanhamento de telemetria por 48h:
+   - `audio_record_events`: incidência de `ogg_tail_fixed` ≈ 100% das gravações, `ogg_structure_invalid` = 0;
+   - `messages`: `error_code = 131053` = 0 na janela.
+
+Nenhuma alteração de código proposta nesta etapa.
