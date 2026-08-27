@@ -6,8 +6,10 @@ import OpusMediaRecorder from 'opus-media-recorder';
 // Serve worker + WASM from the local bundle — NO CDN.
 // encoderWorker.umd.js is a CLASSIC UMD worker; instantiate WITHOUT `{ type: 'module' }`.
 import workerUrl from 'opus-media-recorder/encoderWorker.umd.js?url';
-import oggWasmUrl from 'opus-media-recorder/OggOpusEncoder.wasm?url';
-import webmWasmUrl from 'opus-media-recorder/WebMOpusEncoder.wasm?url';
+// The .wasm binaries are static assets under public/wasm/ and are fetched by URL
+// at runtime by the worker — never imported into a source bundle.
+const oggWasmUrl = '/wasm/OggOpusEncoder.wasm';
+const webmWasmUrl = '/wasm/WebMOpusEncoder.wasm';
 import { logAudioEvent, type AudioTelemetryContext } from '@/lib/audioTelemetry';
 import { sanitizeOggOpusBlob, isSendableOggOpus } from '@/lib/sanitizeOggOpus';
 
