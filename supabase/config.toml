@@ -141,8 +141,3 @@ port = 54423
 port = 54424
 [analytics]
 port = 54427
-
-# SONDA TEMPORARIA (erro 131053 em audio Meta). Auth propria: segredo
-# administrativo META_AUDIO_PROBE_SECRET validado no Edge. REMOVER ao fim.
-[functions.meta-audio-131053-probe]
-verify_jwt = false
