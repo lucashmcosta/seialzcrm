@@ -78,9 +78,11 @@ A variante B existe para checar se o parâmetro composto é o que o produto real
 
 ## Como os testes serão executados
 
-Uma Edge Function de diagnóstico temporária (`meta-audio-131053-probe`, autenticada por `service_role`) que **não** escreve em `messages`, `message_threads` ou `activities` e **não** toca em endpoints, rotas ou `active_endpoint_id`. Ela recebe bytes + `filename` + `type`/Content-Type do part e executa apenas `POST /media` e `POST /messages` (`audio:{id}`), devolvendo SHA-256, tamanho, resposta bruta do upload, `media_id`, payload e `wamid`. As variantes C/D/E são geradas por `ffmpeg` no sandbox, nunca em produção.
+Uma Edge Function de diagnóstico temporária (`meta-audio-131053-probe`) que **não** escreve em `messages`, `message_threads` ou `activities` e **não** toca em endpoints, rotas ou `active_endpoint_id`. Ela recebe bytes + `filename` + `type`/Content-Type do part e executa apenas `POST /media` e `POST /messages` (`audio:{id}`), devolvendo SHA-256, tamanho, resposta bruta do upload, `media_id`, payload e `wamid`. As variantes C/D/E são geradas por `ffmpeg` no sandbox, nunca em produção.
 
-Destino dos testes: **+55 11 96429-8621** (número interno). Tentativas espaçadas alguns segundos, cada uma com tag única (`A-7067`, `B-7027`, …) para correlacionar o webhook. O status final e o `error_data.details` são lidos por `wamid` em `integration_inbound_events.raw_payload`. A função é removida ao fim da investigação.
+Segurança (exigência do aprovador): nenhuma credencial sai do servidor. A função valida a chamada exclusivamente server-side (`Authorization` administrativo validado no Edge, sem qualquer via de acesso pelo browser), lê o access token da Meta pelo resolvedor de credenciais já existente e nunca devolve token, `appsecret_proof` ou service-role key na resposta. A `SUPABASE_SERVICE_ROLE_KEY` é usada apenas dentro do runtime da função; não há chamada do frontend e nenhuma chave é impressa em log. A função é removida ao fim da investigação.
+
+Destino dos testes: **+55 11 96429-8621** (número interno). Tentativas espaçadas alguns segundos, cada uma com tag única (`A-7067`, `B-7027`, …) para correlacionar o webhook. O status final e o `error_data.details` são lidos por `wamid` em `integration_inbound_events.raw_payload`.
 
 
 
