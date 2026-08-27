@@ -54,3 +54,35 @@ ORDER BY ok DESC;
 ## Notas
 - Guard `415 unsupported_audio_mime` em `meta-whatsapp-send` continua ativo.
 - Props opcionais em `<AudioRecorder>`: `endpointId`, `threadId`, `organizationId`. Passar quando disponível para enriquecer os eventos.
+
+## Sanitização do container OGG (2026-08-27)
+
+`opus-media-recorder@0.8.0` finaliza o stream anexando um **pacote de comprimento zero**
+(lacing `0` no fim da segment table da última página, marcada EOS). Um pacote Opus vazio é
+inválido (RFC 6716): o ffmpeg falha com `Packet processing failed: Invalid data found` e a
+Meta reclassifica o upload como `application/octet-stream` → **erro 131053**.
+
+`src/lib/sanitizeOggOpus.ts` remove esse lacing, decrementa `page_segments` e recalcula o
+CRC32 Ogg apenas da página final. Nenhum byte de payload é alterado; sem recodificação.
+A correção é aplicada em `AudioRecorder.onstop`, antes do preview/envio, e é idempotente.
+
+Salvaguardas (qualquer desvio → Blob intacto + motivo em telemetria, sem reparo genérico):
+cadeia de páginas completa terminando exatamente no fim do buffer, `stream_structure_version = 0`,
+última página com EOS, último lacing `= 0`, `page_segments >= 2` e lacing anterior `!= 255`.
+
+`validateOggOpus` ganhou checagem de cauda (`isSendableOggOpus`): envio falha fechado se
+sobrar qualquer pacote de comprimento zero ou se a última página não tiver EOS.
+
+Novos eventos:
+- `audio_record_ogg_tail_fixed` — pacote vazio removido (`metadata.reason`, `metadata.originalSizeBytes`).
+- `audio_record_ogg_structure_invalid` — container reprovado nas salvaguardas (`error` = motivo).
+
+```sql
+SELECT event, count(*), min(created_at), max(created_at)
+FROM public.audio_record_events
+WHERE event IN ('audio_record_ogg_tail_fixed','audio_record_ogg_structure_invalid')
+  AND created_at >= now() - interval '48 hours'
+GROUP BY 1;
+```
+
+Áudios históricos já armazenados **não** foram reprocessados nesta entrega.

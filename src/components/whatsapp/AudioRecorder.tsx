@@ -6,9 +6,12 @@ import OpusMediaRecorder from 'opus-media-recorder';
 // Serve worker + WASM from the local bundle — NO CDN.
 // encoderWorker.umd.js is a CLASSIC UMD worker; instantiate WITHOUT `{ type: 'module' }`.
 import workerUrl from 'opus-media-recorder/encoderWorker.umd.js?url';
-import oggWasmUrl from 'opus-media-recorder/OggOpusEncoder.wasm?url';
-import webmWasmUrl from 'opus-media-recorder/WebMOpusEncoder.wasm?url';
+// The .wasm binaries are static assets under public/wasm/ and are fetched by URL
+// at runtime by the worker — never imported into a source bundle.
+const oggWasmUrl = '/wasm/OggOpusEncoder.wasm';
+const webmWasmUrl = '/wasm/WebMOpusEncoder.wasm';
 import { logAudioEvent, type AudioTelemetryContext } from '@/lib/audioTelemetry';
+import { sanitizeOggOpusBlob, isSendableOggOpus } from '@/lib/sanitizeOggOpus';
 
 // Wrap Worker so vendor errors thrown across the worker boundary (e.g. a
 // race in encoderWorker.umd.js where `encoder.close()` runs before the WASM
@@ -121,20 +124,28 @@ async function warmEncoder(): Promise<void> {
 }
 
 // Validate the recorded blob before allowing send.
-// Meta requires a real OGG Opus stream (OggS + OpusHead identification header).
+// Meta requires a real OGG Opus stream (OggS + OpusHead identification header)
+// AND a stream with no zero-length packet — a trailing empty packet makes Meta
+// reclassify the upload as application/octet-stream (error 131053).
 async function validateOggOpus(blob: Blob): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (!blob || blob.size < 2048) return { ok: false, reason: 'muito curto' };
-  // OpusHead should be in the first Ogg page — scan a generous 4KB window.
-  const head = new Uint8Array(await blob.slice(0, 4096).arrayBuffer());
-  const hasOggS = head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53;
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const hasOggS = bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53;
   if (!hasOggS) return { ok: false, reason: 'sem cabeçalho OggS' };
+  // OpusHead should be in the first Ogg page — scan a generous 4KB window.
+  const head = bytes.subarray(0, 4096);
   const needle = [0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64]; // "OpusHead"
+  let hasOpusHead = false;
   outer: for (let i = 0; i <= head.length - needle.length; i++) {
     for (let j = 0; j < needle.length; j++) if (head[i + j] !== needle[j]) continue outer;
-    return { ok: true };
+    hasOpusHead = true;
+    break;
   }
-  return { ok: false, reason: 'sem OpusHead' };
+  if (!hasOpusHead) return { ok: false, reason: 'sem OpusHead' };
+  // Tail check — fail closed if the sanitizer could not produce a clean stream.
+  return isSendableOggOpus(bytes);
 }
+
 
 type RecorderKind = 'opus-ogg' | 'native-ogg' | 'native-mp4' | 'native-webm';
 
@@ -252,12 +263,46 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
           (chunksRef.current[0] && (chunksRef.current[0] as Blob).type) ||
           'audio/ogg;codecs=opus';
         const blob = new Blob(chunksRef.current, { type: actualType });
-        setAudioBlob(blob);
-        setRecordedKind(recorderKindRef.current);
-        setIsProcessing(false); // P4 — end spinner
-        isStoppingRef.current = false;
-        stream.getTracks().forEach((t) => t.stop());
+        const finalize = (finalBlob: Blob) => {
+          setAudioBlob(finalBlob);
+          setRecordedKind(recorderKindRef.current);
+          setIsProcessing(false); // P4 — end spinner
+          isStoppingRef.current = false;
+          stream.getTracks().forEach((t) => t.stop());
+        };
+        // Container surgery: opus-media-recorder appends a zero-length Opus
+        // packet on the EOS page, which Meta rejects with 131053. Conservative
+        // and idempotent — anything unexpected leaves the blob untouched.
+        if (actualType.toLowerCase().includes('ogg')) {
+          void sanitizeOggOpusBlob(blob).then(
+            ({ blob: sanitized, changed, reason }) => {
+              if (changed) {
+                logAudioEvent('audio_record_ogg_tail_fixed', {
+                  ...telemetryCtx,
+                  mimeType: actualType,
+                  sizeBytes: sanitized.size,
+                  metadata: { reason, originalSizeBytes: blob.size },
+                });
+              } else if (reason !== 'already_valid') {
+                logAudioEvent('audio_record_ogg_structure_invalid', {
+                  ...telemetryCtx,
+                  mimeType: actualType,
+                  sizeBytes: blob.size,
+                  error: reason,
+                });
+              }
+              finalize(sanitized);
+            },
+            (err) => {
+              console.warn('[AudioRecorder] sanitizeOggOpusBlob threw', err);
+              finalize(blob);
+            },
+          );
+          return;
+        }
+        finalize(blob);
       };
+
 
       // Start WITHOUT timeslice — we want a single blob on stop() containing the
       // full OGG stream (BOS + OpusHead + data pages). Passing a timeslice caused
