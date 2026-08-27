@@ -9,6 +9,7 @@ import workerUrl from 'opus-media-recorder/encoderWorker.umd.js?url';
 import oggWasmUrl from 'opus-media-recorder/OggOpusEncoder.wasm?url';
 import webmWasmUrl from 'opus-media-recorder/WebMOpusEncoder.wasm?url';
 import { logAudioEvent, type AudioTelemetryContext } from '@/lib/audioTelemetry';
+import { sanitizeOggOpusBlob, isSendableOggOpus } from '@/lib/sanitizeOggOpus';
 
 // Wrap Worker so vendor errors thrown across the worker boundary (e.g. a
 // race in encoderWorker.umd.js where `encoder.close()` runs before the WASM
