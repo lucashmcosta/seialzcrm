@@ -261,12 +261,46 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
           (chunksRef.current[0] && (chunksRef.current[0] as Blob).type) ||
           'audio/ogg;codecs=opus';
         const blob = new Blob(chunksRef.current, { type: actualType });
-        setAudioBlob(blob);
-        setRecordedKind(recorderKindRef.current);
-        setIsProcessing(false); // P4 — end spinner
-        isStoppingRef.current = false;
-        stream.getTracks().forEach((t) => t.stop());
+        const finalize = (finalBlob: Blob) => {
+          setAudioBlob(finalBlob);
+          setRecordedKind(recorderKindRef.current);
+          setIsProcessing(false); // P4 — end spinner
+          isStoppingRef.current = false;
+          stream.getTracks().forEach((t) => t.stop());
+        };
+        // Container surgery: opus-media-recorder appends a zero-length Opus
+        // packet on the EOS page, which Meta rejects with 131053. Conservative
+        // and idempotent — anything unexpected leaves the blob untouched.
+        if (actualType.toLowerCase().includes('ogg')) {
+          void sanitizeOggOpusBlob(blob).then(
+            ({ blob: sanitized, changed, reason }) => {
+              if (changed) {
+                logAudioEvent('audio_record_ogg_tail_fixed', {
+                  ...telemetryCtx,
+                  mimeType: actualType,
+                  sizeBytes: sanitized.size,
+                  metadata: { reason, originalSizeBytes: blob.size },
+                });
+              } else if (reason !== 'already_valid') {
+                logAudioEvent('audio_record_ogg_structure_invalid', {
+                  ...telemetryCtx,
+                  mimeType: actualType,
+                  sizeBytes: blob.size,
+                  error: reason,
+                });
+              }
+              finalize(sanitized);
+            },
+            (err) => {
+              console.warn('[AudioRecorder] sanitizeOggOpusBlob threw', err);
+              finalize(blob);
+            },
+          );
+          return;
+        }
+        finalize(blob);
       };
+
 
       // Start WITHOUT timeslice — we want a single blob on stop() containing the
       // full OGG stream (BOS + OpusHead + data pages). Passing a timeslice caused
