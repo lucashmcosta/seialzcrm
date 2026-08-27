@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
-  const expected = Deno.env.get("META_AUDIO_PROBE_SECRET") ?? "";
+  const expected = Deno.env.get("META_AUDIO_PROBE_SECRET_V2") ?? "";
   const provided = req.headers.get("x-probe-secret") ?? "";
   if (!expected || !provided || !safeEqual(expected, provided)) {
     return json(401, { error: "unauthorized" });
