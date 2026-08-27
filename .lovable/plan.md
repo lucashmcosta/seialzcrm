@@ -76,8 +76,12 @@ A variante B existe para checar se o parâmetro composto é o que o produto real
 
 **Nenhuma mitigação será proposta antes de T1–T4 fecharem.**
 
-## Pendência para começar
-Preciso do **número interno de destino** (E.164) que pode receber os áudios de teste. Sem ele não disparo nada.
+## Como os testes serão executados
+
+Uma Edge Function de diagnóstico temporária (`meta-audio-131053-probe`, autenticada por `service_role`) que **não** escreve em `messages`, `message_threads` ou `activities` e **não** toca em endpoints, rotas ou `active_endpoint_id`. Ela recebe bytes + `filename` + `type`/Content-Type do part e executa apenas `POST /media` e `POST /messages` (`audio:{id}`), devolvendo SHA-256, tamanho, resposta bruta do upload, `media_id`, payload e `wamid`. As variantes C/D/E são geradas por `ffmpeg` no sandbox, nunca em produção.
+
+Destino dos testes: **+55 11 96429-8621** (número interno). Tentativas espaçadas alguns segundos, cada uma com tag única (`A-7067`, `B-7027`, …) para correlacionar o webhook. O status final e o `error_data.details` são lidos por `wamid` em `integration_inbound_events.raw_payload`. A função é removida ao fim da investigação.
+
 
 
 ## Fora de escopo nesta etapa
