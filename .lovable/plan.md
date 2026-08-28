@@ -1,180 +1,96 @@
-# Auditoria técnica `/dashboards` — onde o tempo é gasto
+# Auditoria READ-ONLY — RPCs existentes vs. dados comerciais de `/dashboards`
 
-Nenhum arquivo de código foi alterado. Tudo abaixo é medido, não estimado. Onde não pude medir, está marcado `[INCERTO]`.
+Nada foi criado ou alterado. Levantamento feito no banco vivo (`pg_proc`, `pg_stat_statements`) e no código.
 
-Rota: `/dashboards` → `src/pages/reports/ReportsPage.tsx` (827 linhas), registrada em `src/App.tsx:674-681`.
-
-Org de referência das medições: **Central Trabalhista** (`40ae935c…`) — a maior e a que sofre. Comparação com **Viagi** (`b246ef6f…`) no final.
+Filtrei as funções de `public` por nome (`dashboard|stat|metric|report|kpi|funnel|pipeline|leaderboard|sales|opportunit|seller|rollup|summary|trend`) e cruzei com todas as chamadas `supabase.rpc(` do frontend.
 
 ---
 
-## ETAPA 1 — Mapa cronológico
+## Tabela de aproveitamento
 
-1. `ProtectedRoute` → `ReportsPage` monta.
-2. Hooks, na ordem: `useOrganization`, `usePermissions`, `useIsMobile`, 3× `usePersistedFilters` (`reports.preset`, `reports.customRange`, `reports.ownerId`), `useMemo computeRange`, 8× `useState`, `useServiceStats`.
-3. `useEffect` A (`ReportsPage.tsx:131`, dep `organization?.id`) → `fetchUsersAndStages()`: 2 SELECTs em paralelo (`user_organizations+users`, `pipeline_stages`).
-4. `useEffect` B (`:137`, deps `organization?.id, filtersHydrated, rangeKey, ownerId`) → `fetchData()`.
-   - Enquanto `filtersHydrated` é false (hidratação do localStorage), **não dispara** — logo há um render inicial com `loading=true` e depois o efeito roda; se o preset persistido difere do default `last_30`, `rangeKey` muda e o efeito roda **duas vezes**.
-5. `useServiceStats` (`src/hooks/useServiceStats.ts:46`) → RPC `get_service_dashboard_stats` (1 request), em paralelo ao item 4.
-6. `fetchData()` (`:216-248`) dispara **5 cadeias** em `Promise.all`, cada cadeia via `fetchAllPagedRows` (`src/lib/fetchAllPagedRows.ts`) que pagina **sequencialmente** de 1000 em 1000 até a página vir incompleta:
-   - C1 `currentCreated`: `created_at` no período
-   - C2 `currentClosed`: `status in (won,lost)` + `close_date` no período
-   - C3 `previousCreated`
-   - C4 `previousClosed`
-   - C5 `openRows`: `status='open'` (**sem filtro de data — pipeline inteiro**)
-7. `setCurrentOpps` / `setPreviousOpps` / `setOpenOpps` → 3 setState (React 18 batcha em um render), `dedupeRowsById` monta 2 `Map`.
-8. `useMemo` recalculam: `stats` (`:270`), `funnel` (`:356`), `trend` (`:368`), `userStats` (`:424`).
-9. Render de 13 `KpiCard`, `WinRateGauge`, `SalesTrendChart`, `PipelineFunnel`, `StageDistribution`, `UserLeaderboard` (Recharts).
-
----
-
-## ETAPA 2 / ETAPA 7 — Volume e tempo real por etapa (Central, preset `last_30`, owner `all`)
-
-Volumes exatos (contados no banco agora):
-
-| Consulta | Linhas | Páginas HTTP (1000/pág) | Bytes JSON (347 B/linha medido) |
-|---|---|---|---|
-| C1 criadas 30d | 4.342 | **5 sequenciais** | ~1,51 MB |
-| C2 fechadas 30d | 3.234 | **4** | ~1,12 MB |
-| C3 criadas período anterior | 3.381 | **4** | ~1,17 MB |
-| C4 fechadas período anterior | ~3,0k `[INCERTO — mesma ordem de C2]` | ~4 | ~1,04 MB |
-| C5 abertas (todas) | 3.465 | **4** | ~1,20 MB |
-| **Total** | **~17,4k linhas** | **~21 requests** | **~6,0 MB** |
-
-Tempo real **em produção, com RLS**, de `extensions.pg_stat_statements` (só tempo de banco, sem rede):
-
-| Consulta | calls | média | máximo | total acumulado |
+| RPC / Função | O que retorna | Quem usa hoje | Serve para `/dashboards`? | Pode ser reaproveitada? |
 |---|---|---|---|---|
-| C5 `status='open'` | 48 | **7.207 ms** | **20.889 ms** | 345,9 s |
-| C1 `created_at >= <=` | 67 | **3.232 ms** | 6.949 ms | 216,5 s |
-| C2 `status=ANY + close_date >= <=` | 54 | **2.960 ms** | 6.945 ms | 159,8 s |
-| C3 `created_at >= <` | 35 | **2.599 ms** | 7.276 ms | 91,0 s |
-| C4 `close_date >= <` | 27 | **2.076 ms** | 6.844 ms | 56,0 s |
-| RPC `get_service_dashboard_stats` | 78 | 187 ms | 1.538 ms | 14,6 s |
-| mesmas queries **com owner filtrado** | 31 | 39–263 ms | 798 ms | — |
+| **`get_dashboard_stats(p_organization_id, p_days_ago=30, p_owner_user_id)`** → `json`, plpgsql, **STABLE SECURITY DEFINER** | `open_count`, `pipeline_value` (soma das abertas), `won_amount`, `lost_count`, `new_contacts`, `stage_data[]` (nome do estágio + soma, só `type='custom'`), `won_trend[]` (data + soma das ganhas), `tasks[]` (5), `activities[]` (10). Access check: 1× `user_organizations + current_user_id()`, e depois **consulta sem RLS** | **NINGUÉM.** Zero chamadas em `src/` e **0 calls em `pg_stat_statements`** — função órfã, do dashboard antigo | **Parcialmente (≈40%)** — cobre pipeline aberto (qtd+valor), valor ganho, qtd perdida, distribuição por estágio e uma série temporal | **SIM — é a melhor base.** Já é exatamente o padrão arquitetural que falta ao `/dashboards`. Limites: recorte por `p_days_ago` (não `from`/`to`), usa `updated_at` em vez de `close_date`, só valores (sem contagens de ganhas/criadas), sem período anterior, sem conversão/ticket/ciclo, sem leaderboard, `stage_data` ignora estágios won/lost |
+| **`get_opportunities_by_stage(p_organization_id, p_limit_per_stage, p_owner_ids, p_include_no_owner, p_min_amount, p_max_amount, p_close_date_from/to, p_no_close_date, p_created_from/to, p_tag_ids, p_stage_ids)`** → `json`, **STABLE SECURITY DEFINER** (há também um overload antigo de 2 args) | Cards de oportunidades agrupados por estágio, com limite por estágio e filtros ricos | `src/pages/opportunities/OpportunitiesKanban.tsx:282` | **Não diretamente** — devolve linhas de cards, não agregados; e limita por estágio | **Como referência, sim.** É a **prova de performance**: 503 calls, **média 66 ms**, máx 410 ms, na mesma tabela `opportunities` da Central. Confirma que o problema do `/dashboards` é o caminho RLS+paginação, não o volume. O bloco de filtros dela é o modelo de assinatura a copiar |
+| **`get_opportunity_stage_counts(org_id)`** → `TABLE(stage_id, opportunity_count, total_amount)`, **STABLE SECURITY DEFINER** | Contagem + soma por estágio, com o gate de permissão resolvido **1×** (`v_can_view_all := user_can_view_all(...)` fora da query) | `OpportunitiesKanban.tsx:345` | **SIM, para 2 cards** — funil / distribuição por estágio e, somando, o pipeline aberto | **SIM, quase pronta.** Mede **20 ms**. Falta: filtro de período e de owner (hoje é org inteira e usa só o owner do usuário logado como recorte de privacidade). Padrão de "resolver `user_can_view_all` uma vez em variável" é exatamente o antídoto ao gargalo por linha |
+| **`get_service_dashboard_stats(p_org, p_from, p_to, p_owner)`** → `TABLE(5 colunas)`, **LANGUAGE sql STABLE SECURITY DEFINER** | KPIs de atendimento | `src/hooks/useServiceStats.ts:46` | Já é usada (os 4 cards de Atendimento) | **Não para vendas** — é o **contrato modelo** a espelhar (detalhado abaixo) |
+| `get_service_worst_responses(...)` | Piores tempos de resposta | `src/hooks/useServiceWorstResponses.ts:58` | Não (atendimento) | Não |
+| `admin_list_pipeline_stages(p_org_id)` | id/name/order_index/type dos estágios | Superfície admin | Auxiliar (rótulos do funil) | Sim, como lookup — mas `pipeline_stages` já é lido direto em `ReportsPage.tsx` |
+| `evaluate_opportunity_close_v1`, `fn_snapshot_opportunity_close_v1`, `fn_guard_opportunity_won_requirements_v1`, `fn_build_opportunity_won_payload`, `fn_opportunities_result_timestamps` | Regras/guards/payload de fechamento de oportunidade (triggers e validação) | Fluxo de won/lost | Não — não são agregadores | Não. Mas `fn_opportunities_result_timestamps` importa: é o trigger que popula os timestamps de resultado, ou seja, define qual coluna é a verdade de "quando fechou" |
+| `fn_refresh_sales_journeys(p_organization_id, p_ghost_days)` + tabela `sales_journeys` | Materialização de jornadas de venda (Inteligência) | Módulo Inteligência | Não — granularidade de jornada, não KPI de período | Não |
+| `kairos_db_stats`, `kairos_table_stats`, `fn_outbox_health_summary`, `fn_inbound_health_summary` | Saúde de infra/filas | Observabilidade / admin | Não | Não |
+| `merge_sales_threads`, `provision_sales_endpoint`, `fn_is_canonical_sales_thread`, `fn_is_sales_eligible_endpoint`, `sales_thread_status_rank`, `fn_replay_sales_merge_state` | Roteamento/consolidação de threads comerciais ("sales" no nome, mas domínio messaging) | Messages | Não | Não |
+| `rpc_kommo_upsert_opportunity` | Upsert de espelho Kommo | Integração Kommo | Não | Não |
 
-Caminho crítico (a cadeia mais lenta manda no wall clock): **C5 = 4 páginas × 7.207 ms ≈ 28,8 s de banco**, mais ~4 RTTs de rede. É isso que o usuário sente.
+### Agregados pré-calculados que existem, mas não são RPC
 
-Objetos criados em JS: ~17,4k objetos `Opp` + ~17,4k parses JSON + 2 `Map` no dedupe + ~30 pontos de `trend` + ~22 linhas de `userStats`. Renderizações do `ReportsPage`: **6 a 8** (mount, hidratação dos 3 filtros, serviceStats, batch dos 3 setState, `loading=false`).
+| Objeto | O que tem | Quem preenche | Serve para `/dashboards`? |
+|---|---|---|---|
+| **`seller_metrics_daily`** (`organization_id, user_id, day, avg/median_response_seconds`) | Métricas **diárias por vendedor** — porém só de tempo de resposta | `supabase/functions/intelligence-rollup-cron/index.ts:55` | **Não para o leaderboard comercial** (não tem ganhas/valor). Mas é o **precedente de rollup diário por vendedor**: se um dia o leaderboard precisar ser instantâneo, a tabela e o cron já existem para receber colunas de vendas |
+| **`opportunity_behavior_snapshot`** (`final_status`, `days_to_close`, `won_at`, `lost_at`, contadores) | Já tem **`days_to_close` por oportunidade** — insumo direto do "ciclo médio de venda" | mesmo cron (`:119`), só oportunidades com `updated_at` nas últimas 36h **e que tenham thread** | **Parcialmente, e não confiável como fonte única**: cobertura incompleta (exige thread, janela de 36h, `limit 2000`) e é lido apenas em `src/components/settings/IntelligenceSettings.tsx:76` |
+| `sales_events` | Eventos de venda (objeções, sinais de compra) | Inteligência | Não |
 
 ---
 
-## ETAPA 5 — Banco: prova de que o custo é RLS, não plano/índice
-
-Mesma consulta C5 executada **sem RLS** (service_role), `EXPLAIN (ANALYZE, BUFFERS)`:
-
-```text
-Limit (actual time=79.760..84.669 rows=465)
-  -> Index Scan using opportunities_pkey  (actual time=0.836..84.438 rows=3465)
-     Filter: deleted_at IS NULL AND organization_id = ... AND status='open'
-     Rows Removed by Filter: 24432
-     Buffers: shared hit=28323 read=146
-Execution Time: 84.771 ms
-```
-
-Sem RLS: **84,8 ms**. Com RLS em produção: **7.207 ms de média**.
-→ **RLS = ~98,8% do tempo dessa consulta.** Não é falta de índice: existem `idx_opportunities_org_status (organization_id, status) WHERE deleted_at IS NULL` e `idx_opportunities_org_close_date`. O plano só piora porque o `OFFSET 3000` sem `ORDER BY` faz o planner escolher `opportunities_pkey` e descartar 24.432 linhas.
-
-Causa exata do custo de RLS — policy `Users can view opportunities in their org`:
+## Contrato atual de `get_service_dashboard_stats` — o padrão a espelhar
 
 ```sql
-is_admin_user() OR ( organization_id = ANY (current_user_org_ids())
-  AND deleted_at IS NULL
-  AND ( user_can_view_all(organization_id,'opportunities') OR owner_user_id = current_user_id() ) )
+get_service_dashboard_stats(p_org uuid, p_from timestamptz, p_to timestamptz, p_owner uuid DEFAULT NULL)
+RETURNS TABLE (contacts_count int, avg_first_response_seconds numeric,
+               resolved_count int, total_count int, avg_response_seconds numeric)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 ```
 
-- `is_admin_user()` e `current_user_org_ids()` não recebem colunas → viram InitPlan (1× por query). OK.
-- **`user_can_view_all(organization_id, 'opportunities')` recebe uma coluna** → é avaliada **por linha**. É `plpgsql` e faz por chamada: 1 SELECT em `organizations`, 1 chamada a `current_user_id()` (que é outro `plpgsql` com SELECT em `users`) e 1 SELECT com JOIN em `user_organizations`+`permission_profiles`. **3 SELECTs × ~16.500 linhas escaneadas por página.**
-- `Central Trabalhista` tem `private_records_enabled = true`; `Viagi` tem `false`. Em Viagi a função retorna `true` no primeiro SELECT (saída antecipada); em Central ela executa o caminho completo. É exatamente por isso que a Central é a que trava.
-- Emulando os mesmos lookups **em SQL puro** (subplans, sem overhead de plpgsql) o custo é 20,9 ms para 3.466 linhas (`loops=3466` visíveis no plano). O salto de 20 ms → ~7.000 ms é overhead de execução de `plpgsql` por linha.
-- Não consigo executar `SET ROLE authenticated` por esta ferramenta (read-only), por isso a prova é: plano sem RLS (85 ms) + tempo real em produção com RLS (7.207 ms) + estrutura da policy. `[INCERTO — a divisão exata entre `user_can_view_all` e `current_user_id` dentro dos 7.122 ms restantes não foi isolada]`
+Características do contrato:
 
-Sem seq scan em `opportunities`, sem sort, sem hash join custoso. `get_service_dashboard_stats`: 70 ms no `EXPLAIN`, 187 ms de média em produção — **não é gargalo**.
+1. **`LANGUAGE sql`**, não plpgsql — sem overhead de execução por linha.
+2. **`SECURITY DEFINER`** — a RLS de `message_threads`/`message_response_times` **não é avaliada**; o recorte é feito explicitamente nas cláusulas `where organization_id = p_org`.
+3. **Uma linha de saída, colunas tipadas** — o frontend não recebe linha bruta nenhuma.
+4. **Parâmetros de recorte explícitos**: `p_from`/`p_to` como `timestamptz` e `p_owner` nulo = "todos".
+5. **Regra de negócio dentro da função**: CTE `cutoff` fixa o início do módulo (`2026-05-30T03:00:00Z`) e aplica `greatest(p_from, service_start)` — o mesmo cutoff que o frontend replica em `src/lib/serviceCutoff.ts`.
+6. **CTEs nomeadas por conceito** (`t`, `first_rt`, `all_rt`) e os 5 KPIs como subselects sobre elas — um único plano.
+7. Consumo: `useServiceStats.ts` faz 1 `supabase.rpc`, trata `Array.isArray(rows) ? rows[0] : rows` e coage números.
+8. Custo medido em produção: **187 ms de média** (78 calls), máx 1.538 ms.
 
----
+**Ponto de atenção do modelo:** `p_owner` filtra por `assigned_user_id`, mas a função **não verifica se o chamador pertence a `p_org`** — quem tiver o `p_org` lê os KPIs de qualquer org. `get_dashboard_stats` e `get_opportunity_stage_counts` **fazem** essa checagem (`user_organizations` + `current_user_id()` / `user_can_view_all`). Se um `get_sales_dashboard_stats` for criado, ele deve seguir `get_dashboard_stats`/`get_opportunity_stage_counts` neste ponto, não `get_service_dashboard_stats`.
 
-## ETAPA 3 — React: está rápido, e aqui está a prova
+## Existe padrão arquitetural equivalente para Sales?
 
-- `stats`, `funnel`, `trend`, `userStats` são 4 passes lineares sobre ~17,4k objetos com `filter`/`reduce`/`forEach`. Ordem de grandeza: dezenas de ms em desktop, contra ~28.800 ms de banco. **React é <1% do tempo.**
-- Ineficiências reais, porém de baixo impacto:
-  - `trend` (`:404`, `:411`) usa `points.findIndex` dentro de `forEach` → O(n×dias); com 17,4k linhas × 31 pontos = ~540k comparações + `toLocaleDateString` chamado por linha (custo real, mas ainda ordens de grandeza abaixo do banco).
-  - `userStats` (`:431`) faz `users.find` dentro do loop.
-  - `openOpps.reduce(...)` inline em `:495` e `:617` — recalcula o valor do pipeline em **todo** render, fora de `useMemo`.
-  - `stats`/`trend`/`userStats` dependem de `rangeKey` (string) mas leem `range` do closure — funciona, porém as deps não declaram `range`; risco de stale, não de lentidão.
-  - `Suspense` envolvendo componentes importados estaticamente (`:535`, `:578`…) não tem efeito nenhum.
-  - Duplo disparo de `fetchData` quando o preset persistido ≠ default → potencialmente **42 requests** em vez de 21.
-- **Não há React Query nesta página** (só `useState`+`useEffect`), portanto: zero cache, zero dedupe, e voltar para `/dashboards` refaz as ~21 requests do zero. Em contraste, `src/pages/marketing/_hooks/useOverview.ts` já usa React Query com `staleTime` de 5 min.
+**Existe, e está espalhado em três funções que ninguém juntou:**
 
----
+- `get_dashboard_stats` — o agregador de vendas completo em JSON, **órfão, zero uso**;
+- `get_opportunity_stage_counts` — o funil, com o gate de permissão resolvido 1× (20 ms);
+- `get_opportunities_by_stage` — a assinatura rica de filtros e a prova de que `opportunities` responde em 66 ms sob SECURITY DEFINER.
 
-## ETAPA 4 — Rede: todas as chamadas de um carregamento
+O que **não** existe em nenhuma delas: contagem de criadas por período, contagem de ganhas/perdidas (só valor/qtd parciais), período anterior para comparação, conversão, ticket médio, ciclo médio e leaderboard por vendedor.
 
-| # | Chamada | Requests | Linhas | Tempo (banco) | Necessária? |
-|---|---|---|---|---|---|
-| 1 | `user_organizations + users` | 1 | 22 | <20 ms | Sim |
-| 2 | `pipeline_stages` | 1 | 6 | <10 ms | Sim |
-| 3 | RPC `get_service_dashboard_stats` | 1 | 1 | 187 ms | Sim (modelo correto) |
-| 4 | C1 `opportunities` criadas | 5 | 4.342 | 5×3.232 ms | Só os agregados |
-| 5 | C2 fechadas | 4 | 3.234 | 4×2.960 ms | Só os agregados |
-| 6 | C3 criadas anterior | 4 | 3.381 | 4×2.599 ms | **Desnecessária como linhas** — só 4 deltas |
-| 7 | C4 fechadas anterior | ~4 | ~3,0k | 4×2.076 ms | **Desnecessária como linhas** — só 1 delta |
-| 8 | C5 abertas (sem filtro de data) | 4 | 3.465 | 4×7.207 ms | **Desnecessária como linhas** — só count/soma por estágio |
-
-Bug de correção encontrado no caminho: `fetchAllPagedRows` usa `.range()` **sem `ORDER BY`**. Em Postgres a ordem sem `ORDER BY` não é garantida entre páginas → páginas podem repetir/omitir linhas. `dedupeRowsById` esconde a duplicata, mas **não** a omissão. Isso pode fazer os KPIs divergirem do Kanban.
+E `/dashboards` (`src/pages/reports/ReportsPage.tsx`) **não usa nenhuma das três** para a parte comercial — baixa ~17,4k linhas em ~21 requests paginados. Ou seja: o padrão certo já foi construído neste projeto três vezes e o dashboard comercial ficou fora dele.
 
 ---
 
-## ETAPA 6 — Origem de cada KPI
+## Conclusão da auditoria
 
-| Card | Origem | Classe |
-|---|---|---|
-| Oportunidades criadas | `stats.createdCount` — `filter` em JS sobre C1 | **A** |
-| Ganhas (qtd/valor) | `stats.wonCount/wonValue` — `filter`+`reduce` em JS | **A** |
-| Perdidas (qtd/valor) | `stats.lostCount/lostValue` — JS | **A** |
-| Conversão | JS (won/created) | **A** |
-| Gauge de conversão | JS | **A** |
-| Ticket médio | JS | **A** |
-| Ciclo médio de venda | JS (`close_date - created_at` por linha) | **A** |
-| Pipeline aberto (qtd) | `openOpps.length` | **A** |
-| Pipeline aberto (valor) | `reduce` inline no JSX `:617` | **A** |
-| Funil / Distribuição por estágio | `funnel` useMemo sobre `openOpps` | **A** |
-| Tendência (gráfico) | `trend` useMemo sobre C1 | **A** |
-| Leaderboard por usuário | `userStats` useMemo | **A** |
-| Pessoas em contato | RPC `get_service_dashboard_stats` | **B** |
-| Tempo médio 1ª resposta | RPC | **B** |
-| Encerrados / Total | RPC | **B** |
-| Tempo médio de resposta | RPC | **B** |
+| Card de `/dashboards` | Já coberto por RPC existente? |
+|---|---|
+| Pipeline aberto (qtd) | `get_dashboard_stats.open_count` / `get_opportunity_stage_counts` |
+| Pipeline aberto (valor) | `get_dashboard_stats.pipeline_value` |
+| Distribuição por estágio / funil | `get_dashboard_stats.stage_data` (só `custom`) / `get_opportunity_stage_counts` (todos, com valor) |
+| Ganhas (valor) | `get_dashboard_stats.won_amount` — mas por `updated_at`, não `close_date` |
+| Perdidas (qtd) | `get_dashboard_stats.lost_count` — mesma ressalva |
+| Série temporal | `get_dashboard_stats.won_trend` — só ganhas por valor; o dashboard plota criadas |
+| Oportunidades criadas | **Não** |
+| Ganhas (qtd) / Perdidas (valor) | **Não** |
+| Conversão | **Não** (derivável de criadas+ganhas) |
+| Ticket médio | **Não** (derivável) |
+| Ciclo médio | **Não** (`opportunity_behavior_snapshot.days_to_close` existe, cobertura parcial) |
+| Leaderboard por vendedor | **Não** |
+| Comparação com período anterior | **Não** |
 
-Resumo: **12 de 16 cards são classe A** (baixam linhas brutas e calculam no React). Os 4 que são classe B (RPC) custam 187 ms no total. O contraste é a resposta da auditoria.
+**Veredito:** não é preciso partir do zero, e também não dá para só chamar algo que já existe. O caminho de menor risco é **estender `get_dashboard_stats`** (órfã → zero risco de regressão, já `SECURITY DEFINER` com access check correto), migrando `p_days_ago` para `p_from`/`p_to`, trocando `updated_at` por `close_date` onde o dashboard usa `close_date`, e adicionando as contagens, o período anterior e o leaderboard — reaproveitando o padrão de gate 1× de `get_opportunity_stage_counts` e a assinatura de filtros de `get_opportunities_by_stage`.
 
----
+Antes de escrever qualquer SQL, o próximo passo que sugiro é confirmar duas decisões de contrato:
 
-## ETAPA 8 — Ranking do gargalo (caminho crítico ≈ 28,8 s de banco + ~21 RTTs)
+1. **Reusar `get_dashboard_stats` (renomeando/estendendo) ou criar `get_sales_dashboard_stats` novo** e deixar a órfã para remoção posterior.
+2. **Qual coluna é a verdade de "fechamento"** — o `/dashboards` usa `close_date` (data local, via `parseLocalDate`) e `get_dashboard_stats` usa `updated_at`. Precisam convergir, ou os KPIs vão divergir dos números atuais.
 
-| # | Gargalo | Onde | Tempo | % |
-|---|---|---|---|---|
-| 1 | `user_can_view_all(organization_id, …)` avaliada **por linha** na policy de `opportunities` (plpgsql, 3 SELECTs/linha) | policy `Users can view opportunities in their org` | ~7.122 ms de cada 7.207 ms | **~98,8% do tempo de cada query** |
-| 2 | Paginação **sequencial** de 1000 em 1000 | `src/lib/fetchAllPagedRows.ts:11` | multiplica ×4–5 o custo acima (7,2 s → 28,8 s) | multiplicador 4–5× |
-| 3 | Baixar 17,4k linhas / 6,0 MB para produzir ~30 números | `ReportsPage.tsx:216-252` | é a causa raiz de #1 e #2 | — |
-| 4 | C5 sem filtro de data (pipeline inteiro, 3.465 linhas) | `ReportsPage.tsx:243-247` | a cadeia mais lenta de todas | 100% do caminho crítico |
-| 5 | RPC de atendimento | `get_service_dashboard_stats` | 187 ms | ~0,6% |
-| 6 | Processamento JS (4 useMemo, `findIndex` em loop, `toLocaleDateString` por linha) | `:270-474` | dezenas de ms | **<1%** |
-| 7 | Duplo `fetchData` na hidratação dos filtros | `:137-141` | dobra tudo quando ocorre | intermitente |
-
-**Veredito: o banco está lento e o React está rápido.** Uma única causa — a função de RLS avaliada por linha — responde por ~98,8% do tempo de banco; e o padrão de baixar linhas brutas paginadas sequencialmente é o que a expõe 21 vezes por carregamento. Nenhuma otimização de React muda o número percebido.
-
----
-
-## ETAPA 9 — Correções propostas (nada implementado)
-
-| # | Correção | Impacto esperado | Risco | Esforço |
-|---|---|---|---|---|
-| 1 | RPC `SECURITY DEFINER` `get_sales_dashboard_stats(p_org, p_from, p_to, p_owner)` retornando **em 1 request** os agregados de C1–C5 + funil por estágio + série temporal + leaderboard, com checagem de acesso feita **1×** no início (`current_user_org_ids()` + `user_can_view_all`) em vez de por linha. Substitui `ReportsPage.tsx:216-252` e os 4 `useMemo`. | ~28,8 s → **~150–300 ms** (mesma classe do RPC de atendimento, que já faz isso e custa 187 ms) | Médio — precisa reproduzir exatamente as regras de `close_date` local vs UTC (`parseLocalDate`, `:54`) e o recorte de private records, senão os números divergem do Kanban | **Grande Refatoração** (mas é a única que resolve #1–#4) |
-| 2 | Reescrever `user_can_view_all` como `LANGUAGE sql STABLE` (sem plpgsql) e/ou trocar a policy para não passar coluna: `organization_id = ANY(current_user_org_ids())` + gate de privacidade resolvido em InitPlan | Elimina o overhead por linha em **toda a aplicação**, não só nos dashboards | **Alto** — mexe em policy de segurança multi-tenant; exige matriz de teste de `private_records_enabled` por perfil antes de aplicar | Médio |
-| 3 | Adicionar `.order('id')` em todas as chamadas paginadas de `fetchAllPagedRows` | Corrige risco de linhas omitidas entre páginas (bug de correção, não de performance) | Baixo | **Quick Win** |
-| 4 | Envolver a busca em React Query com `staleTime` (padrão já usado em `useOverview.ts`) | Elimina o custo total ao voltar para a tela; corrige o duplo disparo | Baixo | **Quick Win** |
-| 5 | `useMemo` para `openOpps.reduce` de `:495` e `:617`; `Map` de datas em `trend` no lugar de `findIndex`; remover `Suspense` inócuos | Dezenas de ms | Baixo | **Quick Win** |
-
-Ordem recomendada: 3 e 4 primeiro (isolados, sem risco), depois 1, e 2 só com matriz de teste de permissões — 2 é o que dá o ganho global, mas é o de maior risco de segurança.
-
-Nada será alterado sem sua aprovação. Se quiser, o próximo passo é eu detalhar o contrato exato do RPC do item 1 (assinatura, colunas de retorno e equivalência campo a campo com os 16 cards atuais) antes de escrever qualquer SQL.
+Nada será implementado sem sua aprovação.
