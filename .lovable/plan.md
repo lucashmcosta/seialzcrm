@@ -98,3 +98,20 @@ Contrato final da RPC · SQL aplicado · mudanças de frontend · matriz KPI ant
 ## Fora desta entrega
 
 React Query, cache, RLS, policies, índices, materialized views, cron, rollups, `seller_metrics_daily`, `opportunity_behavior_snapshot`, e a remoção da `get_dashboard_stats` órfã.
+
+---
+
+## Garantias adicionais confirmadas antes da execução
+
+**1. Access check inequívoco sem PL/pgSQL por linha.**
+`LANGUAGE sql` não dá controle de fluxo confiável para abortar, então o desenho final é dividido em duas peças:
+
+- `get_sales_dashboard_stats(...)` — wrapper **PL/pgSQL**, executado **uma única vez por chamada**: faz o `EXISTS` em `user_organizations` + `current_user_id()` (`is_active = true`) e, em caso de falha, `RAISE EXCEPTION 'ACCESS_DENIED' USING ERRCODE = 'P0002'` — mesmo erro e mesmo SQLSTATE que a `get_dashboard_stats` já usa hoje. Aprovado o gate, faz um único `SELECT` na função de agregação e devolve o JSON.
+- `get_sales_dashboard_stats_core(...)` — `LANGUAGE sql STABLE SECURITY DEFINER`, sem nenhuma verificação de permissão, contendo todas as CTEs de agregação. **Não recebe `GRANT EXECUTE` para `authenticated`** (só o wrapper recebe), de modo que não existe caminho de chamada que ignore o gate.
+
+Resultado: exatamente **um** `EXISTS` de autorização por request, zero PL/pgSQL dentro do plano de agregação, zero avaliação de `user_can_view_all` — nem por linha nem por chamada. Teste de aceite: chamar a RPC com um `p_organization_id` de outra organização deve retornar erro `ACCESS_DENIED` (P0002), e chamar `..._core` diretamente com a chave `anon`/`authenticated` deve falhar com permissão negada.
+
+**2. Semântica do leaderboard sob `p_owner_user_id`.**
+Auditado no código atual: `ReportsPage.fetchData` aplica `withOwner` ao `baseQuery`, que alimenta **todas** as cinco consultas — inclusive `openRows`. Portanto, com um vendedor selecionado, `currentOpps`/`previousOpps`/`openOpps` já contêm somente as oportunidades daquele vendedor, e `userStats` produz **uma única linha**: o vendedor filtrado. **Não** existe comparação global hoje.
+
+A RPC reproduz isso sem alteração: o filtro de owner é aplicado na CTE `scope`, da qual o `leaderboard` deriva — então com `p_owner_user_id` preenchido o leaderboard retorna somente aquele vendedor, e as linhas `unassigned` desaparecem, exatamente como hoje. A matriz de paridade inclui obrigatoriamente uma rodada com um SDR específico para provar a igualdade linha a linha.
