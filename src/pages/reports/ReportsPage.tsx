@@ -352,6 +352,37 @@ export default function ReportsPage() {
     };
   }, [currentOpps, previousOpps, rangeKey]);
 
+  // ─────────────────────────────────────────
+  // Parity shadow read (only with ?parity=1) — validates the new RPC vs legacy
+  // ─────────────────────────────────────────
+  const legacyShadowStats = useMemo(() => {
+    if (loading) return null;
+    return {
+      createdCount: stats.createdCount,
+      wonCount: stats.wonCount,
+      wonValue: stats.wonValue,
+      lostCount: stats.lostCount,
+      lostValue: stats.lostValue,
+      winRate: stats.winRate,
+      avgTicket: stats.avgTicket,
+      avgCycle: stats.avgCycle,
+      openCount: openOpps.length,
+      openValue: openOpps.reduce((s, o) => s + (Number(o.amount) || 0), 0),
+    };
+  }, [stats, openOpps, loading]);
+
+  useSalesDashboardStatsShadow({
+    organizationId: organization?.id,
+    from: range.from,
+    to: range.to,
+    ownerId,
+    legacy: legacyShadowStats,
+    refreshKey: `${rangeKey}_${ownerId}`,
+    ready: !loading,
+  });
+
+
+
   // Funnel & distribution
   const funnel: FunnelStage[] = useMemo(() => {
     return stages.map((s) => {
