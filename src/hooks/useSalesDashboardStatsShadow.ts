@@ -133,8 +133,28 @@ export function useSalesDashboardStatsShadow({
     : null;
   const runKey = scope ? buildRunKey(scope) : '';
 
+  const mountLoggedRef = useRef(false);
+  if (!mountLoggedRef.current && isParityMode()) {
+    mountLoggedRef.current = true;
+    // eslint-disable-next-line no-console
+    console.log(
+      '[dashboard-test] hook mounted',
+      `org=${organizationId ?? 'none'}`,
+      `ready=${ready}`,
+      `runKey=${runKey || 'none'}`,
+    );
+  }
+
   useEffect(() => {
-    if (!isParityMode() || !runKey || !ready) return;
+    if (!isParityMode()) return;
+    if (!runKey || !ready) {
+      // eslint-disable-next-line no-console
+      console.log(
+        '[dashboard-test] rpc skipped',
+        !runKey ? 'reason=no runKey' : 'reason=not ready',
+      );
+      return;
+    }
 
     const [orgId, fromISO, toISO, owner] = runKey.split('|');
     const run = getRun({ organizationId: orgId, orgName, fromISO, toISO, ownerId: owner });
@@ -149,7 +169,10 @@ export function useSalesDashboardStatsShadow({
     (async () => {
       logScenarioOnce(run);
       run.rpcStart = performance.now();
+      // eslint-disable-next-line no-console
+      console.log('[dashboard-test] rpc start');
       plog(run, 'RPC_START', run.rpcStart.toFixed(1));
+
 
       const fromDate = new Date(fromISO);
       const toDate = new Date(toISO);
