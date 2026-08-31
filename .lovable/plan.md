@@ -138,9 +138,11 @@ Só proponho cutover com todos os itens satisfeitos:
 - nenhuma explosão de CPU atribuível ao dashboard durante a janela;
 - nenhuma chamada repetida por re-render (`calls` delta = 1 no `pg_stat_statements`).
 
+- `REPORTS_RENDER_COUNT` estável entre cenários equivalentes (sem crescimento suspeito).
+
 Depois dos seus prints + meus dados de banco, entrego:
 
-`CENÁRIO | LEGACY_MS | RPC_MS | GANHO % | LEGACY_REQUESTS | RPC_CALLS | PARITY | CPU/OBSERVAÇÃO`
+`CENÁRIO | LEGACY_MS | RPC_MS | USER_PERCEIVED_MS | GANHO % | LEGACY_REQUESTS | RPC_CALLS | RENDERS | PARITY | CPU/OBSERVAÇÃO`
 
 E só então proponho o cutover, em mensagem separada.
 
