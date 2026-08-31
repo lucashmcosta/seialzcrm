@@ -285,6 +285,7 @@ export default function ReportsPage() {
     } catch (e) {
       console.error('Reports fetch error:', e);
     } finally {
+      if (run) endLegacy(run);
       setLoading(false);
     }
   }
