@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, Suspense } from 'react';
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -38,7 +38,20 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileReports } from '@/components/mobile/MobileReports';
 import { dedupeRowsById, fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
-import { useSalesDashboardStatsShadow } from '@/hooks/useSalesDashboardStatsShadow';
+import {
+  useSalesDashboardStatsShadow,
+  type LegacySnapshot,
+} from '@/hooks/useSalesDashboardStatsShadow';
+import {
+  endLegacy,
+  getRun,
+  isParityMode,
+  noteLegacyRequest,
+  noteRender,
+  noteUiReady,
+  startLegacy,
+  type RunRecord,
+} from '@/lib/dashboardParityRun';
 
 const BlockFallback = ({ className = 'h-32' }: { className?: string }) => (
   <div className={`animate-pulse rounded-md bg-muted/50 ${className}`} />
@@ -171,6 +184,20 @@ export default function ReportsPage() {
     if (!organization) return;
     setLoading(true);
 
+    // Passive instrumentation (only with ?parity=1) — never changes the data source.
+    const run: RunRecord | null = isParityMode()
+      ? getRun({
+          organizationId: organization.id,
+          orgName: organization.name,
+          fromISO: range.from.toISOString(),
+          toISO: range.to.toISOString(),
+          ownerId,
+        })
+      : null;
+    if (run) startLegacy(run);
+
+
+
     const fromDate = range.from;
     const toDate = range.to;
     const days = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / 86400000));
@@ -203,7 +230,11 @@ export default function ReportsPage() {
       // Helper: applies owner filter if set
       const withOwner = (q: any) => (ownerEq ? q.eq('owner_user_id', ownerEq) : q);
       const paged = <T,>(factory: (from: number, to: number) => Promise<{ data: T[] | null; error: any }>) =>
-        fetchAllPagedRows<T>(factory);
+        fetchAllPagedRows<T>(async (pageFrom, pageTo) => {
+          const res = await factory(pageFrom, pageTo);
+          if (run) noteLegacyRequest(run, res.data?.length ?? 0);
+          return res;
+        });
 
       const baseQuery = () =>
         withOwner(
@@ -254,6 +285,7 @@ export default function ReportsPage() {
     } catch (e) {
       console.error('Reports fetch error:', e);
     } finally {
+      if (run) endLegacy(run);
       setLoading(false);
     }
   }
@@ -350,36 +382,29 @@ export default function ReportsPage() {
       winRateDelta: delta(winRate, prevWinRate),
       avgTicket,
       avgCycle,
+      // Previous-period raw values (diagnostic parity only — not rendered)
+      prevCreatedCount: prevCreated.length,
+      prevWonCount: prevWon.length,
+      prevWonValue,
+      prevWinRate,
     };
   }, [currentOpps, previousOpps, rangeKey]);
 
   // ─────────────────────────────────────────
-  // Parity shadow read (only with ?parity=1) — validates the new RPC vs legacy
+  // Parity shadow read (only with ?parity=1) — validates the new RPC vs legacy.
+  // The snapshot is filled synchronously during render (below), so the hook's
+  // effect always finds it before the RPC response arrives.
   // ─────────────────────────────────────────
-  const legacyShadowStats = useMemo(() => {
-    if (loading) return null;
-    return {
-      createdCount: stats.createdCount,
-      wonCount: stats.wonCount,
-      wonValue: stats.wonValue,
-      lostCount: stats.lostCount,
-      lostValue: stats.lostValue,
-      winRate: stats.winRate,
-      avgTicket: stats.avgTicket,
-      avgCycle: stats.avgCycle,
-      openCount: openOpps.length,
-      openValue: openOpps.reduce((s, o) => s + (Number(o.amount) || 0), 0),
-    };
-  }, [stats, openOpps, loading]);
+  const legacySnapshotRef = useRef<LegacySnapshot | null>(null);
 
   useSalesDashboardStatsShadow({
     organizationId: organization?.id,
+    orgName: organization?.name,
     from: range.from,
     to: range.to,
     ownerId,
-    legacy: legacyShadowStats,
-    refreshKey: `${rangeKey}_${ownerId}`,
     ready: !loading,
+    getLegacy: () => legacySnapshotRef.current,
   });
 
 
@@ -504,6 +529,73 @@ export default function ReportsPage() {
       (r) => r.open > 0 || r.created > 0 || r.won > 0 || r.lost > 0,
     );
   }, [openOpps, currentOpps, users, rangeKey]);
+
+  // ─────────────────────────────────────────
+  // Parity instrumentation (inert without ?parity=1)
+  // ─────────────────────────────────────────
+  const parityRun = isParityMode() && organization
+    ? getRun({
+        organizationId: organization.id,
+        orgName: organization.name,
+        fromISO: range.from.toISOString(),
+        toISO: range.to.toISOString(),
+        ownerId,
+      })
+    : null;
+
+  if (parityRun) {
+    noteRender(parityRun);
+    if (!loading) {
+      const openValue = openOpps.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+      const trendDays = Math.max(
+        1,
+        Math.round((range.to.getTime() - range.from.getTime()) / 86400000) + 1,
+      );
+      legacySnapshotRef.current = {
+        kpis: {
+          created_count: stats.createdCount,
+          created_count_prev: stats.prevCreatedCount,
+          won_count: stats.wonCount,
+          won_value: stats.wonValue,
+          won_value_prev: stats.prevWonValue,
+          lost_count: stats.lostCount,
+          lost_value: stats.lostValue,
+          win_rate: stats.winRate,
+          win_rate_prev: stats.prevWinRate,
+          avg_ticket: stats.avgTicket,
+          avg_cycle_days: stats.avgCycle,
+          open_count: openOpps.length,
+          open_value: openValue,
+        },
+        funnel: funnel.map((f) => ({ name: f.name, count: f.count, value: f.value })),
+        trend: trend.map((p) => ({
+          date: p.date,
+          created: p.created,
+          won: p.won,
+          wonValue: p.wonValue,
+        })),
+        leaderboard: userStats.map((u) => ({
+          userId: u.userId,
+          fullName: u.fullName,
+          open: u.open,
+          created: u.created,
+          won: u.won,
+          lost: u.lost,
+          wonValue: u.wonValue,
+        })),
+        isMonthly: trendDays > 90,
+        locale,
+      };
+    }
+  }
+
+  useEffect(() => {
+    if (!parityRun || loading) return;
+    noteUiReady(parityRun);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parityRun?.runId, loading]);
+
+
 
   // Permission gate (after hooks to satisfy Rules of Hooks)
   if (!permsLoading && !permissions.canManageSettings) {
