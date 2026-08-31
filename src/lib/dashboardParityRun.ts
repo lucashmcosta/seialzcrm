@@ -135,7 +135,7 @@ export function peekRun(key: string): RunRecord | undefined {
 
 export function plog(run: RunRecord, ...args: unknown[]): void {
   // eslint-disable-next-line no-console
-  console.info(`[dashboard-test][RUN ${run.runId}]`, ...args);
+  console.log(`[dashboard-test][RUN ${run.runId}]`, ...args);
 }
 
 export function logScenarioOnce(run: RunRecord): void {

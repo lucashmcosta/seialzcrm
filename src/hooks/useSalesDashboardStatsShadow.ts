@@ -248,7 +248,7 @@ function compareAll(runId: string, legacy: LegacySnapshot, data: any): number {
   const kpiRows = KPI_KEYS.map((key) => cmp(key, num(legacy.kpis[key]), num(k[key])));
   diffs += kpiRows.filter((r) => r.match === 'DIFF').length;
   // eslint-disable-next-line no-console
-  console.info(`${prefix} KPIs`);
+  console.log(`${prefix} KPIs`);
   // eslint-disable-next-line no-console
   console.table(kpiRows);
 
@@ -283,7 +283,7 @@ function compareAll(runId: string, legacy: LegacySnapshot, data: any): number {
   });
   diffs += funnelRows.filter((r) => r.match === 'DIFF').length;
   // eslint-disable-next-line no-console
-  console.info(`${prefix} FUNNEL (${legacy.funnel.length} etapas)`);
+  console.log(`${prefix} FUNNEL (${legacy.funnel.length} etapas)`);
   // eslint-disable-next-line no-console
   console.table(funnelRows);
 
@@ -324,7 +324,7 @@ function compareAll(runId: string, legacy: LegacySnapshot, data: any): number {
   const trendDiffs = trendRows.filter((r) => r.match === 'DIFF');
   diffs += trendDiffs.length;
   // eslint-disable-next-line no-console
-  console.info(
+  console.log(
     `${prefix} TREND (${legacy.trend.length} buckets, ${legacy.isMonthly ? 'mensal' : 'diário'}) — ${trendDiffs.length} DIFF`,
   );
   // eslint-disable-next-line no-console
@@ -364,7 +364,7 @@ function compareAll(runId: string, legacy: LegacySnapshot, data: any): number {
   });
   diffs += lbRows.filter((r) => r.match === 'DIFF').length;
   // eslint-disable-next-line no-console
-  console.info(`${prefix} LEADERBOARD (${legacy.leaderboard.length} vendedores)`);
+  console.log(`${prefix} LEADERBOARD (${legacy.leaderboard.length} vendedores)`);
   // eslint-disable-next-line no-console
   console.table(lbRows);
 
