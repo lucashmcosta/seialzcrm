@@ -194,7 +194,10 @@ export function useSalesDashboardStatsShadow({
       const timing = sumResourceTiming('/rest/v1/rpc/get_sales_dashboard_stats', run.rpcStart ?? 0);
       run.rpcNetworkMs = timing.durationMs;
 
+      // eslint-disable-next-line no-console
+      console.log('[dashboard-test] rpc end');
       plog(run, 'RPC_END', run.rpcEnd.toFixed(1));
+
       plog(run, 'RPC_DURATION_MS', Math.round(run.rpcEnd - (run.rpcStart ?? run.rpcEnd)));
       plog(run, 'RPC_TRANSPORT_MS', Math.round(run.rpcNetworkMs));
 
