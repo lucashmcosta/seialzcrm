@@ -382,6 +382,11 @@ export default function ReportsPage() {
       winRateDelta: delta(winRate, prevWinRate),
       avgTicket,
       avgCycle,
+      // Previous-period raw values (diagnostic parity only — not rendered)
+      prevCreatedCount: prevCreated.length,
+      prevWonCount: prevWon.length,
+      prevWonValue,
+      prevWinRate,
     };
   }, [currentOpps, previousOpps, rangeKey]);
 
