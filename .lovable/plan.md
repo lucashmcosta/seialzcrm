@@ -27,6 +27,8 @@ Sem alterar nenhuma query, nenhum filtro, nenhum `useMemo` de cálculo:
 - O helper `paged()` recebe um wrapper que, apenas em modo parity, incrementa `LEGACY_REQUEST_COUNT` por página buscada e soma `LEGACY_ROWS_DOWNLOADED`. A paginação em si (`fetchAllPagedRows`) **não é alterada**.
 - Ao fim do `Promise.all`: `LEGACY_END` e `LEGACY_DURATION_MS`.
 - `UI_READY_MS`: medido no `requestAnimationFrame` seguinte ao render em que `loading` vira `false` — é o "tempo até os cards preencherem" comparável ao seu cronômetro visual.
+- `REPORTS_RENDER_COUNT`: contador de renders do `ReportsPage` por `runId`, incrementado em um `useRef` a cada render (sem causar render). Serve para provar que nenhuma chamada extra nasce de re-render.
+- `USER_PERCEIVED_MS`: tempo entre `LEGACY_START` (início do carregamento do run) e `RPC_END` percebido no navegador — a janela total que o usuário esperaria hoje no modo parity, e a referência contra a qual o ganho do cutover será medido.
 - Bytes reais por request: leitura de `performance.getEntriesByType('resource')` filtrando `/rest/v1/opportunities` na janela do run, somando `transferSize` e `duration` — isso dá o **tempo de rede** do legado separado do tempo de banco.
 
 Snapshot do legado para paridade: gravado em um `useRef` (`stats`, `funnel`, `trend`, `userStats`, `openCount`, `openValue`) e lido pela comparação. **Nunca entra em array de dependências.**
@@ -56,6 +58,8 @@ Novo desenho:
 [dashboard-test][RUN abc123] LEGACY_NETWORK_MS 512  LEGACY_BYTES 3.1MB  UI_READY_MS 5104
 [dashboard-test][RUN abc123] RPC_START ...  RPC_END ...  RPC_DURATION_MS 212
 [dashboard-test][RUN abc123] RPC_CALL_COUNT 1
+[dashboard-test][RUN abc123] REPORTS_RENDER_COUNT 6
+[dashboard-test][RUN abc123] USER_PERCEIVED_MS 5316
 [dashboard-test][RUN abc123] PARITY_RESULT FULL MATCH
 ```
 
@@ -134,9 +138,11 @@ Só proponho cutover com todos os itens satisfeitos:
 - nenhuma explosão de CPU atribuível ao dashboard durante a janela;
 - nenhuma chamada repetida por re-render (`calls` delta = 1 no `pg_stat_statements`).
 
+- `REPORTS_RENDER_COUNT` estável entre cenários equivalentes (sem crescimento suspeito).
+
 Depois dos seus prints + meus dados de banco, entrego:
 
-`CENÁRIO | LEGACY_MS | RPC_MS | GANHO % | LEGACY_REQUESTS | RPC_CALLS | PARITY | CPU/OBSERVAÇÃO`
+`CENÁRIO | LEGACY_MS | RPC_MS | USER_PERCEIVED_MS | GANHO % | LEGACY_REQUESTS | RPC_CALLS | RENDERS | PARITY | CPU/OBSERVAÇÃO`
 
 E só então proponho o cutover, em mensagem separada.
 
