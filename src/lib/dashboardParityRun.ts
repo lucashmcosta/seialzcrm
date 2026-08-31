@@ -44,14 +44,60 @@ export interface RunRecord {
 
 const runs = new Map<string, RunRecord>();
 
+const PARITY_STORAGE_KEY = 'parityMode';
+let parityEnabledLogged = false;
+
+function readParityFlag(): { enabled: boolean; source: string } {
+  if (typeof window === 'undefined') return { enabled: false, source: 'ssr' };
+
+  const fromSearch = new URLSearchParams(window.location.search).get('parity');
+  const hash = window.location.hash || '';
+  const hashQuery = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+  const fromHash = new URLSearchParams(hashQuery).get('parity');
+  const explicit = fromSearch ?? fromHash;
+
+  if (explicit === '0') {
+    try {
+      window.localStorage.removeItem(PARITY_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    return { enabled: false, source: 'disabled-by-url' };
+  }
+
+  if (explicit === '1') {
+    try {
+      window.localStorage.setItem(PARITY_STORAGE_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    return { enabled: true, source: fromSearch === '1' ? 'query' : 'hash' };
+  }
+
+  try {
+    if (window.localStorage.getItem(PARITY_STORAGE_KEY) === '1') {
+      return { enabled: true, source: 'localStorage' };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { enabled: false, source: 'off' };
+}
+
 export function isParityMode(): boolean {
-  if (typeof window === 'undefined') return false;
-  return new URLSearchParams(window.location.search).get('parity') === '1';
+  const { enabled, source } = readParityFlag();
+  if (enabled && !parityEnabledLogged) {
+    parityEnabledLogged = true;
+    // eslint-disable-next-line no-console
+    console.log('[dashboard-test] parity enabled', `source=${source}`);
+  }
+  return enabled;
 }
 
 export function buildRunKey(scope: RunScope): string {
   return `${scope.organizationId}|${scope.fromISO}|${scope.toISO}|${scope.ownerId}`;
 }
+
 
 /** Deterministic short id derived from the stable run key. */
 export function runIdFor(key: string): string {
