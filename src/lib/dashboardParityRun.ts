@@ -10,6 +10,9 @@
  * double-mounts and identity changes of React objects (`stats`, `legacy`, ...).
  */
 
+// eslint-disable-next-line no-console
+console.log('PARITY_MODULE_IMPORTED');
+
 export interface RunScope {
   organizationId: string;
   orgName?: string | null;

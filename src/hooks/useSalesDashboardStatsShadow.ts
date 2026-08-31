@@ -11,6 +11,9 @@ import {
   type RunScope,
 } from '@/lib/dashboardParityRun';
 
+// eslint-disable-next-line no-console
+console.log('SHADOW_HOOK_IMPORTED');
+
 /**
  * Shadow (parity) reader for the new `get_sales_dashboard_stats` RPC.
  *
