@@ -1,118 +1,153 @@
-# Auditoria READ-ONLY — CPU do banco em 100%
+# Teste controlado e reproduzível — `/dashboards` legado × `get_sales_dashboard_stats`
 
-Nada foi alterado. Todas as consultas abaixo são de leitura (`pg_stat_activity`, `pg_stat_statements`, `pg_stat_user_tables`, `cron.job`) mais leitura de código.
+Escopo estritamente isolado: só a tela `/dashboards`. Sem cutover, sem tocar `ObservabilityPage`, realtime, `integration_events`, `integration_inbound_events`, buscas `ilike`, RLS, policies ou índices. Nenhuma otimização nesta etapa — só medição.
 
-## Resposta direta
+A fonte que alimenta a UI continua sendo **exclusivamente o caminho legado**. Toda a instrumentação é passiva e só existe sob `?parity=1`.
 
-**A `get_sales_dashboard_stats` NÃO é a causa. Ela nunca executou em produção.**
+---
 
-E, no momento desta auditoria, **o banco está ocioso** — o pico já passou.
+## 1. Instrumentação temporária
 
-Os consumidores reais de CPU são consultas de polling administrativo/realtime que fazem **Seq Scan em tabelas grandes**, dezenas de milhares de vezes.
+### 1.1 Novo arquivo `src/lib/dashboardParityRun.ts`
 
-## 1. `pg_stat_activity` (agora)
+Módulo puro, sem React, responsável por manter o estado do teste fora do ciclo de render:
 
-| Métrica | Valor |
+- `isParityMode()` — lê `?parity=1`.
+- `buildRunKey({ organizationId, fromISO, toISO, ownerId })` — **chave estável**, sem nenhuma dependência de identidade de objeto.
+- `runId` curto e determinístico derivado da chave (hash base36 de 6 chars), para o prefixo `[dashboard-test][RUN abc123]`.
+- Registro por `runId` em um `Map` de módulo: `legacy`, `rpc`, `logged`, `rpcCallCount`. Um `runId` que já disparou a RPC **nunca** dispara de novo, ainda que o componente re-renderize, remonte em StrictMode ou troque a identidade de `stats`/`legacy`.
+- Contadores do legado: `noteRequest(runId, rows)` e marcas `startLegacy` / `endLegacy`.
+- Helpers de log com o prefixo único.
+
+### 1.2 `ReportsPage.tsx` — instrumentação do caminho A (legado)
+
+Sem alterar nenhuma query, nenhum filtro, nenhum `useMemo` de cálculo:
+
+- No início de `fetchData()`: `LEGACY_START` (`performance.now()`), zerando os contadores do `runId` atual.
+- O helper `paged()` recebe um wrapper que, apenas em modo parity, incrementa `LEGACY_REQUEST_COUNT` por página buscada e soma `LEGACY_ROWS_DOWNLOADED`. A paginação em si (`fetchAllPagedRows`) **não é alterada**.
+- Ao fim do `Promise.all`: `LEGACY_END` e `LEGACY_DURATION_MS`.
+- `UI_READY_MS`: medido no `requestAnimationFrame` seguinte ao render em que `loading` vira `false` — é o "tempo até os cards preencherem" comparável ao seu cronômetro visual.
+- Bytes reais por request: leitura de `performance.getEntriesByType('resource')` filtrando `/rest/v1/opportunities` na janela do run, somando `transferSize` e `duration` — isso dá o **tempo de rede** do legado separado do tempo de banco.
+
+Snapshot do legado para paridade: gravado em um `useRef` (`stats`, `funnel`, `trend`, `userStats`, `openCount`, `openValue`) e lido pela comparação. **Nunca entra em array de dependências.**
+
+### 1.3 `useSalesDashboardStatsShadow.ts` — reescrita do gatilho
+
+Problema atual (causa da chamada repetida): `useEffect` com deps `[organizationId, refreshKey, ownerId, ready, legacy]`, onde `legacy` é objeto recriado a cada `useMemo`.
+
+Novo desenho:
+
+- Deps do efeito: **apenas `runKey` (string) e `ready` (boolean)**.
+- Guarda de execução única por `runId` no `Map` do módulo (`rpcStarted`), então `RPC_CALL_COUNT = 1` mesmo com remontagem/StrictMode.
+- `AbortController` de verdade via `supabase.rpc(...).abortSignal(controller.signal)`, para que um run abandonado **cancele a consulta no banco** em vez de apenas descartar o resultado.
+- Medição: `RPC_START`, `RPC_END`, `RPC_DURATION_MS` (total cliente = rede + banco) e, pela `PerformanceResourceTiming` da chamada `/rest/v1/rpc/get_sales_dashboard_stats`, o detalhamento `network_ms` (conexão/TTFB) × `server_ms` estimado.
+- Erros: qualquer falha é logada como `RPC_ERROR: <code> <message>` e marcada `PARITY_RESULT = ERROR` — em especial para distinguir `ACCESS_DENIED` legítimo (org errada) de indevido.
+- Ordem preservada: a RPC só dispara depois de `LEGACY_END` (`ready`), então os dois caminhos **não competem por CPU no mesmo instante**.
+
+### 1.4 Formato do log (um bloco por run, emitido uma única vez)
+
+```text
+[dashboard-test][RUN abc123] scenario org=<nome> from=<iso> to=<iso> owner=<all|uuid>
+[dashboard-test][RUN abc123] LEGACY_START 0.0
+[dashboard-test][RUN abc123] LEGACY_END 4820.4
+[dashboard-test][RUN abc123] LEGACY_DURATION_MS 4820
+[dashboard-test][RUN abc123] LEGACY_REQUEST_COUNT 9
+[dashboard-test][RUN abc123] LEGACY_ROWS_DOWNLOADED 13417
+[dashboard-test][RUN abc123] LEGACY_NETWORK_MS 512  LEGACY_BYTES 3.1MB  UI_READY_MS 5104
+[dashboard-test][RUN abc123] RPC_START ...  RPC_END ...  RPC_DURATION_MS 212
+[dashboard-test][RUN abc123] RPC_CALL_COUNT 1
+[dashboard-test][RUN abc123] PARITY_RESULT FULL MATCH
+```
+
+Mais três `console.table`: KPIs, funnel, trend, leaderboard.
+
+---
+
+## 2. Teste de paridade
+
+Tabela `metric | legacy | rpc | delta | match` para:
+
+**KPIs (13):** `created_count`, `created_count_prev`, `won_count`, `won_value`, `won_value_prev`, `lost_count`, `lost_value`, `win_rate`, `win_rate_prev`, `avg_ticket`, `avg_cycle_days`, `open_count`, `open_value`.
+
+Observação: `created_count_prev`, `won_value_prev` e `win_rate_prev` não existem hoje como número no state legado — só como `delta` percentual. A instrumentação reconstrói os três a partir de `previousOpps` com **exatamente a mesma aritmética** do `useMemo` atual (linhas 310-334), sem alterar o `useMemo`.
+
+**Funnel:** etapa por etapa (`stage_id`/nome, `count`, `value`), mais checagem de contagem de etapas e ordem.
+
+**Trend:** bucket por bucket (`created`, `won`, `won_value`). A RPC devolve buckets diários; a comparação aplica ao lado RPC a mesma regra de bucketização do front (`> 90 dias` → mensal, rótulo por `toLocaleDateString` no mesmo locale) — só no comparador, sem tocar o gráfico.
+
+**Leaderboard:** vendedor por vendedor (`open`, `created`, `won`, `lost`, `won_value`), incluindo a linha `unassigned`, com detecção de vendedor presente em um lado e ausente no outro (`MISSING`).
+
+**Tolerâncias (as já aprovadas):** contagens e valores monetários → **zero**; `win_rate` → ≤ 0,05 pp; `avg_ticket` / `avg_cycle_days` → ≤ 0,01. Qualquer coisa fora disso imprime `DIFF` e o run fecha com `PARITY = MISMATCH`. Nada é arredondado antes da comparação.
+
+---
+
+## 3. Medição no banco (do meu lado, entre os seus testes)
+
+Sempre pelo **wrapper público autenticado**. Nenhum grant temporário no core, nenhum `EXPLAIN` no core.
+
+Antes do teste 1 e depois de cada run, leitura read-only de `extensions.pg_stat_statements` filtrando a chamada PostgREST do wrapper, registrando o **delta** entre snapshots:
+
+| Campo | Fonte |
 |---|---|
-| Backends de cliente | 37 |
-| `active` agora | 1 (a própria auditoria) |
-| `idle in transaction` | 0 |
-| Consulta mais longa ativa | 00:00:00 |
+| chamadas no run | `calls` (delta) |
+| tempo total | `total_exec_time` (delta) |
+| tempo médio | `mean_exec_time` |
+| pico | `max_exec_time` |
+| linhas retornadas | `rows` (delta) |
+| erro | ausência de entrada + `RPC_ERROR` no console (erros não entram em `pg_stat_statements`) |
+| execução duplicada | `calls` delta > 1 para um `runId` com `RPC_CALL_COUNT = 1` |
 
-Único backend de longa duração: `START_REPLICATION SLOT supabase_realtime_...` (walsender do Realtime, 2h28m, esperando WAL — normal). Ou seja: **o pico de CPU não está em curso**; a análise a seguir é por acumulado.
+Com isso o **tempo de banco** vem do delta de `total_exec_time`, o **tempo total cliente** vem do `RPC_DURATION_MS`, e o **tempo de rede** é a diferença. Também amostro `pg_stat_activity` durante cada janela para confirmar ausência de pico de CPU atribuível ao dashboard.
 
-## 2. `pg_stat_statements` — top por tempo total acumulado
+Opcional (só se você autorizar): expor `server_ms` dentro do JSON do wrapper com `clock_timestamp()`, o que daria tempo de banco exato por chamada sem depender de snapshot. Fica **fora** do plano por padrão, para não alterar a função aprovada.
 
-`pg_stat_database.stats_reset` é `NULL`, então os números são acumulados desde o início (sem janela).
+---
 
-| # | Consulta | Chamadas | Média | Máx | Total |
+## 4. Seu roteiro manual
+
+Todos os testes: aba nova, console limpo, aguardar o bloco `PARITY_RESULT` aparecer, print, e me informar o tempo visual até os cards preencherem.
+
+**Hard refresh:** obrigatório **só no TESTE 1** (`Ctrl+Shift+R` / `Cmd+Shift+R`), para garantir o bundle novo com a instrumentação. Nos testes 2 a 5, refresh normal basta — mas **sempre aba nova**, porque a guarda de execução única é por módulo carregado.
+
+Os filtros de período/vendedor são persistidos em `localStorage`, então em cada teste você **ajusta o filtro na própria tela** e um novo `runId` é emitido automaticamente. Não é preciso mexer na URL além do `?parity=1`.
+
+| # | Organização | URL | Período | Vendedor | Esperado no console |
 |---|---|---|---|---|---|
-| 1 | `realtime.list_changes(...)` (walrus / Realtime) | 662.955 | 13 ms | 1.518 ms | **8.492 s ×10³** |
-| 2 | `SELECT cost_usd FROM vw_org_monthly_cost_byok` | 19.089 | 220 ms | 2.104 ms | 4.198 s ×10³ |
-| 3 | `SELECT ... FROM integration_events ORDER BY occurred_at DESC` | 14.652 | 271 ms | 4.276 ms | 3.967 s ×10³ |
-| 4 | `SELECT ... FROM integration_inbound_events ORDER BY received_at DESC` | 14.652 | 270 ms | 3.757 ms | 3.959 s ×10³ |
-| 5 | `SELECT id FROM contacts WHERE full_name ilike $2` | 442 | **8.638 ms** | 29.979 ms | 3.818 s ×10³ |
-| 6 | `SELECT ... FROM opportunities WHERE title ilike $6` (+ join lateral) | 442 | **7.861 ms** | 27.512 ms | 3.475 s ×10³ |
-| 7 | `DELETE FROM net._http_response` (limpeza pg_net) | 105.591 | 21 ms | 1.121 ms | 2.167 s ×10³ |
-| 8 | `SELECT direction, content FROM messages WHERE thread_id = $1` | 16.322 | 91 ms | 1.316 ms | 1.482 s ×10³ |
-| 9 | `INSERT INTO messages ...` | 8.584 | 128 ms | 2.590 ms | 1.095 s ×10³ |
+| 1 | Central Trabalhista | `/dashboards?parity=1` (hard refresh) | Últimos 30 dias | Todos os vendedores | 1 bloco `RUN`, `RPC_CALL_COUNT 1`, `PARITY_RESULT FULL MATCH`, `LEGACY_DURATION_MS` na casa de milhares, `RPC_DURATION_MS` de 2 a 3 ordens abaixo |
+| 2 | Central Trabalhista | mesma aba ou nova | Últimos 90 dias | Todos | novo `runId`, exatamente 1 chamada de RPC, FULL MATCH |
+| 3 | Central Trabalhista | mesma | Últimos 30 dias | **um SDR específico** (ex. Victoria Amorim) | leaderboard com **uma única linha** (o SDR), sem linhas `unassigned` — é a semântica atual auditada |
+| 4 | Central Trabalhista | mesma | Últimos 365 dias | Todos | trend **mensal** dos dois lados; é o cenário de maior volume no legado |
+| 5 | Viagi | trocar de organização, depois `/dashboards?parity=1` | Últimos 30 dias | Todos | FULL MATCH; se seu usuário não tiver o gate administrativo na Viagi, aparece `RPC_ERROR ACCESS_DENIED` — **esperado e não é falha** |
 
-O caminho legado do dashboard aparece bem abaixo: `opportunities` por `created_at` (146 chamadas, média 3.466 ms) e por `close_date` (109 chamadas, média 3.268 ms).
+Sinais de alarme que quero que você me reporte se aparecerem: mais de um bloco `RUN` com o mesmo id, `RPC_CALL_COUNT` maior que 1, qualquer `DIFF` nas tabelas, ou `RPC_ERROR` no teste 1-4.
 
-## 3. `get_sales_dashboard_stats` — tempo médio e total
+---
 
-| Item | Resultado |
+## 5. Critério de cutover (não automático)
+
+Só proponho cutover com todos os itens satisfeitos:
+
+- `RPC_CALL_COUNT = 1` por run, nos 5 cenários;
+- `PARITY = FULL MATCH` em todos (Viagi com `ACCESS_DENIED` esperado conta como cenário de permissão, não de paridade);
+- nenhum `ACCESS_DENIED` indevido;
+- RPC significativamente mais rápida que o legado no tempo de banco medido;
+- nenhuma explosão de CPU atribuível ao dashboard durante a janela;
+- nenhuma chamada repetida por re-render (`calls` delta = 1 no `pg_stat_statements`).
+
+Depois dos seus prints + meus dados de banco, entrego:
+
+`CENÁRIO | LEGACY_MS | RPC_MS | GANHO % | LEGACY_REQUESTS | RPC_CALLS | PARITY | CPU/OBSERVAÇÃO`
+
+E só então proponho o cutover, em mensagem separada.
+
+---
+
+## 6. Arquivos tocados nesta etapa
+
+| Arquivo | Mudança |
 |---|---|
-| Entradas de execução em `pg_stat_statements` | **Nenhuma** (só as linhas de DDL da migração: `CREATE`, `REVOKE`, `GRANT`) |
-| Chamadas via PostgREST (`rpc/get_sales_dashboard_stats`) | **0** |
-| Tempo total | **0 ms** |
-| Tempo médio | **n/a** |
-| `pg_stat_user_functions` | vazio (`track_functions` desligado no projeto) |
+| `src/lib/dashboardParityRun.ts` | **novo** — runId estável, guarda de execução única, contadores, logs |
+| `src/hooks/useSalesDashboardStatsShadow.ts` | reescrita do gatilho (deps por string, guarda por runId, abort real, medição) e comparador completo (KPIs + funnel + trend + leaderboard) |
+| `src/pages/reports/ReportsPage.tsx` | apenas instrumentação passiva: marcas de tempo, contadores de request/linhas, snapshot em `ref`, `UI_READY_MS`. Zero mudança em query, filtro ou cálculo |
 
-Confirmação adicional: `EXPLAIN ANALYZE` do core falha com `42501 permission denied for function get_sales_dashboard_stats_core` — o isolamento aprovado está de fato ativo (o core não é chamável fora do wrapper). O `EXPLAIN ANALYZE` pedido só será possível dentro do wrapper (com sessão admin) ou concedendo execução temporária ao core, e por isso **fica pendente** — não executei nada que exigisse alteração de grant.
-
-**Consequência:** não existe evidência de que a nova RPC tenha custado 1 ms de CPU. Provavelmente as chamadas do modo parity falharam antes de executar (erro de permissão/`ACCESS_DENIED` não é contabilizado em `pg_stat_statements`), ou o modo parity não foi aberto com usuário admin.
-
-## 4. Modo parity executa os dois caminhos ao mesmo tempo? — SIM
-
-Verificado em `src/pages/reports/ReportsPage.tsx`:
-
-- `fetchData()` (linhas 208-249) roda **sempre**, com 5 consultas paginadas em `Promise.all` sobre `opportunities`.
-- `useSalesDashboardStatsShadow` (linha 375) é **adicional**: recebe `ready: !loading`, ou seja só dispara **depois** que o legado terminou.
-
-Logo, em `?parity=1` o custo é `legado + RPC`, em série (não concorrente). Sem `?parity=1`, a RPC não é chamada.
-
-## 5. Chamadas da RPC por carregamento
-
-O `useEffect` do hook tem deps `[organizationId, refreshKey, ownerId, ready, legacy]`.
-
-`legacy` é o objeto `legacyShadowStats`, produzido por `useMemo([stats, openOpps, loading])` — e `stats` é outro `useMemo` que muda de identidade a cada refetch. O `console.table` é desduplicado por `refreshKey` (`loggedFor`), **mas a chamada de rede não é**: toda vez que a identidade de `legacy` muda, o efeito re-executa e faz **uma nova chamada à RPC**, sem log visível.
-
-Contagem esperada: **1 chamada por mudança de identidade de `legacy`** (≥1 por carregamento, ≥1 por troca de período/vendedor, e mais uma a cada re-render que recrie `stats`). Não há `AbortController` na RPC — só a flag `cancelled`, que descarta o resultado mas **não cancela** a consulta no banco. Risco real de amplificação; hoje sem impacto medido porque a RPC nunca chegou a executar.
-
-## 6. Seq Scans inesperados — aqui está o CPU
-
-`pg_stat_user_tables` (acumulado):
-
-| Tabela | Seq scans | Tuplas lidas em seq scan | Idx scans | Tamanho |
-|---|---|---|---|---|
-| `messages` | 56.964 | **13,07 bilhões** | 1,63 M | 593 MB |
-| `message_threads` | 274.678 | **5,94 bilhões** | 1,31 M | 115 MB |
-| `integration_events` | 29.259 | **3,56 bilhões** | 27.865 | 470 MB |
-| `integration_inbound_events` | 29.255 | **2,50 bilhões** | 49.688 | 585 MB |
-| `opportunities` | 211 | 2,40 milhões | 124.246 | 16 MB |
-| `contacts` | 2 | 42.948 | 21,7 M | 55 MB |
-
-Leitura:
-
-- `integration_events` + `integration_inbound_events`: 29.259 + 29.255 seq scans ≈ **exatamente 2 × 14.652**, o número de chamadas das consultas #3 e #4. Cada chamada varre a tabela inteira e ordena (`ORDER BY occurred_at DESC` / `received_at DESC` sem índice utilizável), a 270 ms por execução. **Casam 1:1.**
-- Origem dessas chamadas: `src/pages/admin/ObservabilityPage.tsx` — a única tela que lê essas tabelas, com múltiplos blocos `limit(5000)`, `limit(1000)`, `count exact head` e janelas de 1h/24h. Cada abertura/refresh dispara dezenas de varreduras.
-- `messages` e `message_threads`: as maiores massas de tuplas lidas do banco. Combinam com as consultas #8 (`messages` por `thread_id`, 91 ms de média — alto demais para acesso por índice) e com o walrus do Realtime, que também exerce pressão sobre essas tabelas.
-- **`opportunities` (o dashboard) é irrelevante em Seq Scan**: 211 varreduras e 2,4 M de tuplas — cinco ordens de magnitude abaixo de `messages`.
-
-## 7. CTE reexecutada desnecessariamente
-
-Não há evidência de CTE reexecutada dentro da nova RPC (ela não executou; o plano fica pendente conforme item 3). O padrão de reexecução observável é do PostgREST: `WITH pgrst_source AS (...) SELECT ... FROM (SELECT * FROM pgrst_source)` — envelope normal, não é reexecução.
-
-O desperdício real é de outra natureza: **a mesma consulta pesada repetida milhares de vezes** (19.089 × `vw_org_monthly_cost_byok`, 14.652 × cada tabela de eventos), não uma CTE avaliada duas vezes.
-
-## 8. Suspeitos do pico de 100% durante os testes
-
-Em ordem de probabilidade, com base no acumulado e no volume por chamada:
-
-1. **`ObservabilityPage` (admin)** — as duas varreduras completas de `integration_events` / `integration_inbound_events` (470 MB + 585 MB) a 270 ms cada, mais os blocos `limit(5000)`. É o padrão que mais claramente satura CPU quando alguém deixa a tela aberta/recarregando durante testes.
-2. **`vw_org_monthly_cost_byok`** — 19.089 chamadas a 220 ms; view agregada consultada em loop.
-3. **Buscas `ilike` sem índice trigram** — `contacts.full_name ilike` (8,6 s de média, pico 30 s) e `opportunities.title ilike` (7,9 s, pico 27,5 s). Poucas chamadas, custo brutal cada uma; qualquer digitação em campo de busca durante os testes gera picos.
-4. **Realtime `list_changes`** — maior total absoluto (8,5 × 10⁶ ms), custo constante de fundo proporcional ao WAL de `messages`.
-5. **Caminho legado do `/dashboards`** — 5 consultas paginadas por carregamento, 3,3-3,5 s por página. Contribui, mas com 146/109 chamadas está longe de ser o dominante.
-
-Cron ativo relevante para o ruído de fundo: `integration-worker` (30 s), `intelligence-worker-30s` (30 s), `outbox-reaper` (1 min), `telephony-warm-all` (1 min), `intelligence-backfill-tick` (2 min) — 19 jobs ativos no total.
-
-## Pendências desta auditoria (não executadas por serem intrusivas)
-
-- `EXPLAIN ANALYZE` da nova RPC: exige sessão admin através do wrapper ou grant temporário no core. Peço autorização explícita antes.
-- Atribuição do pico ao minuto exato: `pg_stat_statements` está sem `stats_reset`, e a consulta aos logs Postgres da última janela voltou vazia. Para amarrar horário ao consumidor seria necessário amostragem contínua de `pg_stat_activity` durante um novo teste.
-
-## Nada foi alterado
-
-Zero DDL, zero DML, zero mudança de grant, RLS, policy, índice ou código.
+Nada de banco, migração, RLS, policy, índice, cron ou edge function. Todo o código novo é inerte sem `?parity=1`, e removido no cutover.
