@@ -58,6 +58,8 @@ Novo desenho:
 [dashboard-test][RUN abc123] LEGACY_NETWORK_MS 512  LEGACY_BYTES 3.1MB  UI_READY_MS 5104
 [dashboard-test][RUN abc123] RPC_START ...  RPC_END ...  RPC_DURATION_MS 212
 [dashboard-test][RUN abc123] RPC_CALL_COUNT 1
+[dashboard-test][RUN abc123] REPORTS_RENDER_COUNT 6
+[dashboard-test][RUN abc123] USER_PERCEIVED_MS 5316
 [dashboard-test][RUN abc123] PARITY_RESULT FULL MATCH
 ```
 
