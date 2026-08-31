@@ -27,6 +27,8 @@ Sem alterar nenhuma query, nenhum filtro, nenhum `useMemo` de cálculo:
 - O helper `paged()` recebe um wrapper que, apenas em modo parity, incrementa `LEGACY_REQUEST_COUNT` por página buscada e soma `LEGACY_ROWS_DOWNLOADED`. A paginação em si (`fetchAllPagedRows`) **não é alterada**.
 - Ao fim do `Promise.all`: `LEGACY_END` e `LEGACY_DURATION_MS`.
 - `UI_READY_MS`: medido no `requestAnimationFrame` seguinte ao render em que `loading` vira `false` — é o "tempo até os cards preencherem" comparável ao seu cronômetro visual.
+- `REPORTS_RENDER_COUNT`: contador de renders do `ReportsPage` por `runId`, incrementado em um `useRef` a cada render (sem causar render). Serve para provar que nenhuma chamada extra nasce de re-render.
+- `USER_PERCEIVED_MS`: tempo entre `LEGACY_START` (início do carregamento do run) e `RPC_END` percebido no navegador — a janela total que o usuário esperaria hoje no modo parity, e a referência contra a qual o ganho do cutover será medido.
 - Bytes reais por request: leitura de `performance.getEntriesByType('resource')` filtrando `/rest/v1/opportunities` na janela do run, somando `transferSize` e `duration` — isso dá o **tempo de rede** do legado separado do tempo de banco.
 
 Snapshot do legado para paridade: gravado em um `useRef` (`stats`, `funnel`, `trend`, `userStats`, `openCount`, `openValue`) e lido pela comparação. **Nunca entra em array de dependências.**
