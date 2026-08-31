@@ -266,7 +266,8 @@ function compareAll(runId: string, legacy: LegacySnapshot, data: any): number {
         delta: '-',
         match: 'DIFF',
       });
-      diffs += 1;
+      return;
+    }
       return;
     }
     funnelRows.push(cmp(`${stage.name}.count`, stage.count, num(r.count)));
