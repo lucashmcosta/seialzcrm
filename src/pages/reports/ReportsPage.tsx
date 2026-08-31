@@ -97,6 +97,8 @@ interface UserRow {
 }
 
 export default function ReportsPage() {
+  // eslint-disable-next-line no-console
+  console.log('REPORTS_PAGE_MOUNTED');
   const { organization, locale } = useOrganization();
   const { permissions, loading: permsLoading } = usePermissions();
   const navigate = useNavigate();
