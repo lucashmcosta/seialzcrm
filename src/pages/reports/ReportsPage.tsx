@@ -530,6 +530,73 @@ export default function ReportsPage() {
     );
   }, [openOpps, currentOpps, users, rangeKey]);
 
+  // ─────────────────────────────────────────
+  // Parity instrumentation (inert without ?parity=1)
+  // ─────────────────────────────────────────
+  const parityRun = isParityMode() && organization
+    ? getRun({
+        organizationId: organization.id,
+        orgName: organization.name,
+        fromISO: range.from.toISOString(),
+        toISO: range.to.toISOString(),
+        ownerId,
+      })
+    : null;
+
+  if (parityRun) {
+    noteRender(parityRun);
+    if (!loading) {
+      const openValue = openOpps.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+      const trendDays = Math.max(
+        1,
+        Math.round((range.to.getTime() - range.from.getTime()) / 86400000) + 1,
+      );
+      legacySnapshotRef.current = {
+        kpis: {
+          created_count: stats.createdCount,
+          created_count_prev: stats.prevCreatedCount,
+          won_count: stats.wonCount,
+          won_value: stats.wonValue,
+          won_value_prev: stats.prevWonValue,
+          lost_count: stats.lostCount,
+          lost_value: stats.lostValue,
+          win_rate: stats.winRate,
+          win_rate_prev: stats.prevWinRate,
+          avg_ticket: stats.avgTicket,
+          avg_cycle_days: stats.avgCycle,
+          open_count: openOpps.length,
+          open_value: openValue,
+        },
+        funnel: funnel.map((f) => ({ name: f.name, count: f.count, value: f.value })),
+        trend: trend.map((p) => ({
+          date: p.date,
+          created: p.created,
+          won: p.won,
+          wonValue: p.wonValue,
+        })),
+        leaderboard: userStats.map((u) => ({
+          userId: u.userId,
+          fullName: u.fullName,
+          open: u.open,
+          created: u.created,
+          won: u.won,
+          lost: u.lost,
+          wonValue: u.wonValue,
+        })),
+        isMonthly: trendDays > 90,
+        locale,
+      };
+    }
+  }
+
+  useEffect(() => {
+    if (!parityRun || loading) return;
+    noteUiReady(parityRun);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parityRun?.runId, loading]);
+
+
+
   // Permission gate (after hooks to satisfy Rules of Hooks)
   if (!permsLoading && !permissions.canManageSettings) {
     return <Navigate to="/dashboard" replace />;
