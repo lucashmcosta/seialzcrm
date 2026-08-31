@@ -281,11 +281,7 @@ function compareAll(runId: string, legacy: LegacySnapshot, data: any): number {
       match: 'DIFF',
     });
   });
-  diffs += funnelRows.filter((r) => r.match === 'DIFF').length - diffs * 0;
-  // recount to avoid double counting the MISSING rows added above
-  diffs =
-    kpiRows.filter((r) => r.match === 'DIFF').length +
-    funnelRows.filter((r) => r.match === 'DIFF').length;
+  diffs += funnelRows.filter((r) => r.match === 'DIFF').length;
   // eslint-disable-next-line no-console
   console.info(`${prefix} FUNNEL (${legacy.funnel.length} etapas)`);
   // eslint-disable-next-line no-console
