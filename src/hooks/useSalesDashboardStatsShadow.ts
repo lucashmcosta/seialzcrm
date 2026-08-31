@@ -268,8 +268,6 @@ function compareAll(runId: string, legacy: LegacySnapshot, data: any): number {
       });
       return;
     }
-      return;
-    }
     funnelRows.push(cmp(`${stage.name}.count`, stage.count, num(r.count)));
     funnelRows.push(cmp(`${stage.name}.value`, stage.value, num(r.value)));
     rpcByName.delete(stage.name);
