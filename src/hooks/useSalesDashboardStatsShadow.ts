@@ -133,8 +133,28 @@ export function useSalesDashboardStatsShadow({
     : null;
   const runKey = scope ? buildRunKey(scope) : '';
 
+  const mountLoggedRef = useRef(false);
+  if (!mountLoggedRef.current && isParityMode()) {
+    mountLoggedRef.current = true;
+    // eslint-disable-next-line no-console
+    console.log(
+      '[dashboard-test] hook mounted',
+      `org=${organizationId ?? 'none'}`,
+      `ready=${ready}`,
+      `runKey=${runKey || 'none'}`,
+    );
+  }
+
   useEffect(() => {
-    if (!isParityMode() || !runKey || !ready) return;
+    if (!isParityMode()) return;
+    if (!runKey || !ready) {
+      // eslint-disable-next-line no-console
+      console.log(
+        '[dashboard-test] rpc skipped',
+        !runKey ? 'reason=no runKey' : 'reason=not ready',
+      );
+      return;
+    }
 
     const [orgId, fromISO, toISO, owner] = runKey.split('|');
     const run = getRun({ organizationId: orgId, orgName, fromISO, toISO, ownerId: owner });
@@ -149,7 +169,10 @@ export function useSalesDashboardStatsShadow({
     (async () => {
       logScenarioOnce(run);
       run.rpcStart = performance.now();
+      // eslint-disable-next-line no-console
+      console.log('[dashboard-test] rpc start');
       plog(run, 'RPC_START', run.rpcStart.toFixed(1));
+
 
       const fromDate = new Date(fromISO);
       const toDate = new Date(toISO);
@@ -171,7 +194,10 @@ export function useSalesDashboardStatsShadow({
       const timing = sumResourceTiming('/rest/v1/rpc/get_sales_dashboard_stats', run.rpcStart ?? 0);
       run.rpcNetworkMs = timing.durationMs;
 
+      // eslint-disable-next-line no-console
+      console.log('[dashboard-test] rpc end');
       plog(run, 'RPC_END', run.rpcEnd.toFixed(1));
+
       plog(run, 'RPC_DURATION_MS', Math.round(run.rpcEnd - (run.rpcStart ?? run.rpcEnd)));
       plog(run, 'RPC_TRANSPORT_MS', Math.round(run.rpcNetworkMs));
 
@@ -248,7 +274,7 @@ function compareAll(runId: string, legacy: LegacySnapshot, data: any): number {
   const kpiRows = KPI_KEYS.map((key) => cmp(key, num(legacy.kpis[key]), num(k[key])));
   diffs += kpiRows.filter((r) => r.match === 'DIFF').length;
   // eslint-disable-next-line no-console
-  console.info(`${prefix} KPIs`);
+  console.log(`${prefix} KPIs`);
   // eslint-disable-next-line no-console
   console.table(kpiRows);
 
@@ -283,7 +309,7 @@ function compareAll(runId: string, legacy: LegacySnapshot, data: any): number {
   });
   diffs += funnelRows.filter((r) => r.match === 'DIFF').length;
   // eslint-disable-next-line no-console
-  console.info(`${prefix} FUNNEL (${legacy.funnel.length} etapas)`);
+  console.log(`${prefix} FUNNEL (${legacy.funnel.length} etapas)`);
   // eslint-disable-next-line no-console
   console.table(funnelRows);
 
@@ -324,7 +350,7 @@ function compareAll(runId: string, legacy: LegacySnapshot, data: any): number {
   const trendDiffs = trendRows.filter((r) => r.match === 'DIFF');
   diffs += trendDiffs.length;
   // eslint-disable-next-line no-console
-  console.info(
+  console.log(
     `${prefix} TREND (${legacy.trend.length} buckets, ${legacy.isMonthly ? 'mensal' : 'diário'}) — ${trendDiffs.length} DIFF`,
   );
   // eslint-disable-next-line no-console
@@ -364,7 +390,7 @@ function compareAll(runId: string, legacy: LegacySnapshot, data: any): number {
   });
   diffs += lbRows.filter((r) => r.match === 'DIFF').length;
   // eslint-disable-next-line no-console
-  console.info(`${prefix} LEADERBOARD (${legacy.leaderboard.length} vendedores)`);
+  console.log(`${prefix} LEADERBOARD (${legacy.leaderboard.length} vendedores)`);
   // eslint-disable-next-line no-console
   console.table(lbRows);
 

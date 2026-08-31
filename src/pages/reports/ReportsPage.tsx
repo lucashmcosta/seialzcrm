@@ -194,7 +194,12 @@ export default function ReportsPage() {
           ownerId,
         })
       : null;
-    if (run) startLegacy(run);
+    if (run) {
+      // eslint-disable-next-line no-console
+      console.log('[dashboard-test] legacy start');
+      startLegacy(run);
+    }
+
 
 
 
