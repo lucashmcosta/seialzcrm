@@ -184,6 +184,20 @@ export default function ReportsPage() {
     if (!organization) return;
     setLoading(true);
 
+    // Passive instrumentation (only with ?parity=1) — never changes the data source.
+    const run: RunRecord | null = isParityMode()
+      ? getRun({
+          organizationId: organization.id,
+          orgName: organization.name,
+          fromISO: range.from.toISOString(),
+          toISO: range.to.toISOString(),
+          ownerId,
+        })
+      : null;
+    if (run) startLegacy(run);
+
+
+
     const fromDate = range.from;
     const toDate = range.to;
     const days = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / 86400000));
