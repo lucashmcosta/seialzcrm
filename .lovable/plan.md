@@ -1,96 +1,100 @@
-# Auditoria READ-ONLY — RPCs existentes vs. dados comerciais de `/dashboards`
+# Refatoração de performance do Dashboard Comercial (`/dashboards`)
 
-Nada foi criado ou alterado. Levantamento feito no banco vivo (`pg_proc`, `pg_stat_statements`) e no código.
-
-Filtrei as funções de `public` por nome (`dashboard|stat|metric|report|kpi|funnel|pipeline|leaderboard|sales|opportunit|seller|rollup|summary|trend`) e cruzei com todas as chamadas `supabase.rpc(` do frontend.
+Objetivo único: trocar o caminho de obtenção dos dados (hoje ~21 requests paginados, 3k–17k linhas baixadas) por uma RPC agregadora. **Nenhum KPI muda de valor, nenhuma tela muda, nenhuma regra de negócio muda.**
 
 ---
 
-## Tabela de aproveitamento
+## 1. Auditoria interna de `get_dashboard_stats` (lida no banco vivo)
 
-| RPC / Função | O que retorna | Quem usa hoje | Serve para `/dashboards`? | Pode ser reaproveitada? |
-|---|---|---|---|---|
-| **`get_dashboard_stats(p_organization_id, p_days_ago=30, p_owner_user_id)`** → `json`, plpgsql, **STABLE SECURITY DEFINER** | `open_count`, `pipeline_value` (soma das abertas), `won_amount`, `lost_count`, `new_contacts`, `stage_data[]` (nome do estágio + soma, só `type='custom'`), `won_trend[]` (data + soma das ganhas), `tasks[]` (5), `activities[]` (10). Access check: 1× `user_organizations + current_user_id()`, e depois **consulta sem RLS** | **NINGUÉM.** Zero chamadas em `src/` e **0 calls em `pg_stat_statements`** — função órfã, do dashboard antigo | **Parcialmente (≈40%)** — cobre pipeline aberto (qtd+valor), valor ganho, qtd perdida, distribuição por estágio e uma série temporal | **SIM — é a melhor base.** Já é exatamente o padrão arquitetural que falta ao `/dashboards`. Limites: recorte por `p_days_ago` (não `from`/`to`), usa `updated_at` em vez de `close_date`, só valores (sem contagens de ganhas/criadas), sem período anterior, sem conversão/ticket/ciclo, sem leaderboard, `stage_data` ignora estágios won/lost |
-| **`get_opportunities_by_stage(p_organization_id, p_limit_per_stage, p_owner_ids, p_include_no_owner, p_min_amount, p_max_amount, p_close_date_from/to, p_no_close_date, p_created_from/to, p_tag_ids, p_stage_ids)`** → `json`, **STABLE SECURITY DEFINER** (há também um overload antigo de 2 args) | Cards de oportunidades agrupados por estágio, com limite por estágio e filtros ricos | `src/pages/opportunities/OpportunitiesKanban.tsx:282` | **Não diretamente** — devolve linhas de cards, não agregados; e limita por estágio | **Como referência, sim.** É a **prova de performance**: 503 calls, **média 66 ms**, máx 410 ms, na mesma tabela `opportunities` da Central. Confirma que o problema do `/dashboards` é o caminho RLS+paginação, não o volume. O bloco de filtros dela é o modelo de assinatura a copiar |
-| **`get_opportunity_stage_counts(org_id)`** → `TABLE(stage_id, opportunity_count, total_amount)`, **STABLE SECURITY DEFINER** | Contagem + soma por estágio, com o gate de permissão resolvido **1×** (`v_can_view_all := user_can_view_all(...)` fora da query) | `OpportunitiesKanban.tsx:345` | **SIM, para 2 cards** — funil / distribuição por estágio e, somando, o pipeline aberto | **SIM, quase pronta.** Mede **20 ms**. Falta: filtro de período e de owner (hoje é org inteira e usa só o owner do usuário logado como recorte de privacidade). Padrão de "resolver `user_can_view_all` uma vez em variável" é exatamente o antídoto ao gargalo por linha |
-| **`get_service_dashboard_stats(p_org, p_from, p_to, p_owner)`** → `TABLE(5 colunas)`, **LANGUAGE sql STABLE SECURITY DEFINER** | KPIs de atendimento | `src/hooks/useServiceStats.ts:46` | Já é usada (os 4 cards de Atendimento) | **Não para vendas** — é o **contrato modelo** a espelhar (detalhado abaixo) |
-| `get_service_worst_responses(...)` | Piores tempos de resposta | `src/hooks/useServiceWorstResponses.ts:58` | Não (atendimento) | Não |
-| `admin_list_pipeline_stages(p_org_id)` | id/name/order_index/type dos estágios | Superfície admin | Auxiliar (rótulos do funil) | Sim, como lookup — mas `pipeline_stages` já é lido direto em `ReportsPage.tsx` |
-| `evaluate_opportunity_close_v1`, `fn_snapshot_opportunity_close_v1`, `fn_guard_opportunity_won_requirements_v1`, `fn_build_opportunity_won_payload`, `fn_opportunities_result_timestamps` | Regras/guards/payload de fechamento de oportunidade (triggers e validação) | Fluxo de won/lost | Não — não são agregadores | Não. Mas `fn_opportunities_result_timestamps` importa: é o trigger que popula os timestamps de resultado, ou seja, define qual coluna é a verdade de "quando fechou" |
-| `fn_refresh_sales_journeys(p_organization_id, p_ghost_days)` + tabela `sales_journeys` | Materialização de jornadas de venda (Inteligência) | Módulo Inteligência | Não — granularidade de jornada, não KPI de período | Não |
-| `kairos_db_stats`, `kairos_table_stats`, `fn_outbox_health_summary`, `fn_inbound_health_summary` | Saúde de infra/filas | Observabilidade / admin | Não | Não |
-| `merge_sales_threads`, `provision_sales_endpoint`, `fn_is_canonical_sales_thread`, `fn_is_sales_eligible_endpoint`, `sales_thread_status_rank`, `fn_replay_sales_merge_state` | Roteamento/consolidação de threads comerciais ("sales" no nome, mas domínio messaging) | Messages | Não | Não |
-| `rpc_kommo_upsert_opportunity` | Upsert de espelho Kommo | Integração Kommo | Não | Não |
+Assinatura atual: `get_dashboard_stats(p_organization_id uuid, p_days_ago int = 30, p_owner_user_id uuid = null) returns json`, `plpgsql STABLE SECURITY DEFINER set search_path=public`. Órfã: zero chamadas no `src/` e zero em `pg_stat_statements`.
 
-### Agregados pré-calculados que existem, mas não são RPC
+| Bloco da função | Veredito | Motivo |
+|---|---|---|
+| Access check (`user_organizations` + `current_user_id()`, 1×) | **Reaproveitar integralmente** | É exatamente o gate correto, resolvido uma vez fora das queries |
+| `SECURITY DEFINER` + `set search_path` | **Reaproveitar** | Elimina a avaliação de `user_can_view_all` por linha (causa raiz medida: 2–7 s vs 85 ms) |
+| Pipeline aberto: `count(*)`, `sum(amount)` com `status='open'`, `deleted_at is null`, owner opcional | **Correto, reaproveitar** | Idêntico ao que o front calcula sobre `openOpps` |
+| `won_amount` filtrado por `updated_at >= v_date_filter` | **Substituir** | O dashboard usa `close_date` entre `from` e `to`; `updated_at` produz números diferentes |
+| `lost_count` por `updated_at` | **Substituir** | mesma razão |
+| `stage_data` (só `ps.type='custom'`, só `sum(amount)`, sem `count`) | **Substituir** | O funil da tela precisa de `count` **e** `value` por etapa, e a tela já lê apenas etapas `custom` — manter o recorte `custom`, adicionar `count` |
+| `won_trend` (`updated_at::date`, só valor) | **Substituir** | A tela plota `created`, `won` e `wonValue` por bucket, derivados de `created_at` e `close_date` |
+| `new_contacts` (tabela `contacts`) | **Remover do contrato** | Nenhum card de `/dashboards` consome isso |
+| `tasks` (5 linhas) e `activities` (10 linhas) | **Remover do contrato** | Resíduo do dashboard antigo; `/dashboards` não exibe nenhum dos dois. Carregar linhas aqui contraria o objetivo de performance |
+| `p_days_ago` | **Migrar a assinatura** | Sem gambiarra: nova assinatura com `p_from`/`p_to` (overload distinto, a antiga fica intocada até a remoção final) |
 
-| Objeto | O que tem | Quem preenche | Serve para `/dashboards`? |
-|---|---|---|---|
-| **`seller_metrics_daily`** (`organization_id, user_id, day, avg/median_response_seconds`) | Métricas **diárias por vendedor** — porém só de tempo de resposta | `supabase/functions/intelligence-rollup-cron/index.ts:55` | **Não para o leaderboard comercial** (não tem ganhas/valor). Mas é o **precedente de rollup diário por vendedor**: se um dia o leaderboard precisar ser instantâneo, a tabela e o cron já existem para receber colunas de vendas |
-| **`opportunity_behavior_snapshot`** (`final_status`, `days_to_close`, `won_at`, `lost_at`, contadores) | Já tem **`days_to_close` por oportunidade** — insumo direto do "ciclo médio de venda" | mesmo cron (`:119`), só oportunidades com `updated_at` nas últimas 36h **e que tenham thread** | **Parcialmente, e não confiável como fonte única**: cobertura incompleta (exige thread, janela de 36h, `limit 2000`) e é lido apenas em `src/components/settings/IntelligenceSettings.tsx:76` |
-| `sales_events` | Eventos de venda (objeções, sinais de compra) | Inteligência | Não |
+## 2. Coluna canônica de fechamento — auditada, não assumida
 
----
+Auditado: trigger `fn_opportunities_result_timestamps` (BEFORE INS/UPD) preenche `won_at`/`lost_at` com `now()` na transição de `status`, e limpa quando sai de won/lost, marcando `*_source='trigger'`. Ou seja `won_at`/`lost_at` são **timestamps de evento** (quando o registro mudou de status no sistema), não a data comercial do fechamento.
 
-## Contrato atual de `get_service_dashboard_stats` — o padrão a espelhar
+Contagem no banco (`deleted_at is null`):
+
+| status | total | com `close_date` | com `won_at` | com `lost_at` | fechadas sem `close_date` | `won_at::date <> close_date` |
+|---|---|---|---|---|---|---|
+| won | 1.334 | 1.295 | 1.334 | 0 | 39 | **250** |
+| lost | 15.273 | 15.273 | 0 | 15.273 | 0 | — |
+
+Conclusão: **`close_date` é a coluna canônica de fechamento para relatórios.** Em 250 oportunidades ganhas `won_at::date` divergiria de `close_date`, e o fluxo de fechamento (`transition_opportunity_stage_v1` / `evaluate_opportunity_close_v1`) recebe `_close_date` explicitamente — é o dado informado pelo operador. `won_at`/`lost_at` continuam sendo auditoria de evento e **não** entram na RPC. As 39 ganhas sem `close_date` continuam fora dos KPIs de fechamento, exatamente como hoje (o front descarta `close_date` nulo).
+
+Detalhe crítico de fuso: `close_date` é `date` e o front compara com `parseLocalDate` (meia-noite local). A RPC comparará `close_date` contra os **limites em `date` local** (`p_from`/`p_to` convertidos com o mesmo `America/Sao_Paulo` que `computeRange` gera), nunca contra `timestamptz` — é o que preserva a paridade.
+
+## 3. Contrato final da RPC
 
 ```sql
-get_service_dashboard_stats(p_org uuid, p_from timestamptz, p_to timestamptz, p_owner uuid DEFAULT NULL)
-RETURNS TABLE (contacts_count int, avg_first_response_seconds numeric,
-               resolved_count int, total_count int, avg_response_seconds numeric)
+get_sales_dashboard_stats(
+  p_organization_id uuid,
+  p_from            timestamptz,
+  p_to              timestamptz,
+  p_owner_user_id   uuid default null   -- null = todos
+) returns json
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 ```
 
-Características do contrato:
+Nome novo (overload não é possível com tipos diferentes na mesma posição sem ambiguidade); `get_dashboard_stats` fica **intocada** e órfã, marcada para remoção numa etapa posterior. Access check idêntico ao dela, resolvido 1× (`user_organizations` + `current_user_id()`), envolvido numa CTE/`case` que aborta com `ACCESS_DENIED`. Período anterior calculado **dentro** da função com a mesma aritmética do front (`days = round((to-from)/86400000)`, `prevFrom = from - days`, `prevTo = from`, aberto à direita).
 
-1. **`LANGUAGE sql`**, não plpgsql — sem overhead de execução por linha.
-2. **`SECURITY DEFINER`** — a RLS de `message_threads`/`message_response_times` **não é avaliada**; o recorte é feito explicitamente nas cláusulas `where organization_id = p_org`.
-3. **Uma linha de saída, colunas tipadas** — o frontend não recebe linha bruta nenhuma.
-4. **Parâmetros de recorte explícitos**: `p_from`/`p_to` como `timestamptz` e `p_owner` nulo = "todos".
-5. **Regra de negócio dentro da função**: CTE `cutoff` fixa o início do módulo (`2026-05-30T03:00:00Z`) e aplica `greatest(p_from, service_start)` — o mesmo cutoff que o frontend replica em `src/lib/serviceCutoff.ts`.
-6. **CTEs nomeadas por conceito** (`t`, `first_rt`, `all_rt`) e os 5 KPIs como subselects sobre elas — um único plano.
-7. Consumo: `useServiceStats.ts` faz 1 `supabase.rpc`, trata `Array.isArray(rows) ? rows[0] : rows` e coage números.
-8. Custo medido em produção: **187 ms de média** (78 calls), máx 1.538 ms.
+JSON retornado:
 
-**Ponto de atenção do modelo:** `p_owner` filtra por `assigned_user_id`, mas a função **não verifica se o chamador pertence a `p_org`** — quem tiver o `p_org` lê os KPIs de qualquer org. `get_dashboard_stats` e `get_opportunity_stage_counts` **fazem** essa checagem (`user_organizations` + `current_user_id()` / `user_can_view_all`). Se um `get_sales_dashboard_stats` for criado, ele deve seguir `get_dashboard_stats`/`get_opportunity_stage_counts` neste ponto, não `get_service_dashboard_stats`.
+```
+kpis: { created_count, created_count_prev,
+        won_count, won_value, won_value_prev,
+        lost_count, lost_value,
+        win_rate, win_rate_prev,
+        avg_ticket, avg_cycle_days,
+        open_count, open_value }
+funnel:      [{ stage_id, name, order_index, count, value }]
+trend:       [{ bucket_date, created, won, won_value }]   -- diário; mensal agregado no front
+leaderboard: [{ user_id, full_name, open, created, won, lost, won_value }]
+```
 
-## Existe padrão arquitetural equivalente para Sales?
+Regras replicadas literalmente do `useMemo` atual: conversão = `won_count / created_count * 100` (0 se não houver criadas); ticket médio = `won_value / won_count`; ciclo médio = média de `max(0, close_date - created_at::date)` só das ganhas com `close_date`; `unassigned` como chave do leaderboard quando `owner_user_id` é nulo; leaderboard filtra linhas totalmente zeradas.
 
-**Existe, e está espalhado em três funções que ninguém juntou:**
+## 4. Plano SQL
 
-- `get_dashboard_stats` — o agregador de vendas completo em JSON, **órfão, zero uso**;
-- `get_opportunity_stage_counts` — o funil, com o gate de permissão resolvido 1× (20 ms);
-- `get_opportunities_by_stage` — a assinatura rica de filtros e a prova de que `opportunities` responde em 66 ms sob SECURITY DEFINER.
+1. Migração única criando `get_sales_dashboard_stats` (nada é alterado: sem RLS, sem policy, sem índice, sem tocar `get_opportunities_by_stage`, `get_opportunity_stage_counts`, `get_service_dashboard_stats` ou os fluxos do Kanban).
+2. CTEs nomeadas por conceito, um único plano: `bounds` (limites `date` locais + período anterior), `scope` (oportunidades da org não deletadas, owner opcional), `created`, `closed`, `prev`, `open`, `stages`, `days`, `people`.
+3. `GRANT EXECUTE ... TO authenticated` (a função é `SECURITY DEFINER`; nenhum GRANT de tabela é criado ou alterado).
+4. `EXPLAIN ANALYZE` da RPC com a org Central Trabalhista e período de 30/90/365 dias, anexado ao relatório final.
 
-O que **não** existe em nenhuma delas: contagem de criadas por período, contagem de ganhas/perdidas (só valor/qtd parciais), período anterior para comparação, conversão, ticket médio, ciclo médio e leaderboard por vendedor.
+## 5. Plano do frontend
 
-E `/dashboards` (`src/pages/reports/ReportsPage.tsx`) **não usa nenhuma das três** para a parte comercial — baixa ~17,4k linhas em ~21 requests paginados. Ou seja: o padrão certo já foi construído neste projeto três vezes e o dashboard comercial ficou fora dele.
+Fase A — validação paralela (nada é removido):
+- `src/hooks/useSalesDashboardStats.ts` chama a RPC (1 request), mesmo padrão de `useServiceStats` (coerção numérica, `cancelled` guard).
+- `ReportsPage` passa a manter os dois resultados e, em modo de validação, loga a matriz card-a-card (valor antigo, valor novo, diferença) para os 13 KPIs + funil + trend + leaderboard, nos presets 7/30/90/365 dias e ano corrente, com `ownerId = all` e com um SDR específico.
 
----
+Fase B — corte, **somente após todos os deltas serem zero**:
+- remover `fetchAllPagedRows` e `dedupeRowsById` do `ReportsPage`, os 5 fetches paginados, os states `currentOpps` / `previousOpps` / `openOpps` e os `useMemo` de `stats`, `funnel`, `trend`, `userStats`;
+- `MobileReports` recebe as mesmas props derivadas da RPC (assinatura preservada, componente não muda);
+- o diálogo de detalhe ("criadas/ganhas/perdidas" com lista clicável) **não** pode ser servido por agregados: passa a buscar sua lista sob demanda, só ao abrir, com `ORDER BY` explícito e `limit` — deixa de custar no carregamento da página;
+- `UserDetailDialog`, `ServiceResponseDetailDialog` e `useServiceStats` ficam intocados.
 
-## Conclusão da auditoria
+Quick wins independentes da RPC: `ORDER BY` explícito nas paginações remanescentes (o diálogo de detalhe — a paginação sem ordenação é bug latente de duplicidade/omissão), remoção dos `Suspense` sem lazy boundary no `ReportsPage`, e `range.from`/`range.to` como dependências reais dos `useMemo` restantes.
 
-| Card de `/dashboards` | Já coberto por RPC existente? |
-|---|---|
-| Pipeline aberto (qtd) | `get_dashboard_stats.open_count` / `get_opportunity_stage_counts` |
-| Pipeline aberto (valor) | `get_dashboard_stats.pipeline_value` |
-| Distribuição por estágio / funil | `get_dashboard_stats.stage_data` (só `custom`) / `get_opportunity_stage_counts` (todos, com valor) |
-| Ganhas (valor) | `get_dashboard_stats.won_amount` — mas por `updated_at`, não `close_date` |
-| Perdidas (qtd) | `get_dashboard_stats.lost_count` — mesma ressalva |
-| Série temporal | `get_dashboard_stats.won_trend` — só ganhas por valor; o dashboard plota criadas |
-| Oportunidades criadas | **Não** |
-| Ganhas (qtd) / Perdidas (valor) | **Não** |
-| Conversão | **Não** (derivável de criadas+ganhas) |
-| Ticket médio | **Não** (derivável) |
-| Ciclo médio | **Não** (`opportunity_behavior_snapshot.days_to_close` existe, cobertura parcial) |
-| Leaderboard por vendedor | **Não** |
-| Comparação com período anterior | **Não** |
+## 6. Validação obrigatória (bloqueante)
 
-**Veredito:** não é preciso partir do zero, e também não dá para só chamar algo que já existe. O caminho de menor risco é **estender `get_dashboard_stats`** (órfã → zero risco de regressão, já `SECURITY DEFINER` com access check correto), migrando `p_days_ago` para `p_from`/`p_to`, trocando `updated_at` por `close_date` onde o dashboard usa `close_date`, e adicionando as contagens, o período anterior e o leaderboard — reaproveitando o padrão de gate 1× de `get_opportunity_stage_counts` e a assinatura de filtros de `get_opportunities_by_stage`.
+Para cada preset, uma tabela: `KPI | antigo | novo | diferença`. Cobertura: Oportunidades criadas (+delta), Ganhas qtd, Ganhas valor (+delta), Perdidas qtd, Perdidas valor, Conversão (+delta), Ticket médio, Ciclo médio, Pipeline aberto qtd, Pipeline aberto valor, cada etapa do funil (count e value), cada bucket do trend, cada linha do leaderboard. Tolerância: **zero** para contagens e valores; ≤ 0,05 pp em conversão e ≤ 0,01 em médias (apenas arredondamento numérico). Qualquer divergência acima disso interrompe a entrega e o caminho antigo permanece.
 
-Antes de escrever qualquer SQL, o próximo passo que sugiro é confirmar duas decisões de contrato:
+## 7. Relatório de entrega
 
-1. **Reusar `get_dashboard_stats` (renomeando/estendendo) ou criar `get_sales_dashboard_stats` novo** e deixar a órfã para remoção posterior.
-2. **Qual coluna é a verdade de "fechamento"** — o `/dashboards` usa `close_date` (data local, via `parseLocalDate`) e `get_dashboard_stats` usa `updated_at`. Precisam convergir, ou os KPIs vão divergir dos números atuais.
+Contrato final da RPC · SQL aplicado · mudanças de frontend · matriz KPI antigo × novo · `EXPLAIN ANALYZE` · tempo antes (medido: 2–7 s por página, ~28,8 s acumulados no caminho crítico) × tempo depois · confirmação explícita de que nenhuma regra de negócio, filtro, permissão, RLS ou policy foi alterada.
 
-Nada será implementado sem sua aprovação.
+## Fora desta entrega
+
+React Query, cache, RLS, policies, índices, materialized views, cron, rollups, `seller_metrics_daily`, `opportunity_behavior_snapshot`, e a remoção da `get_dashboard_stats` órfã.
