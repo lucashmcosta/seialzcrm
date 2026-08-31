@@ -13465,6 +13465,30 @@ export type Database = {
           total_amount: number
         }[]
       }
+      get_sales_dashboard_stats: {
+        Args: {
+          p_from: string
+          p_from_day: string
+          p_organization_id: string
+          p_owner_user_id?: string
+          p_to: string
+          p_to_day: string
+          p_tz?: string
+        }
+        Returns: Json
+      }
+      get_sales_dashboard_stats_core: {
+        Args: {
+          p_from: string
+          p_from_day: string
+          p_organization_id: string
+          p_owner_user_id?: string
+          p_to: string
+          p_to_day: string
+          p_tz?: string
+        }
+        Returns: Json
+      }
       get_service_dashboard_stats: {
         Args: { p_from: string; p_org: string; p_owner?: string; p_to: string }
         Returns: {
