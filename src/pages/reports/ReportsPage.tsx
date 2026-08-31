@@ -230,7 +230,11 @@ export default function ReportsPage() {
       // Helper: applies owner filter if set
       const withOwner = (q: any) => (ownerEq ? q.eq('owner_user_id', ownerEq) : q);
       const paged = <T,>(factory: (from: number, to: number) => Promise<{ data: T[] | null; error: any }>) =>
-        fetchAllPagedRows<T>(factory);
+        fetchAllPagedRows<T>(async (pageFrom, pageTo) => {
+          const res = await factory(pageFrom, pageTo);
+          if (run) noteLegacyRequest(run, res.data?.length ?? 0);
+          return res;
+        });
 
       const baseQuery = () =>
         withOwner(
