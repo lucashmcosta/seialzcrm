@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.get_sales_dashboard_stats(uuid, timestamptz, timestamptz, date, date, uuid, text) FROM anon;

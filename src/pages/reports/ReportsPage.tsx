@@ -38,6 +38,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileReports } from '@/components/mobile/MobileReports';
 import { dedupeRowsById, fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
+import { useSalesDashboardStatsShadow } from '@/hooks/useSalesDashboardStatsShadow';
 
 const BlockFallback = ({ className = 'h-32' }: { className?: string }) => (
   <div className={`animate-pulse rounded-md bg-muted/50 ${className}`} />
@@ -351,6 +352,37 @@ export default function ReportsPage() {
       avgCycle,
     };
   }, [currentOpps, previousOpps, rangeKey]);
+
+  // ─────────────────────────────────────────
+  // Parity shadow read (only with ?parity=1) — validates the new RPC vs legacy
+  // ─────────────────────────────────────────
+  const legacyShadowStats = useMemo(() => {
+    if (loading) return null;
+    return {
+      createdCount: stats.createdCount,
+      wonCount: stats.wonCount,
+      wonValue: stats.wonValue,
+      lostCount: stats.lostCount,
+      lostValue: stats.lostValue,
+      winRate: stats.winRate,
+      avgTicket: stats.avgTicket,
+      avgCycle: stats.avgCycle,
+      openCount: openOpps.length,
+      openValue: openOpps.reduce((s, o) => s + (Number(o.amount) || 0), 0),
+    };
+  }, [stats, openOpps, loading]);
+
+  useSalesDashboardStatsShadow({
+    organizationId: organization?.id,
+    from: range.from,
+    to: range.to,
+    ownerId,
+    legacy: legacyShadowStats,
+    refreshKey: `${rangeKey}_${ownerId}`,
+    ready: !loading,
+  });
+
+
 
   // Funnel & distribution
   const funnel: FunnelStage[] = useMemo(() => {
