@@ -38,7 +38,20 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileReports } from '@/components/mobile/MobileReports';
 import { dedupeRowsById, fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
-import { useSalesDashboardStatsShadow } from '@/hooks/useSalesDashboardStatsShadow';
+import {
+  useSalesDashboardStatsShadow,
+  type LegacySnapshot,
+} from '@/hooks/useSalesDashboardStatsShadow';
+import {
+  endLegacy,
+  getRun,
+  isParityMode,
+  noteLegacyRequest,
+  noteRender,
+  noteUiReady,
+  startLegacy,
+  type RunRecord,
+} from '@/lib/dashboardParityRun';
 
 const BlockFallback = ({ className = 'h-32' }: { className?: string }) => (
   <div className={`animate-pulse rounded-md bg-muted/50 ${className}`} />
