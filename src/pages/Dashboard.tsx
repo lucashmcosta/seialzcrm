@@ -68,6 +68,8 @@ export default function Dashboard() {
 
   const [enteredCount, setEnteredCount] = useState(0);
   const [closedCount, setClosedCount] = useState(0);
+  const [enteredCountPrev, setEnteredCountPrev] = useState(0);
+  const [closedCountPrev, setClosedCountPrev] = useState(0);
   const [opps, setOpps] = useState<OppRow[]>([]);
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
