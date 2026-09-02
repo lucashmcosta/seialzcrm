@@ -68,6 +68,8 @@ export default function Dashboard() {
 
   const [enteredCount, setEnteredCount] = useState(0);
   const [closedCount, setClosedCount] = useState(0);
+  const [enteredCountPrev, setEnteredCountPrev] = useState(0);
+  const [closedCountPrev, setClosedCountPrev] = useState(0);
   const [opps, setOpps] = useState<OppRow[]>([]);
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,7 +216,31 @@ export default function Dashboard() {
         return query;
       };
 
-      const [createdRows, wonRows] = await Promise.all([
+      // Previous period: same duration, immediately before the selected range.
+      const prevTo = new Date(from.getTime() - 1);
+      const prevFrom = new Date(prevTo.getTime() - (to.getTime() - from.getTime()));
+      const prevFromIso = prevFrom.toISOString();
+      const prevToIso = prevTo.toISOString();
+      const prevFromDay = toDayStr(prevFrom);
+      const prevToDay = toDayStr(prevTo);
+
+      const countQuery = () => {
+        let query = supabase
+          .from('opportunities')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', organization.id)
+          .is('deleted_at', null);
+
+        if (!canViewAll) {
+          query = query.eq('owner_user_id', userProfile.id);
+        } else if (ownerId && ownerId !== 'all') {
+          query = query.eq('owner_user_id', ownerId);
+        }
+
+        return query;
+      };
+
+      const [createdRows, wonRows, prevCreatedRes, prevWonRes] = await Promise.all([
         fetchAllPagedRows<OppRow>(async (pageFrom, pageTo) =>
           await baseQuery()
             .gte('created_at', fromIso)
@@ -228,7 +254,13 @@ export default function Dashboard() {
             .lte('close_date', toDay)
             .range(pageFrom, pageTo),
         ),
+        countQuery().gte('created_at', prevFromIso).lte('created_at', prevToIso),
+        countQuery()
+          .eq('status', 'won')
+          .gte('close_date', prevFromDay)
+          .lte('close_date', prevToDay),
       ]);
+
 
       const rows = dedupeRowsById<OppRow>([...createdRows, ...wonRows]);
 
@@ -250,6 +282,8 @@ export default function Dashboard() {
 
       setEnteredCount(entered);
       setClosedCount(closed);
+      setEnteredCountPrev(prevCreatedRes.count || 0);
+      setClosedCountPrev(prevWonRes.count || 0);
       setOpps(rows);
     } catch (e) {
       console.error('Dashboard fetch error:', e);
@@ -259,6 +293,13 @@ export default function Dashboard() {
   }
 
   const conversion = enteredCount > 0 ? (closedCount / enteredCount) * 100 : null;
+  const conversionPrev =
+    enteredCountPrev > 0 ? (closedCountPrev / enteredCountPrev) * 100 : null;
+
+  const delta = (curr: number, prev: number): number | null => {
+    if (prev === 0) return curr === 0 ? 0 : null;
+    return ((curr - prev) / prev) * 100;
+  };
 
   const kpis = [
     {
@@ -268,6 +309,7 @@ export default function Dashboard() {
       icon: TrendUp,
       accent: 'info' as const,
       clickable: true,
+      delta: delta(enteredCount, enteredCountPrev),
     },
     {
       key: 'closed' as const,
@@ -276,6 +318,7 @@ export default function Dashboard() {
       icon: CheckCircle,
       accent: 'success' as const,
       clickable: true,
+      delta: delta(closedCount, closedCountPrev),
     },
     {
       key: 'conversion' as const,
@@ -284,6 +327,7 @@ export default function Dashboard() {
       icon: ChartLineUp,
       accent: 'orange' as const,
       clickable: false,
+      delta: delta(conversion ?? 0, conversionPrev ?? 0),
     },
   ];
 
@@ -346,6 +390,7 @@ export default function Dashboard() {
                   value={loading ? '—' : kpi.value}
                   icon={kpi.icon}
                   accent={kpi.accent}
+                  delta={kpi.delta}
                   loading={loading}
                   mono
                   onClick={

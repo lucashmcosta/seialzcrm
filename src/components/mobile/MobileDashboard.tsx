@@ -3,7 +3,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { TrendUp, CheckCircle, ChartLineUp } from '@phosphor-icons/react';
+import { TrendUp, CheckCircle, ChartLineUp, ArrowUp, ArrowDown, Minus } from '@phosphor-icons/react';
 
 const periods = [
   { value: '1', label: 'Hoje' },
@@ -20,6 +20,8 @@ export function MobileDashboard() {
   const [loading, setLoading] = useState(true);
   const [enteredCount, setEnteredCount] = useState(0);
   const [closedCount, setClosedCount] = useState(0);
+  const [enteredCountPrev, setEnteredCountPrev] = useState(0);
+  const [closedCountPrev, setClosedCountPrev] = useState(0);
 
   useEffect(() => {
     if (organization && userProfile) {
@@ -46,28 +48,39 @@ export function MobileDashboard() {
       const fromDay = toDayStr(from);
       const toDay = toDayStr(to);
 
-      const [enteredRes, closedRes] = await Promise.all([
+      // Previous period: same duration, immediately before the selected range.
+      const prevTo = new Date(from.getTime() - 1);
+      const prevFrom = new Date(prevTo.getTime() - (to.getTime() - from.getTime()));
+      const prevFromDay = toDayStr(prevFrom);
+      const prevToDay = toDayStr(prevTo);
+
+      const countQuery = () =>
         supabase
           .from('opportunities')
           .select('*', { count: 'exact', head: true })
           .eq('organization_id', organization.id)
           .eq('owner_user_id', userProfile.id)
-          .is('deleted_at', null)
-          .gte('created_at', fromIso)
-          .lte('created_at', toIso),
-        supabase
-          .from('opportunities')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', organization.id)
-          .eq('owner_user_id', userProfile.id)
+          .is('deleted_at', null);
+
+      const [enteredRes, closedRes, prevEnteredRes, prevClosedRes] = await Promise.all([
+        countQuery().gte('created_at', fromIso).lte('created_at', toIso),
+        countQuery()
           .eq('status', 'won')
-          .is('deleted_at', null)
           .gte('close_date', fromDay)
           .lte('close_date', toDay),
+        countQuery()
+          .gte('created_at', prevFrom.toISOString())
+          .lte('created_at', prevTo.toISOString()),
+        countQuery()
+          .eq('status', 'won')
+          .gte('close_date', prevFromDay)
+          .lte('close_date', prevToDay),
       ]);
 
       setEnteredCount(enteredRes.count || 0);
       setClosedCount(closedRes.count || 0);
+      setEnteredCountPrev(prevEnteredRes.count || 0);
+      setClosedCountPrev(prevClosedRes.count || 0);
     } catch (e) {
       console.error('Mobile dashboard fetch error:', e);
     } finally {
@@ -77,17 +90,55 @@ export function MobileDashboard() {
 
   const firstName = userProfile?.full_name?.split(' ')[0] || '';
   const conversion = enteredCount > 0 ? (closedCount / enteredCount) * 100 : null;
+  const conversionPrev =
+    enteredCountPrev > 0 ? (closedCountPrev / enteredCountPrev) * 100 : null;
+
+  const delta = (curr: number, prev: number): number | null => {
+    if (prev === 0) return curr === 0 ? 0 : null;
+    return ((curr - prev) / prev) * 100;
+  };
 
   const kpis = [
-    { label: t('dashboard.entered'), value: enteredCount.toString(), icon: TrendUp, color: 'text-info' },
-    { label: t('dashboard.closed'), value: closedCount.toString(), icon: CheckCircle, color: 'text-success' },
+    {
+      label: t('dashboard.entered'),
+      value: enteredCount.toString(),
+      icon: TrendUp,
+      color: 'text-info',
+      delta: delta(enteredCount, enteredCountPrev),
+    },
+    {
+      label: t('dashboard.closed'),
+      value: closedCount.toString(),
+      icon: CheckCircle,
+      color: 'text-success',
+      delta: delta(closedCount, closedCountPrev),
+    },
     {
       label: t('dashboard.conversion'),
       value: conversion === null ? '—' : `${conversion.toFixed(1)}%`,
       icon: ChartLineUp,
       color: 'text-orange',
+      delta: delta(conversion ?? 0, conversionPrev ?? 0),
     },
   ];
+
+  const renderDelta = (value: number | null) => {
+    if (value == null || !isFinite(value)) return null;
+    const isFlat = value === 0;
+    const isUp = value > 0;
+    const Arrow = isFlat ? Minus : isUp ? ArrowUp : ArrowDown;
+    const color = isFlat
+      ? 'text-muted-foreground'
+      : isUp
+        ? 'text-success'
+        : 'text-destructive';
+    return (
+      <div className={cn('flex items-center gap-1 mt-1 text-xs font-medium', color)}>
+        <Arrow size={12} weight="bold" />
+        <span>{Math.abs(value).toFixed(1)}%</span>
+      </div>
+    );
+  };
 
   return (
     <div className="px-4 py-5 space-y-5">
@@ -131,6 +182,7 @@ export function MobileDashboard() {
               <p className={cn('text-2xl font-semibold mt-0.5 truncate', kpi.color)}>
                 {loading ? '—' : kpi.value}
               </p>
+              {!loading && renderDelta(kpi.delta)}
             </div>
             <kpi.icon size={28} weight="light" className={cn(kpi.color, 'opacity-60 flex-shrink-0')} />
           </div>
