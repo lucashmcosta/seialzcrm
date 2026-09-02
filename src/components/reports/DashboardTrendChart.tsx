@@ -89,8 +89,8 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
       .sort((a, b) => a.date.getTime() - b.date.getTime())
       .map((b) => ({
         label: formatBucketLabel(b.date, weekly),
-        Entradas: b.entered,
-        Fechamentos: b.closed,
+        Criadas: b.entered,
+        Ganhas: b.closed,
       }));
 
     return { series, weekly };
@@ -100,7 +100,7 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
     <div className="rounded-md border border-border bg-card p-5">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-foreground">
-          Entradas x Fechamentos
+          Criadas x Ganhas
         </h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {weekly ? 'Agregação semanal' : 'Agregação diária'}
@@ -138,7 +138,7 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Line
                 type="monotone"
-                dataKey="Entradas"
+                dataKey="Criadas"
                 stroke="hsl(var(--primary))"
                 strokeWidth={2}
                 dot={false}
@@ -146,7 +146,7 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
               />
               <Line
                 type="monotone"
-                dataKey="Fechamentos"
+                dataKey="Ganhas"
                 stroke="hsl(var(--success))"
                 strokeWidth={2}
                 dot={false}

@@ -94,8 +94,8 @@ export const translations = {
     'dashboard.wonOverTime': 'Ganhos ao Longo do Tempo',
     'dashboard.noTasks': 'Nenhuma tarefa para hoje',
     'dashboard.noActivities': 'Nenhuma atividade recente',
-    'dashboard.entered': 'Oportunidades que entraram',
-    'dashboard.closed': 'Oportunidades fechadas',
+    'dashboard.entered': 'Criadas',
+    'dashboard.closed': 'Ganhas',
     'dashboard.conversion': 'Conversão',
     
     // Contacts
@@ -593,8 +593,8 @@ export const translations = {
     'dashboard.wonOverTime': 'Won Over Time',
     'dashboard.noTasks': 'No tasks for today',
     'dashboard.noActivities': 'No recent activities',
-    'dashboard.entered': 'Opportunities entered',
-    'dashboard.closed': 'Opportunities closed',
+    'dashboard.entered': 'Created',
+    'dashboard.closed': 'Won',
     'dashboard.conversion': 'Conversion',
     
     // Contacts
