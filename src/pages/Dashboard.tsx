@@ -408,7 +408,7 @@ export default function Dashboard() {
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5 truncate">
                           {(detail === 'closed'
-                            ? `Fechada em ${fmtDate(o.close_date, true)}`
+                            ? `Ganha em ${fmtDate(o.close_date, true)}`
                             : `Criada em ${fmtDate(o.created_at)}`)
                             + ` · Vendedor: ${o.users?.full_name || '—'}`}
                         </p>
