@@ -15,6 +15,8 @@ import { ensureEndpointMigrationNote } from "../_shared/endpoint-migration-note.
 import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
 import { getServiceWindow, type ContactCtwaInputs } from "../_shared/service-window.ts";
 import { resolveManualReplyEndpoint, replyChoiceMetadata } from "../_shared/manual-reply-endpoint.ts";
+import { sanitizeTemplateParam } from "../_shared/template-param-text.ts";
+
 
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
@@ -738,8 +740,10 @@ serve(async (req) => {
         const tv = (templateVariables ?? {}) as Record<string, unknown>;
         for (const n of vars) {
           const v = tv[n] ?? tv[`var${n}`] ?? "";
-          values[n] = String(v);
+          // Meta rejeita (132018) parâmetros com \n, \t ou espaços consecutivos.
+          values[n] = sanitizeTemplateParam(v);
         }
+
         // Render preview
         let preview = bodyTextRaw;
         for (const n of vars) {

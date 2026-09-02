@@ -15,6 +15,8 @@ import { assertTemplateAllowedForEndpoint } from "./complianceGuards";
 import { logComplianceBlock } from "./complianceLog";
 import { resolveSalesReplyRoute } from "./salesReplyRoute";
 import { resolveManualReplyEndpoint } from "./manualReplyEndpoint";
+import { sanitizeTemplateVariables } from "./templateParamText";
+
 
 
 
@@ -280,12 +282,19 @@ async function resolveProvider(
  * Retorna o mesmo shape de `supabase.functions.invoke(...)`: `{ data, error }`.
  */
 export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
+  // Meta rejeita (132018) parâmetros de template com \n, \t ou espaços
+  // consecutivos. Normaliza aqui, no único ponto de saída do cliente.
+  if (payload.templateVariables) {
+    payload = { ...payload, templateVariables: sanitizeTemplateVariables(payload.templateVariables) };
+  }
+
   // O contrato novo do seletor Comercial é sempre resolvido server-side. O
   // endpointId `derived` da UI é apenas hint; o servidor reconsulta a thread.
   // Inbox e callers legados sem `replyEndpointSelection` ficam intactos.
   if (payload.senderContext === "messages" && payload.replyEndpointSelection) {
     return directFetchEdgeFunction("dispatch-whatsapp-send", payload);
   }
+
 
   // ============================================================
   // Roteamento por LINHA (restaurado):

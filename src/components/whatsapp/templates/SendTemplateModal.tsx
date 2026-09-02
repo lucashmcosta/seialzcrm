@@ -22,6 +22,8 @@ import { WhatsAppPreview } from './WhatsAppPreview';
 import { useTemplates, useSendTemplate, WhatsAppTemplate } from '@/hooks/useWhatsAppTemplates';
 import { useOrganization } from '@/hooks/useOrganization';
 import { extractVariables } from '@/lib/template-validation';
+import { sanitizeTemplateVariables } from '@/lib/templateParamText';
+
 import { SpinnerGap, PaperPlaneTilt } from '@phosphor-icons/react';
 
 interface SendTemplateModalProps {
@@ -81,8 +83,10 @@ export function SendTemplateModal({
       organization_id: organization.id,
       to: phone,
       template_id: selectedTemplateId,
-      variables: variableValues,
+      // Meta rejeita (132018) variáveis com \n, \t ou espaços consecutivos.
+      variables: sanitizeTemplateVariables(variableValues),
     });
+
 
     onOpenChange(false);
     onSuccess?.();
