@@ -3,7 +3,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { TrendUp, CheckCircle, ChartLineUp } from '@phosphor-icons/react';
+import { TrendUp, CheckCircle, ChartLineUp, ArrowUp, ArrowDown, Minus } from '@phosphor-icons/react';
 
 const periods = [
   { value: '1', label: 'Hoje' },
