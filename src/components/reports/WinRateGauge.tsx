@@ -36,7 +36,7 @@ export function WinRateGauge({ rate, wonCount, createdCount, loading }: WinRateG
                 <path
                   d="M 26 110 A 84 84 0 0 1 194 110"
                   fill="none"
-                  stroke="hsl(var(--primary))"
+                  stroke="hsl(var(--orange))"
                   strokeWidth={strokeWidth}
                   strokeLinecap="round"
                   strokeDasharray={circumference}
@@ -62,7 +62,7 @@ export function WinRateGauge({ rate, wonCount, createdCount, loading }: WinRateG
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Criadas</p>
-          <p className="font-mono text-lg font-semibold text-foreground">{createdCount}</p>
+          <p className="font-mono text-lg font-semibold text-info">{createdCount}</p>
         </div>
       </div>
     </div>

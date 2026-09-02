@@ -94,8 +94,8 @@ export function SalesTrendChart({ data, formatCurrency, loading }: Props) {
             <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="h-72 w-full" role="img" aria-label="Evolução das oportunidades no período">
               <defs>
                 <linearGradient id="reports-created" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.35" />
-                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.04" />
+                  <stop offset="0%" stopColor="hsl(var(--info))" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="hsl(var(--info))" stopOpacity="0.04" />
                 </linearGradient>
                 <linearGradient id="reports-won" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="hsl(var(--success))" stopOpacity="0.32" />
@@ -123,7 +123,7 @@ export function SalesTrendChart({ data, formatCurrency, loading }: Props) {
                 );
               })}
 
-              <path d={createdArea} fill="url(#reports-created)" stroke="hsl(var(--primary))" strokeWidth="2.5" />
+              <path d={createdArea} fill="url(#reports-created)" stroke="hsl(var(--info))" strokeWidth="2.5" />
               <path d={wonArea} fill="url(#reports-won)" stroke="hsl(var(--success))" strokeWidth="2.5" />
               <path d={valueArea} fill="url(#reports-value)" stroke="hsl(var(--warning))" strokeWidth="2.5" />
             </svg>
@@ -154,7 +154,7 @@ export function SalesTrendChart({ data, formatCurrency, loading }: Props) {
 
             <div className="grid min-w-[180px] gap-2 rounded-md border border-border/60 bg-background/40 p-3 text-xs text-muted-foreground">
               <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-primary" />
+                <span className="h-2.5 w-2.5 rounded-full bg-info" />
                 <span>Criadas</span>
               </div>
               <div className="flex items-center gap-2">
