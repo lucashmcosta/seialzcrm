@@ -411,6 +411,7 @@ export default function ReportsPage() {
     to: range.to,
     ownerId,
     ready: !loading,
+    filtersHydrated,
     getLegacy: () => legacySnapshotRef.current,
   });
 
@@ -540,7 +541,7 @@ export default function ReportsPage() {
   // ─────────────────────────────────────────
   // Parity instrumentation (inert without ?parity=1)
   // ─────────────────────────────────────────
-  const parityRun = isParityMode() && organization
+  const parityRun = isParityMode() && organization && filtersHydrated
     ? getRun({
         organizationId: organization.id,
         orgName: organization.name,

@@ -34,7 +34,8 @@ export interface RunRecord {
   legacyBytes?: number;
   uiReadyMs?: number;
   renderCount: number;
-  rpcStarted: boolean;
+  /** 'idle' = never ran or last attempt aborted; 'running' = in flight; 'done' = completed (success or logged error). */
+  rpcState: 'idle' | 'running' | 'done';
   rpcStart?: number;
   rpcEnd?: number;
   rpcCallCount: number;
@@ -123,7 +124,7 @@ export function getRun(scope: RunScope): RunRecord {
     legacyRequestCount: 0,
     legacyRows: 0,
     renderCount: 0,
-    rpcStarted: false,
+    rpcState: 'idle',
     rpcCallCount: 0,
     scenarioLogged: false,
     finalLogged: false,

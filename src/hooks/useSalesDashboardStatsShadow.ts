@@ -66,6 +66,8 @@ interface Params {
   ownerId: string;
   /** True once the legacy path finished for the current filters. */
   ready: boolean;
+  /** True once persisted filters (preset/custom/owner) finished hydrating. */
+  filtersHydrated: boolean;
   /** Ref-backed reader — deliberately NOT a dependency. */
   getLegacy: () => LegacySnapshot | null;
 }
@@ -120,6 +122,7 @@ export function useSalesDashboardStatsShadow({
   to,
   ownerId,
   ready,
+  filtersHydrated,
   getLegacy,
 }: Params) {
   const getLegacyRef = useRef(getLegacy);
@@ -136,25 +139,34 @@ export function useSalesDashboardStatsShadow({
     : null;
   const runKey = scope ? buildRunKey(scope) : '';
 
-  const mountLoggedRef = useRef(false);
-  if (!mountLoggedRef.current && isParityMode()) {
-    mountLoggedRef.current = true;
+  // Logged on every meaningful change, so the console always shows the CURRENT runKey
+  // (the previous once-per-lifetime log froze the pre-hydration `last_30` range).
+  const lastMountLogRef = useRef('');
+  const mountSignature = `${runKey}|${ready}|${filtersHydrated}`;
+  if (lastMountLogRef.current !== mountSignature && isParityMode()) {
+    lastMountLogRef.current = mountSignature;
     // eslint-disable-next-line no-console
     console.log(
       '[dashboard-test] hook mounted',
       `org=${organizationId ?? 'none'}`,
       `ready=${ready}`,
+      `filtersHydrated=${filtersHydrated}`,
       `runKey=${runKey || 'none'}`,
     );
   }
 
   useEffect(() => {
     if (!isParityMode()) return;
-    if (!runKey || !ready) {
+    if (!filtersHydrated || !runKey || !ready) {
       // eslint-disable-next-line no-console
       console.log(
         '[dashboard-test] rpc skipped',
-        !runKey ? 'reason=no runKey' : 'reason=not ready',
+        !filtersHydrated
+          ? 'reason=filters not hydrated'
+          : !runKey
+            ? 'reason=no runKey'
+            : 'reason=not ready',
+        `runKey=${runKey || 'none'}`,
       );
       return;
     }
@@ -162,9 +174,18 @@ export function useSalesDashboardStatsShadow({
     const [orgId, fromISO, toISO, owner] = runKey.split('|');
     const run = getRun({ organizationId: orgId, orgName, fromISO, toISO, ownerId: owner });
 
-    // Hard guard: one execution per runId, whatever React does.
-    if (run.rpcStarted) return;
-    run.rpcStarted = true;
+    // Hard guard: exactly ONE completed execution per runId. An aborted attempt
+    // returns the run to 'idle' in the cleanup so it can be retried.
+    if (run.rpcState !== 'idle') {
+      // eslint-disable-next-line no-console
+      console.log(
+        '[dashboard-test] rpc skipped',
+        run.rpcState === 'done' ? 'reason=already done' : 'reason=in flight',
+        `run=${run.runId}`,
+      );
+      return;
+    }
+    run.rpcState = 'running';
 
     const controller = new AbortController();
     let aborted = false;
@@ -191,6 +212,7 @@ export function useSalesDashboardStatsShadow({
       }).abortSignal(controller.signal);
 
       if (aborted) return;
+      run.rpcState = 'done';
 
       run.rpcEnd = performance.now();
       run.rpcCallCount += 1;
@@ -225,6 +247,7 @@ export function useSalesDashboardStatsShadow({
       logFinalOnce(run);
     })().catch((e) => {
       if (aborted) return;
+      run.rpcState = 'done';
       run.rpcError = String(e?.message ?? e);
       run.parityResult = 'ERROR';
       // eslint-disable-next-line no-console
@@ -235,9 +258,16 @@ export function useSalesDashboardStatsShadow({
     return () => {
       aborted = true;
       controller.abort();
+      if (run.rpcState === 'running') {
+        // Attempt abandoned (ready flapped / StrictMode remount): release the latch
+        // so the same run can be retried instead of being silently skipped forever.
+        run.rpcState = 'idle';
+        // eslint-disable-next-line no-console
+        console.log('[dashboard-test] rpc aborted', `run=${run.runId}`, 'latch released');
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runKey, ready]);
+  }, [runKey, ready, filtersHydrated]);
 
   return { enabled: isParityMode() };
 }
