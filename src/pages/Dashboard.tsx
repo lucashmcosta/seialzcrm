@@ -216,7 +216,31 @@ export default function Dashboard() {
         return query;
       };
 
-      const [createdRows, wonRows] = await Promise.all([
+      // Previous period: same duration, immediately before the selected range.
+      const prevTo = new Date(from.getTime() - 1);
+      const prevFrom = new Date(prevTo.getTime() - (to.getTime() - from.getTime()));
+      const prevFromIso = prevFrom.toISOString();
+      const prevToIso = prevTo.toISOString();
+      const prevFromDay = toDayStr(prevFrom);
+      const prevToDay = toDayStr(prevTo);
+
+      const countQuery = () => {
+        let query = supabase
+          .from('opportunities')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', organization.id)
+          .is('deleted_at', null);
+
+        if (!canViewAll) {
+          query = query.eq('owner_user_id', userProfile.id);
+        } else if (ownerId && ownerId !== 'all') {
+          query = query.eq('owner_user_id', ownerId);
+        }
+
+        return query;
+      };
+
+      const [createdRows, wonRows, prevCreatedRes, prevWonRes] = await Promise.all([
         fetchAllPagedRows<OppRow>(async (pageFrom, pageTo) =>
           await baseQuery()
             .gte('created_at', fromIso)
@@ -230,7 +254,13 @@ export default function Dashboard() {
             .lte('close_date', toDay)
             .range(pageFrom, pageTo),
         ),
+        countQuery().gte('created_at', prevFromIso).lte('created_at', prevToIso),
+        countQuery()
+          .eq('status', 'won')
+          .gte('close_date', prevFromDay)
+          .lte('close_date', prevToDay),
       ]);
+
 
       const rows = dedupeRowsById<OppRow>([...createdRows, ...wonRows]);
 
