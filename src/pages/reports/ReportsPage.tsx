@@ -71,6 +71,8 @@ interface DetailOpp {
   status: string;
   created_at: string;
   close_date: string | null;
+  contacts?: { full_name: string | null } | null;
+  users?: { full_name: string | null } | null;
 }
 
 interface Stage {
