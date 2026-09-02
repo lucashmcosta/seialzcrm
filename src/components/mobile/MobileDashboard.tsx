@@ -115,7 +115,7 @@ export function MobileDashboard() {
     },
     {
       label: t('dashboard.conversion'),
-      value: conversion === null ? '—' : `${conversion.toFixed(1)}%`,
+      value: conversion === null ? '—' : `${conversion.toFixed(2)}%`,
       icon: ChartLineUp,
       color: 'text-orange',
       delta: delta(conversion ?? 0, conversionPrev ?? 0),
