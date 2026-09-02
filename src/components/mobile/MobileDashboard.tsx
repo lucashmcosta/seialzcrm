@@ -90,17 +90,55 @@ export function MobileDashboard() {
 
   const firstName = userProfile?.full_name?.split(' ')[0] || '';
   const conversion = enteredCount > 0 ? (closedCount / enteredCount) * 100 : null;
+  const conversionPrev =
+    enteredCountPrev > 0 ? (closedCountPrev / enteredCountPrev) * 100 : null;
+
+  const delta = (curr: number, prev: number): number | null => {
+    if (prev === 0) return curr === 0 ? 0 : null;
+    return ((curr - prev) / prev) * 100;
+  };
 
   const kpis = [
-    { label: t('dashboard.entered'), value: enteredCount.toString(), icon: TrendUp, color: 'text-info' },
-    { label: t('dashboard.closed'), value: closedCount.toString(), icon: CheckCircle, color: 'text-success' },
+    {
+      label: t('dashboard.entered'),
+      value: enteredCount.toString(),
+      icon: TrendUp,
+      color: 'text-info',
+      delta: delta(enteredCount, enteredCountPrev),
+    },
+    {
+      label: t('dashboard.closed'),
+      value: closedCount.toString(),
+      icon: CheckCircle,
+      color: 'text-success',
+      delta: delta(closedCount, closedCountPrev),
+    },
     {
       label: t('dashboard.conversion'),
       value: conversion === null ? '—' : `${conversion.toFixed(1)}%`,
       icon: ChartLineUp,
       color: 'text-orange',
+      delta: delta(conversion ?? 0, conversionPrev ?? 0),
     },
   ];
+
+  const renderDelta = (value: number | null) => {
+    if (value == null || !isFinite(value)) return null;
+    const isFlat = value === 0;
+    const isUp = value > 0;
+    const Arrow = isFlat ? Minus : isUp ? ArrowUp : ArrowDown;
+    const color = isFlat
+      ? 'text-muted-foreground'
+      : isUp
+        ? 'text-success'
+        : 'text-destructive';
+    return (
+      <div className={cn('flex items-center gap-1 mt-1 text-xs font-medium', color)}>
+        <Arrow size={12} weight="bold" />
+        <span>{Math.abs(value).toFixed(1)}%</span>
+      </div>
+    );
+  };
 
   return (
     <div className="px-4 py-5 space-y-5">
