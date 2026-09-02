@@ -182,6 +182,7 @@ export function MobileDashboard() {
               <p className={cn('text-2xl font-semibold mt-0.5 truncate', kpi.color)}>
                 {loading ? '—' : kpi.value}
               </p>
+              {!loading && renderDelta(kpi.delta)}
             </div>
             <kpi.icon size={28} weight="light" className={cn(kpi.color, 'opacity-60 flex-shrink-0')} />
           </div>
