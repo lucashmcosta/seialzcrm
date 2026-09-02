@@ -282,6 +282,8 @@ export default function Dashboard() {
 
       setEnteredCount(entered);
       setClosedCount(closed);
+      setEnteredCountPrev(prevCreatedRes.count || 0);
+      setClosedCountPrev(prevWonRes.count || 0);
       setOpps(rows);
     } catch (e) {
       console.error('Dashboard fetch error:', e);
