@@ -39,20 +39,25 @@ export function useInboxThreadMessages(threadId: string | null) {
     if (!threadId) { setMessages([]); return; }
     setLoading(true);
     setError(null);
+    // Buscamos as mensagens MAIS RECENTES (desc + limit) e invertemos no
+    // cliente. Com `ascending: true` + limit, threads longas (>limit)
+    // devolviam as mais antigas e escondiam as respostas novas.
     const { data, error } = await supabase
       .from('messages')
       .select(SELECT)
       .eq('thread_id', threadId)
       .is('deleted_at', null)
-      .order('sent_at', { ascending: true })
-      .limit(500);
+      .order('sent_at', { ascending: false })
+      .limit(800);
     if (error) {
       console.error('[useInboxThreadMessages]', error);
       setError(error.message);
       setMessages([]);
     } else {
-      setMessages((data ?? []) as unknown as InboxMessageRow[]);
+      const rows = ((data ?? []) as unknown as InboxMessageRow[]).slice().reverse();
+      setMessages(rows);
     }
+
     setLoading(false);
   }, [threadId]);
 
