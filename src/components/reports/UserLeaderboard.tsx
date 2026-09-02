@@ -151,7 +151,7 @@ export function UserLeaderboard({ rows, formatCurrency, loading, onRowClick }: P
             <tbody>
               {sorted.map((r, idx) => {
                 const widthPct = (r.wonValue / maxValue) * 100;
-                const tColor = trophyColor(idx);
+                const tColor = trophyColor(idx, r);
                 return (
                   <tr
                     key={r.userId}
