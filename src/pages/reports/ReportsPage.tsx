@@ -335,7 +335,7 @@ export default function ReportsPage() {
 
         const { data, error } = await q.limit(500);
         if (error) throw error;
-        if (!cancelled) setDetailRows((data ?? []) as DetailOpp[]);
+        if (!cancelled) setDetailRows((data ?? []) as unknown as DetailOpp[]);
       } catch (e) {
         console.error('Reports detail fetch error:', e);
         if (!cancelled) setDetailRows([]);
