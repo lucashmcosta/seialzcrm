@@ -34,7 +34,7 @@ function initials(name: string) {
 
 export function UserLeaderboard({ rows, formatCurrency, loading, onRowClick }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
-    key: 'wonValue',
+    key: 'winRate',
     dir: 'desc',
   });
 
@@ -43,16 +43,31 @@ export function UserLeaderboard({ rows, formatCurrency, loading, onRowClick }: P
     return { ...r, winRate };
   });
 
-  const sorted = [...enriched].sort((a, b) => {
-    const va = a[sort.key as keyof typeof a] as any;
-    const vb = b[sort.key as keyof typeof b] as any;
+  type Row = (typeof enriched)[number];
+  const TIE_BREAKERS: SortKey[] = ['winRate', 'won', 'wonValue', 'open', 'fullName'];
+
+  const compareKey = (a: Row, b: Row, key: SortKey, dir: 'asc' | 'desc') => {
+    const va = a[key as keyof Row] as any;
+    const vb = b[key as keyof Row] as any;
     if (typeof va === 'string') {
-      return sort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
     }
-    return sort.dir === 'asc' ? va - vb : vb - va;
+    return dir === 'asc' ? va - vb : vb - va;
+  };
+
+  const sorted = [...enriched].sort((a, b) => {
+    const primary = compareKey(a, b, sort.key, sort.dir);
+    if (primary !== 0) return primary;
+    for (const key of TIE_BREAKERS) {
+      if (key === sort.key) continue;
+      const cmp = compareKey(a, b, key, key === 'fullName' ? 'asc' : 'desc');
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
   });
 
   const maxValue = Math.max(...sorted.map((r) => r.wonValue), 1);
+
 
   const toggleSort = (key: SortKey) => {
     setSort((s) =>
@@ -77,23 +92,37 @@ export function UserLeaderboard({ rows, formatCurrency, loading, onRowClick }: P
     </th>
   );
 
-  const trophyColor = (idx: number) =>
-    idx === 0
+  const SORT_LABELS: Record<SortKey, string> = {
+    fullName: 'Vendedor',
+    open: 'Abertas',
+    won: 'Ganhas',
+    lost: 'Perdidas',
+    winRate: 'Conversão',
+    wonValue: 'Valor Ganho',
+  };
+
+  const trophyColor = (idx: number, row: (typeof sorted)[number]) => {
+    const activeValue = row[sort.key as keyof typeof row];
+    const hasMerit = typeof activeValue === 'number' ? activeValue > 0 : true;
+    if (!hasMerit) return null;
+    return idx === 0
       ? 'text-warning'
       : idx === 1
         ? 'text-muted-foreground'
         : idx === 2
           ? 'text-warning/60'
           : null;
+  };
 
   return (
     <div className="overflow-hidden rounded-md border border-border bg-card">
       <div className="border-b border-border p-5">
         <h3 className="text-sm font-semibold text-foreground">Ranking de vendedores</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Performance individual no período
+          Performance individual no período · Ordenado por {SORT_LABELS[sort.key]}
         </p>
       </div>
+
 
       {loading ? (
         <div className="space-y-2 p-5">
@@ -122,7 +151,7 @@ export function UserLeaderboard({ rows, formatCurrency, loading, onRowClick }: P
             <tbody>
               {sorted.map((r, idx) => {
                 const widthPct = (r.wonValue / maxValue) * 100;
-                const tColor = trophyColor(idx);
+                const tColor = trophyColor(idx, r);
                 return (
                   <tr
                     key={r.userId}
