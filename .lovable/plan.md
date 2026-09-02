@@ -9,13 +9,15 @@
 
 ## Correção proposta (só apresentação, sem tocar em cálculo/banco)
 
-1. Desempate determinístico na ordenação: quando os valores da coluna escolhida empatam, ordenar em cascata por Valor Ganho → Ganhas → Conversão → Abertas → Nome (A-Z).
-2. Troféu só quando houver mérito: exibir troféu apenas nas 3 primeiras linhas **cujo valor da coluna ordenada seja maior que zero**; nas demais, mostrar a posição numérica.
-3. Deixar explícito no subtítulo do card o critério vigente, ex.: "Ordenado por Valor Ganho", atualizando conforme a coluna clicada.
+1. Ordenação padrão passa a ser **Conversão (desc)** em vez de Valor Ganho — quem converte melhor no período lidera. As colunas continuam clicáveis.
+2. Desempate determinístico: quando os valores da coluna escolhida empatam, ordenar em cascata por Conversão → Ganhas → Valor Ganho → Abertas → Nome (A-Z). Assim ninguém com 0/0/0 sobe na frente de quem tem ganhas.
+3. Troféu só quando houver mérito: exibir troféu apenas nas 3 primeiras linhas cujo valor da coluna ordenada seja maior que zero; nas demais, mostrar a posição numérica.
+4. Subtítulo do card indica o critério vigente, ex.: "Ordenado por Conversão".
 
-Nada muda em KPIs, filtros, RPC, RLS ou regra de negócio.
+Nada muda em KPIs, filtros, RPC, RLS ou regra de negócio. A conversão da linha continua sendo Ganhas ÷ Criadas no período.
 
 ## Detalhes técnicos
 
-- `src/components/reports/UserLeaderboard.tsx`: extrair um comparador com lista de desempate (`wonValue`, `won`, `winRate`, `open`, `fullName`) aplicado após a comparação da chave ativa; ajustar `trophyColor(idx)` para receber também o valor da chave ativa da linha; usar o rótulo da coluna ativa no subtítulo.
-- Observação de dado (não escopo desta mudança): `Valor Ganho` sai zerado para todos porque as oportunidades ganhas do período estão sem valor preenchido — se quiser, podemos investigar isso em separado.
+- `src/components/reports/UserLeaderboard.tsx`: estado inicial de `sort` para `{ key: 'winRate', dir: 'desc' }`; comparador com lista de desempate (`winRate`, `won`, `wonValue`, `open`, `fullName`) aplicado após a comparação da chave ativa; `trophyColor` passa a receber o valor da chave ativa da linha; rótulo da coluna ativa no subtítulo.
+- Observação de dado (fora do escopo desta mudança): `Valor Ganho` sai zerado para todos porque as oportunidades ganhas do período estão sem valor preenchido — podemos investigar em separado.
+
