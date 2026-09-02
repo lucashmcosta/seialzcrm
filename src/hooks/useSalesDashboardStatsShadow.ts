@@ -209,6 +209,7 @@ export function useSalesDashboardStatsShadow({
       }).abortSignal(controller.signal);
 
       if (aborted) return;
+      run.rpcState = 'done';
 
       run.rpcEnd = performance.now();
       run.rpcCallCount += 1;
