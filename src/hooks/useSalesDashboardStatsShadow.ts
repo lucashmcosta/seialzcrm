@@ -122,6 +122,7 @@ export function useSalesDashboardStatsShadow({
   to,
   ownerId,
   ready,
+  filtersHydrated,
   getLegacy,
 }: Params) {
   const getLegacyRef = useRef(getLegacy);
