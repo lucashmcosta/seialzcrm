@@ -244,6 +244,7 @@ export function useSalesDashboardStatsShadow({
       logFinalOnce(run);
     })().catch((e) => {
       if (aborted) return;
+      run.rpcState = 'done';
       run.rpcError = String(e?.message ?? e);
       run.parityResult = 'ERROR';
       // eslint-disable-next-line no-console
