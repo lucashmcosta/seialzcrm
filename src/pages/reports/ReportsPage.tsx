@@ -418,7 +418,7 @@ export default function ReportsPage() {
                   value={stats.createdCount}
                   delta={stats.createdDelta}
                   icon={Briefcase}
-                  accent="primary"
+                  accent="info"
                   loading={loading}
                   onClick={() => setDetail('created')}
                 />
@@ -447,7 +447,7 @@ export default function ReportsPage() {
                   value={`${stats.winRate.toFixed(1)}%`}
                   delta={stats.winRateDelta}
                   icon={Target}
-                  accent="warning"
+                  accent="orange"
                   loading={loading}
                   mono
                 />
@@ -484,7 +484,7 @@ export default function ReportsPage() {
                     label="Pipeline aberto (qtd)"
                     value={openCount}
                     icon={Briefcase}
-                    accent="primary"
+                    accent="warning"
                     loading={loading}
                   />
                   <KpiCard

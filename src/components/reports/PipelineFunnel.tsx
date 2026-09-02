@@ -52,7 +52,7 @@ export function PipelineFunnel({ stages, formatCurrency, loading }: Props) {
                   <div
                     className={cn(
                       'h-full rounded-md transition-all duration-500',
-                      'bg-gradient-to-r from-primary/80 to-primary',
+                      'bg-gradient-to-r from-warning/80 to-warning',
                     )}
                     style={{ width: `${Math.max(widthPct, 2)}%` }}
                   />

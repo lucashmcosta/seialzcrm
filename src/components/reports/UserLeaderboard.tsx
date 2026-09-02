@@ -153,7 +153,7 @@ export function UserLeaderboard({ rows, formatCurrency, loading, onRowClick }: P
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-right font-mono text-sm text-foreground">
+                    <td className="px-3 py-3 text-right font-mono text-sm text-warning">
                       {r.open}
                     </td>
                     <td className="px-3 py-3 text-right font-mono text-sm text-success">
@@ -163,7 +163,7 @@ export function UserLeaderboard({ rows, formatCurrency, loading, onRowClick }: P
                       {r.lost}
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 font-mono text-xs font-semibold text-primary">
+                      <span className="inline-flex items-center rounded-md bg-orange/10 px-2 py-0.5 font-mono text-xs font-semibold text-orange">
                         {r.winRate.toFixed(1)}%
                       </span>
                     </td>
