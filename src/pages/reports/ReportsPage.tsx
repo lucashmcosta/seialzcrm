@@ -71,6 +71,8 @@ interface DetailOpp {
   status: string;
   created_at: string;
   close_date: string | null;
+  contacts?: { full_name: string | null } | null;
+  users?: { full_name: string | null } | null;
 }
 
 interface Stage {
@@ -305,9 +307,14 @@ export default function ReportsPage() {
     (async () => {
       setDetailLoading(true);
       try {
+        const sel = (s: string): string => s;
         let q = supabase
           .from('opportunities')
-          .select('id, title, amount, status, created_at, close_date')
+          .select(
+            sel(
+              'id, title, amount, status, created_at, close_date, contacts:contact_id(full_name), users:owner_user_id(full_name)',
+            ),
+          )
           .eq('organization_id', organization.id)
           .is('deleted_at', null);
 
@@ -328,7 +335,7 @@ export default function ReportsPage() {
 
         const { data, error } = await q.limit(500);
         if (error) throw error;
-        if (!cancelled) setDetailRows((data ?? []) as DetailOpp[]);
+        if (!cancelled) setDetailRows((data ?? []) as unknown as DetailOpp[]);
       } catch (e) {
         console.error('Reports detail fetch error:', e);
         if (!cancelled) setDetailRows([]);
@@ -638,7 +645,7 @@ export default function ReportsPage() {
                   const dateLabel =
                     detail === 'created'
                       ? `Criada em ${new Date(o.created_at).toLocaleDateString(locale)}`
-                      : `Fechada em ${parseLocalDate(o.close_date)?.toLocaleDateString(locale) ?? '—'}`;
+                      : `${detail === 'won' ? 'Ganha' : 'Fechada'} em ${parseLocalDate(o.close_date)?.toLocaleDateString(locale) ?? '—'}`;
                   return (
                     <li key={o.id}>
                       <button
@@ -651,10 +658,17 @@ export default function ReportsPage() {
                       >
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-foreground truncate">
+                            {o.contacts?.full_name || '(sem contato)'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5 truncate">
                             {o.title || '(sem título)'}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{dateLabel}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                            {dateLabel}
+                            {` · Responsável: ${o.users?.full_name || '—'}`}
+                          </p>
                         </div>
+
                         <span className="text-sm font-mono text-muted-foreground flex-shrink-0">
                           {formatCurrency(Number(o.amount) || 0)}
                         </span>

@@ -448,7 +448,7 @@ export default function Dashboard() {
                           {(detail === 'closed'
                             ? `Ganha em ${fmtDate(o.close_date, true)}`
                             : `Criada em ${fmtDate(o.created_at)}`)
-                            + ` · Vendedor: ${o.users?.full_name || '—'}`}
+                            + ` · Responsável: ${o.users?.full_name || '—'}`}
                         </p>
                       </div>
 
