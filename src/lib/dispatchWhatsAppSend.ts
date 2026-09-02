@@ -15,6 +15,8 @@ import { assertTemplateAllowedForEndpoint } from "./complianceGuards";
 import { logComplianceBlock } from "./complianceLog";
 import { resolveSalesReplyRoute } from "./salesReplyRoute";
 import { resolveManualReplyEndpoint } from "./manualReplyEndpoint";
+import { sanitizeTemplateVariables } from "./templateParamText";
+
 
 
 
