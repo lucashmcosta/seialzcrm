@@ -149,8 +149,8 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
       ) : (
         <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={series} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <BarChart data={series} margin={{ top: 8, right: 12, left: -16, bottom: 0 }} barGap={2} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
               <XAxis
                 dataKey="label"
                 tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
@@ -164,6 +164,7 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
                 axisLine={{ stroke: 'hsl(var(--border))' }}
               />
               <Tooltip
+                cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
                 contentStyle={{
                   background: 'hsl(var(--popover))',
                   border: '1px solid hsl(var(--border))',
@@ -173,23 +174,10 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
                 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line
-                type="monotone"
-                dataKey="Criadas"
-                stroke="hsl(var(--info))"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="Ganhas"
-                stroke="hsl(var(--success))"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-            </LineChart>
+              <Bar dataKey="Criadas" fill="hsl(var(--info))" radius={[3, 3, 0, 0]} maxBarSize={28} />
+              <Bar dataKey="Ganhas" fill="hsl(var(--success))" radius={[3, 3, 0, 0]} maxBarSize={28} />
+            </BarChart>
+
           </ResponsiveContainer>
         </div>
       )}
