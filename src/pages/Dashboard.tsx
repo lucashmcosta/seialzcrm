@@ -293,6 +293,13 @@ export default function Dashboard() {
   }
 
   const conversion = enteredCount > 0 ? (closedCount / enteredCount) * 100 : null;
+  const conversionPrev =
+    enteredCountPrev > 0 ? (closedCountPrev / enteredCountPrev) * 100 : null;
+
+  const delta = (curr: number, prev: number): number | null => {
+    if (prev === 0) return curr === 0 ? 0 : null;
+    return ((curr - prev) / prev) * 100;
+  };
 
   const kpis = [
     {
@@ -302,6 +309,7 @@ export default function Dashboard() {
       icon: TrendUp,
       accent: 'info' as const,
       clickable: true,
+      delta: delta(enteredCount, enteredCountPrev),
     },
     {
       key: 'closed' as const,
@@ -310,6 +318,7 @@ export default function Dashboard() {
       icon: CheckCircle,
       accent: 'success' as const,
       clickable: true,
+      delta: delta(closedCount, closedCountPrev),
     },
     {
       key: 'conversion' as const,
@@ -318,6 +327,7 @@ export default function Dashboard() {
       icon: ChartLineUp,
       accent: 'orange' as const,
       clickable: false,
+      delta: delta(conversion ?? 0, conversionPrev ?? 0),
     },
   ];
 
