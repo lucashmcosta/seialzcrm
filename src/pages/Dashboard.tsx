@@ -247,6 +247,7 @@ export default function Dashboard() {
     const runId = parity ? parityRunId : '';
     if (parity && runId) startLegacy(runId);
     setLoading(true);
+    try {
       const fromIso = from.toISOString();
       const toIso = to.toISOString();
       const fromDay = toDayStr(from);
