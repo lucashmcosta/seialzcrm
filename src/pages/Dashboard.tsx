@@ -66,19 +66,24 @@ export default function Dashboard() {
   const { permissions } = usePermissions();
   const canViewAll = !!permissions?.viewAllOpportunities;
 
-  const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'today');
-  const [customRange, setCustomRange] = usePersistedFilters<CustomRange | undefined>(
-    'dashboard.custom',
-    undefined,
-    (raw) => {
-      if (!raw || typeof raw !== 'object') return undefined;
-      return {
-        from: raw.from ? new Date(raw.from) : undefined,
-        to: raw.to ? new Date(raw.to) : undefined,
-      };
-    },
+  const [preset, setPreset, , presetHydrated] = usePersistedFilters<PeriodPreset>(
+    'dashboard.preset',
+    'today',
   );
-  const [ownerId, setOwnerId] = usePersistedFilters<string>('dashboard.ownerId', 'all');
+  const [customRange, setCustomRange, , customHydrated] = usePersistedFilters<
+    CustomRange | undefined
+  >('dashboard.custom', undefined, (raw) => {
+    if (!raw || typeof raw !== 'object') return undefined;
+    return {
+      from: raw.from ? new Date(raw.from) : undefined,
+      to: raw.to ? new Date(raw.to) : undefined,
+    };
+  });
+  const [ownerId, setOwnerId, , ownerHydrated] = usePersistedFilters<string>(
+    'dashboard.ownerId',
+    'all',
+  );
+  const filtersHydrated = presetHydrated && customHydrated && ownerHydrated;
 
   const [enteredCount, setEnteredCount] = useState(0);
   const [closedCount, setClosedCount] = useState(0);
@@ -90,6 +95,23 @@ export default function Dashboard() {
   const [detail, setDetail] = useState<null | 'entered' | 'closed'>(null);
 
   const { from, to } = computeRange(preset, customRange);
+
+  // ---- TEMPORARY shadow parity plumbing (no effect on rendered numbers) ----
+  const parityRunId = organization?.id
+    ? runIdOf(
+        buildRunKey({
+          organizationId: organization.id,
+          fromISO: from.toISOString(),
+          toISO: to.toISOString(),
+          ownerId,
+          canViewAll,
+        }),
+      )
+    : '';
+  const legacySnapshotRef = useRef<HomeSnapshot | null>(null);
+  const [legacyReadyRunId, setLegacyReadyRunId] = useState<string>('');
+  if (isHomeParityMode() && parityRunId) noteRender(parityRunId);
+
 
   useEffect(() => {
     if (!orgLoading && !user) {
