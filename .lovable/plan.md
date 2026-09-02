@@ -8,7 +8,7 @@ Cada linha da lista passa a exibir, na ordem:
 
 1. Nome do contato (negrito) — hoje mostra o título da oportunidade
 2. Título da oportunidade (linha secundária)
-3. Data + vendedor, ex.: `Criada em 01/09/2026 · Vendedor: Victoria Amorim`
+3. Data + responsável, ex.: `Criada em 01/09/2026 · Responsável: Victoria Amorim` (rótulo "Responsável", também na tela Início)
 
 Valor (R$) continua alinhado à direita. Rótulo de data para ganhas passa de "Fechada em" para "Ganha em", como na Início; perdidas mantém "Fechada em".
 
