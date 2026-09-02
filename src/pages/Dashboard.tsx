@@ -338,11 +338,28 @@ export default function Dashboard() {
       setEnteredCountPrev(prevCreatedRes.count || 0);
       setClosedCountPrev(prevWonRes.count || 0);
       setOpps(rows);
+
+      if (parity && runId) {
+        noteRequest(runId, createdRows.length);
+        noteRequest(runId, wonRows.length);
+        noteRequest(runId, 0);
+        noteRequest(runId, 0);
+        legacySnapshotRef.current = legacySnapshot(
+          rows,
+          from,
+          to,
+          prevCreatedRes.count || 0,
+          prevWonRes.count || 0,
+        );
+        endLegacy(runId);
+        setLegacyReadyRunId(runId);
+      }
     } catch (e) {
       console.error('Dashboard fetch error:', e);
     } finally {
       setLoading(false);
     }
+
   }
 
   const conversion = enteredCount > 0 ? (closedCount / enteredCount) * 100 : null;
