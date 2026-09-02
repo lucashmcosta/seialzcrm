@@ -13364,6 +13364,32 @@ export type Database = {
           suggested_user_id: string
         }[]
       }
+      get_home_dashboard_stats: {
+        Args: {
+          p_from: string
+          p_from_day: string
+          p_organization_id: string
+          p_owner_user_id?: string
+          p_to: string
+          p_to_day: string
+          p_tz?: string
+        }
+        Returns: Json
+      }
+      get_home_dashboard_stats_core: {
+        Args: {
+          p_from: string
+          p_from_day: string
+          p_organization_id: string
+          p_owner_user_id: string
+          p_self_user_id: string
+          p_to: string
+          p_to_day: string
+          p_tz: string
+          p_view_all: boolean
+        }
+        Returns: Json
+      }
       get_internal_function_auth_token: { Args: never; Returns: string }
       get_marketing_ad_performance: {
         Args: {
