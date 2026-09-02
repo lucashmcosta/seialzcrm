@@ -390,6 +390,7 @@ export default function Dashboard() {
                   value={loading ? '—' : kpi.value}
                   icon={kpi.icon}
                   accent={kpi.accent}
+                  delta={kpi.delta}
                   loading={loading}
                   mono
                   onClick={
