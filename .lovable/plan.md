@@ -20,6 +20,7 @@ Se o contato não existir, exibe `(sem contato)`; sem responsável, exibe `—`.
 - Ampliar o `select` da busca on-demand do modal para incluir `contacts(full_name)` e `users!opportunities_owner_user_id_fkey(full_name)` (mesmos relacionamentos usados na Início), mantendo `.limit(500)`, filtros de organização, `deleted_at`, período e responsável.
 - Atualizar a interface `DetailOpp` com os campos aninhados.
 - Ajustar o JSX da lista para as três linhas descritas.
+- Em `src/pages/Dashboard.tsx`, trocar o rótulo "Vendedor:" por "Responsável:" para manter as duas telas iguais.
 
 ## Fora de escopo
 
