@@ -15,6 +15,8 @@ import { ensureEndpointMigrationNote } from "../_shared/endpoint-migration-note.
 import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
 import { getServiceWindow, type ContactCtwaInputs } from "../_shared/service-window.ts";
 import { resolveManualReplyEndpoint, replyChoiceMetadata } from "../_shared/manual-reply-endpoint.ts";
+import { sanitizeTemplateParam } from "../_shared/template-param-text.ts";
+
 
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
