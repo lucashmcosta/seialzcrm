@@ -3,7 +3,6 @@ import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from '@/lib/i18n';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { TrendUp, CheckCircle, ChartLineUp } from '@phosphor-icons/react';
@@ -12,6 +11,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 import { ReportFilters } from '@/components/reports/ReportFilters';
+import { KpiCard } from '@/components/reports/KpiCard';
 import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
 import { DashboardTrendChart } from '@/components/reports/DashboardTrendChart';
 import { DashboardStatusDonut } from '@/components/reports/DashboardStatusDonut';
@@ -267,7 +267,7 @@ export default function Dashboard() {
       label: t('dashboard.entered'),
       value: enteredCount.toString(),
       icon: TrendUp,
-      color: 'text-primary',
+      accent: 'info' as const,
       clickable: true,
     },
     {
@@ -275,7 +275,7 @@ export default function Dashboard() {
       label: t('dashboard.closed'),
       value: closedCount.toString(),
       icon: CheckCircle,
-      color: 'text-success',
+      accent: 'success' as const,
       clickable: true,
     },
     {
@@ -283,7 +283,7 @@ export default function Dashboard() {
       label: t('dashboard.conversion'),
       value: conversion === null ? '—' : `${conversion.toFixed(1)}%`,
       icon: ChartLineUp,
-      color: 'text-primary',
+      accent: 'orange' as const,
       clickable: false,
     },
   ];
