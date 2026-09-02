@@ -255,9 +255,16 @@ export function useSalesDashboardStatsShadow({
     return () => {
       aborted = true;
       controller.abort();
+      if (run.rpcState === 'running') {
+        // Attempt abandoned (ready flapped / StrictMode remount): release the latch
+        // so the same run can be retried instead of being silently skipped forever.
+        run.rpcState = 'idle';
+        // eslint-disable-next-line no-console
+        console.log('[dashboard-test] rpc aborted', `run=${run.runId}`, 'latch released');
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runKey, ready]);
+  }, [runKey, ready, filtersHydrated]);
 
   return { enabled: isParityMode() };
 }
