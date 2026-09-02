@@ -323,7 +323,7 @@ export default function Dashboard() {
     {
       key: 'conversion' as const,
       label: t('dashboard.conversion'),
-      value: conversion === null ? '—' : `${conversion.toFixed(1)}%`,
+      value: conversion === null ? '—' : `${conversion.toFixed(2)}%`,
       icon: ChartLineUp,
       accent: 'orange' as const,
       clickable: false,
