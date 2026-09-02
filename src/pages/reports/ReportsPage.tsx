@@ -305,9 +305,14 @@ export default function ReportsPage() {
     (async () => {
       setDetailLoading(true);
       try {
+        const sel = (s: string): string => s;
         let q = supabase
           .from('opportunities')
-          .select('id, title, amount, status, created_at, close_date')
+          .select(
+            sel(
+              'id, title, amount, status, created_at, close_date, contacts:contact_id(full_name), users:owner_user_id(full_name)',
+            ),
+          )
           .eq('organization_id', organization.id)
           .is('deleted_at', null);
 
