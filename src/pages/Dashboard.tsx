@@ -341,28 +341,22 @@ export default function Dashboard() {
             {kpis.map((kpi) => {
               const interactive = kpi.clickable && !loading;
               return (
-                <Card
+                <KpiCard
                   key={kpi.key}
-                  onClick={interactive ? () => setDetail(kpi.key as 'entered' | 'closed') : undefined}
-                  className={cn(
-                    'p-6 transition',
-                    loading && 'animate-pulse',
-                    interactive && 'cursor-pointer hover:border-primary/40 hover:shadow-sm',
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm text-muted-foreground">{kpi.label}</p>
-                      <p className={cn('text-3xl font-semibold mt-2', kpi.color)}>
-                        {loading ? '—' : kpi.value}
-                      </p>
-                    </div>
-                    <kpi.icon size={32} weight="light" className={cn(kpi.color, 'opacity-60 flex-shrink-0')} />
-                  </div>
-                </Card>
+                  label={kpi.label}
+                  value={loading ? '—' : kpi.value}
+                  icon={kpi.icon}
+                  accent={kpi.accent}
+                  loading={loading}
+                  mono
+                  onClick={
+                    interactive ? () => setDetail(kpi.key as 'entered' | 'closed') : undefined
+                  }
+                />
               );
             })}
           </div>
+
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
