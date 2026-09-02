@@ -1,127 +1,84 @@
-# Auditoria READ-ONLY — tela Início (`/dashboard`) — performance e arquitetura de leitura
+# `get_home_dashboard_stats` — criação + validação em modo shadow (sem cutover)
 
-Nada foi alterado: sem SQL, sem RPC, sem RLS, sem frontend, sem permissões.
+Auditoria de `/dashboard` aprovada. Esta etapa cria a RPC e valida paridade. **A tela continua exibindo exclusivamente os números do caminho legado.** Nada de RLS, policy, índice ou regra de permissão é alterado.
 
-## 1. O que carrega a tela
+## 1. Migração — duas funções
 
-| Camada | Arquivo | Papel |
-|---|---|---|
-| Desktop | `src/pages/Dashboard.tsx` (`fetchStats`, linhas 194-293) | única fonte de dados da tela |
-| Mobile | `src/components/mobile/MobileDashboard.tsx` | caminho separado, só 4 `count exact/head` (já leve) |
-| Gráfico Criadas × Ganhas | `src/components/reports/DashboardTrendChart.tsx` | recebe `opps` cru e bucketiza no `useMemo` |
-| Donut Status | `src/components/reports/DashboardStatusDonut.tsx` | recebe `opps` cru e conta open/won/lost no `useMemo` |
-| Período | `src/lib/report-period.ts` (`computeRange`) | preset padrão `today`, persistido em `usePersistedFilters('dashboard.preset')` |
-| Vendedor | `usePersistedFilters('dashboard.ownerId')` + lista de `user_organizations` | só exibido quando `viewAllOpportunities` |
+**Core privado** `public.get_home_dashboard_stats_core(p_organization_id uuid, p_from timestamptz, p_to timestamptz, p_from_day date, p_to_day date, p_owner_user_id uuid, p_view_all boolean, p_self_user_id uuid, p_tz text)` — `LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public`, sem nenhuma checagem de permissão. **Sem `GRANT EXECUTE` para `authenticated`/`anon`**: só o wrapper pode chamá-la.
 
-Não há hook dedicado nem React Query: é `useState` + `useEffect` disparando `fetchStats` a cada mudança de `org`, `userProfile`, `from`, `to`, `canViewAll`, `ownerId`.
+CTEs:
+- `scope`: `opportunities` da org, `deleted_at IS NULL`, e filtro de owner resolvido pelo wrapper (`p_self_user_id` quando não view_all; `p_owner_user_id` quando informado e view_all; sem filtro caso contrário);
+- `prev_bounds`: período anterior de mesma duração, `prev_to = p_from - interval '1 millisecond'`, `prev_from = prev_to - (p_to - p_from)`, com os equivalentes em `date` para `close_date`;
+- `created`, `won`, `created_prev`, `won_prev`, `status`, `days`.
 
-## 2. Queries disparadas hoje (desktop)
-
-Por carregamento, 4 chamadas lógicas em `Promise.all`:
-
-1. `opportunities` **criadas** no período — `fetchAllPagedRows` (páginas de 1.000, até 200 páginas), com joins laterais `contacts:contact_id(full_name)` e `users:owner_user_id(full_name)`;
-2. `opportunities` **ganhas** por `close_date` no período — também paginada, mesmos joins;
-3. `count exact/head` de criadas no período anterior;
-4. `count exact/head` de ganhas no período anterior.
-
-Mais 1 query de `user_organizations` (lista de vendedores) quando o usuário tem `viewAllOpportunities`.
-
-**Sim, existe paginação massiva de `opportunities`** — as duas primeiras chamadas baixam linhas completas.
-
-## 3. Volume real (Central Trabalhista, medido agora)
-
-| Período | Linhas criadas baixadas | Linhas ganhas baixadas |
-|---|---|---|
-| Hoje (padrão) | 111 | — |
-| 7 dias | 824 | — |
-| 30 dias | 4.559 | 254 |
-| 90 dias | 11.006 | — |
-| 365 dias | 14.763 | 976 |
-
-Ou seja: em 90/365 dias a tela baixa 11 mil–15 mil linhas com dois joins laterais por linha. Em `pg_stat_statements` a consulta paginada de criadas (`organization_id + deleted_at is null + created_at between`) aparece com **483 chamadas, média 3.940 ms, máximo 21.501 ms**; a de `status = 'won'` com **292 chamadas, média 8.348 ms, máximo 29.484 ms**.
-
-## 4. Onde cada número é calculado — hoje, tudo no frontend
-
-- **Criadas / Ganhas**: laço `for` sobre as linhas deduplicadas (`Dashboard.tsx:271-281`).
-- **Conversão**: `closedCount / enteredCount * 100` no render.
-- **Deltas de período anterior**: únicos números já agregados no banco (`count exact/head`).
-- **Status (donut)**: contagem open/won/lost no `useMemo` do componente.
-- **Gráfico Criadas × Ganhas**: bucketização diária/semanal no `useMemo` do componente.
-- **Modal de detalhe**: reaproveita as mesmas linhas já baixadas (`enteredOpps` / `closedOpps`), incluindo nome do contato, título, valor e responsável.
-
-## 5. Regra de permissão vigente (precisa ser preservada literalmente)
-
-Duas camadas somadas:
-
-**Frontend** — `usePermissions` lê `user_organizations.permission_profile_id` → `permission_profiles.permissions`. `canViewAll = permissions.viewAllOpportunities`.
-- `canViewAll = false` → `where owner_user_id = userProfile.id`, e o seletor de vendedor **não é exibido**.
-- `canViewAll = true` → sem filtro de owner, ou `owner_user_id = ownerId` quando um vendedor é escolhido.
-
-**Banco** — policy de SELECT em `public.opportunities`:
-```
-is_admin_user()
-OR ( organization_id = ANY(current_user_org_ids())
-     AND deleted_at IS NULL
-     AND ( user_can_view_all(organization_id,'opportunities')
-           OR owner_user_id = current_user_id() ) )
-```
-`user_can_view_all` é PL/pgSQL STABLE: se `organizations.private_records_enabled` **não** for true, **todos veem tudo**; se for true (caso da Central Trabalhista), depende de `view_all_opportunities` no perfil de permissão.
-
-Outras regras a preservar: `deleted_at IS NULL`, escopo por `organization_id`, membership ativa em `user_organizations`, e `is_admin_user()` (impersonação/admin de plataforma).
-
-Detalhe importante: **a RPC de `/dashboards` NÃO serve aqui**. O wrapper `get_sales_dashboard_stats` exige `can_manage_permission_profiles(org)` e aborta com `ACCESS_DENIED` — é admin-only por contrato. `/dashboard` é para todos os usuários.
-
-## 6. Respostas objetivas
-
-**Gargalo real:** o banco, pelo mesmo mecanismo já provado em `/dashboards` — `user_can_view_all` é avaliado por linha dentro da policy, sobre 11–15 mil linhas, com dois joins laterais por linha. Média medida de 3,9 s e 8,3 s nas duas consultas paginadas.
-
-**Quanto do processamento está no frontend:** 100% das agregações exibidas (Criadas, Ganhas, Conversão, Status, gráfico), mas o custo de CPU do React é marginal — o tempo está na ida ao banco e no transporte das linhas. Os deltas são a única parte já agregada no servidor.
-
-**Uma RPC própria resolveria?** Sim, e é a correção mínima: uma única chamada `SECURITY DEFINER`, permissão resolvida uma vez, `user_can_view_all` nunca por linha, resposta em poucos KB.
-
-**Vale RPC própria e não reuso:** sim. O contrato de `/dashboard` é diferente (donut de status, trend Criadas × Ganhas, deltas) e o gate é diferente (não admin-only).
-
-## 7. Contrato proposto (mínimo)
-
-```sql
-get_home_dashboard_stats(
-  p_organization_id uuid,
-  p_from            timestamptz,
-  p_to              timestamptz,
-  p_from_day        date,
-  p_to_day          date,
-  p_owner_user_id   uuid default null,   -- null = todos (só honrado se view_all)
-  p_tz              text default 'America/Sao_Paulo'
-) returns json
-```
-
-Retorno:
+Retorno JSON:
 ```
 kpis:   { created_count, created_count_prev, won_count, won_count_prev }
 status: { open, won, lost }              -- entre as criadas no período
-trend:  [{ bucket_date, created, won }]  -- diário; semanal segue agregado no front
+trend:  [{ bucket_date, created, won }]  -- diário
 ```
 
-Desenho de segurança, espelhando o padrão já aprovado em `/dashboards`:
-- **wrapper público** `get_home_dashboard_stats` (PL/pgSQL, `SECURITY DEFINER`): resolve `current_user_id()`, exige membership ativa em `user_organizations` e **então** resolve `user_can_view_all(org,'opportunities')` **uma única vez**. Se falso, ignora `p_owner_user_id` e força o escopo ao próprio usuário — exatamente o que o frontend faz hoje. Se verdadeiro, aplica `p_owner_user_id` quando informado. Sem `can_manage_permission_profiles` aqui;
-- **core privado** `get_home_dashboard_stats_core`, `LANGUAGE sql STABLE SECURITY DEFINER`, sem checagem, **sem `GRANT EXECUTE` para `authenticated`** — só o wrapper chama;
-- `GRANT EXECUTE` apenas no wrapper; nenhum `GRANT` de tabela, nenhuma policy, nenhum índice, nenhuma RLS alterada.
+**Wrapper público** `public.get_home_dashboard_stats(p_organization_id uuid, p_from timestamptz, p_to timestamptz, p_from_day date, p_to_day date, p_owner_user_id uuid default null, p_tz text default 'America/Sao_Paulo')` — PL/pgSQL `STABLE SECURITY DEFINER SET search_path = public`, executado uma única vez por chamada:
 
-Aritmética replicada literalmente do código atual: `close_date` comparado em `date` local (`p_from_day`/`p_to_day`), `created_at` em `timestamptz`, período anterior = mesma duração imediatamente anterior (`prevTo = from - 1ms`), conversão = `won / created * 100` com `—` quando `created = 0`, deltas com `(curr - prev) / prev * 100` e a regra de `prev = 0` já existente.
+1. `v_user_id := current_user_id()`; nulo → `RAISE EXCEPTION 'ACCESS_DENIED' USING ERRCODE = 'P0002'`;
+2. `EXISTS` em `user_organizations` (`is_active = true`) para a org; falso → mesmo `ACCESS_DENIED`;
+3. `v_view_all := public.user_can_view_all(p_organization_id, 'opportunities')` — **uma única avaliação por chamada**;
+4. se `v_view_all` for falso, ignora `p_owner_user_id` e força escopo ao próprio usuário; se verdadeiro, aplica `p_owner_user_id` quando informado;
+5. delega ao core e devolve o JSON.
 
-## 8. Queries que a RPC substitui
+Sem `can_manage_permission_profiles` aqui — `/dashboard` é para todos os usuários. `GRANT EXECUTE` apenas no wrapper, para `authenticated`.
 
-| Hoje | Depois |
+Aritmética replicada literalmente do frontend: `created_at` comparado em `timestamptz`; `close_date` comparado em `date` local (`p_from_day`/`p_to_day`); ganhas = `status = 'won'` **e** `close_date` no período; status do donut contado somente entre as **criadas** no período, com qualquer status diferente de `won`/`lost` classificado como `open`; buckets do trend por `created_at::date` (criadas) e `close_date` (ganhas), em `p_tz`.
+
+## 2. Frontend — shadow, inerte por padrão
+
+Novo hook `src/hooks/useHomeDashboardStatsShadow.ts`, ativado apenas por `?parity=1` ou `localStorage.homeParityMode = '1'`. Fora desse modo não dispara nada.
+
+Reaproveita o desenho já corrigido do shadow de `/dashboards`:
+- `runKey` string estável (`org | fromISO | toISO | owner | viewAll`), sem identidade de objeto nas dependências;
+- estado por run `idle | running | done`, reset no abort, para garantir **exatamente uma chamada de RPC por filtro** mesmo com re-render, StrictMode ou remontagem;
+- gate de hidratação: nada roda antes de `usePersistedFilters` hidratar (evita o run fantasma de 30 dias que ocorreu em `/dashboards`);
+- `AbortController` real via `.abortSignal(...)`.
+
+`Dashboard.tsx` recebe apenas instrumentação passiva: marcas `LEGACY_START/END`, contagem de requests e linhas baixadas, snapshot do resultado legado em `useRef` (nunca em deps), e chamada do hook shadow. **Zero mudança em query, filtro, cálculo, KPI ou render.** `MobileDashboard` não é tocado.
+
+## 3. Comparação exigida
+
+Log único por run, prefixo `[home-test][RUN xxxxxx]`, com tabela `metric | legacy | rpc | delta | match`:
+
+- **Criadas** e **Ganhas** do período;
+- **Criadas** e **Ganhas** do período anterior (hoje já vêm de `count exact/head`);
+- **deltas** de Criadas, Ganhas e Conversão, recalculados nos dois lados com a mesma função `delta()` e a mesma regra de `prev = 0`;
+- **Conversão** (`won / created * 100`, `—` quando `created = 0`);
+- **Status**: `open`, `won`, `lost`;
+- **Trend**: bucket a bucket, `created` e `won`, aplicando ao lado RPC a mesma agregação semanal do componente quando o switch estiver em Semanal.
+
+Tolerância: **zero** para contagens; ≤ 0,05 pp para Conversão e deltas (só arredondamento). Qualquer diferença acima disso imprime `DIFF` e fecha o run como `MISMATCH`.
+
+Também logados: `RPC_DURATION_MS`, `RPC_CALL_COUNT` (deve ser 1), `LEGACY_DURATION_MS`, `LEGACY_REQUEST_COUNT`, `LEGACY_ROWS_DOWNLOADED`, `RENDER_COUNT`.
+
+## 4. Cenários a validar
+
+| # | Usuário | Período | Esperado |
+|---|---|---|---|
+| 1 | Admin (com `view_all_opportunities`) | 30 dias | FULL MATCH, `RPC_CALL_COUNT 1` |
+| 2 | Admin | 90 dias | FULL MATCH, `RPC_CALL_COUNT 1` |
+| 3 | Admin | 12 meses | FULL MATCH, `RPC_CALL_COUNT 1` |
+| 4 | Usuário **sem** `view_all_opportunities` | 30 dias | FULL MATCH e escopo restrito ao próprio usuário, provado pela RPC devolver os mesmos números do legado filtrado por `owner_user_id` |
+
+Do meu lado, leio `pg_stat_statements` (via ferramenta de banco, read-only) para separar tempo de banco de tempo de rede, e confirmar `calls` = 1 por run.
+
+## 5. Critério de cutover (etapa separada)
+
+Só proponho o cutover com os 4 cenários em FULL MATCH, `RPC_CALL_COUNT = 1` em todos, e `RPC_DURATION_MS` materialmente abaixo do legado. O cutover — remover as duas paginações, trocar os cards/gráficos para a RPC, adicionar a consulta sob demanda do modal e remover a instrumentação — fica para uma mensagem própria.
+
+## 6. Arquivos e objetos tocados
+
+| Item | Mudança |
 |---|---|
-| Paginação de criadas (até 15 mil linhas) | agregado na RPC |
-| Paginação de ganhas por `close_date` | agregado na RPC |
-| `count` de criadas do período anterior | agregado na RPC |
-| `count` de ganhas do período anterior | agregado na RPC |
-| Contagens de status no `useMemo` | bloco `status` |
-| Bucketização do gráfico no `useMemo` | bloco `trend` (diário) |
+| migração | cria `get_home_dashboard_stats` + `get_home_dashboard_stats_core`, e o `GRANT EXECUTE` do wrapper |
+| `src/hooks/useHomeDashboardStatsShadow.ts` | **novo**, inerte sem modo parity |
+| `src/pages/Dashboard.tsx` | apenas instrumentação passiva + chamada do hook shadow |
+| `roadmap.md` | registro das duas etapas (shadow agora, cutover depois) |
 
-Permanecem: a query de `user_organizations` (lista de vendedores) e — necessariamente — uma **consulta sob demanda** para o modal de detalhe, disparada só ao clicar no card, com `ORDER BY` explícito e `limit`, no mesmo formato já adotado em `/dashboards`. Agregados não conseguem servir a lista clicável.
-
-## 9. Fora desta proposta
-
-Mobile (`MobileDashboard` já usa só counts), React Query/cache, RLS, policies, índices, materialized views, e qualquer mudança de regra de negócio, filtro ou visibilidade.
+Fora desta etapa: cutover, mobile, RLS, policies, índices, grants de tabela, React Query/cache, e qualquer mudança de filtro, permissão ou regra de negócio.
