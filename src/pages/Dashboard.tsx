@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,6 +20,20 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { dedupeRowsById, fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
+// TEMPORARY: shadow parity instrumentation for get_home_dashboard_stats.
+import { useHomeDashboardStatsShadow } from '@/hooks/useHomeDashboardStatsShadow';
+import {
+  buildRunKey,
+  endLegacy,
+  isHomeParityMode,
+  legacySnapshot,
+  noteRender,
+  noteRequest,
+  runIdOf,
+  startLegacy,
+  type HomeSnapshot,
+} from '@/lib/homeParityRun';
+
 interface OppRow {
   id: string;
   title: string | null;
@@ -52,19 +66,24 @@ export default function Dashboard() {
   const { permissions } = usePermissions();
   const canViewAll = !!permissions?.viewAllOpportunities;
 
-  const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'today');
-  const [customRange, setCustomRange] = usePersistedFilters<CustomRange | undefined>(
-    'dashboard.custom',
-    undefined,
-    (raw) => {
-      if (!raw || typeof raw !== 'object') return undefined;
-      return {
-        from: raw.from ? new Date(raw.from) : undefined,
-        to: raw.to ? new Date(raw.to) : undefined,
-      };
-    },
+  const [preset, setPreset, , presetHydrated] = usePersistedFilters<PeriodPreset>(
+    'dashboard.preset',
+    'today',
   );
-  const [ownerId, setOwnerId] = usePersistedFilters<string>('dashboard.ownerId', 'all');
+  const [customRange, setCustomRange, , customHydrated] = usePersistedFilters<
+    CustomRange | undefined
+  >('dashboard.custom', undefined, (raw) => {
+    if (!raw || typeof raw !== 'object') return undefined;
+    return {
+      from: raw.from ? new Date(raw.from) : undefined,
+      to: raw.to ? new Date(raw.to) : undefined,
+    };
+  });
+  const [ownerId, setOwnerId, , ownerHydrated] = usePersistedFilters<string>(
+    'dashboard.ownerId',
+    'all',
+  );
+  const filtersHydrated = presetHydrated && customHydrated && ownerHydrated;
 
   const [enteredCount, setEnteredCount] = useState(0);
   const [closedCount, setClosedCount] = useState(0);
@@ -76,6 +95,23 @@ export default function Dashboard() {
   const [detail, setDetail] = useState<null | 'entered' | 'closed'>(null);
 
   const { from, to } = computeRange(preset, customRange);
+
+  // ---- TEMPORARY shadow parity plumbing (no effect on rendered numbers) ----
+  const parityRunId = organization?.id
+    ? runIdOf(
+        buildRunKey({
+          organizationId: organization.id,
+          fromISO: from.toISOString(),
+          toISO: to.toISOString(),
+          ownerId,
+          canViewAll,
+        }),
+      )
+    : '';
+  const legacySnapshotRef = useRef<HomeSnapshot | null>(null);
+  const [legacyReadyRunId, setLegacyReadyRunId] = useState<string>('');
+  if (isHomeParityMode() && parityRunId) noteRender(parityRunId);
+
 
   useEffect(() => {
     if (!orgLoading && !user) {
@@ -111,6 +147,20 @@ export default function Dashboard() {
       }
     })();
   }, [organization?.id, canViewAll]);
+
+  // TEMPORARY: shadow-only RPC comparison. Never feeds the UI.
+  useHomeDashboardStatsShadow({
+    organizationId: organization?.id,
+    from,
+    to,
+    ownerId,
+    canViewAll,
+    filtersHydrated,
+    legacyReady: !!parityRunId && legacyReadyRunId === parityRunId,
+    getLegacy: () => legacySnapshotRef.current,
+  });
+
+
 
   if (isMobile) {
     if (orgLoading) {
@@ -193,6 +243,9 @@ export default function Dashboard() {
 
   async function fetchStats() {
     if (!organization || !userProfile) return;
+    const parity = isHomeParityMode();
+    const runId = parity ? parityRunId : '';
+    if (parity && runId) startLegacy(runId);
     setLoading(true);
     try {
       const fromIso = from.toISOString();
@@ -285,11 +338,28 @@ export default function Dashboard() {
       setEnteredCountPrev(prevCreatedRes.count || 0);
       setClosedCountPrev(prevWonRes.count || 0);
       setOpps(rows);
+
+      if (parity && runId) {
+        noteRequest(runId, createdRows.length);
+        noteRequest(runId, wonRows.length);
+        noteRequest(runId, 0);
+        noteRequest(runId, 0);
+        legacySnapshotRef.current = legacySnapshot(
+          rows,
+          from,
+          to,
+          prevCreatedRes.count || 0,
+          prevWonRes.count || 0,
+        );
+        endLegacy(runId);
+        setLegacyReadyRunId(runId);
+      }
     } catch (e) {
       console.error('Dashboard fetch error:', e);
     } finally {
       setLoading(false);
     }
+
   }
 
   const conversion = enteredCount > 0 ? (closedCount / enteredCount) * 100 : null;
