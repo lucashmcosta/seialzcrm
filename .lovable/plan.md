@@ -1,38 +1,67 @@
-# Cutover do /dashboards para `get_sales_dashboard_stats`
+# Template `distribuicao_com_audiencia` — causa raiz do erro 132018
 
-Objetivo: `/dashboards` passa a montar KPIs, funil, trend e leaderboard com **uma única** chamada à RPC, sem nenhuma carga paginada de `opportunities` no carregamento inicial. Sem mudança de banco, RPC, SQL ou RLS. Sem alteração visual.
+## O que a Meta devolveu (erro completo)
 
-## O que muda
+```text
+code: 132018
+message: (#132018) There’s an issue with the parameters in your template
+```
 
-### 1. Novo hook de leitura (`src/hooks/useSalesDashboardStats.ts`)
-Hook de produção (substitui o shadow). Recebe `organizationId`, `from`, `to`, `ownerId`, `filtersHydrated` e chama exatamente uma vez por combinação de filtros:
+Mensagem falha: `536fb0b5-4528-453f-90f1-ce19ba535821` (IVET), endpoint
+`03bdcb91-b9ec-40b8-a578-f59686a12a86` (Atendimento +55 11 5026-2896,
+phone_number_id `1133881223149879`), template `a3e19e2a-…`
+(`distribuicao_com_audiencia`, APPROVED, 6 variáveis, BODY apenas).
 
-`get_sales_dashboard_stats(p_organization_id, p_from, p_to, p_from_day, p_to_day, p_owner_user_id, p_tz)`
+## Causa raiz (comprovada nos dados)
 
-Mesmos parâmetros já validados no shadow (incluindo `p_from_day`/`p_to_day` locais e timezone do navegador). Retorna `{ data, loading, error }` com o payload bruto (`kpis`, `funnel`, `trend`, `leaderboard`). Cancelamento por `AbortController` quando os filtros mudam.
+A variável `{{6}}` (modalidade) chega com **sequências longas de espaços**
+usadas como separador visual:
 
-### 2. `ReportsPage.tsx` — troca da fonte de dados
-- Remover `fetchData()` e os cinco fetches paginados de `opportunities` (`currentCreated`, `currentClosed`, `previousCreated`, `previousClosed`, `openRows`) e os estados `currentOpps` / `previousOpps` / `openOpps`.
-- `stats` passa a ser derivado de `data.kpis`, mantendo exatamente os mesmos campos hoje renderizados: `createdCount`, `createdDelta`, `wonCount`, `wonValue`, `wonValueDelta`, `lostCount`, `lostValue`, `winRate`, `winRateDelta`, `avgTicket`, `avgCycle`. Os deltas continuam calculados com a mesma fórmula atual, usando os campos `*_prev` da RPC (`created_count_prev`, `won_value_prev`, `win_rate_prev`) — já batidos como FULL MATCH.
-- Pipeline aberto (qtd/valor) passa a vir de `kpis.open_count` / `kpis.open_value`.
-- `funnel` passa a vir de `data.funnel` (`name`, `count`, `value`), preservando a ordem das etapas de `pipeline_stages`; `StageDistribution` continua consumindo o mesmo `funnel`.
-- `trend`: eixo de buckets continua sendo gerado na página (diário até 90 dias, mensal acima), com os mesmos rótulos de `toLocaleDateString`; os valores passam a ser agregados a partir de `data.trend` (`bucket_date`, `created`, `won`, `won_value`) usando a mesma regra de bucketização já validada na paridade.
-- `userStats` passa a vir de `data.leaderboard` (`user_id`, `full_name`, `open`, `created`, `won`, `lost`, `won_value`), com fallback de nome para "Sem responsável" quando `user_id` for `unassigned`, e o mesmo filtro atual de linhas vazias.
-- `loading` passa a refletir o loading da RPC. `fetchUsersAndStages()` (usuários e etapas para os filtros) permanece — é leve e não é agregação.
-- `MobileReports` continua recebendo exatamente as mesmas props, agora alimentadas pela RPC.
+```text
+Virtual - Link de acesso: https://teams.microsoft.com/…      |       Posso confirmar sua presença?
+```
 
-### 3. Dialog de detalhe (Criadas / Ganhas / Perdidas)
-Hoje esse dialog lista oportunidades individuais a partir das linhas já carregadas em memória. Com a RPC (só agregados) essa lista precisa de fonte própria, então ela passa a ser carregada **sob demanda, apenas ao abrir o dialog**, com uma consulta escopada (organização + `deleted_at is null` + owner + intervalo por `created_at` ou `close_date` conforme o tipo), ordenada por data e limitada. Nada disso roda no carregamento da tela. Contagem exibida no título passa a usar o KPI correspondente da RPC.
+A Cloud API rejeita parâmetros de texto que contenham nova linha, tabulação
+ou mais de 4 espaços consecutivos — exatamente o 132018.
 
-### 4. Remoção da instrumentação temporária
-- Excluir `src/lib/dashboardParityRun.ts` e `src/hooks/useSalesDashboardStatsShadow.ts`.
-- Remover de `ReportsPage.tsx`: `REPORTS_PAGE_MOUNTED`, todos os logs `[dashboard-test]`, `legacySnapshotRef`, `parityRun`, `noteRender`, `noteUiReady`, os campos `prev*` de diagnóstico que não forem usados pelos deltas, e os imports agora órfãos (`fetchAllPagedRows`, `dedupeRowsById`, `supabase` só se ficar sem uso).
+Correlação nas últimas 24 mensagens desse template (7 dias):
 
-## Não muda
-Banco, RPC, migração, RLS, grants, `useServiceStats` (bloco Atendimento), `UserDetailDialog`, `ServiceResponseDetailDialog`, componentes de gráfico, filtros persistidos e layout/estilo.
+| status | error_code | qtd | params com 4+ espaços |
+|---|---|---|---|
+| read/delivered/sent | — | 22 | 0 |
+| failed | 132018 | 4 | 4 |
 
-## Validação
-1. Build.
-2. Abrir `/dashboards` autenticado no preview e conferir na aba Network: exatamente **1** `POST /rest/v1/rpc/get_sales_dashboard_stats` e **zero** `GET /rest/v1/opportunities` no carregamento.
-3. Trocar o período (30 → 90) e confirmar 1 nova chamada da RPC, sem carga paginada.
-4. Conferir visualmente que KPIs, funil, trend e leaderboard exibem os mesmos números do último run FULL MATCH.
+100% das falhas 132018 têm 4+ espaços consecutivos no parâmetro; 100% dos
+envios bem-sucedidos não têm. Não é template rejeitado, não é idioma
+(`en` é o idioma cadastrado e funciona), não é janela 24h (o 131008 é outro
+caso, separado). O texto colado com o link do Teams + separador `|` é o que
+quebra.
+
+## Correção proposta (mínima)
+
+1. **Backend — `supabase/functions/meta-whatsapp-send/index.ts`**
+   Sanitizar cada valor de parâmetro antes de montar
+   `outboundTemplateComponents` (linha ~752) e antes de renderizar o preview:
+   - `\r\n`, `\n`, `\t` → um espaço;
+   - runs de 2+ espaços → um único espaço;
+   - `trim()` nas pontas.
+   Aplicar apenas em parâmetros de template (não altera mensagem livre nem
+   o corpo aprovado do template).
+
+2. **Frontend — modal de envio de template**
+   (`src/components/whatsapp/templates/SendTemplateModal.tsx` e o caminho do
+   Inbox) aplicar a mesma normalização no valor digitado/colado e exibir aviso
+   discreto quando houver colapso, para o preview refletir o que a Meta vai
+   receber.
+
+3. **UI de erro** — manter como está (já mostra código + mensagem técnica),
+   apenas incluir dica específica para 132018: "parâmetro com quebra de linha
+   ou muitos espaços".
+
+Nada de banco, RLS, RPC ou reenvio automático. Reenvio dos 4 casos falhos fica
+manual, depois do fix.
+
+## Fora de escopo
+
+- Erro `131008` (2 casos) — outra causa, tratar separadamente se você quiser.
+- Reescrever o template na Meta (não é necessário).
