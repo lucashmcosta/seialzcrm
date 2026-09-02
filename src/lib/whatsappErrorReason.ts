@@ -120,12 +120,19 @@ const MAP: Record<string, WhatsAppErrorInfo> = {
     reason: 'O conteúdo (caracteres/formatação) não é permitido pela Meta.',
     category: 'template',
   },
+  '132018': {
+    short: 'Variável do template com formatação inválida.',
+    reason: 'A Meta recusou os parâmetros: algum valor de variável contém quebra de linha, tabulação ou vários espaços seguidos (comum em texto colado com links).',
+    action: 'Reescreva o valor da variável em uma única linha, sem espaços duplicados, e reenvie.',
+    category: 'template',
+  },
   '132012': {
     short: 'Formato de variável do template inválido.',
     reason: 'O valor enviado em uma variável não está no formato esperado.',
     action: 'Revise os valores das variáveis.',
     category: 'template',
   },
+
   '132015': {
     short: 'Template pausado por baixa qualidade.',
     reason: 'A Meta pausou este template por baixa qualidade.',
