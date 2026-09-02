@@ -1,14 +1,16 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
 } from 'recharts';
+import { cn } from '@/lib/utils';
+
 
 interface OppPoint {
   created_at: string;
@@ -52,10 +54,23 @@ function formatBucketLabel(d: Date, weekly: boolean) {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
+type Granularity = 'daily' | 'weekly';
+
 export function DashboardTrendChart({ data, from, to, loading }: Props) {
-  const { series, weekly } = useMemo(() => {
+  const defaultGranularity: Granularity = useMemo(() => {
     const days = Math.ceil((to.getTime() - from.getTime()) / 86400000) + 1;
-    const weekly = days > 90;
+    return days > 90 ? 'weekly' : 'daily';
+  }, [from, to]);
+
+  const [granularity, setGranularity] = useState<Granularity>(defaultGranularity);
+
+  useEffect(() => {
+    setGranularity(defaultGranularity);
+  }, [defaultGranularity]);
+
+  const weekly = granularity === 'weekly';
+
+  const series = useMemo(() => {
     const buckets = new Map<number, { entered: number; closed: number; date: Date }>();
 
     const start = weekly ? startOfWeek(from) : startOfDay(from);
@@ -85,35 +100,57 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
       }
     }
 
-    const series = Array.from(buckets.values())
+    return Array.from(buckets.values())
       .sort((a, b) => a.date.getTime() - b.date.getTime())
       .map((b) => ({
         label: formatBucketLabel(b.date, weekly),
         Criadas: b.entered,
         Ganhas: b.closed,
       }));
-
-    return { series, weekly };
-  }, [data, from, to]);
+  }, [data, from, to, weekly]);
 
   return (
     <div className="rounded-md border border-border bg-card p-5">
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold text-foreground">
-          Criadas x Ganhas
-        </h3>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {weekly ? 'Agregação semanal' : 'Agregação diária'}
-        </p>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">
+            Criadas x Ganhas
+          </h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {weekly ? 'Agregação semanal' : 'Agregação diária'}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 rounded-md border border-border bg-muted/40 p-0.5">
+          {([
+            { value: 'daily' as Granularity, label: 'Diária' },
+            { value: 'weekly' as Granularity, label: 'Semanal' },
+          ]).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setGranularity(opt.value)}
+              aria-pressed={granularity === opt.value}
+              className={cn(
+                'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                granularity === opt.value
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
+
 
       {loading ? (
         <div className="h-64 animate-pulse rounded-md bg-muted/50" />
       ) : (
         <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={series} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <BarChart data={series} margin={{ top: 8, right: 12, left: -16, bottom: 0 }} barGap={2} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
               <XAxis
                 dataKey="label"
                 tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
@@ -127,6 +164,7 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
                 axisLine={{ stroke: 'hsl(var(--border))' }}
               />
               <Tooltip
+                cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
                 contentStyle={{
                   background: 'hsl(var(--popover))',
                   border: '1px solid hsl(var(--border))',
@@ -136,23 +174,10 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
                 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line
-                type="monotone"
-                dataKey="Criadas"
-                stroke="hsl(var(--info))"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="Ganhas"
-                stroke="hsl(var(--success))"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-            </LineChart>
+              <Bar dataKey="Criadas" fill="hsl(var(--info))" radius={[3, 3, 0, 0]} maxBarSize={28} />
+              <Bar dataKey="Ganhas" fill="hsl(var(--success))" radius={[3, 3, 0, 0]} maxBarSize={28} />
+            </BarChart>
+
           </ResponsiveContainer>
         </div>
       )}
