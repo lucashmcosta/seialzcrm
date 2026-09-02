@@ -85,6 +85,14 @@ button, nav, [role="tablist"], [role="tab"] {
     --warning: 45 93% 47%;
     --warning-foreground: 26 83% 14%;
 
+    /* Cores Info (azul) */
+    --info: 213 94% 52%;
+    --info-foreground: 0 0% 100%;
+
+    /* Cores Orange (laranja) */
+    --orange: 25 95% 53%;
+    --orange-foreground: 0 0% 100%;
+
     /* Bordas e Inputs */
     --border: 214 32% 91%;
     --input: 214 32% 91%;
@@ -177,6 +185,12 @@ button, nav, [role="tablist"], [role="tab"] {
 
     --warning: 45 93% 35%;
     --warning-foreground: 45 93% 90%;
+
+    --info: 213 94% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --orange: 25 95% 58%;
+    --orange-foreground: 26 83% 14%;
     
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
@@ -249,6 +263,10 @@ button, nav, [role="tablist"], [role="tab"] {
     --success-foreground: 240 20% 3%;   /* bg */
     --warning: 43 100% 50%;             /* #FFB800 */
     --warning-foreground: 240 20% 3%;
+    --info: 220 100% 63%;               /* #4488FF */
+    --info-foreground: 240 20% 3%;
+    --orange: 25 100% 58%;              /* laranja */
+    --orange-foreground: 240 20% 3%;
 
     /* ═══ BORDERS ═══ */
     --border: 240 10% 12%;              /* #1A1A22 */

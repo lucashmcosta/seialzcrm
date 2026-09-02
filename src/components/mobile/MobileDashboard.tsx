@@ -79,13 +79,13 @@ export function MobileDashboard() {
   const conversion = enteredCount > 0 ? (closedCount / enteredCount) * 100 : null;
 
   const kpis = [
-    { label: t('dashboard.entered'), value: enteredCount.toString(), icon: TrendUp, color: 'text-primary' },
+    { label: t('dashboard.entered'), value: enteredCount.toString(), icon: TrendUp, color: 'text-info' },
     { label: t('dashboard.closed'), value: closedCount.toString(), icon: CheckCircle, color: 'text-success' },
     {
       label: t('dashboard.conversion'),
       value: conversion === null ? '—' : `${conversion.toFixed(1)}%`,
       icon: ChartLineUp,
-      color: 'text-primary',
+      color: 'text-orange',
     },
   ];
 

@@ -14,7 +14,7 @@ interface Props {
 }
 
 const STATUS_META = [
-  { key: 'open', label: 'Abertas', color: 'hsl(var(--primary))' },
+  { key: 'open', label: 'Abertas', color: 'hsl(var(--warning))' },
   { key: 'won', label: 'Ganhas', color: 'hsl(var(--success))' },
   { key: 'lost', label: 'Perdidas', color: 'hsl(var(--destructive))' },
 ];
