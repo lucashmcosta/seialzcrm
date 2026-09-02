@@ -738,8 +738,10 @@ serve(async (req) => {
         const tv = (templateVariables ?? {}) as Record<string, unknown>;
         for (const n of vars) {
           const v = tv[n] ?? tv[`var${n}`] ?? "";
-          values[n] = String(v);
+          // Meta rejeita (132018) parâmetros com \n, \t ou espaços consecutivos.
+          values[n] = sanitizeTemplateParam(v);
         }
+
         // Render preview
         let preview = bodyTextRaw;
         for (const n of vars) {
