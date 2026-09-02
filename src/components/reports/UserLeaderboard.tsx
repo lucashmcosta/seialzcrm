@@ -92,23 +92,37 @@ export function UserLeaderboard({ rows, formatCurrency, loading, onRowClick }: P
     </th>
   );
 
-  const trophyColor = (idx: number) =>
-    idx === 0
+  const SORT_LABELS: Record<SortKey, string> = {
+    fullName: 'Vendedor',
+    open: 'Abertas',
+    won: 'Ganhas',
+    lost: 'Perdidas',
+    winRate: 'Conversão',
+    wonValue: 'Valor Ganho',
+  };
+
+  const trophyColor = (idx: number, row: (typeof sorted)[number]) => {
+    const activeValue = row[sort.key as keyof typeof row];
+    const hasMerit = typeof activeValue === 'number' ? activeValue > 0 : true;
+    if (!hasMerit) return null;
+    return idx === 0
       ? 'text-warning'
       : idx === 1
         ? 'text-muted-foreground'
         : idx === 2
           ? 'text-warning/60'
           : null;
+  };
 
   return (
     <div className="overflow-hidden rounded-md border border-border bg-card">
       <div className="border-b border-border p-5">
         <h3 className="text-sm font-semibold text-foreground">Ranking de vendedores</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Performance individual no período
+          Performance individual no período · Ordenado por {SORT_LABELS[sort.key]}
         </p>
       </div>
+
 
       {loading ? (
         <div className="space-y-2 p-5">
