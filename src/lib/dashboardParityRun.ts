@@ -124,7 +124,7 @@ export function getRun(scope: RunScope): RunRecord {
     legacyRequestCount: 0,
     legacyRows: 0,
     renderCount: 0,
-    rpcStarted: false,
+    rpcState: 'idle',
     rpcCallCount: 0,
     scenarioLogged: false,
     finalLogged: false,
