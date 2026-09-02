@@ -645,7 +645,7 @@ export default function ReportsPage() {
                   const dateLabel =
                     detail === 'created'
                       ? `Criada em ${new Date(o.created_at).toLocaleDateString(locale)}`
-                      : `Fechada em ${parseLocalDate(o.close_date)?.toLocaleDateString(locale) ?? '—'}`;
+                      : `${detail === 'won' ? 'Ganha' : 'Fechada'} em ${parseLocalDate(o.close_date)?.toLocaleDateString(locale) ?? '—'}`;
                   return (
                     <li key={o.id}>
                       <button
@@ -658,10 +658,17 @@ export default function ReportsPage() {
                       >
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-foreground truncate">
+                            {o.contacts?.full_name || '(sem contato)'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5 truncate">
                             {o.title || '(sem título)'}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{dateLabel}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                            {dateLabel}
+                            {` · Responsável: ${o.users?.full_name || '—'}`}
+                          </p>
                         </div>
+
                         <span className="text-sm font-mono text-muted-foreground flex-shrink-0">
                           {formatCurrency(Number(o.amount) || 0)}
                         </span>
