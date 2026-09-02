@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,6 +20,20 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { dedupeRowsById, fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
+// TEMPORARY: shadow parity instrumentation for get_home_dashboard_stats.
+import { useHomeDashboardStatsShadow } from '@/hooks/useHomeDashboardStatsShadow';
+import {
+  buildRunKey,
+  endLegacy,
+  isHomeParityMode,
+  legacySnapshot,
+  noteRender,
+  noteRequest,
+  runIdOf,
+  startLegacy,
+  type HomeSnapshot,
+} from '@/lib/homeParityRun';
+
 interface OppRow {
   id: string;
   title: string | null;
