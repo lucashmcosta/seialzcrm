@@ -48,28 +48,39 @@ export function MobileDashboard() {
       const fromDay = toDayStr(from);
       const toDay = toDayStr(to);
 
-      const [enteredRes, closedRes] = await Promise.all([
+      // Previous period: same duration, immediately before the selected range.
+      const prevTo = new Date(from.getTime() - 1);
+      const prevFrom = new Date(prevTo.getTime() - (to.getTime() - from.getTime()));
+      const prevFromDay = toDayStr(prevFrom);
+      const prevToDay = toDayStr(prevTo);
+
+      const countQuery = () =>
         supabase
           .from('opportunities')
           .select('*', { count: 'exact', head: true })
           .eq('organization_id', organization.id)
           .eq('owner_user_id', userProfile.id)
-          .is('deleted_at', null)
-          .gte('created_at', fromIso)
-          .lte('created_at', toIso),
-        supabase
-          .from('opportunities')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', organization.id)
-          .eq('owner_user_id', userProfile.id)
+          .is('deleted_at', null);
+
+      const [enteredRes, closedRes, prevEnteredRes, prevClosedRes] = await Promise.all([
+        countQuery().gte('created_at', fromIso).lte('created_at', toIso),
+        countQuery()
           .eq('status', 'won')
-          .is('deleted_at', null)
           .gte('close_date', fromDay)
           .lte('close_date', toDay),
+        countQuery()
+          .gte('created_at', prevFrom.toISOString())
+          .lte('created_at', prevTo.toISOString()),
+        countQuery()
+          .eq('status', 'won')
+          .gte('close_date', prevFromDay)
+          .lte('close_date', prevToDay),
       ]);
 
       setEnteredCount(enteredRes.count || 0);
       setClosedCount(closedRes.count || 0);
+      setEnteredCountPrev(prevEnteredRes.count || 0);
+      setClosedCountPrev(prevClosedRes.count || 0);
     } catch (e) {
       console.error('Mobile dashboard fetch error:', e);
     } finally {
