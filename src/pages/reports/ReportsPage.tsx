@@ -411,6 +411,7 @@ export default function ReportsPage() {
     to: range.to,
     ownerId,
     ready: !loading,
+    filtersHydrated,
     getLegacy: () => legacySnapshotRef.current,
   });
 
