@@ -34,7 +34,8 @@ export interface RunRecord {
   legacyBytes?: number;
   uiReadyMs?: number;
   renderCount: number;
-  rpcStarted: boolean;
+  /** 'idle' = never ran or last attempt aborted; 'running' = in flight; 'done' = completed (success or logged error). */
+  rpcState: 'idle' | 'running' | 'done';
   rpcStart?: number;
   rpcEnd?: number;
   rpcCallCount: number;
