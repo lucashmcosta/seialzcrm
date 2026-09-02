@@ -66,6 +66,8 @@ interface Params {
   ownerId: string;
   /** True once the legacy path finished for the current filters. */
   ready: boolean;
+  /** True once persisted filters (preset/custom/owner) finished hydrating. */
+  filtersHydrated: boolean;
   /** Ref-backed reader — deliberately NOT a dependency. */
   getLegacy: () => LegacySnapshot | null;
 }
