@@ -81,8 +81,10 @@ export function SendTemplateModal({
       organization_id: organization.id,
       to: phone,
       template_id: selectedTemplateId,
-      variables: variableValues,
+      // Meta rejeita (132018) variáveis com \n, \t ou espaços consecutivos.
+      variables: sanitizeTemplateVariables(variableValues),
     });
+
 
     onOpenChange(false);
     onSuccess?.();
