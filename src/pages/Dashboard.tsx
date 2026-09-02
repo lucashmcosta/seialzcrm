@@ -19,7 +19,6 @@ import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-import { cn } from '@/lib/utils';
 import { dedupeRowsById, fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
 interface OppRow {
   id: string;
