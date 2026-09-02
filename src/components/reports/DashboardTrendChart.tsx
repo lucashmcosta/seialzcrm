@@ -139,7 +139,7 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
               <Line
                 type="monotone"
                 dataKey="Criadas"
-                stroke="hsl(var(--primary))"
+                stroke="hsl(var(--info))"
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 4 }}

@@ -8,7 +8,7 @@ interface KpiCardProps {
   sublabel?: string;
   delta?: number | null;
   icon?: PhosphorIcon;
-  accent?: 'primary' | 'success' | 'destructive' | 'warning';
+  accent?: 'primary' | 'success' | 'destructive' | 'warning' | 'info' | 'orange';
   loading?: boolean;
   mono?: boolean;
   onClick?: () => void;
@@ -19,6 +19,8 @@ const accentColor = {
   success: 'text-success',
   destructive: 'text-destructive',
   warning: 'text-warning',
+  info: 'text-info',
+  orange: 'text-orange',
 };
 
 export function KpiCard({
@@ -59,6 +61,8 @@ export function KpiCard({
           accent === 'success' && 'bg-success',
           accent === 'destructive' && 'bg-destructive',
           accent === 'warning' && 'bg-warning',
+          accent === 'info' && 'bg-info',
+          accent === 'orange' && 'bg-orange',
         )}
       />
       <div className="relative flex items-start justify-between">
@@ -90,6 +94,8 @@ export function KpiCard({
               accent === 'success' && 'bg-success/10',
               accent === 'destructive' && 'bg-destructive/10',
               accent === 'warning' && 'bg-warning/10',
+              accent === 'info' && 'bg-info/10',
+              accent === 'orange' && 'bg-orange/10',
             )}
           >
             <Icon size={20} weight="light" className={accentColor[accent]} />
