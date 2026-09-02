@@ -148,6 +148,20 @@ export default function Dashboard() {
     })();
   }, [organization?.id, canViewAll]);
 
+  // TEMPORARY: shadow-only RPC comparison. Never feeds the UI.
+  useHomeDashboardStatsShadow({
+    organizationId: organization?.id,
+    from,
+    to,
+    ownerId,
+    canViewAll,
+    filtersHydrated,
+    legacyReady: !!parityRunId && legacyReadyRunId === parityRunId,
+    getLegacy: () => legacySnapshotRef.current,
+  });
+
+
+
   if (isMobile) {
     if (orgLoading) {
       return (
