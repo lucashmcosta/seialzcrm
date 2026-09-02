@@ -12,7 +12,7 @@ Cada linha da lista passa a exibir, na ordem:
 
 Valor (R$) continua alinhado à direita. Rótulo de data para ganhas passa de "Fechada em" para "Ganha em", como na Início; perdidas mantém "Fechada em".
 
-Se o contato não existir, exibe `(sem contato)`; sem vendedor, exibe `—`.
+Se o contato não existir, exibe `(sem contato)`; sem responsável, exibe `—`.
 
 ## Detalhes técnicos
 
