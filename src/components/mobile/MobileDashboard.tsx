@@ -20,6 +20,8 @@ export function MobileDashboard() {
   const [loading, setLoading] = useState(true);
   const [enteredCount, setEnteredCount] = useState(0);
   const [closedCount, setClosedCount] = useState(0);
+  const [enteredCountPrev, setEnteredCountPrev] = useState(0);
+  const [closedCountPrev, setClosedCountPrev] = useState(0);
 
   useEffect(() => {
     if (organization && userProfile) {
