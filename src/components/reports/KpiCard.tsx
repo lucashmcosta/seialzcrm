@@ -12,6 +12,8 @@ interface KpiCardProps {
   loading?: boolean;
   mono?: boolean;
   onClick?: () => void;
+  /** Inverts the delta colour semantics (growth is bad, e.g. "Perdidas"). */
+  invertDelta?: boolean;
 }
 
 const accentColor = {

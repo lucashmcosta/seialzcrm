@@ -17,6 +17,7 @@ export interface DashboardKpis {
   won_value_prev: number;
 
   lost_count: number;
+  lost_count_prev: number;
   lost_value: number;
   win_rate: number;
   win_rate_prev: number;
