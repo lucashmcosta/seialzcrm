@@ -92,8 +92,10 @@ export function computeRange(
         return { from: startOfDay(custom.from), to: endOfDay(custom.from) };
       }
       return { from: today, to: endOfDay(now) };
+    }
   }
 }
+
 
 /**
  * Explicit previous window, ONLY for calendar presets that are partially elapsed
