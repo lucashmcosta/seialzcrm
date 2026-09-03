@@ -363,10 +363,10 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
-              <DashboardTrendChart data={opps} from={from} to={to} loading={loading} />
+              <DashboardTrendChart data={stats.trend} from={from} to={to} loading={loading} />
             </div>
             <div className="lg:col-span-1">
-              <DashboardStatusDonut data={opps} from={from} to={to} loading={loading} />
+              <DashboardStatusDonut data={stats.status} loading={loading} />
             </div>
           </div>
         </div>
@@ -376,15 +376,23 @@ export default function Dashboard() {
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>
-              {detailTitle} — {detailRows.length}
+              {detailTitle}
+              {detailLoading ? '' : ` — ${detailRows.length}`}
             </DialogTitle>
           </DialogHeader>
           <div className="overflow-auto -mx-6 px-6">
-            {detailRows.length === 0 ? (
+            {detailLoading ? (
+              <div className="space-y-2 py-4">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="h-12 bg-muted rounded animate-pulse" />
+                ))}
+              </div>
+            ) : detailRows.length === 0 ? (
               <p className="text-sm text-muted-foreground py-6 text-center">
                 Sem oportunidades no período.
               </p>
             ) : (
+
               <ul className="divide-y divide-border">
                 {detailRows.map((o) => (
                   <li key={o.id}>
