@@ -41,6 +41,21 @@ O `- 1 ms` no fallback de `prev_from` preserva a duração efetiva de hoje: a ja
 4. **Frontend.** `useHomeDashboardStats` passa a aceitar `previousRange?: { from, toExclusive } | null` e envia os 4 parâmetros (ou `null`). `Dashboard.tsx` calcula com a função já existente e validada `computeExplicitPreviousRange(preset, { from, to })` de `src/lib/report-period.ts`, que retorna janela explícita só para `this_week` e `this_month` (com clamp de fim de mês) e `null` para todos os outros presets e `custom`.
 5. **Sem mudança** em RLS, policies, índices, KPIs, status, trend, modal, mobile (`MobileDashboard`), textos ou cores.
 
+## Prova por exemplo (referência 03/09/2026, fuso America/Sao_Paulo)
+
+**`last_30` — resultado idêntico ao de hoje.** Atual: `p_from = 05/08 00:00:00.000`, `p_to = 03/09 23:59:59.999`, `p_from_day = 05/08`, duração = 29d 23:59:59.999.
+
+| | hoje (inclusivo) | novo (exclusivo) |
+|---|---|---|
+| `created_prev` | `[06/07 00:00:00.000 , 04/08 23:59:59.999]` | `[06/07 00:00:00.000 , 05/08 00:00:00.000)` |
+| `won_prev` (dias) | `06/07 … 04/08` | `06/07 … 05/08)` = `06/07 … 04/08` |
+
+Mesmos conjuntos de linhas → `created_count_prev` e `won_count_prev` inalterados. Vale igualmente para `today`, `yesterday`, `last_7`, `last_90`, `last_12_months` e `custom`, que continuam enviando `NULL`.
+
+**`this_week`** (31/08 seg → 03/09): janela explícita `24/08 00:00` a `28/08 00:00` exclusivo → dias 24–27, o mesmo trecho da semana anterior.
+
+**`this_month`** (01/09 → 03/09): janela explícita `01/08 00:00` a `04/08 00:00` exclusivo → dias 01–03 de agosto, com clamp quando o mês anterior é mais curto.
+
 ## Validação após implementar
 
-Com **Esta semana** e os mesmos filtros de `/dashboards`, a Início deve mostrar: Criadas ≈ ↓ 3,6%, Ganhas ≈ ↓ 15,4%, Conversão ≈ ↓ 12,3%. Confirmar também: uma única assinatura de cada função, `authenticated` executando o wrapper e sem acesso ao core, e demais presets com deltas inalterados. Typecheck e build.
+Com **Esta semana** e os mesmos filtros de `/dashboards`, a Início deve mostrar: Criadas ≈ ↓ 3,6%, Ganhas ≈ ↓ 15,4%, Conversão ≈ ↓ 12,3%. Confirmar também: uma única assinatura de cada função, `authenticated` executando o wrapper e sem acesso ao core, e um preset comum (`last_30`) com `created_count_prev`/`won_count_prev` idênticos aos de antes da migração. Typecheck e build.
