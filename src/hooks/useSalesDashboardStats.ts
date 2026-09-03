@@ -150,7 +150,18 @@ export function useSalesDashboardStats({
       aborted = true;
       controller.abort();
     };
-  }, [organizationId, fromISO, toISO, ownerId, enabled]);
+  }, [
+    organizationId,
+    fromISO,
+    toISO,
+    ownerId,
+    enabled,
+    prevFromISO,
+    prevToISO,
+    prevFromDay,
+    prevToDay,
+  ]);
+
 
   return { data, loading };
 }
