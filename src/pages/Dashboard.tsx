@@ -303,22 +303,9 @@ export default function Dashboard() {
     },
   ];
 
-  const fromMs = from.getTime();
-  const toMs = to.getTime();
-  const enteredOpps = opps.filter((o) => {
-    const c = new Date(o.created_at).getTime();
-    return c >= fromMs && c <= toMs;
-  });
-  const closedOpps = opps.filter((o) => {
-    if (o.status !== 'won' || !o.close_date) return false;
-    const d = parseLocalDate(o.close_date);
-    if (!d) return false;
-    const u = d.getTime();
-    return u >= fromMs && u <= toMs;
-  });
-  const detailRows = detail === 'entered' ? enteredOpps : detail === 'closed' ? closedOpps : [];
   const detailTitle =
     detail === 'entered' ? t('dashboard.entered') : detail === 'closed' ? t('dashboard.closed') : '';
+
 
   const fmtMoney = (v: number | null) =>
     v == null ? '—' : v.toLocaleString(locale === 'en-US' ? 'en-US' : 'pt-BR', {
