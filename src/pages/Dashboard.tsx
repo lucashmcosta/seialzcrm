@@ -12,7 +12,7 @@ import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 import { ReportFilters } from '@/components/reports/ReportFilters';
 import { KpiCard } from '@/components/reports/KpiCard';
-import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
+import { computeRange, computeExplicitPreviousRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
 import { DashboardTrendChart } from '@/components/reports/DashboardTrendChart';
 import { DashboardStatusDonut } from '@/components/reports/DashboardStatusDonut';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
