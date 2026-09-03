@@ -1,15 +1,14 @@
 import { useMemo } from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 
-interface OppPoint {
-  created_at: string;
-  status: string;
+interface StatusCounts {
+  open: number;
+  won: number;
+  lost: number;
 }
 
 interface Props {
-  data: OppPoint[];
-  from: Date;
-  to: Date;
+  data: StatusCounts;
   loading?: boolean;
 }
 
@@ -17,29 +16,19 @@ const STATUS_META = [
   { key: 'open', label: 'Abertas', color: 'hsl(var(--warning))' },
   { key: 'won', label: 'Ganhas', color: 'hsl(var(--success))' },
   { key: 'lost', label: 'Perdidas', color: 'hsl(var(--destructive))' },
-];
+] as const;
 
-export function DashboardStatusDonut({ data, from, to, loading }: Props) {
+export function DashboardStatusDonut({ data, loading }: Props) {
   const { slices, total } = useMemo(() => {
-    const fromMs = from.getTime();
-    const toMs = to.getTime();
-    const counts: Record<string, number> = { open: 0, won: 0, lost: 0 };
-
-    for (const opp of data) {
-      const created = new Date(opp.created_at).getTime();
-      if (created < fromMs || created > toMs) continue;
-      const s = opp.status === 'won' || opp.status === 'lost' ? opp.status : 'open';
-      counts[s] = (counts[s] || 0) + 1;
-    }
-
     const slices = STATUS_META.map((m) => ({
       name: m.label,
-      value: counts[m.key] || 0,
+      value: Number(data?.[m.key]) || 0,
       color: m.color,
     }));
     const total = slices.reduce((a, b) => a + b.value, 0);
     return { slices, total };
-  }, [data, from, to]);
+  }, [data]);
+
 
   return (
     <div className="rounded-md border border-border bg-card p-5">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,21 +18,7 @@ import { DashboardStatusDonut } from '@/components/reports/DashboardStatusDonut'
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-
-import { dedupeRowsById, fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
-// TEMPORARY: shadow parity instrumentation for get_home_dashboard_stats.
-import { useHomeDashboardStatsShadow } from '@/hooks/useHomeDashboardStatsShadow';
-import {
-  buildRunKey,
-  endLegacy,
-  isHomeParityMode,
-  legacySnapshot,
-  noteRender,
-  noteRequest,
-  runIdOf,
-  startLegacy,
-  type HomeSnapshot,
-} from '@/lib/homeParityRun';
+import { useHomeDashboardStats } from '@/hooks/useHomeDashboardStats';
 
 interface OppRow {
   id: string;
@@ -57,6 +43,7 @@ const parseLocalDate = (s: string | null | undefined): Date | null => {
 
 const toDayStr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 export default function Dashboard() {
   const { organization, userProfile, locale, loading: orgLoading, error } = useOrganization();
   const { user, signOut } = useAuth();
@@ -85,46 +72,31 @@ export default function Dashboard() {
   );
   const filtersHydrated = presetHydrated && customHydrated && ownerHydrated;
 
-  const [enteredCount, setEnteredCount] = useState(0);
-  const [closedCount, setClosedCount] = useState(0);
-  const [enteredCountPrev, setEnteredCountPrev] = useState(0);
-  const [closedCountPrev, setClosedCountPrev] = useState(0);
-  const [opps, setOpps] = useState<OppRow[]>([]);
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<null | 'entered' | 'closed'>(null);
+  const [detailRows, setDetailRows] = useState<OppRow[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const { from, to } = computeRange(preset, customRange);
 
-  // ---- TEMPORARY shadow parity plumbing (no effect on rendered numbers) ----
-  const parityRunId = organization?.id
-    ? runIdOf(
-        buildRunKey({
-          organizationId: organization.id,
-          fromISO: from.toISOString(),
-          toISO: to.toISOString(),
-          ownerId,
-          canViewAll,
-        }),
-      )
-    : '';
-  const legacySnapshotRef = useRef<HomeSnapshot | null>(null);
-  const [legacyReadyRunId, setLegacyReadyRunId] = useState<string>('');
-  if (isHomeParityMode() && parityRunId) noteRender(parityRunId);
+  const { data: stats, loading } = useHomeDashboardStats({
+    organizationId: organization?.id,
+    from,
+    to,
+    ownerId,
+    enabled: filtersHydrated && !!userProfile,
+  });
 
+  const enteredCount = stats.kpis.created_count;
+  const closedCount = stats.kpis.won_count;
+  const enteredCountPrev = stats.kpis.created_count_prev;
+  const closedCountPrev = stats.kpis.won_count_prev;
 
   useEffect(() => {
     if (!orgLoading && !user) {
       navigate('/auth/signin', { replace: true });
     }
   }, [orgLoading, user, navigate]);
-
-  useEffect(() => {
-    if (organization && userProfile) {
-      fetchStats();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization?.id, userProfile?.id, from.getTime(), to.getTime(), canViewAll, ownerId]);
 
   useEffect(() => {
     if (!organization || !canViewAll) {
@@ -148,17 +120,67 @@ export default function Dashboard() {
     })();
   }, [organization?.id, canViewAll]);
 
-  // TEMPORARY: shadow-only RPC comparison. Never feeds the UI.
-  useHomeDashboardStatsShadow({
-    organizationId: organization?.id,
-    from,
-    to,
-    ownerId,
-    canViewAll,
-    filtersHydrated,
-    legacyReady: !!parityRunId && legacyReadyRunId === parityRunId,
-    getLegacy: () => legacySnapshotRef.current,
-  });
+  // Raw opportunities are fetched ONLY when the detail modal opens.
+  useEffect(() => {
+    if (!detail || !organization || !userProfile) {
+      setDetailRows([]);
+      return;
+    }
+
+    let aborted = false;
+    setDetailLoading(true);
+
+    (async () => {
+      let query = supabase
+        .from('opportunities')
+        .select(
+          'id, title, status, created_at, updated_at, close_date, amount, contact_id, owner_user_id, contacts:contact_id(full_name), users:owner_user_id(full_name)',
+        )
+        .eq('organization_id', organization.id)
+        .is('deleted_at', null);
+
+      if (!canViewAll) {
+        query = query.eq('owner_user_id', userProfile.id);
+      } else if (ownerId && ownerId !== 'all') {
+        query = query.eq('owner_user_id', ownerId);
+      }
+
+      if (detail === 'entered') {
+        query = query
+          .gte('created_at', from.toISOString())
+          .lte('created_at', to.toISOString())
+          .order('created_at', { ascending: false });
+      } else {
+        query = query
+          .eq('status', 'won')
+          .gte('close_date', toDayStr(from))
+          .lte('close_date', toDayStr(to))
+          .order('close_date', { ascending: false });
+      }
+
+      const { data, error: qErr } = await query.limit(500);
+      if (aborted) return;
+      if (qErr) {
+        console.error('Dashboard detail fetch error:', qErr);
+        setDetailRows([]);
+      } else {
+        setDetailRows((data ?? []) as unknown as OppRow[]);
+      }
+      setDetailLoading(false);
+    })().catch((e) => {
+      if (aborted) return;
+      console.error('Dashboard detail fetch error:', e);
+      setDetailRows([]);
+      setDetailLoading(false);
+    });
+
+    return () => {
+      aborted = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail, organization?.id, userProfile?.id, canViewAll, ownerId, from.getTime(), to.getTime()]);
+
+
 
 
 
@@ -241,128 +263,8 @@ export default function Dashboard() {
     );
   }
 
-  async function fetchStats() {
-    if (!organization || !userProfile) return;
-    const parity = isHomeParityMode();
-    const runId = parity ? parityRunId : '';
-    if (parity && runId) startLegacy(runId);
-    setLoading(true);
-    try {
-      const fromIso = from.toISOString();
-      const toIso = to.toISOString();
-      const fromDay = toDayStr(from);
-      const toDay = toDayStr(to);
-
-      const baseQuery = () => {
-        let query = supabase
-          .from('opportunities')
-          .select('id, title, status, created_at, updated_at, close_date, amount, contact_id, owner_user_id, contacts:contact_id(full_name), users:owner_user_id(full_name)')
-          .eq('organization_id', organization.id)
-          .is('deleted_at', null);
-
-        if (!canViewAll) {
-          query = query.eq('owner_user_id', userProfile.id);
-        } else if (ownerId && ownerId !== 'all') {
-          query = query.eq('owner_user_id', ownerId);
-        }
-
-        return query;
-      };
-
-      // Previous period: same duration, immediately before the selected range.
-      const prevTo = new Date(from.getTime() - 1);
-      const prevFrom = new Date(prevTo.getTime() - (to.getTime() - from.getTime()));
-      const prevFromIso = prevFrom.toISOString();
-      const prevToIso = prevTo.toISOString();
-      const prevFromDay = toDayStr(prevFrom);
-      const prevToDay = toDayStr(prevTo);
-
-      const countQuery = () => {
-        let query = supabase
-          .from('opportunities')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', organization.id)
-          .is('deleted_at', null);
-
-        if (!canViewAll) {
-          query = query.eq('owner_user_id', userProfile.id);
-        } else if (ownerId && ownerId !== 'all') {
-          query = query.eq('owner_user_id', ownerId);
-        }
-
-        return query;
-      };
-
-      const [createdRows, wonRows, prevCreatedRes, prevWonRes] = await Promise.all([
-        fetchAllPagedRows<OppRow>(async (pageFrom, pageTo) =>
-          await baseQuery()
-            .gte('created_at', fromIso)
-            .lte('created_at', toIso)
-            .range(pageFrom, pageTo),
-        ),
-        fetchAllPagedRows<OppRow>(async (pageFrom, pageTo) =>
-          await baseQuery()
-            .eq('status', 'won')
-            .gte('close_date', fromDay)
-            .lte('close_date', toDay)
-            .range(pageFrom, pageTo),
-        ),
-        countQuery().gte('created_at', prevFromIso).lte('created_at', prevToIso),
-        countQuery()
-          .eq('status', 'won')
-          .gte('close_date', prevFromDay)
-          .lte('close_date', prevToDay),
-      ]);
-
-
-      const rows = dedupeRowsById<OppRow>([...createdRows, ...wonRows]);
-
-      const fromMs = from.getTime();
-      const toMs = to.getTime();
-      let entered = 0;
-      let closed = 0;
-      for (const r of rows) {
-        const c = new Date(r.created_at).getTime();
-        if (c >= fromMs && c <= toMs) entered += 1;
-        if (r.status === 'won' && r.close_date) {
-          const d = parseLocalDate(r.close_date);
-          if (d) {
-            const u = d.getTime();
-            if (u >= fromMs && u <= toMs) closed += 1;
-          }
-        }
-      }
-
-      setEnteredCount(entered);
-      setClosedCount(closed);
-      setEnteredCountPrev(prevCreatedRes.count || 0);
-      setClosedCountPrev(prevWonRes.count || 0);
-      setOpps(rows);
-
-      if (parity && runId) {
-        noteRequest(runId, createdRows.length);
-        noteRequest(runId, wonRows.length);
-        noteRequest(runId, 0);
-        noteRequest(runId, 0);
-        legacySnapshotRef.current = legacySnapshot(
-          rows,
-          from,
-          to,
-          prevCreatedRes.count || 0,
-          prevWonRes.count || 0,
-        );
-        endLegacy(runId);
-        setLegacyReadyRunId(runId);
-      }
-    } catch (e) {
-      console.error('Dashboard fetch error:', e);
-    } finally {
-      setLoading(false);
-    }
-
-  }
-
   const conversion = enteredCount > 0 ? (closedCount / enteredCount) * 100 : null;
+
   const conversionPrev =
     enteredCountPrev > 0 ? (closedCountPrev / enteredCountPrev) * 100 : null;
 
@@ -401,22 +303,9 @@ export default function Dashboard() {
     },
   ];
 
-  const fromMs = from.getTime();
-  const toMs = to.getTime();
-  const enteredOpps = opps.filter((o) => {
-    const c = new Date(o.created_at).getTime();
-    return c >= fromMs && c <= toMs;
-  });
-  const closedOpps = opps.filter((o) => {
-    if (o.status !== 'won' || !o.close_date) return false;
-    const d = parseLocalDate(o.close_date);
-    if (!d) return false;
-    const u = d.getTime();
-    return u >= fromMs && u <= toMs;
-  });
-  const detailRows = detail === 'entered' ? enteredOpps : detail === 'closed' ? closedOpps : [];
   const detailTitle =
     detail === 'entered' ? t('dashboard.entered') : detail === 'closed' ? t('dashboard.closed') : '';
+
 
   const fmtMoney = (v: number | null) =>
     v == null ? '—' : v.toLocaleString(locale === 'en-US' ? 'en-US' : 'pt-BR', {
@@ -474,10 +363,10 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
-              <DashboardTrendChart data={opps} from={from} to={to} loading={loading} />
+              <DashboardTrendChart data={stats.trend} from={from} to={to} loading={loading} />
             </div>
             <div className="lg:col-span-1">
-              <DashboardStatusDonut data={opps} from={from} to={to} loading={loading} />
+              <DashboardStatusDonut data={stats.status} loading={loading} />
             </div>
           </div>
         </div>
@@ -487,15 +376,23 @@ export default function Dashboard() {
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>
-              {detailTitle} — {detailRows.length}
+              {detailTitle}
+              {detailLoading ? '' : ` — ${detailRows.length}`}
             </DialogTitle>
           </DialogHeader>
           <div className="overflow-auto -mx-6 px-6">
-            {detailRows.length === 0 ? (
+            {detailLoading ? (
+              <div className="space-y-2 py-4">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="h-12 bg-muted rounded animate-pulse" />
+                ))}
+              </div>
+            ) : detailRows.length === 0 ? (
               <p className="text-sm text-muted-foreground py-6 text-center">
                 Sem oportunidades no período.
               </p>
             ) : (
+
               <ul className="divide-y divide-border">
                 {detailRows.map((o) => (
                   <li key={o.id}>

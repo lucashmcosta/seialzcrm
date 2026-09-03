@@ -12,11 +12,11 @@ import {
 import { cn } from '@/lib/utils';
 
 
-interface OppPoint {
-  created_at: string;
-  status: string;
-  updated_at: string;
-  close_date?: string | null;
+interface TrendBucket {
+  /** YYYY-MM-DD (local day) */
+  bucket_date: string;
+  created: number;
+  won: number;
 }
 
 const parseLocalDate = (s: string | null | undefined): Date | null => {
@@ -27,11 +27,12 @@ const parseLocalDate = (s: string | null | undefined): Date | null => {
 };
 
 interface Props {
-  data: OppPoint[];
+  data: TrendBucket[];
   from: Date;
   to: Date;
   loading?: boolean;
 }
+
 
 function startOfDay(d: Date) {
   const x = new Date(d);
@@ -80,24 +81,14 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
       cur.setDate(cur.getDate() + (weekly ? 7 : 1));
     }
 
-    const fromMs = from.getTime();
-    const toMs = to.getTime();
-
-    for (const opp of data) {
-      const created = new Date(opp.created_at);
-      if (created.getTime() >= fromMs && created.getTime() <= toMs) {
-        const key = (weekly ? startOfWeek(created) : startOfDay(created)).getTime();
-        const b = buckets.get(key);
-        if (b) b.entered += 1;
-      }
-      if (opp.status === 'won' && opp.close_date) {
-        const updated = parseLocalDate(opp.close_date);
-        if (updated && updated.getTime() >= fromMs && updated.getTime() <= toMs) {
-          const key = (weekly ? startOfWeek(updated) : startOfDay(updated)).getTime();
-          const b = buckets.get(key);
-          if (b) b.closed += 1;
-        }
-      }
+    for (const row of data) {
+      const day = parseLocalDate(row.bucket_date);
+      if (!day) continue;
+      const key = (weekly ? startOfWeek(day) : startOfDay(day)).getTime();
+      const b = buckets.get(key);
+      if (!b) continue;
+      b.entered += Number(row.created) || 0;
+      b.closed += Number(row.won) || 0;
     }
 
     return Array.from(buckets.values())
@@ -108,6 +99,7 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
         Ganhas: b.closed,
       }));
   }, [data, from, to, weekly]);
+
 
   return (
     <div className="rounded-md border border-border bg-card p-5">
