@@ -35,15 +35,17 @@ export function KpiCard({
   loading,
   mono,
   onClick,
+  invertDelta = false,
 }: KpiCardProps) {
   const renderDelta = () => {
     if (delta == null || !isFinite(delta)) return null;
     const isUp = delta > 0;
     const isFlat = delta === 0;
     const Arrow = isFlat ? Minus : isUp ? ArrowUp : ArrowDown;
+    const isGood = invertDelta ? !isUp : isUp;
     const color = isFlat
       ? 'text-muted-foreground'
-      : isUp
+      : isGood
         ? 'text-success'
         : 'text-destructive';
     return (
