@@ -216,6 +216,8 @@ export default function ReportsPage() {
       // Delta follows the card's primary metric (count), not the currency sublabel.
       wonCountDelta: delta(wonCount, prevWonCount),
       lostCount: num(k.lost_count),
+      // Delta follows the count, and its colour is inverted in the card.
+      lostCountDelta: delta(num(k.lost_count), num(k.lost_count_prev)),
       lostValue: num(k.lost_value),
       winRate,
       winRateDelta: delta(winRate, prevWinRate),
@@ -459,6 +461,8 @@ export default function ReportsPage() {
                   label="Perdidas"
                   value={stats.lostCount}
                   sublabel={formatCurrency(stats.lostValue)}
+                  delta={stats.lostCountDelta}
+                  invertDelta
                   icon={XCircle}
                   accent="destructive"
                   loading={loading}
