@@ -449,7 +449,7 @@ export default function ReportsPage() {
                   label="Ganhas"
                   value={stats.wonCount}
                   sublabel={formatCurrency(stats.wonValue)}
-                  delta={stats.wonValueDelta}
+                  delta={stats.wonCountDelta}
                   icon={CheckCircle}
                   accent="success"
                   loading={loading}
