@@ -33,7 +33,13 @@ import { StageDistribution } from '@/components/reports/StageDistribution';
 import UserDetailDialog from '@/components/reports/UserDetailDialog';
 import { ServiceResponseDetailDialog } from '@/components/reports/ServiceResponseDetailDialog';
 import { ReportFilters } from '@/components/reports/ReportFilters';
-import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
+import {
+  computeRange,
+  computeExplicitPreviousRange,
+  type PeriodPreset,
+  type CustomRange,
+} from '@/lib/report-period';
+
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileReports } from '@/components/mobile/MobileReports';
@@ -121,13 +127,20 @@ export default function ReportsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [serviceDetail, setServiceDetail] = useState<null | 'first' | 'all'>(null);
 
+  const previousRange = useMemo(
+    () => computeExplicitPreviousRange(preset, range),
+    [preset, range],
+  );
+
   const { data: dashboard, loading } = useSalesDashboardStats({
     organizationId: organization?.id,
     from: range.from,
     to: range.to,
     ownerId,
+    previousRange,
     enabled: filtersHydrated,
   });
+
 
   const { data: serviceStats, loading: serviceLoading } = useServiceStats({
     organizationId: organization?.id,
@@ -189,17 +202,19 @@ export default function ReportsPage() {
 
     const createdCount = num(k.created_count);
     const prevCreatedCount = num(k.created_count_prev);
+    const wonCount = num(k.won_count);
+    const prevWonCount = num(k.won_count_prev);
     const wonValue = num(k.won_value);
-    const prevWonValue = num(k.won_value_prev);
     const winRate = num(k.win_rate);
     const prevWinRate = num(k.win_rate_prev);
 
     return {
       createdCount,
       createdDelta: delta(createdCount, prevCreatedCount),
-      wonCount: num(k.won_count),
+      wonCount,
       wonValue,
-      wonValueDelta: delta(wonValue, prevWonValue),
+      // Delta follows the card's primary metric (count), not the currency sublabel.
+      wonCountDelta: delta(wonCount, prevWonCount),
       lostCount: num(k.lost_count),
       lostValue: num(k.lost_value),
       winRate,
@@ -207,6 +222,7 @@ export default function ReportsPage() {
       avgTicket: num(k.avg_ticket),
       avgCycle: num(k.avg_cycle_days),
     };
+
   }, [dashboard]);
 
   const openCount = num(dashboard.kpis.open_count);
@@ -433,7 +449,7 @@ export default function ReportsPage() {
                   label="Ganhas"
                   value={stats.wonCount}
                   sublabel={formatCurrency(stats.wonValue)}
-                  delta={stats.wonValueDelta}
+                  delta={stats.wonCountDelta}
                   icon={CheckCircle}
                   accent="success"
                   loading={loading}

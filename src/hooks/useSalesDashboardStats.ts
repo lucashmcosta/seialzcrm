@@ -12,8 +12,10 @@ export interface DashboardKpis {
   created_count: number;
   created_count_prev: number;
   won_count: number;
+  won_count_prev: number;
   won_value: number;
   won_value_prev: number;
+
   lost_count: number;
   lost_value: number;
   win_rate: number;
@@ -69,16 +71,33 @@ interface Params {
   to: Date;
   /** users.id or 'all' */
   ownerId: string;
+  /**
+   * Explicit previous window, only for calendar presets with special semantics
+   * (`this_week` / `this_month`). When omitted/null the RPC keeps its own
+   * same-duration previous window.
+   */
+  previousRange?: { from: Date; toExclusive: Date } | null;
   /** Only fetch once persisted filters finished hydrating. */
   enabled: boolean;
 }
 
-export function useSalesDashboardStats({ organizationId, from, to, ownerId, enabled }: Params) {
+export function useSalesDashboardStats({
+  organizationId,
+  from,
+  to,
+  ownerId,
+  previousRange,
+  enabled,
+}: Params) {
   const [data, setData] = useState<DashboardStatsPayload>(EMPTY);
   const [loading, setLoading] = useState(true);
 
   const fromISO = from.toISOString();
   const toISO = to.toISOString();
+  const prevFromISO = previousRange ? previousRange.from.toISOString() : null;
+  const prevToISO = previousRange ? previousRange.toExclusive.toISOString() : null;
+  const prevFromDay = previousRange ? fmtDay(previousRange.from) : null;
+  const prevToDay = previousRange ? fmtDay(previousRange.toExclusive) : null;
 
   useEffect(() => {
     if (!organizationId || !enabled) return;
@@ -99,7 +118,12 @@ export function useSalesDashboardStats({ organizationId, from, to, ownerId, enab
         p_to_day: fmtDay(toDate),
         p_owner_user_id: ownerId !== 'all' ? ownerId : null,
         p_tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo',
+        p_prev_from: prevFromISO,
+        p_prev_to: prevToISO,
+        p_prev_from_day: prevFromDay,
+        p_prev_to_day: prevToDay,
       }).abortSignal(controller.signal);
+
 
       if (aborted) return;
 
@@ -128,7 +152,18 @@ export function useSalesDashboardStats({ organizationId, from, to, ownerId, enab
       aborted = true;
       controller.abort();
     };
-  }, [organizationId, fromISO, toISO, ownerId, enabled]);
+  }, [
+    organizationId,
+    fromISO,
+    toISO,
+    ownerId,
+    enabled,
+    prevFromISO,
+    prevToISO,
+    prevFromDay,
+    prevToDay,
+  ]);
+
 
   return { data, loading };
 }
