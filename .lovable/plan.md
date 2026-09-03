@@ -23,12 +23,39 @@ prev_from_day= prev_from::date
 
 ## Plano mínimo
 
-1. **Migração — core.** `CREATE OR REPLACE` de `get_home_dashboard_stats_core` acrescentando 4 parâmetros ao final, todos `DEFAULT NULL`: `p_prev_from timestamptz`, `p_prev_to timestamptz`, `p_prev_from_day date`, `p_prev_to_day date`. Na CTE `bounds`, `COALESCE` de cada valor com a expressão atual por duração. Quando explícito, os limites superiores são **exclusivos** (`< prev_to`, `< prev_to_day`), idêntico a `/dashboards`; quando ausente, mantém exatamente a comparação inclusiva de hoje. Nada além de `created_prev` e `won_prev` muda.
+1. **Migração — core.** `CREATE` de `get_home_dashboard_stats_core` com 4 parâmetros novos ao final, todos `DEFAULT NULL`: `p_prev_from timestamptz`, `p_prev_to timestamptz`, `p_prev_from_day date`, `p_prev_to_day date`. A CTE `bounds` é normalizada para **fim exclusivo em todos os casos**, igual a `/dashboards`:
+
+```sql
+prev_to       = COALESCE(p_prev_to,       p_from)
+prev_from     = COALESCE(p_prev_from,     p_from - (p_to - p_from) - interval '1 millisecond')
+prev_to_day   = COALESCE(p_prev_to_day,   p_from_day)
+prev_from_day = COALESCE(p_prev_from_day, ((p_from - (p_to - p_from) - interval '1 millisecond') AT TIME ZONE p_tz)::date)
+```
+
+`created_prev`: `created_at >= prev_from AND created_at < prev_to`.
+`won_prev`: `status='won' AND close_date >= prev_from_day AND close_date < prev_to_day`.
+
+O `- 1 ms` no fallback de `prev_from` preserva a duração efetiva de hoje: a janela inclusiva atual `[p_from-1ms-dur, p_from-1ms]` e a nova exclusiva `[p_from-1ms-dur, p_from)` cobrem exatamente o mesmo conjunto. Nada além de `created_prev` e `won_prev` muda.
 2. **Migração — wrapper.** `CREATE OR REPLACE` de `get_home_dashboard_stats` com os mesmos 4 parâmetros `DEFAULT NULL` no final, apenas repassados ao core. Toda a lógica de identidade/membership/`view_all_opportunities`/escopo forçado permanece intocada.
 3. **Overload.** Como ambas as funções ganham parâmetros novos, `CREATE OR REPLACE` cria assinatura nova e mantém a antiga → seria overload ambíguo (todos os novos têm default). Por isso a migração faz `DROP FUNCTION` das assinaturas atuais e `CREATE` das novas na mesma transação, reaplicando os grants: wrapper `EXECUTE` para `authenticated` e `service_role`; core sem `EXECUTE` para `authenticated`/`anon`.
 4. **Frontend.** `useHomeDashboardStats` passa a aceitar `previousRange?: { from, toExclusive } | null` e envia os 4 parâmetros (ou `null`). `Dashboard.tsx` calcula com a função já existente e validada `computeExplicitPreviousRange(preset, { from, to })` de `src/lib/report-period.ts`, que retorna janela explícita só para `this_week` e `this_month` (com clamp de fim de mês) e `null` para todos os outros presets e `custom`.
 5. **Sem mudança** em RLS, policies, índices, KPIs, status, trend, modal, mobile (`MobileDashboard`), textos ou cores.
 
+## Prova por exemplo (referência 03/09/2026, fuso America/Sao_Paulo)
+
+**`last_30` — resultado idêntico ao de hoje.** Atual: `p_from = 05/08 00:00:00.000`, `p_to = 03/09 23:59:59.999`, `p_from_day = 05/08`, duração = 29d 23:59:59.999.
+
+| | hoje (inclusivo) | novo (exclusivo) |
+|---|---|---|
+| `created_prev` | `[06/07 00:00:00.000 , 04/08 23:59:59.999]` | `[06/07 00:00:00.000 , 05/08 00:00:00.000)` |
+| `won_prev` (dias) | `06/07 … 04/08` | `06/07 … 05/08)` = `06/07 … 04/08` |
+
+Mesmos conjuntos de linhas → `created_count_prev` e `won_count_prev` inalterados. Vale igualmente para `today`, `yesterday`, `last_7`, `last_90`, `last_12_months` e `custom`, que continuam enviando `NULL`.
+
+**`this_week`** (31/08 seg → 03/09): janela explícita `24/08 00:00` a `28/08 00:00` exclusivo → dias 24–27, o mesmo trecho da semana anterior.
+
+**`this_month`** (01/09 → 03/09): janela explícita `01/08 00:00` a `04/08 00:00` exclusivo → dias 01–03 de agosto, com clamp quando o mês anterior é mais curto.
+
 ## Validação após implementar
 
-Com **Esta semana** e os mesmos filtros de `/dashboards`, a Início deve mostrar: Criadas ≈ ↓ 3,6%, Ganhas ≈ ↓ 15,4%, Conversão ≈ ↓ 12,3%. Confirmar também: uma única assinatura de cada função, `authenticated` executando o wrapper e sem acesso ao core, e demais presets com deltas inalterados. Typecheck e build.
+Com **Esta semana** e os mesmos filtros de `/dashboards`, a Início deve mostrar: Criadas ≈ ↓ 3,6%, Ganhas ≈ ↓ 15,4%, Conversão ≈ ↓ 12,3%. Confirmar também: uma única assinatura de cada função, `authenticated` executando o wrapper e sem acesso ao core, e um preset comum (`last_30`) com `created_count_prev`/`won_count_prev` idênticos aos de antes da migração. Typecheck e build.
