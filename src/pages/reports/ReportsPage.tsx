@@ -33,7 +33,13 @@ import { StageDistribution } from '@/components/reports/StageDistribution';
 import UserDetailDialog from '@/components/reports/UserDetailDialog';
 import { ServiceResponseDetailDialog } from '@/components/reports/ServiceResponseDetailDialog';
 import { ReportFilters } from '@/components/reports/ReportFilters';
-import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
+import {
+  computeRange,
+  computeExplicitPreviousRange,
+  type PeriodPreset,
+  type CustomRange,
+} from '@/lib/report-period';
+
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileReports } from '@/components/mobile/MobileReports';
