@@ -78,12 +78,16 @@ export default function Dashboard() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   const { from, to } = computeRange(preset, customRange);
+  // Explicit previous window only for calendar presets with special semantics
+  // (this_week / this_month). Other presets keep the RPC's same-duration fallback.
+  const previousRange = computeExplicitPreviousRange(preset, { from, to });
 
   const { data: stats, loading } = useHomeDashboardStats({
     organizationId: organization?.id,
     from,
     to,
     ownerId,
+    previousRange,
     enabled: filtersHydrated && !!userProfile,
   });
 
