@@ -92,6 +92,48 @@ export function computeRange(
         return { from: startOfDay(custom.from), to: endOfDay(custom.from) };
       }
       return { from: today, to: endOfDay(now) };
-    }
   }
 }
+
+/**
+ * Explicit previous window, ONLY for calendar presets that are partially elapsed
+ * and therefore need the same position inside the previous period:
+ *
+ *  - this_week  → monday..today  vs  monday..same weekday of the previous week
+ *  - this_month → day 1..today   vs  day 1..same day of the previous month
+ *
+ * Every other preset (including `custom`) returns null so the aggregation RPC
+ * keeps its current behaviour (same-duration window immediately before).
+ *
+ * `toExclusive` is an exclusive upper bound (start of the day after the last
+ * day of the previous window), matching the RPC filter `< prev_to`.
+ */
+export function computeExplicitPreviousRange(
+  preset: PeriodPreset,
+  current: { from: Date; to: Date },
+): { from: Date; toExclusive: Date } | null {
+  if (preset === 'this_week') {
+    const from = new Date(current.from);
+    from.setDate(from.getDate() - 7);
+    const toExclusive = startOfDay(current.to);
+    toExclusive.setDate(toExclusive.getDate() - 7 + 1);
+    return { from: startOfDay(from), toExclusive };
+  }
+
+  if (preset === 'this_month') {
+    const curFrom = startOfDay(current.from);
+    const from = new Date(curFrom.getFullYear(), curFrom.getMonth() - 1, 1);
+
+    const dayOfMonth = startOfDay(current.to).getDate();
+    // Last day of the previous month, to clamp e.g. 31/03 → 28/02.
+    const lastDayPrevMonth = new Date(from.getFullYear(), from.getMonth() + 1, 0).getDate();
+    const lastDay = Math.min(dayOfMonth, lastDayPrevMonth);
+
+    const toExclusive = new Date(from.getFullYear(), from.getMonth(), lastDay);
+    toExclusive.setDate(toExclusive.getDate() + 1);
+    return { from, toExclusive: startOfDay(toExclusive) };
+  }
+
+  return null;
+}
+
