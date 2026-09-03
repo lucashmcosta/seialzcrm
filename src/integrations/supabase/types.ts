@@ -13370,6 +13370,10 @@ export type Database = {
           p_from_day: string
           p_organization_id: string
           p_owner_user_id?: string
+          p_prev_from?: string
+          p_prev_from_day?: string
+          p_prev_to?: string
+          p_prev_to_day?: string
           p_to: string
           p_to_day: string
           p_tz?: string
@@ -13382,6 +13386,10 @@ export type Database = {
           p_from_day: string
           p_organization_id: string
           p_owner_user_id: string
+          p_prev_from?: string
+          p_prev_from_day?: string
+          p_prev_to?: string
+          p_prev_to_day?: string
           p_self_user_id: string
           p_to: string
           p_to_day: string

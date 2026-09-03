@@ -48,16 +48,33 @@ interface Params {
   to: Date;
   /** users.id or 'all' */
   ownerId: string;
+  /**
+   * Explicit previous window, only for calendar presets with special semantics
+   * (this_week / this_month). When null the RPC falls back to the same-duration
+   * previous window.
+   */
+  previousRange?: { from: Date; toExclusive: Date } | null;
   /** Only fetch once persisted filters finished hydrating. */
   enabled: boolean;
 }
 
-export function useHomeDashboardStats({ organizationId, from, to, ownerId, enabled }: Params) {
+export function useHomeDashboardStats({
+  organizationId,
+  from,
+  to,
+  ownerId,
+  previousRange,
+  enabled,
+}: Params) {
   const [data, setData] = useState<HomeStatsPayload>(EMPTY);
   const [loading, setLoading] = useState(true);
 
   const fromISO = from.toISOString();
   const toISO = to.toISOString();
+  const prevFromISO = previousRange ? previousRange.from.toISOString() : null;
+  const prevToISO = previousRange ? previousRange.toExclusive.toISOString() : null;
+  const prevFromDay = previousRange ? fmtDay(previousRange.from) : null;
+  const prevToDay = previousRange ? fmtDay(previousRange.toExclusive) : null;
 
   useEffect(() => {
     if (!organizationId || !enabled) return;
@@ -75,6 +92,10 @@ export function useHomeDashboardStats({ organizationId, from, to, ownerId, enabl
         p_to_day: fmtDay(new Date(toISO)),
         p_owner_user_id: ownerId !== 'all' ? ownerId : null,
         p_tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo',
+        p_prev_from: prevFromISO,
+        p_prev_to: prevToISO,
+        p_prev_from_day: prevFromDay,
+        p_prev_to_day: prevToDay,
       }).abortSignal(controller.signal);
 
       if (aborted) return;
@@ -103,7 +124,17 @@ export function useHomeDashboardStats({ organizationId, from, to, ownerId, enabl
       aborted = true;
       controller.abort();
     };
-  }, [organizationId, fromISO, toISO, ownerId, enabled]);
+  }, [
+    organizationId,
+    fromISO,
+    toISO,
+    ownerId,
+    prevFromISO,
+    prevToISO,
+    prevFromDay,
+    prevToDay,
+    enabled,
+  ]);
 
   return { data, loading };
 }
