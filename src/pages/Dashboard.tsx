@@ -72,46 +72,31 @@ export default function Dashboard() {
   );
   const filtersHydrated = presetHydrated && customHydrated && ownerHydrated;
 
-  const [enteredCount, setEnteredCount] = useState(0);
-  const [closedCount, setClosedCount] = useState(0);
-  const [enteredCountPrev, setEnteredCountPrev] = useState(0);
-  const [closedCountPrev, setClosedCountPrev] = useState(0);
-  const [opps, setOpps] = useState<OppRow[]>([]);
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<null | 'entered' | 'closed'>(null);
+  const [detailRows, setDetailRows] = useState<OppRow[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const { from, to } = computeRange(preset, customRange);
 
-  // ---- TEMPORARY shadow parity plumbing (no effect on rendered numbers) ----
-  const parityRunId = organization?.id
-    ? runIdOf(
-        buildRunKey({
-          organizationId: organization.id,
-          fromISO: from.toISOString(),
-          toISO: to.toISOString(),
-          ownerId,
-          canViewAll,
-        }),
-      )
-    : '';
-  const legacySnapshotRef = useRef<HomeSnapshot | null>(null);
-  const [legacyReadyRunId, setLegacyReadyRunId] = useState<string>('');
-  if (isHomeParityMode() && parityRunId) noteRender(parityRunId);
+  const { data: stats, loading } = useHomeDashboardStats({
+    organizationId: organization?.id,
+    from,
+    to,
+    ownerId,
+    enabled: filtersHydrated && !!userProfile,
+  });
 
+  const enteredCount = stats.kpis.created_count;
+  const closedCount = stats.kpis.won_count;
+  const enteredCountPrev = stats.kpis.created_count_prev;
+  const closedCountPrev = stats.kpis.won_count_prev;
 
   useEffect(() => {
     if (!orgLoading && !user) {
       navigate('/auth/signin', { replace: true });
     }
   }, [orgLoading, user, navigate]);
-
-  useEffect(() => {
-    if (organization && userProfile) {
-      fetchStats();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization?.id, userProfile?.id, from.getTime(), to.getTime(), canViewAll, ownerId]);
 
   useEffect(() => {
     if (!organization || !canViewAll) {
@@ -135,17 +120,67 @@ export default function Dashboard() {
     })();
   }, [organization?.id, canViewAll]);
 
-  // TEMPORARY: shadow-only RPC comparison. Never feeds the UI.
-  useHomeDashboardStatsShadow({
-    organizationId: organization?.id,
-    from,
-    to,
-    ownerId,
-    canViewAll,
-    filtersHydrated,
-    legacyReady: !!parityRunId && legacyReadyRunId === parityRunId,
-    getLegacy: () => legacySnapshotRef.current,
-  });
+  // Raw opportunities are fetched ONLY when the detail modal opens.
+  useEffect(() => {
+    if (!detail || !organization || !userProfile) {
+      setDetailRows([]);
+      return;
+    }
+
+    let aborted = false;
+    setDetailLoading(true);
+
+    (async () => {
+      let query = supabase
+        .from('opportunities')
+        .select(
+          'id, title, status, created_at, updated_at, close_date, amount, contact_id, owner_user_id, contacts:contact_id(full_name), users:owner_user_id(full_name)',
+        )
+        .eq('organization_id', organization.id)
+        .is('deleted_at', null);
+
+      if (!canViewAll) {
+        query = query.eq('owner_user_id', userProfile.id);
+      } else if (ownerId && ownerId !== 'all') {
+        query = query.eq('owner_user_id', ownerId);
+      }
+
+      if (detail === 'entered') {
+        query = query
+          .gte('created_at', from.toISOString())
+          .lte('created_at', to.toISOString())
+          .order('created_at', { ascending: false });
+      } else {
+        query = query
+          .eq('status', 'won')
+          .gte('close_date', toDayStr(from))
+          .lte('close_date', toDayStr(to))
+          .order('close_date', { ascending: false });
+      }
+
+      const { data, error: qErr } = await query.limit(500);
+      if (aborted) return;
+      if (qErr) {
+        console.error('Dashboard detail fetch error:', qErr);
+        setDetailRows([]);
+      } else {
+        setDetailRows((data ?? []) as unknown as OppRow[]);
+      }
+      setDetailLoading(false);
+    })().catch((e) => {
+      if (aborted) return;
+      console.error('Dashboard detail fetch error:', e);
+      setDetailRows([]);
+      setDetailLoading(false);
+    });
+
+    return () => {
+      aborted = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail, organization?.id, userProfile?.id, canViewAll, ownerId, from.getTime(), to.getTime()]);
+
+
 
 
 
