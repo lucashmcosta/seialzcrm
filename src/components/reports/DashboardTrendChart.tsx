@@ -12,11 +12,11 @@ import {
 import { cn } from '@/lib/utils';
 
 
-interface OppPoint {
-  created_at: string;
-  status: string;
-  updated_at: string;
-  close_date?: string | null;
+interface TrendBucket {
+  /** YYYY-MM-DD (local day) */
+  bucket_date: string;
+  created: number;
+  won: number;
 }
 
 const parseLocalDate = (s: string | null | undefined): Date | null => {
@@ -27,11 +27,12 @@ const parseLocalDate = (s: string | null | undefined): Date | null => {
 };
 
 interface Props {
-  data: OppPoint[];
+  data: TrendBucket[];
   from: Date;
   to: Date;
   loading?: boolean;
 }
+
 
 function startOfDay(d: Date) {
   const x = new Date(d);
