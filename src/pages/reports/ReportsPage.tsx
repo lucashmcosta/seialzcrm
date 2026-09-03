@@ -202,17 +202,19 @@ export default function ReportsPage() {
 
     const createdCount = num(k.created_count);
     const prevCreatedCount = num(k.created_count_prev);
+    const wonCount = num(k.won_count);
+    const prevWonCount = num(k.won_count_prev);
     const wonValue = num(k.won_value);
-    const prevWonValue = num(k.won_value_prev);
     const winRate = num(k.win_rate);
     const prevWinRate = num(k.win_rate_prev);
 
     return {
       createdCount,
       createdDelta: delta(createdCount, prevCreatedCount),
-      wonCount: num(k.won_count),
+      wonCount,
       wonValue,
-      wonValueDelta: delta(wonValue, prevWonValue),
+      // Delta follows the card's primary metric (count), not the currency sublabel.
+      wonCountDelta: delta(wonCount, prevWonCount),
       lostCount: num(k.lost_count),
       lostValue: num(k.lost_value),
       winRate,
@@ -220,6 +222,7 @@ export default function ReportsPage() {
       avgTicket: num(k.avg_ticket),
       avgCycle: num(k.avg_cycle_days),
     };
+
   }, [dashboard]);
 
   const openCount = num(dashboard.kpis.open_count);
