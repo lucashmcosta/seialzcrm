@@ -35,7 +35,15 @@ prev_from_day = COALESCE(p_prev_from_day, ((p_from - (p_to - p_from) - interval 
 `created_prev`: `created_at >= prev_from AND created_at < prev_to`.
 `won_prev`: `status='won' AND close_date >= prev_from_day AND close_date < prev_to_day`.
 
-O `- 1 ms` no fallback de `prev_from` preserva a duração efetiva de hoje: a janela inclusiva atual `[p_from-1ms-dur, p_from-1ms]` e a nova exclusiva `[p_from-1ms-dur, p_from)` cobrem exatamente o mesmo conjunto. Nada além de `created_prev` e `won_prev` muda.
+O `- 1 ms` no fallback de `prev_from` preserva a duração efetiva de hoje. Como `timestamptz` tem precisão de microssegundos, `created_at <= p_from - 1ms` e `created_at < p_from` não são conjuntos idênticos em teoria (linhas nos 999 µs entre os dois limites entrariam só na nova janela). Verificação read-only nos dados vivos (referência 03/09/2026, `deleted_at IS NULL`, todas as organizações) confirmou ausência de drift atual:
+
+| preset | janela antiga | janela nova exclusiva |
+|---|---|---|
+| `last_7` | 1.062 | 1.062 |
+| `last_30` | 5.202 | 5.202 |
+| `last_90` | 7.283 | 7.283 |
+
+Para `close_date` (tipo `date`) o desenho novo `>= prev_from_day AND < prev_to_day` com fallback `prev_to_day = p_from_day` é exatamente equivalente ao inclusivo de hoje. Nada além de `created_prev` e `won_prev` muda.
 2. **Migração — wrapper.** `CREATE OR REPLACE` de `get_home_dashboard_stats` com os mesmos 4 parâmetros `DEFAULT NULL` no final, apenas repassados ao core. Toda a lógica de identidade/membership/`view_all_opportunities`/escopo forçado permanece intocada.
 3. **Overload.** Como ambas as funções ganham parâmetros novos, `CREATE OR REPLACE` cria assinatura nova e mantém a antiga → seria overload ambíguo (todos os novos têm default). Por isso a migração faz `DROP FUNCTION` das assinaturas atuais e `CREATE` das novas na mesma transação, reaplicando os grants: wrapper `EXECUTE` para `authenticated` e `service_role`; core sem `EXECUTE` para `authenticated`/`anon`.
 4. **Frontend.** `useHomeDashboardStats` passa a aceitar `previousRange?: { from, toExclusive } | null` e envia os 4 parâmetros (ou `null`). `Dashboard.tsx` calcula com a função já existente e validada `computeExplicitPreviousRange(preset, { from, to })` de `src/lib/report-period.ts`, que retorna janela explícita só para `this_week` e `this_month` (com clamp de fim de mês) e `null` para todos os outros presets e `custom`.
