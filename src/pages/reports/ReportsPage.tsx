@@ -121,13 +121,20 @@ export default function ReportsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [serviceDetail, setServiceDetail] = useState<null | 'first' | 'all'>(null);
 
+  const previousRange = useMemo(
+    () => computeExplicitPreviousRange(preset, range),
+    [preset, range],
+  );
+
   const { data: dashboard, loading } = useSalesDashboardStats({
     organizationId: organization?.id,
     from: range.from,
     to: range.to,
     ownerId,
+    previousRange,
     enabled: filtersHydrated,
   });
+
 
   const { data: serviceStats, loading: serviceLoading } = useServiceStats({
     organizationId: organization?.id,
