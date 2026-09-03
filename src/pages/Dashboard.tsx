@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,21 +18,7 @@ import { DashboardStatusDonut } from '@/components/reports/DashboardStatusDonut'
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-
-import { dedupeRowsById, fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
-// TEMPORARY: shadow parity instrumentation for get_home_dashboard_stats.
-import { useHomeDashboardStatsShadow } from '@/hooks/useHomeDashboardStatsShadow';
-import {
-  buildRunKey,
-  endLegacy,
-  isHomeParityMode,
-  legacySnapshot,
-  noteRender,
-  noteRequest,
-  runIdOf,
-  startLegacy,
-  type HomeSnapshot,
-} from '@/lib/homeParityRun';
+import { useHomeDashboardStats } from '@/hooks/useHomeDashboardStats';
 
 interface OppRow {
   id: string;
@@ -57,6 +43,7 @@ const parseLocalDate = (s: string | null | undefined): Date | null => {
 
 const toDayStr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 export default function Dashboard() {
   const { organization, userProfile, locale, loading: orgLoading, error } = useOrganization();
   const { user, signOut } = useAuth();
