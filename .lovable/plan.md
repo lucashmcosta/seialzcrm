@@ -1,42 +1,43 @@
-# Sentry SEIALZ-1Q (chunk stale) — conclusão e ação mínima
+# Sentry SEIALZ-27 — `readProgressDenominator is not defined`
 
-## O que já tenho (não preciso de mais nada)
+## Diagnóstico
 
-A própria captura responde às duas perguntas que faltavam:
+Fatos do evento (da captura):
 
-- **Last seen:** 12 dias atrás, release `ae48a182bd47`
-- **First seen:** ~1 mês atrás, release `0fcae69ea8b6`
-- 8 eventos, **0 usuários afetados nos últimos 90 dias**, `handled: yes`
+- `ReferenceError: readProgressDenominator is not defined`, unhandled
+- mechanism: `auto.browser.browserapierrors.addEventListener`, handler `onTimeUpdate`
+- **environment: development (100%)**, URL `3e7cbf89-...lovableproject.com/commercial` (preview do Lovable)
+- release `2026-08-19T14-45-04-265Z`, 4 eventos, **0 usuários**, first e last seen 15 dias atrás
 
-Ou seja: não é recorrência nova — é a mesma issue antiga acumulando eventos residuais, sem novos eventos há 12 dias.
+Busca no código atual: **não existe nenhuma referência** a
+`readProgressDenominator` nem a handler `onTimeUpdate` em `src/`
+(`rg` retornou vazio; só há `ontimeupdate` em `CallRecordingPlayer.tsx`, sem
+essa variável). Ou seja, o identificador pertenceu a uma versão intermediária
+do player de áudio durante a edição no preview, já removida — não existe em
+produção.
 
-## Por que ainda chegam eventos apesar do filtro
+Confirma isso o fato de os 4 eventos serem de um único release de preview, em
+ambiente `development`, e nunca terem voltado.
 
-O filtro de stale-chunk existe em `src/instrument.ts` (`beforeSend` derruba
-"failed to fetch dynamically imported module"). Ele só roda no bundle que a
-aba carregou. Uma aba antiga, aberta antes do deploy, roda a versão antiga do
-`instrument.ts` — logo o evento é enviado pelo código velho, sem o filtro. Por
-definição esses eventos continuam pingando por alguns dias após cada deploy e
-depois param. É exatamente o padrão observado (8 eventos, decrescente, 0
-usuários, último há 12 dias).
+## Causa raiz
 
-O app já recupera: `retryImport` + guardas globais em `src/main.tsx` +
-escalonamento para hard refresh na segunda falha da sessão.
+Não é um bug de produção. É ruído de telemetria: o Sentry está inicializado
+também no preview/dev (`environment: import.meta.env.MODE`), então erros de
+código em edição — inclusive estados transitórios que só existem por minutos —
+viram issues permanentes ao lado dos erros reais dos usuários.
 
-## Ação mínima proposta
+## Correção mínima proposta
 
-1. **No Sentry (sem código):** arquivar/resolver a issue SEIALZ-1Q e criar um
-   *Inbound Filter* / regra de descarte server-side por mensagem
-   ("failed to fetch dynamically imported module", "loading chunk",
-   "importing a module script failed"). Isso pega também os eventos vindos de
-   bundles antigos, que o `beforeSend` nunca vai alcançar.
-2. **No repositório (opcional, 1 linha de doc):** registrar essa conclusão em
-   `docs/operations/drift/` para não reabrir a investigação na próxima vez.
+1. **Só reportar em produção.** Em `src/instrument.ts`, deixar de enviar
+   eventos quando o ambiente não é produção (não inicializar o Sentry, ou
+   descartar no `beforeSend` quando `environment !== "production"`). Nada mais
+   muda: DSN, release, tracing e todos os filtros atuais ficam iguais.
+2. **No Sentry:** resolver/arquivar SEIALZ-27 (issue de preview, sem impacto).
 
-Nenhuma mudança em código de aplicação, build, RPC, RLS ou infraestrutura é
-necessária — a mitigação já está no lugar e não há usuário impactado.
+Sem mudanças no player de áudio, em RPC, RLS, build ou infraestrutura.
 
-## Decisão que preciso de você
+## Alternativa, se você quiser manter visibilidade do preview
 
-Se preferir, eu aplico apenas o item 2 (documentação). O item 1 é feito na UI
-do Sentry, que eu não acesso.
+Manter o envio em development, mas separar por ambiente no Sentry (filtro de
+ambiente nas views/alertas) para que o preview não polua a fila de produção.
+Diga qual das duas prefere e eu implemento apenas essa.
