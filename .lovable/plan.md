@@ -23,7 +23,19 @@ prev_from_day= prev_from::date
 
 ## Plano mínimo
 
-1. **Migração — core.** `CREATE OR REPLACE` de `get_home_dashboard_stats_core` acrescentando 4 parâmetros ao final, todos `DEFAULT NULL`: `p_prev_from timestamptz`, `p_prev_to timestamptz`, `p_prev_from_day date`, `p_prev_to_day date`. Na CTE `bounds`, `COALESCE` de cada valor com a expressão atual por duração. Quando explícito, os limites superiores são **exclusivos** (`< prev_to`, `< prev_to_day`), idêntico a `/dashboards`; quando ausente, mantém exatamente a comparação inclusiva de hoje. Nada além de `created_prev` e `won_prev` muda.
+1. **Migração — core.** `CREATE` de `get_home_dashboard_stats_core` com 4 parâmetros novos ao final, todos `DEFAULT NULL`: `p_prev_from timestamptz`, `p_prev_to timestamptz`, `p_prev_from_day date`, `p_prev_to_day date`. A CTE `bounds` é normalizada para **fim exclusivo em todos os casos**, igual a `/dashboards`:
+
+```sql
+prev_to       = COALESCE(p_prev_to,       p_from)
+prev_from     = COALESCE(p_prev_from,     p_from - (p_to - p_from) - interval '1 millisecond')
+prev_to_day   = COALESCE(p_prev_to_day,   p_from_day)
+prev_from_day = COALESCE(p_prev_from_day, ((p_from - (p_to - p_from) - interval '1 millisecond') AT TIME ZONE p_tz)::date)
+```
+
+`created_prev`: `created_at >= prev_from AND created_at < prev_to`.
+`won_prev`: `status='won' AND close_date >= prev_from_day AND close_date < prev_to_day`.
+
+O `- 1 ms` no fallback de `prev_from` preserva a duração efetiva de hoje: a janela inclusiva atual `[p_from-1ms-dur, p_from-1ms]` e a nova exclusiva `[p_from-1ms-dur, p_from)` cobrem exatamente o mesmo conjunto. Nada além de `created_prev` e `won_prev` muda.
 2. **Migração — wrapper.** `CREATE OR REPLACE` de `get_home_dashboard_stats` com os mesmos 4 parâmetros `DEFAULT NULL` no final, apenas repassados ao core. Toda a lógica de identidade/membership/`view_all_opportunities`/escopo forçado permanece intocada.
 3. **Overload.** Como ambas as funções ganham parâmetros novos, `CREATE OR REPLACE` cria assinatura nova e mantém a antiga → seria overload ambíguo (todos os novos têm default). Por isso a migração faz `DROP FUNCTION` das assinaturas atuais e `CREATE` das novas na mesma transação, reaplicando os grants: wrapper `EXECUTE` para `authenticated` e `service_role`; core sem `EXECUTE` para `authenticated`/`anon`.
 4. **Frontend.** `useHomeDashboardStats` passa a aceitar `previousRange?: { from, toExclusive } | null` e envia os 4 parâmetros (ou `null`). `Dashboard.tsx` calcula com a função já existente e validada `computeExplicitPreviousRange(preset, { from, to })` de `src/lib/report-period.ts`, que retorna janela explícita só para `this_week` e `this_month` (com clamp de fim de mês) e `null` para todos os outros presets e `custom`.
