@@ -1,215 +1,31 @@
-# Auditoria: seletor "Responder por" (Comercial) e como levar ao mobile
+# Liberar áudio `audio/mp4` (AAC) no envio Meta
 
-Tudo abaixo foi conferido no banco e no código do web.
+## Resposta curta
+A trava pode ser ajustada. Ela não existe porque `audio/mp4` seja proibido pela Meta — existe porque o **navegador** produzia mp4 com codec **Opus** (saída do polyfill de gravação no desktop), que a Meta aceita no upload e depois rejeita com 131053. O comentário no próprio código diz isso: "audio/mp4 (que costuma vir com codec Opus)". Foi um bloqueio preventivo contra o caso do desktop, e acabou pegando o caso legítimo do celular.
 
-## 1. Provedores existentes hoje
+## O que os dados mostram
+- Áudio de saída nos últimos 120 dias: 40.324 entregues/lidos/enviados, todos com extensão diferente de `.m4a`.
+- Só existem **2** tentativas com `.m4a` no período: uma de 07/07 que falhou com 131053 (originada do desktop, caminho `fallback_mp4` do gravador web, mp4/Opus) e a de ontem do app, que nem chegou à Meta — foi barrada pela nossa própria trava (status `sending`, sem erro registrado).
+- Ou seja: **não há nenhum caso real de AAC dentro de .m4a rejeitado pela Meta** no nosso histórico. Não existe impedimento comprovado, nem restrição a "nota de voz com waveform" no nosso lado.
 
-`communication_endpoints.provider` (valores em uso agora):
+## Correção proposta (mínima)
+No guard de áudio do envio Meta, trocar "bloqueia mp4" por "bloqueia mp4 que não seja AAC":
 
-| provider | canal | purpose | ativos |
-|---|---|---|---|
-| `meta_cloud_api` | whatsapp | commercial / customer_service | 4 |
-| `evolution_api` | whatsapp | commercial | 2 |
-| `twilio` | whatsapp | other / commercial | 14 |
-| `seialz` | webchat | commercial | 2 |
+1. Adicionar `audio/mp4` (e `audio/m4a`, `audio/x-m4a`) à lista permitida.
+2. Antes de liberar, **inspecionar os bytes** do arquivo já baixado: exigir caixa `ftyp` com brand de MP4/M4A e presença de trilha AAC (`mp4a`). Se o contêiner mp4 trouxer Opus (`Opus`/`dOps`), continua bloqueado — é exatamente o caso que gerava 131053.
+3. Manter `audio/webm` bloqueado como hoje.
+4. Registrar o resultado da checagem na telemetria de áudio (`audio_record_events`) com um evento novo, para medir a taxa de sucesso do formato do celular nas primeiras 48h.
 
-Ou seja: o nome do provedor novo é **`evolution_api`** (rótulo "Evolution" na UI). Seu schema local está desatualizado.
+Nada muda para OGG/Opus do web (sanitização atual permanece intacta), nem para AAC/MP3/AMR.
 
-## 2. Função de envio do provedor novo
+## Segunda correção, independente
+O app hoje engole a resposta 415 do envio e deixa a mensagem eternamente com o relógio. Marcar a mensagem como falha e mostrar o motivo devolvido pelo servidor — isso vale para qualquer recusa futura, não só áudio.
 
-Sim: **`evolution-whatsapp-send`**, ao lado de `meta-whatsapp-send` e `twilio-whatsapp-send`. Mas o caminho recomendado **não é** escolher a função no cliente: existe a edge function **`dispatch-whatsapp-send`**, que recebe um payload único (`organizationId`, `threadId`/`contactId`, `message`, mídia, `replyEndpointSelection`, etc.), valida a autenticação e a organização e roteia para o provedor certo. É esse o alvo do mobile — some a lógica de "twilio ou meta" no app.
+## Detalhes técnicos
+- Arquivo: `supabase/functions/meta-whatsapp-send/index.ts`, bloco `if (kind === "audio")` (linhas ~899-916). O guard roda depois do download do arquivo, então os bytes já estão em memória (`fileBytes`) — a inspeção de contêiner não adiciona nenhuma requisição.
+- Sniffing: ler as primeiras caixas do MP4 (`ftyp`, e varredura curta por `mp4a` / `Opus`) num helper puro novo em `supabase/functions/_shared/meta-whatsapp/`, com testes de unidade cobrindo AAC-em-m4a (aceita), Opus-em-mp4 (rejeita) e arquivo truncado (rejeita, fail-closed).
+- Rollout: a função precisa de deploy explícito (não sai por push). Validar com um envio real de `.m4a` do iOS para número interno e conferir o status final no webhook antes de liberar em produção.
+- Documentar em `docs/operations/audio-telemetry.md` e no drift do dia.
 
-Observação: templates aprovados da Meta não são suportados no Evolution (erro `templates_not_supported_on_evolution`).
-
-## 3. Quais números aparecem no dropdown
-
-Não são todos os endpoints da organização. A regra atual:
-
-1. `communication_endpoints` da org com `channel = 'whatsapp'` e `is_active = true`;
-2. cada candidato passa pela função de servidor `fn_is_sales_eligible_endpoint` (elegibilidade **Comercial**) — atendimento fica fora;
-3. cada candidato passa por `fn_can_user_use_reply_endpoint` para o usuário logado — números **pessoais** (`purpose = 'vendor_personal'`) só são usáveis pelo dono; os demais aparecem com cadeado e "bloqueado" (fail-closed);
-4. rótulo: `••••<4 dígitos> · <Provedor>` ou `••••<4 dígitos> · Pessoal · <dono>`.
-
-## 4. Semântica da escolha
-
-É **override pontual**, não mudança permanente:
-
-- a escolha vale para a conversa aberta, em memória (por thread, na sessão);
-- **nunca** altera `primary_endpoint_id`, `messaging_lines.active_endpoint_id` nem grava rotação;
-- ao chegar uma nova mensagem válida na conversa, a escolha manual é descartada e a seleção volta a seguir a última mensagem;
-- o envio manda `replyEndpointSelection = { source: 'manual', endpointId }` e o backend revalida (fail-closed).
-
-## 5. Valor pré-selecionado
-
-Não existe item "Automático". A ordem é:
-
-1. escolha manual do operador nesta conversa, se houver;
-2. senão, o endpoint da **última mensagem válida** da conversa (inbound ou outbound, não deletada, não nota interna) — enviado como `{ source: 'derived' }`, e o backend reconsulta essa mensagem na hora do envio;
-3. senão (conversa sem mensagem roteável), o default da Route (`messaging_lines.active_endpoint_id`).
-
-## 6. Onde está no web
-
-- UI: `src/components/messages/route/ManualReplySelector.tsx`
-- Estado/regras: `src/hooks/messages/useManualReplyEndpoint.ts` (+ `useThreadLastEndpoint.ts`, `useSalesFeatureFlags.ts`)
-- Helpers puros: `src/lib/manualReplySelection.ts`, `src/lib/replyEndpointSelection.ts`
-- Uso: `src/pages/messages/MessagesList.tsx`
-- Espelhos de backend: `supabase/functions/_shared/reply-endpoint-selection.ts` e `_shared/manual-reply-endpoint.ts`
-
-Feature flag: **`sales_manual_reply_endpoint_v1`**, hoje ligada para duas organizações (não é global).
-
-## 7. Atendimento
-
-É **exclusivo do Comercial** por decisão de produto: fora do escopo comercial o hook devolve `disabled` e o seletor não renderiza. No Atendimento o número sai da linha ativa de atendimento; se quiserem algo equivalente lá, é uma discussão de produto separada (ADR-0009 mantém os módulos separados).
-
----
-
-## Plano para o mobile
-
-**Fase 1 — trocar o envio pelo dispatcher (independente da UI)**
-Substituir em `src/lib/dispatchWhatsAppSend.ts` do app a escolha manual entre `twilio-whatsapp-send`/`meta-whatsapp-send` por uma chamada a `dispatch-whatsapp-send`, sem `replyEndpointSelection`. Ganho imediato: passa a funcionar com Evolution e com qualquer provedor futuro. Nenhuma mudança de UI.
-
-**Fase 2 — seletor "Responder por" no composer do app**
-Portar a lógica, sem reimplementar regra:
-- listar endpoints WhatsApp ativos da org e filtrar por `fn_is_sales_eligible_endpoint` e `fn_can_user_use_reply_endpoint` (as duas já existem no banco);
-- seleção derivada pela última mensagem válida da conversa, com override manual por thread em memória e reset ao chegar mensagem nova;
-- enviar `replyEndpointSelection` no payload do dispatcher;
-- respeitar a flag `sales_manual_reply_endpoint_v1` (sem ela, o app segue no comportamento derivado do backend);
-- bloquear apenas o **composer** quando o número selecionado não for permitido, com o texto "Escolha um número permitido para responder" — histórico e contexto continuam visíveis.
-
-Reaproveitamento: os helpers puros `manualReplySelection.ts` e `replyEndpointSelection.ts` podem ser copiados sem alteração para o app (não dependem de React nem do Supabase).
-
-**Fase 3 (opcional)** — reduzir os round-trips: hoje o web faz uma chamada de RPC por endpoint para elegibilidade e permissão. No mobile vale avaliar uma RPC única que devolva a lista já filtrada. Isso exige migração e fica para depois da paridade.
-
-Também vou registrar estas fases no `roadmap.md` junto com as duas migrações de RPC do mobile (Mensagens e Início) já levantadas antes.
-
-Nada aqui altera banco, RLS, permissões ou a versão web.
-
----
-
-## Anexo — contratos exatos para o port (Fase 2)
-
-Assinaturas das duas funções de banco (ambas `returns boolean`, `SECURITY DEFINER`; argumentos nomeados):
-
-```
-fn_is_sales_eligible_endpoint(_organization_id uuid, _endpoint_id uuid) -> boolean
-fn_can_user_use_reply_endpoint(_organization_id uuid, _user_id uuid, _endpoint_id uuid) -> boolean
-```
-
-Chamada no app: `supabase.rpc('fn_is_sales_eligible_endpoint', { _organization_id, _endpoint_id })` e `supabase.rpc('fn_can_user_use_reply_endpoint', { _organization_id, _user_id, _endpoint_id })`. Fail-closed: qualquer erro ou resposta diferente de `true` significa negado.
-
-Arquivos a copiar sem alteração para o app (puros, sem React e sem Supabase):
-- `src/lib/manualReplySelection.ts` — `filterWhatsAppCandidates`, `toManualReplyOptions`, `composerBlockReason`, `manualReplyPayloadValue`
-- `src/lib/replyEndpointSelection.ts` — `isValidRoutingMessage`, `pickLastValidMessage`, `deriveSelectedEndpoint`, `replySelectionPayload`
-
-Vale também copiar `tests/reply-endpoint-selection.test.ts` para travar a paridade da regra no app.
-
-Organizações com a flag `sales_manual_reply_endpoint_v1` ligada (para testar no simulador):
-- **Viagi** — `b246ef6f-6242-4011-a112-6d8783d2896a` (também é a única com `conv_route_resolver_v2` ligada; melhor cenário de teste, tem números Meta e Evolution)
-- **Central Trabalhista** — `40ae935c-a7f7-4ad7-8ea4-91be6404a95f`
-
-### Duas confirmações finais
-
-- **Coluna do endpoint na mensagem:** `messages.endpoint_id` (uuid) — é a única coluna de endpoint na tabela, usada tanto para inbound quanto outbound.
-- **Payload em `derived`:** basta `{ source: 'derived' }`. O backend reconsulta a última mensagem válida no momento do envio e é a fonte de verdade; o `endpointId` enviado em `derived` é apenas dica visual e é ignorado no roteamento. A derivação no app serve, portanto, só para pré-selecionar o dropdown — se ela estiver defasada, o envio continua correto. Em `manual`, ao contrário, o `endpointId` é obrigatório e comanda o envio (fail-closed).
-
----
-
-## Anexo 2 — Snippets, templates por módulo e janela de 24h
-
-### Snippets ("/")
-
-Tabela **`public.message_snippets`** (por organização):
-
-| campo | tipo | papel |
-|---|---|---|
-| `title` | text | nome exibido |
-| `shortcut` | text (nulo) | atalho, ex. `/oi` |
-| `body` | text | corpo com `{{variaveis}}` |
-| `category` | text (nulo) | agrupamento na lista |
-| `allowed_purposes` | text[] | módulo: `commercial` / `customer_service` |
-| `is_active`, `usage_count`, `last_used_at`, `created_by` | — | controle e ordenação |
-
-- **Filtrados por módulo**, sim: a consulta usa `allowed_purposes contains [purpose do endpoint]` (hoje 12 snippets `commercial`, 1 `customer_service`). Ordem: `usage_count` desc, depois título.
-- **Variáveis** são preenchidas automaticamente no cliente (`src/lib/interpolateSnippet.ts`): `{{nome_contato}}`, `{{primeiro_nome}}`, `{{empresa}}`, `{{agente}}`, `{{numero_comercial}}`, `{{numero_atendimento}}`. Variável desconhecida vira texto vazio — nunca sai `{{var}}` na mensagem.
-- **Ao selecionar**, o texto interpolado é **inserido no campo** para o usuário revisar/editar; não envia direto. Abertura pelo `/` no início do campo (`extractSnippetQuery`), e o botão só aparece com a janela de 24h aberta.
-- Envio é texto livre normal (sem `templateId`); uso é contabilizado por `bumpSnippetUsage`.
-
-### Templates por módulo
-
-Sim: **`whatsapp_templates.allowed_purposes`** (text[]) é o "Usar em". Valores em uso hoje: `['commercial']`, `['customer_service']` e `[]` (vazio = sem restrição). Na tela Comercial, filtre por templates que contenham `commercial`, tratando `[]` conforme a regra atual da UI (sem restrição).
-
-### Janela de 24h e template
-
-- **Não é regra igual para todos os provedores.** A exigência é declarada por endpoint, na coluna `communication_endpoints.requires_template_outside_window` (`true` para Meta e Twilio, `false` para `evolution_api`). O composer lê isso do endpoint efetivo (ver `src/hooks/useThreadSendEndpoint.ts`) — não há hardcode por provedor.
-- **Contagem:** por **conversa** (thread), a partir de `last_inbound_at` / `whatsapp_last_inbound_at` da thread, com 24h a partir da última mensagem recebida (`src/lib/serviceWindow.ts`). Não é por par contato+número. Existe ainda uma segunda janela, de 72h (CTWA), que só afeta **gratuidade** de template e não libera texto livre.
-
----
-
-## Anexo 3 — Status das conversas e busca no mobile
-
-**Valores reais de `message_threads.status`** (volumes atuais): `resolved` 8.589 · `awaiting_client` 7.962 · `open` 5.998 · `closed` 92.
-
-Ou seja, "aberta" não é só `open`: o web trata como **aberta** o conjunto `open`, `awaiting_client`, `in_progress` — e ainda inclui um caso especial: thread `resolved` que nunca recebeu resposta do cliente (sem `last_inbound_at` e sem `whatsapp_last_inbound_at`) conta como pendente de primeira resposta e aparece nas abertas. A aba "Resolvidas" mostra `resolved` **com** alguma resposta do cliente.
-
-**Parâmetro na RPC:** `rpc_list_message_threads` tem `p_status text`, mas ele aceita **um único valor** (`mt.status = p_status`); quando vem nulo, a RPC já exclui `resolved` (`status <> 'resolved'`). Não existe parâmetro para o conjunto "aberta" do web. Por isso o web passa `p_status` nulo e faz o recorte das abas no cliente, sobre as linhas retornadas — e o mobile deve fazer igual, usando o campo `status` que já vem em cada linha.
-
-**Comportamento padrão no mobile:** sim, igual ao web — sem escolher aba, mostrar somente as abertas (`open` / `awaiting_client` / `in_progress` + o caso `resolved` sem resposta do cliente). Isso vale também durante a busca: hoje o app mostra as resolvidas antigas porque não aplica esse recorte. Se depois quisermos uma aba "Resolvidas" no app, ela deve chamar a RPC com `p_status: 'resolved'` e exigir a resposta do cliente, como no web.
-
----
-
-## Anexo 4 — Fluxo de mídia no web (áudio, vídeo, documento, vCard)
-
-### 1. Como o envio funciona
-
-Duas etapas no **cliente**, não numa tacada na edge function:
-
-1. upload direto para o Storage, bucket **`whatsapp-media`** (público, sem limite de tamanho e sem restrição de mimetype configurados no bucket), caminho `<organization_id>/<timestamp>-<random>.<ext>`; o inbound dos provedores usa subpastas (`meta-inbound/`, `evolution-inbound/`);
-2. a **URL pública** volta e vai no payload de envio (`mediaUrl` + `mediaType`), e a edge function do provedor repassa essa URL. Nenhuma edge function recebe base64/multipart.
-
-Helper do Atendimento: `src/lib/inboxMediaUpload.ts`. No Comercial a rotina está em `src/components/whatsapp/WhatsAppChat.tsx` / `src/pages/messages/MessagesList.tsx`.
-
-### 2. Shape de `messages.media_urls`
-
-`jsonb`, sempre um **array de strings** (URLs) — hoje na prática com 1 item. Nenhum metadado ali. O tipo vem em `messages.media_type` (`image` | `audio` | `video` | `document`); o resto (caption, vCard, localização, reação, enquete) fica em `messages.metadata`:
-- `metadata.rich_message` — contrato neutro entre provedores: `{ type: 'contacts' | 'location' | 'live_location' | 'reaction' | 'sticker' | 'poll' | 'interactive_reply', contacts: [...], location: {...}, reaction: {...}, poll: {...}, interactive: {...} }`;
-- `metadata.evolution.raw` / `metadata.meta_cloud.raw` — payload original do provedor (fallback do renderer).
-
-Documentado em `docs/integrations/evolution-api/MEDIA_AND_VCARD_AUDIT.md`.
-
-### 3. Limites de tamanho/tipo
-
-Não há limite configurado no bucket `whatsapp-media` (nem `file_size_limit` nem `allowed_mime_types`). A restrição prática é do provedor (limites da Meta/Twilio por tipo) e do `accept` do seletor de arquivo. Não existe validação central de tamanho hoje — se quisermos, é tarefa nova.
-
-### 4. Escopo por módulo
-
-**Vale para os dois** — Comercial (`MessagesList.tsx`, `WhatsAppChat.tsx`) e Atendimento (`InboxConversationTimeline.tsx`, `inboxMediaUpload.ts`). Diferente do seletor "Responder por", mídia não é exclusiva do Comercial. Há também a ação "Vincular como documento" para mídia recebida (imagem/PDF).
-
-### 5. Áudio
-
-O web **grava na hora**, estilo WhatsApp (`src/components/whatsapp/AudioRecorder.tsx`): `opus-media-recorder` (worker + WASM locais, sem CDN) gerando **OGG/Opus**, com saneamento obrigatório de contêiner (`src/lib/sanitizeOggOpus.ts` — pacote vazio quebra a Meta com erro 131053; nunca recodificar). Anexar arquivo de áudio pronto não é oferecido no menu de anexos.
-
-No mobile isso não se porta direto: o gravador do navegador do celular produz `audio/webm` (Android) ou `audio/mp4` (iOS). Precisa decisão — usar o mesmo polyfill Opus no app ou converter no servidor.
-
-### 6. Vídeo e documento
-
-- **Vídeo:** somente upload de arquivo existente (`accept="video/*"`); não há captura pela câmera no web. No mobile o mesmo input já oferece a câmera nativamente.
-- **Documento:** `accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"` (`src/components/whatsapp/MediaUploadButton.tsx`).
-
-### 7. vCard — enviar
-
-**Não existe envio de vCard no web hoje.** Nem da agenda do celular, nem gerada de um contato do CRM. O suporte é só de **recebimento** (parser `supabase/functions/_shared/evolution/vcard.ts` + Meta). Enviar vCard no mobile é **feature nova**, não port — precisa alinhar produto (sugestão: gerar a vCard a partir de um contato do CRM, que é o caso comercial real).
-
-### 8. vCard — receber e vincular ao CRM
-
-Implementado em **`src/components/messages/MetaRichMessageContent.tsx`**:
-- lê `metadata.rich_message.contacts` (fallback `metadata.meta_cloud.raw`) e renderiza o card de contato compartilhado;
-- procura em `contacts` pelo `phone_normalized` (via `normalizePhoneBR`) na organização, ignorando excluídos: se existe, mostra o contato existente; se não, mostra o botão **"Adicionar contato"**;
-- o diálogo `AddSharedContactDialog` pré-preenche nome/sobrenome/telefone da vCard, recheca duplicidade, exige `organizations.operating_country_code`, canoniza o nome (`canonicalContactName`) e faz `insert` em `contacts`.
-
-**Não existe vínculo persistido por mensagem** — nenhuma coluna nova e nenhuma alteração em `message_threads.contact_id`. O "vínculo" é resolvido em tempo de renderização pelo telefone normalizado. Replicar essa mesma regra no mobile mantém a paridade sem tocar no banco.
-
-### Tarefas a registrar no roadmap (ao sair do modo plano)
-
-- Mobile — mídia: enviar e exibir áudio, vídeo, documento e vCard, com paridade das regras acima.
-- Decisão pendente: formato de gravação de áudio no app (polyfill Opus vs. conversão no servidor).
-- Decisão pendente: envio de vCard (feature nova, definir origem — contato do CRM ou agenda do aparelho).
+## Fora de escopo
+Sem transcodificação no servidor, sem biblioteca de conversão no app, sem mudança no gravador do web, sem alteração de roteamento ou de versão da Graph API.
