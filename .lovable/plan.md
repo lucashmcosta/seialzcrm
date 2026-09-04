@@ -83,3 +83,26 @@ Reaproveitamento: os helpers puros `manualReplySelection.ts` e `replyEndpointSel
 Também vou registrar estas fases no `roadmap.md` junto com as duas migrações de RPC do mobile (Mensagens e Início) já levantadas antes.
 
 Nada aqui altera banco, RLS, permissões ou a versão web.
+
+---
+
+## Anexo — contratos exatos para o port (Fase 2)
+
+Assinaturas das duas funções de banco (ambas `returns boolean`, `SECURITY DEFINER`; argumentos nomeados):
+
+```
+fn_is_sales_eligible_endpoint(_organization_id uuid, _endpoint_id uuid) -> boolean
+fn_can_user_use_reply_endpoint(_organization_id uuid, _user_id uuid, _endpoint_id uuid) -> boolean
+```
+
+Chamada no app: `supabase.rpc('fn_is_sales_eligible_endpoint', { _organization_id, _endpoint_id })` e `supabase.rpc('fn_can_user_use_reply_endpoint', { _organization_id, _user_id, _endpoint_id })`. Fail-closed: qualquer erro ou resposta diferente de `true` significa negado.
+
+Arquivos a copiar sem alteração para o app (puros, sem React e sem Supabase):
+- `src/lib/manualReplySelection.ts` — `filterWhatsAppCandidates`, `toManualReplyOptions`, `composerBlockReason`, `manualReplyPayloadValue`
+- `src/lib/replyEndpointSelection.ts` — `isValidRoutingMessage`, `pickLastValidMessage`, `deriveSelectedEndpoint`, `replySelectionPayload`
+
+Vale também copiar `tests/reply-endpoint-selection.test.ts` para travar a paridade da regra no app.
+
+Organizações com a flag `sales_manual_reply_endpoint_v1` ligada (para testar no simulador):
+- **Viagi** — `b246ef6f-6242-4011-a112-6d8783d2896a` (também é a única com `conv_route_resolver_v2` ligada; melhor cenário de teste, tem números Meta e Evolution)
+- **Central Trabalhista** — `40ae935c-a7f7-4ad7-8ea4-91be6404a95f`
