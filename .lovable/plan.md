@@ -111,3 +111,34 @@ Organizações com a flag `sales_manual_reply_endpoint_v1` ligada (para testar n
 
 - **Coluna do endpoint na mensagem:** `messages.endpoint_id` (uuid) — é a única coluna de endpoint na tabela, usada tanto para inbound quanto outbound.
 - **Payload em `derived`:** basta `{ source: 'derived' }`. O backend reconsulta a última mensagem válida no momento do envio e é a fonte de verdade; o `endpointId` enviado em `derived` é apenas dica visual e é ignorado no roteamento. A derivação no app serve, portanto, só para pré-selecionar o dropdown — se ela estiver defasada, o envio continua correto. Em `manual`, ao contrário, o `endpointId` é obrigatório e comanda o envio (fail-closed).
+
+---
+
+## Anexo 2 — Snippets, templates por módulo e janela de 24h
+
+### Snippets ("/")
+
+Tabela **`public.message_snippets`** (por organização):
+
+| campo | tipo | papel |
+|---|---|---|
+| `title` | text | nome exibido |
+| `shortcut` | text (nulo) | atalho, ex. `/oi` |
+| `body` | text | corpo com `{{variaveis}}` |
+| `category` | text (nulo) | agrupamento na lista |
+| `allowed_purposes` | text[] | módulo: `commercial` / `customer_service` |
+| `is_active`, `usage_count`, `last_used_at`, `created_by` | — | controle e ordenação |
+
+- **Filtrados por módulo**, sim: a consulta usa `allowed_purposes contains [purpose do endpoint]` (hoje 12 snippets `commercial`, 1 `customer_service`). Ordem: `usage_count` desc, depois título.
+- **Variáveis** são preenchidas automaticamente no cliente (`src/lib/interpolateSnippet.ts`): `{{nome_contato}}`, `{{primeiro_nome}}`, `{{empresa}}`, `{{agente}}`, `{{numero_comercial}}`, `{{numero_atendimento}}`. Variável desconhecida vira texto vazio — nunca sai `{{var}}` na mensagem.
+- **Ao selecionar**, o texto interpolado é **inserido no campo** para o usuário revisar/editar; não envia direto. Abertura pelo `/` no início do campo (`extractSnippetQuery`), e o botão só aparece com a janela de 24h aberta.
+- Envio é texto livre normal (sem `templateId`); uso é contabilizado por `bumpSnippetUsage`.
+
+### Templates por módulo
+
+Sim: **`whatsapp_templates.allowed_purposes`** (text[]) é o "Usar em". Valores em uso hoje: `['commercial']`, `['customer_service']` e `[]` (vazio = sem restrição). Na tela Comercial, filtre por templates que contenham `commercial`, tratando `[]` conforme a regra atual da UI (sem restrição).
+
+### Janela de 24h e template
+
+- **Não é regra igual para todos os provedores.** A exigência é declarada por endpoint, na coluna `communication_endpoints.requires_template_outside_window` (`true` para Meta e Twilio, `false` para `evolution_api`). O composer lê isso do endpoint efetivo (ver `src/hooks/useThreadSendEndpoint.ts`) — não há hardcode por provedor.
+- **Contagem:** por **conversa** (thread), a partir de `last_inbound_at` / `whatsapp_last_inbound_at` da thread, com 24h a partir da última mensagem recebida (`src/lib/serviceWindow.ts`). Não é por par contato+número. Existe ainda uma segunda janela, de 72h (CTWA), que só afeta **gratuidade** de template e não libera texto livre.
