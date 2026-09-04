@@ -1,93 +1,85 @@
-# Mobile: migrar Mensagens (comercial) e Início para as RPCs existentes
+# Auditoria: seletor "Responder por" (Comercial) e como levar ao mobile
 
-Verificado no banco: **as duas RPCs já existem** e não é preciso criar função nem índice novo. O trabalho é trocar as consultas do app e documentar os contratos.
+Tudo abaixo foi conferido no banco e no código do web.
 
----
+## 1. Provedores existentes hoje
 
-## Parte 1 — Lista de conversas de Mensagens (comercial)
+`communication_endpoints.provider` (valores em uso agora):
 
-**Nome exato:** `rpc_list_message_threads` (mesma que a tela web usa em `src/hooks/useMessageThreads.ts`).
+| provider | canal | purpose | ativos |
+|---|---|---|---|
+| `meta_cloud_api` | whatsapp | commercial / customer_service | 4 |
+| `evolution_api` | whatsapp | commercial | 2 |
+| `twilio` | whatsapp | other / commercial | 14 |
+| `seialz` | webchat | commercial | 2 |
 
-Assinatura (usar sempre a versão com `p_search`):
+Ou seja: o nome do provedor novo é **`evolution_api`** (rótulo "Evolution" na UI). Seu schema local está desatualizado.
 
-```
-rpc_list_message_threads(
-  p_organization_id  uuid,
-  p_status           text   default null,     -- null = tudo menos 'resolved'
-  p_channels         text[] default null,     -- ['whatsapp']
-  p_assigned_user_id uuid   default null,     -- equivalente a "só minhas"
-  p_unassigned_only  boolean default false,
-  p_cursor_updated_at timestamptz default null,
-  p_cursor_id        uuid   default null,
-  p_limit            integer default 50,
-  p_search           text   default null
-)
-```
+## 2. Função de envio do provedor novo
 
-Retorno (uma linha por conversa, campos já resolvidos): `id`, `contact_id`, `contact_name`, `contact_phone`, `channel`, `subject`, `status`, `last_message_id`, `last_message_content`, `last_message_direction`, `last_message_at`, `last_inbound_at`, `whatsapp_last_inbound_at`, `needs_human_attention`, `agent_typing`, `awaiting_button_response`, `assigned_user_id`, `assigned_user_name`, `updated_at`, `created_at`, `is_unread`.
+Sim: **`evolution-whatsapp-send`**, ao lado de `meta-whatsapp-send` e `twilio-whatsapp-send`. Mas o caminho recomendado **não é** escolher a função no cliente: existe a edge function **`dispatch-whatsapp-send`**, que recebe um payload único (`organizationId`, `threadId`/`contactId`, `message`, mídia, `replyEndpointSelection`, etc.), valida a autenticação e a organização e roteia para o provedor certo. É esse o alvo do mobile — some a lógica de "twilio ou meta" no app.
 
-- **Escopo comercial:** filtra `business_context = 'sales'` e, para threads antigas sem valor, aplica o fallback (contato não-cliente e endpoint que não seja de atendimento).
-- **Não lida:** já vem em `is_unread`, com o join de `message_thread_reads` do usuário logado dentro da função — dispensa o round-trip extra.
-- **Busca:** `p_search` roda no banco sobre o dataset completo (nome, telefone e telefone só-dígitos).
-- **Ordenação:** `COALESCE(last_message_at, created_at) DESC NULLS LAST, id DESC`.
-- **Paginação:** por cursor (`p_cursor_updated_at` + `p_cursor_id`), não offset.
-- **Segurança:** exige vínculo ativo com a organização (`ACCESS_DENIED`) e respeita "ver tudo" × "ver só o meu".
-- **Índices:** já existem `idx_threads_org_bizctx_lastmsg (organization_id, business_context, last_message_at DESC NULLS LAST)` e `idx_threads_org_channel_updated`. Nada a criar.
+Observação: templates aprovados da Meta não são suportados no Evolution (erro `templates_not_supported_on_evolution`).
 
-Diferenças em relação ao contrato que você imaginou: não há `p_only_mine` (use `p_assigned_user_id`), não há `p_offset` (cursor), e canal vai como array.
+## 3. Quais números aparecem no dropdown
 
-**Mudanças no app:** trocar o `from('message_threads').select(...)` pela RPC; busca com debounce ~300 ms indo ao banco em vez de filtrar as 100 linhas em memória; "carregar mais" enviando o cursor da última linha; usar `is_unread` e remover a leitura separada de `message_thread_reads` na listagem (o upsert ao abrir a conversa continua).
+Não são todos os endpoints da organização. A regra atual:
 
----
+1. `communication_endpoints` da org com `channel = 'whatsapp'` e `is_active = true`;
+2. cada candidato passa pela função de servidor `fn_is_sales_eligible_endpoint` (elegibilidade **Comercial**) — atendimento fica fora;
+3. cada candidato passa por `fn_can_user_use_reply_endpoint` para o usuário logado — números **pessoais** (`purpose = 'vendor_personal'`) só são usáveis pelo dono; os demais aparecem com cadeado e "bloqueado" (fail-closed);
+4. rótulo: `••••<4 dígitos> · <Provedor>` ou `••••<4 dígitos> · Pessoal · <dono>`.
 
-## Parte 2 — Início (dashboard)
+## 4. Semântica da escolha
 
-**Nome exato:** `get_home_dashboard_stats` (wrapper público; a `_core` não é chamável pelo app).
+É **override pontual**, não mudança permanente:
 
-```
-get_home_dashboard_stats(
-  p_organization_id uuid,
-  p_from            timestamptz,
-  p_to              timestamptz,
-  p_from_day        date,
-  p_to_day          date,
-  p_owner_user_id   uuid default null,
-  p_tz              text default 'America/Sao_Paulo',
-  p_prev_from       timestamptz default null,
-  p_prev_to         timestamptz default null,
-  p_prev_from_day   date default null,
-  p_prev_to_day     date default null
-) returns json
-```
+- a escolha vale para a conversa aberta, em memória (por thread, na sessão);
+- **nunca** altera `primary_endpoint_id`, `messaging_lines.active_endpoint_id` nem grava rotação;
+- ao chegar uma nova mensagem válida na conversa, a escolha manual é descartada e a seleção volta a seguir a última mensagem;
+- o envio manda `replyEndpointSelection = { source: 'manual', endpointId }` e o backend revalida (fail-closed).
 
-Retorno exato:
+## 5. Valor pré-selecionado
 
-```json
-{
-  "kpis":   { "created_count": 0, "created_count_prev": 0, "won_count": 0, "won_count_prev": 0 },
-  "status": { "open": 0, "won": 0, "lost": 0 },
-  "trend":  [ { "bucket_date": "2026-09-01", "created": 0, "won": 0 } ]
-}
-```
+Não existe item "Automático". A ordem é:
 
-Respostas diretas:
+1. escolha manual do operador nesta conversa, se houver;
+2. senão, o endpoint da **última mensagem válida** da conversa (inbound ou outbound, não deletada, não nota interna) — enviado como `{ source: 'derived' }`, e o backend reconsulta essa mensagem na hora do envio;
+3. senão (conversa sem mensagem roteável), o default da Route (`messaging_lines.active_endpoint_id`).
 
-- **Escopo de responsável:** não existe parâmetro `canViewAll`. A própria RPC lê a permissão `view_all_opportunities` do usuário: sem ela, força o escopo ao próprio usuário e **ignora** `p_owner_user_id`; com ela, aplica `p_owner_user_id` quando informado, ou "todos" quando nulo. O app não precisa (nem deve) decidir isso.
-- **Período anterior:** calculado no banco. Os 4 parâmetros `p_prev_*` são opcionais e só devem ser enviados nos casos "esta semana" e "este mês", para alinhar o mesmo trecho da semana/mês anterior; nos demais presets deixe nulos e o fallback de mesma duração é aplicado.
-- **Bucketização:** o `trend` vem **diário** e já preenchido com zeros para todos os dias do período (no fuso `p_tz`). A agregação **semanal continua no cliente** — é o mesmo desenho da web.
-- **Listas de oportunidades (entradas/fechadas):** **não** vêm na RPC, de propósito — eram o que pesava no carregamento. Devem ser buscadas **sob demanda**, só quando o usuário abrir o detalhe, com `select` enxuto (`id`, `title`, `amount`, `status`, data, nome do contato), `ORDER BY` explícito e `limit`.
-- **Conversão:** derivada no cliente (`won_count / created_count * 100`), como na web.
+## 6. Onde está no web
 
-**Mudanças no app (`use-dashboard-stats.ts`):** remover os dois loops de `fetchAllPagedRows` sobre `opportunities` e as agregações em JS; passar a uma única chamada de RPC; manter só a agregação semanal e o cálculo de conversão; mover as duas listas para consulta sob demanda no detalhe.
+- UI: `src/components/messages/route/ManualReplySelector.tsx`
+- Estado/regras: `src/hooks/messages/useManualReplyEndpoint.ts` (+ `useThreadLastEndpoint.ts`, `useSalesFeatureFlags.ts`)
+- Helpers puros: `src/lib/manualReplySelection.ts`, `src/lib/replyEndpointSelection.ts`
+- Uso: `src/pages/messages/MessagesList.tsx`
+- Espelhos de backend: `supabase/functions/_shared/reply-endpoint-selection.ts` e `_shared/manual-reply-endpoint.ts`
+
+Feature flag: **`sales_manual_reply_endpoint_v1`**, hoje ligada para duas organizações (não é global).
+
+## 7. Atendimento
+
+É **exclusivo do Comercial** por decisão de produto: fora do escopo comercial o hook devolve `disabled` e o seletor não renderiza. No Atendimento o número sai da linha ativa de atendimento; se quiserem algo equivalente lá, é uma discussão de produto separada (ADR-0009 mantém os módulos separados).
 
 ---
 
-## Documentação
+## Plano para o mobile
 
-Registrar os dois contratos em `docs/mobile/backend-reference.md`, citar a RPC de threads em `docs/modules/messages/data-model.md`, e abrir as duas tarefas no `roadmap.md`.
+**Fase 1 — trocar o envio pelo dispatcher (independente da UI)**
+Substituir em `src/lib/dispatchWhatsAppSend.ts` do app a escolha manual entre `twilio-whatsapp-send`/`meta-whatsapp-send` por uma chamada a `dispatch-whatsapp-send`, sem `replyEndpointSelection`. Ganho imediato: passa a funcionar com Evolution e com qualquer provedor futuro. Nenhuma mudança de UI.
 
-## Nota técnica
+**Fase 2 — seletor "Responder por" no composer do app**
+Portar a lógica, sem reimplementar regra:
+- listar endpoints WhatsApp ativos da org e filtrar por `fn_is_sales_eligible_endpoint` e `fn_can_user_use_reply_endpoint` (as duas já existem no banco);
+- seleção derivada pela última mensagem válida da conversa, com override manual por thread em memória e reset ao chegar mensagem nova;
+- enviar `replyEndpointSelection` no payload do dispatcher;
+- respeitar a flag `sales_manual_reply_endpoint_v1` (sem ela, o app segue no comportamento derivado do backend);
+- bloquear apenas o **composer** quando o número selecionado não for permitido, com o texto "Escolha um número permitido para responder" — histórico e contexto continuam visíveis.
 
-`rpc_list_message_threads` existe em duas assinaturas (8 e 9 parâmetros — a de 9 adiciona `p_search`), drift já conhecido. Chamadas com argumentos nomeados incluindo `p_search` resolvem para a versão certa; remover a assinatura antiga é uma migração à parte, fora deste trabalho.
+Reaproveitamento: os helpers puros `manualReplySelection.ts` e `replyEndpointSelection.ts` podem ser copiados sem alteração para o app (não dependem de React nem do Supabase).
+
+**Fase 3 (opcional)** — reduzir os round-trips: hoje o web faz uma chamada de RPC por endpoint para elegibilidade e permissão. No mobile vale avaliar uma RPC única que devolva a lista já filtrada. Isso exige migração e fica para depois da paridade.
+
+Também vou registrar estas fases no `roadmap.md` junto com as duas migrações de RPC do mobile (Mensagens e Início) já levantadas antes.
 
 Nada aqui altera banco, RLS, permissões ou a versão web.
