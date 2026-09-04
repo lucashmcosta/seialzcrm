@@ -142,3 +142,15 @@ Sim: **`whatsapp_templates.allowed_purposes`** (text[]) é o "Usar em". Valores 
 
 - **Não é regra igual para todos os provedores.** A exigência é declarada por endpoint, na coluna `communication_endpoints.requires_template_outside_window` (`true` para Meta e Twilio, `false` para `evolution_api`). O composer lê isso do endpoint efetivo (ver `src/hooks/useThreadSendEndpoint.ts`) — não há hardcode por provedor.
 - **Contagem:** por **conversa** (thread), a partir de `last_inbound_at` / `whatsapp_last_inbound_at` da thread, com 24h a partir da última mensagem recebida (`src/lib/serviceWindow.ts`). Não é por par contato+número. Existe ainda uma segunda janela, de 72h (CTWA), que só afeta **gratuidade** de template e não libera texto livre.
+
+---
+
+## Anexo 3 — Status das conversas e busca no mobile
+
+**Valores reais de `message_threads.status`** (volumes atuais): `resolved` 8.589 · `awaiting_client` 7.962 · `open` 5.998 · `closed` 92.
+
+Ou seja, "aberta" não é só `open`: o web trata como **aberta** o conjunto `open`, `awaiting_client`, `in_progress` — e ainda inclui um caso especial: thread `resolved` que nunca recebeu resposta do cliente (sem `last_inbound_at` e sem `whatsapp_last_inbound_at`) conta como pendente de primeira resposta e aparece nas abertas. A aba "Resolvidas" mostra `resolved` **com** alguma resposta do cliente.
+
+**Parâmetro na RPC:** `rpc_list_message_threads` tem `p_status text`, mas ele aceita **um único valor** (`mt.status = p_status`); quando vem nulo, a RPC já exclui `resolved` (`status <> 'resolved'`). Não existe parâmetro para o conjunto "aberta" do web. Por isso o web passa `p_status` nulo e faz o recorte das abas no cliente, sobre as linhas retornadas — e o mobile deve fazer igual, usando o campo `status` que já vem em cada linha.
+
+**Comportamento padrão no mobile:** sim, igual ao web — sem escolher aba, mostrar somente as abertas (`open` / `awaiting_client` / `in_progress` + o caso `resolved` sem resposta do cliente). Isso vale também durante a busca: hoje o app mostra as resolvidas antigas porque não aplica esse recorte. Se depois quisermos uma aba "Resolvidas" no app, ela deve chamar a RPC com `p_status: 'resolved'` e exigir a resposta do cliente, como no web.
