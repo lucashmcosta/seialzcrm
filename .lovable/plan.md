@@ -106,3 +106,8 @@ Vale também copiar `tests/reply-endpoint-selection.test.ts` para travar a parid
 Organizações com a flag `sales_manual_reply_endpoint_v1` ligada (para testar no simulador):
 - **Viagi** — `b246ef6f-6242-4011-a112-6d8783d2896a` (também é a única com `conv_route_resolver_v2` ligada; melhor cenário de teste, tem números Meta e Evolution)
 - **Central Trabalhista** — `40ae935c-a7f7-4ad7-8ea4-91be6404a95f`
+
+### Duas confirmações finais
+
+- **Coluna do endpoint na mensagem:** `messages.endpoint_id` (uuid) — é a única coluna de endpoint na tabela, usada tanto para inbound quanto outbound.
+- **Payload em `derived`:** basta `{ source: 'derived' }`. O backend reconsulta a última mensagem válida no momento do envio e é a fonte de verdade; o `endpointId` enviado em `derived` é apenas dica visual e é ignorado no roteamento. A derivação no app serve, portanto, só para pré-selecionar o dropdown — se ela estiver defasada, o envio continua correto. Em `manual`, ao contrário, o `endpointId` é obrigatório e comanda o envio (fail-closed).
