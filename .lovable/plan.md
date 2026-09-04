@@ -154,3 +154,62 @@ Ou seja, "aberta" não é só `open`: o web trata como **aberta** o conjunto `op
 **Parâmetro na RPC:** `rpc_list_message_threads` tem `p_status text`, mas ele aceita **um único valor** (`mt.status = p_status`); quando vem nulo, a RPC já exclui `resolved` (`status <> 'resolved'`). Não existe parâmetro para o conjunto "aberta" do web. Por isso o web passa `p_status` nulo e faz o recorte das abas no cliente, sobre as linhas retornadas — e o mobile deve fazer igual, usando o campo `status` que já vem em cada linha.
 
 **Comportamento padrão no mobile:** sim, igual ao web — sem escolher aba, mostrar somente as abertas (`open` / `awaiting_client` / `in_progress` + o caso `resolved` sem resposta do cliente). Isso vale também durante a busca: hoje o app mostra as resolvidas antigas porque não aplica esse recorte. Se depois quisermos uma aba "Resolvidas" no app, ela deve chamar a RPC com `p_status: 'resolved'` e exigir a resposta do cliente, como no web.
+
+---
+
+## Anexo 4 — Fluxo de mídia no web (áudio, vídeo, documento, vCard)
+
+### 1. Como o envio funciona
+
+Duas etapas no **cliente**, não numa tacada na edge function:
+
+1. upload direto para o Storage, bucket **`whatsapp-media`** (público, sem limite de tamanho e sem restrição de mimetype configurados no bucket), caminho `<organization_id>/<timestamp>-<random>.<ext>`; o inbound dos provedores usa subpastas (`meta-inbound/`, `evolution-inbound/`);
+2. a **URL pública** volta e vai no payload de envio (`mediaUrl` + `mediaType`), e a edge function do provedor repassa essa URL. Nenhuma edge function recebe base64/multipart.
+
+Helper do Atendimento: `src/lib/inboxMediaUpload.ts`. No Comercial a rotina está em `src/components/whatsapp/WhatsAppChat.tsx` / `src/pages/messages/MessagesList.tsx`.
+
+### 2. Shape de `messages.media_urls`
+
+`jsonb`, sempre um **array de strings** (URLs) — hoje na prática com 1 item. Nenhum metadado ali. O tipo vem em `messages.media_type` (`image` | `audio` | `video` | `document`); o resto (caption, vCard, localização, reação, enquete) fica em `messages.metadata`:
+- `metadata.rich_message` — contrato neutro entre provedores: `{ type: 'contacts' | 'location' | 'live_location' | 'reaction' | 'sticker' | 'poll' | 'interactive_reply', contacts: [...], location: {...}, reaction: {...}, poll: {...}, interactive: {...} }`;
+- `metadata.evolution.raw` / `metadata.meta_cloud.raw` — payload original do provedor (fallback do renderer).
+
+Documentado em `docs/integrations/evolution-api/MEDIA_AND_VCARD_AUDIT.md`.
+
+### 3. Limites de tamanho/tipo
+
+Não há limite configurado no bucket `whatsapp-media` (nem `file_size_limit` nem `allowed_mime_types`). A restrição prática é do provedor (limites da Meta/Twilio por tipo) e do `accept` do seletor de arquivo. Não existe validação central de tamanho hoje — se quisermos, é tarefa nova.
+
+### 4. Escopo por módulo
+
+**Vale para os dois** — Comercial (`MessagesList.tsx`, `WhatsAppChat.tsx`) e Atendimento (`InboxConversationTimeline.tsx`, `inboxMediaUpload.ts`). Diferente do seletor "Responder por", mídia não é exclusiva do Comercial. Há também a ação "Vincular como documento" para mídia recebida (imagem/PDF).
+
+### 5. Áudio
+
+O web **grava na hora**, estilo WhatsApp (`src/components/whatsapp/AudioRecorder.tsx`): `opus-media-recorder` (worker + WASM locais, sem CDN) gerando **OGG/Opus**, com saneamento obrigatório de contêiner (`src/lib/sanitizeOggOpus.ts` — pacote vazio quebra a Meta com erro 131053; nunca recodificar). Anexar arquivo de áudio pronto não é oferecido no menu de anexos.
+
+No mobile isso não se porta direto: o gravador do navegador do celular produz `audio/webm` (Android) ou `audio/mp4` (iOS). Precisa decisão — usar o mesmo polyfill Opus no app ou converter no servidor.
+
+### 6. Vídeo e documento
+
+- **Vídeo:** somente upload de arquivo existente (`accept="video/*"`); não há captura pela câmera no web. No mobile o mesmo input já oferece a câmera nativamente.
+- **Documento:** `accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"` (`src/components/whatsapp/MediaUploadButton.tsx`).
+
+### 7. vCard — enviar
+
+**Não existe envio de vCard no web hoje.** Nem da agenda do celular, nem gerada de um contato do CRM. O suporte é só de **recebimento** (parser `supabase/functions/_shared/evolution/vcard.ts` + Meta). Enviar vCard no mobile é **feature nova**, não port — precisa alinhar produto (sugestão: gerar a vCard a partir de um contato do CRM, que é o caso comercial real).
+
+### 8. vCard — receber e vincular ao CRM
+
+Implementado em **`src/components/messages/MetaRichMessageContent.tsx`**:
+- lê `metadata.rich_message.contacts` (fallback `metadata.meta_cloud.raw`) e renderiza o card de contato compartilhado;
+- procura em `contacts` pelo `phone_normalized` (via `normalizePhoneBR`) na organização, ignorando excluídos: se existe, mostra o contato existente; se não, mostra o botão **"Adicionar contato"**;
+- o diálogo `AddSharedContactDialog` pré-preenche nome/sobrenome/telefone da vCard, recheca duplicidade, exige `organizations.operating_country_code`, canoniza o nome (`canonicalContactName`) e faz `insert` em `contacts`.
+
+**Não existe vínculo persistido por mensagem** — nenhuma coluna nova e nenhuma alteração em `message_threads.contact_id`. O "vínculo" é resolvido em tempo de renderização pelo telefone normalizado. Replicar essa mesma regra no mobile mantém a paridade sem tocar no banco.
+
+### Tarefas a registrar no roadmap (ao sair do modo plano)
+
+- Mobile — mídia: enviar e exibir áudio, vídeo, documento e vCard, com paridade das regras acima.
+- Decisão pendente: formato de gravação de áudio no app (polyfill Opus vs. conversão no servidor).
+- Decisão pendente: envio de vCard (feature nova, definir origem — contato do CRM ou agenda do aparelho).
