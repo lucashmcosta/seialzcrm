@@ -13307,6 +13307,7 @@ export type Database = {
         Args: { _flag_key: string; _organization_id?: string }
         Returns: boolean
       }
+      fn_get_push_dispatch_token: { Args: never; Returns: string }
       fn_inbound_archive_dead_letter: {
         Args: { _event_id: string }
         Returns: undefined
