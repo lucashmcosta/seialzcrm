@@ -25,7 +25,41 @@ import {
 
 
 
+// Peça 2 — encerramento terminal: qualquer recusa definitiva do envio persiste a
+// mensagem como `failed` com o motivo, em vez de deixá-la presa em `sending`.
+// Não reclassifica erros: quem chama define status HTTP, corpo e campos gravados.
+async function finishTerminal(
+  supabase: { from: (t: string) => any },
+  messageId: string,
+  input: {
+    status: number;
+    body: Record<string, unknown>;
+    errorCode?: string | null;
+    errorMessage: string;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  try {
+    await supabase
+      .from("messages")
+      .update({
+        whatsapp_status: "failed",
+        error_code: input.errorCode ?? null,
+        error_message: input.errorMessage,
+        ...(input.metadata ? { metadata: input.metadata } : {}),
+      })
+      .eq("id", messageId);
+  } catch (persistErr) {
+    console.error("[meta-wa-send] terminal_persist_failed", {
+      messageId,
+      error: (persistErr as Error).message,
+    });
+  }
+  return jsonResponse(input.status, input.body);
+}
+
 function jsonResponse(status: number, body: Record<string, unknown>) {
+
   if (status >= 400) {
     console.warn("[meta-wa-send] response_error", {
       status,
