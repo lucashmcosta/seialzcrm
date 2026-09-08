@@ -8,7 +8,8 @@
 - [x] Teste de não-regressão real: OGG/Opus do Web → `delivered` (msg 6d03cd17), MIME enviado segue `audio/ogg`.
 
 ## Peça 2 (separada, não bloqueia a Peça 1)
-- [ ] Recusas terminais do envio (415 e afins) marcam a mensagem como `failed`, persistem e exibem o motivo, em vez de deixar em `sending`.
+- [x] `finishTerminal` em `meta-whatsapp-send`: recusas terminais (415 do guard de áudio) marcam `failed` + motivo persistido; `catch` da Graph reusa o helper com semântica idêntica.
+- [ ] Validação em produção: recusa terminal → `failed` visível; M4A/AAC válido → `delivered`; Web OGG/Opus → `delivered`.
 
 ## Mobile — mídia
 - [ ] Enviar/exibir os 4 tipos (áudio, vídeo, documento, vCard) com paridade de regras com o Web.

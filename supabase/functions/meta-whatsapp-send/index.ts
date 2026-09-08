@@ -1144,16 +1144,14 @@ serve(async (req) => {
       const errDetails = e instanceof MetaWaGraphError
         ? { code: e.error.code, error_subcode: e.error.error_subcode, message: e.error.message }
         : { message: (e as Error).message };
-      await supabase
-        .from("messages")
-        .update({
-          whatsapp_status: "failed",
-          error_code: errDetails.code ? String(errDetails.code) : null,
-          error_message: errDetails.message,
-          metadata: { meta_cloud: { ...baseMeta, error: errDetails } },
-        })
-        .eq("id", insertedMsg.id);
-      return jsonResponse(500, { error: "meta_send_failed", details: errDetails });
+      return await finishTerminal(supabase, insertedMsg.id, {
+        status: 500,
+        body: { error: "meta_send_failed", details: errDetails },
+        errorCode: errDetails.code ? String(errDetails.code) : null,
+        errorMessage: errDetails.message,
+        metadata: { meta_cloud: { ...baseMeta, error: errDetails } },
+      });
+
     }
 
   } catch (e) {
