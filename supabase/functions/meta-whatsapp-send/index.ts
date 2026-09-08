@@ -25,7 +25,41 @@ import {
 
 
 
+// Peça 2 — encerramento terminal: qualquer recusa definitiva do envio persiste a
+// mensagem como `failed` com o motivo, em vez de deixá-la presa em `sending`.
+// Não reclassifica erros: quem chama define status HTTP, corpo e campos gravados.
+async function finishTerminal(
+  supabase: { from: (t: string) => any },
+  messageId: string,
+  input: {
+    status: number;
+    body: Record<string, unknown>;
+    errorCode?: string | null;
+    errorMessage: string;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  try {
+    await supabase
+      .from("messages")
+      .update({
+        whatsapp_status: "failed",
+        error_code: input.errorCode ?? null,
+        error_message: input.errorMessage,
+        ...(input.metadata ? { metadata: input.metadata } : {}),
+      })
+      .eq("id", messageId);
+  } catch (persistErr) {
+    console.error("[meta-wa-send] terminal_persist_failed", {
+      messageId,
+      error: (persistErr as Error).message,
+    });
+  }
+  return jsonResponse(input.status, input.body);
+}
+
 function jsonResponse(status: number, body: Record<string, unknown>) {
+
   if (status >= 400) {
     console.warn("[meta-wa-send] response_error", {
       status,
@@ -917,14 +951,16 @@ serve(async (req) => {
                 reason: verdict.reason,
                 sizeBytes: fileBytes.length,
               });
-              return new Response(
-                JSON.stringify({
-                  error: "unsupported_audio_mime",
-                  message: "Formato de áudio não suportado pela Meta. Envie como arquivo ou grave novamente.",
-                  details: { received: effectiveCt, reason: verdict.reason },
-                }),
-                { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-              );
+              const details = { received: effectiveCt, reason: verdict.reason };
+              const message = "Formato de áudio não suportado pela Meta. Envie como arquivo ou grave novamente.";
+              return await finishTerminal(supabase, insertedMsg.id, {
+                status: 415,
+                body: { error: "unsupported_audio_mime", message, details },
+                errorCode: "unsupported_audio_mime",
+                errorMessage: message,
+                metadata: { meta_cloud: { ...baseMeta, error: { code: "unsupported_audio_mime", ...details } } },
+              });
+
             }
             // Normaliza aliases M4A para o único valor enviado à Meta.
             mimeUsed = normalizeMp4AudioMime(effectiveCt);
@@ -938,14 +974,16 @@ serve(async (req) => {
             const ALLOWED_AUDIO = ["audio/ogg", "audio/opus", "audio/aac", "audio/mpeg", "audio/mp3", "audio/amr"];
             const isAllowed = ALLOWED_AUDIO.some((m) => effectiveCt.startsWith(m));
             if (!isAllowed) {
-              return new Response(
-                JSON.stringify({
-                  error: "unsupported_audio_mime",
-                  message: "Formato de áudio não suportado pela Meta. Envie como arquivo ou grave novamente.",
-                  details: { received: effectiveCt },
-                }),
-                { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-              );
+              const details = { received: effectiveCt };
+              const message = "Formato de áudio não suportado pela Meta. Envie como arquivo ou grave novamente.";
+              return await finishTerminal(supabase, insertedMsg.id, {
+                status: 415,
+                body: { error: "unsupported_audio_mime", message, details },
+                errorCode: "unsupported_audio_mime",
+                errorMessage: message,
+                metadata: { meta_cloud: { ...baseMeta, error: { code: "unsupported_audio_mime", ...details } } },
+              });
+
             }
           }
         }
@@ -1106,16 +1144,14 @@ serve(async (req) => {
       const errDetails = e instanceof MetaWaGraphError
         ? { code: e.error.code, error_subcode: e.error.error_subcode, message: e.error.message }
         : { message: (e as Error).message };
-      await supabase
-        .from("messages")
-        .update({
-          whatsapp_status: "failed",
-          error_code: errDetails.code ? String(errDetails.code) : null,
-          error_message: errDetails.message,
-          metadata: { meta_cloud: { ...baseMeta, error: errDetails } },
-        })
-        .eq("id", insertedMsg.id);
-      return jsonResponse(500, { error: "meta_send_failed", details: errDetails });
+      return await finishTerminal(supabase, insertedMsg.id, {
+        status: 500,
+        body: { error: "meta_send_failed", details: errDetails },
+        errorCode: errDetails.code ? String(errDetails.code) : null,
+        errorMessage: errDetails.message,
+        metadata: { meta_cloud: { ...baseMeta, error: errDetails } },
+      });
+
     }
 
   } catch (e) {
