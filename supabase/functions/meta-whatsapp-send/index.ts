@@ -974,14 +974,16 @@ serve(async (req) => {
             const ALLOWED_AUDIO = ["audio/ogg", "audio/opus", "audio/aac", "audio/mpeg", "audio/mp3", "audio/amr"];
             const isAllowed = ALLOWED_AUDIO.some((m) => effectiveCt.startsWith(m));
             if (!isAllowed) {
-              return new Response(
-                JSON.stringify({
-                  error: "unsupported_audio_mime",
-                  message: "Formato de áudio não suportado pela Meta. Envie como arquivo ou grave novamente.",
-                  details: { received: effectiveCt },
-                }),
-                { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-              );
+              const details = { received: effectiveCt };
+              const message = "Formato de áudio não suportado pela Meta. Envie como arquivo ou grave novamente.";
+              return await finishTerminal(supabase, insertedMsg.id, {
+                status: 415,
+                body: { error: "unsupported_audio_mime", message, details },
+                errorCode: "unsupported_audio_mime",
+                errorMessage: message,
+                metadata: { meta_cloud: { ...baseMeta, error: { code: "unsupported_audio_mime", ...details } } },
+              });
+
             }
           }
         }
