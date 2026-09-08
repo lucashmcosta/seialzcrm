@@ -136,6 +136,9 @@ async function processJob(supabase: any, job: PushJob, summary: Record<string, n
     priority: "high",
     channelId: "messages",
     collapseId: job.thread_id,
+    // iOS agrupa visualmente as notificações da mesma conversa por threadId.
+    threadId: job.thread_id,
+
     data: {
       url: job.target_url,
       thread_id: job.thread_id,

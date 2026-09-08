@@ -988,7 +988,30 @@ serve(async (req) => {
           }
         }
 
-
+        // Guard de vídeo: a Meta Cloud API aceita apenas video/mp4 e video/3gpp.
+        // Vídeos da galeria do iPhone chegam como .mov (video/quicktime) e são
+        // recusados após o upload (erro 100). Falha aqui com motivo claro.
+        if (kind === "video") {
+          const effectiveCt = (mimeUsed || headerCt || "").toLowerCase();
+          const ALLOWED_VIDEO = ["video/mp4", "video/3gpp"];
+          const isAllowed = ALLOWED_VIDEO.some((m) => effectiveCt.startsWith(m));
+          if (!isAllowed) {
+            console.warn("[meta-wa-send] unsupported_video_mime", {
+              received: effectiveCt,
+              sizeBytes: fileBytes.length,
+            });
+            const details = { received: effectiveCt };
+            const message =
+              `Formato de vídeo não aceito pelo WhatsApp (recebido: ${effectiveCt || "desconhecido"}). Envie em MP4/H.264.`;
+            return await finishTerminal(supabase, insertedMsg.id, {
+              status: 415,
+              body: { error: "unsupported_video_mime", message, details },
+              errorCode: "unsupported_video_mime",
+              errorMessage: message,
+              metadata: { meta_cloud: { ...baseMeta, error: { code: "unsupported_video_mime", ...details } } },
+            });
+          }
+        }
 
 
         // 2) Upload para Graph
