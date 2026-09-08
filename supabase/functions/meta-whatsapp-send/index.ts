@@ -896,24 +896,54 @@ serve(async (req) => {
           ? payloadFilename
           : filenameFromUrl(sourceUrl, `file-${Date.now()}`);
 
-        // Guard: Meta Cloud API só aceita como áudio: ogg/opus, aac, mpeg, amr.
-        // audio/webm e audio/mp4 (que costuma vir com codec Opus) são rejeitados
-        // pela Meta assincronamente (100 / 131053). Bloquear antes do upload.
+        // Guard: Meta Cloud API só aceita como áudio: ogg/opus, aac, mpeg, amr, mp4.
+        // `audio/mp4` é aceito pela Meta, mas gravadores de navegador produzem mp4
+        // com Opus dentro — a Meta aceita o upload e depois rejeita (100 / 131053).
+        // Por isso o ramo MP4/M4A é decidido pelo conteúdo real do contêiner.
+        // O caminho OGG/Opus (Web) permanece inalterado.
         if (kind === "audio") {
           const effectiveCt = (mimeUsed || headerCt || "").toLowerCase();
-          const ALLOWED_AUDIO = ["audio/ogg", "audio/opus", "audio/aac", "audio/mpeg", "audio/mp3", "audio/amr"];
-          const isAllowed = ALLOWED_AUDIO.some((m) => effectiveCt.startsWith(m));
-          if (!isAllowed) {
-            return new Response(
-              JSON.stringify({
-                error: "unsupported_audio_mime",
-                message: "Formato de áudio não suportado pela Meta. Envie como arquivo ou grave novamente.",
-                details: { received: effectiveCt },
-              }),
-              { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-            );
+          if (isMp4AudioMime(effectiveCt)) {
+            const verdict = inspectMp4AudioCodec(fileBytes);
+            if (!verdict.ok) {
+              console.warn("[meta-wa-send] mp4_audio_rejected", {
+                received: effectiveCt,
+                reason: verdict.reason,
+                sizeBytes: fileBytes.length,
+              });
+              return new Response(
+                JSON.stringify({
+                  error: "unsupported_audio_mime",
+                  message: "Formato de áudio não suportado pela Meta. Envie como arquivo ou grave novamente.",
+                  details: { received: effectiveCt, reason: verdict.reason },
+                }),
+                { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+              );
+            }
+            // Normaliza aliases M4A para o único valor enviado à Meta.
+            mimeUsed = normalizeMp4AudioMime(effectiveCt);
+            console.log("[meta-wa-send] mp4_audio_accepted", {
+              received: effectiveCt,
+              codec: verdict.codec,
+              sentAs: mimeUsed,
+              sizeBytes: fileBytes.length,
+            });
+          } else {
+            const ALLOWED_AUDIO = ["audio/ogg", "audio/opus", "audio/aac", "audio/mpeg", "audio/mp3", "audio/amr"];
+            const isAllowed = ALLOWED_AUDIO.some((m) => effectiveCt.startsWith(m));
+            if (!isAllowed) {
+              return new Response(
+                JSON.stringify({
+                  error: "unsupported_audio_mime",
+                  message: "Formato de áudio não suportado pela Meta. Envie como arquivo ou grave novamente.",
+                  details: { received: effectiveCt },
+                }),
+                { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+              );
+            }
           }
         }
+
 
 
 
