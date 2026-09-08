@@ -25,6 +25,6 @@ Superfície de conversas da **equipe comercial**: qualificação de leads, follo
 
 ## Push mobile (mensagem nova)
 - Trigger `new_message_notification` → `notify_new_message()` mantém o insert em `notifications` (sininho/toast web, destinatário = `contacts.owner_user_id`) **e** enfileira `push_delivery_jobs` quando a thread tem `assigned_user_id`. Sem responsável, nenhum push.
-- Worker: edge fn `push-dispatch` (cron 30s) consome a fila com `rpc_claim_push_delivery_jobs`, envia ao Expo (`https://exp.host/--/api/v2/push/send`), aplica backoff (5 tentativas → `dead_letter`) e desativa token em `DeviceNotRegistered`.
+- Worker: edge fn `push-dispatch` (cron 30s) consome a fila com `rpc_claim_push_delivery_jobs`, envia ao Expo (`https://exp.host/--/api/v2/push/send`), aplica backoff (5 tentativas → `dead_letter`) e desativa token em `DeviceNotRegistered`. Autenticação server-to-server por header `x-worker-token`, comparado ao segredo do vault `push_dispatch_worker_token` via `fn_get_push_dispatch_token()` (grant só para `service_role`) — o cron envia o mesmo valor lido do vault. ⚠️ Não usar `Authorization: Bearer service_role_key`: o valor guardado no vault difere do env da function e resultava em 401 silencioso (incidente 2026-09-08).
 - Tokens de aparelho: `user_push_tokens` (RLS por `current_user_id()`); app registra/desativa via `rpc_register_push_token(p_expo_push_token, p_platform)` e `rpc_deactivate_push_token(p_expo_push_token)`.
 - `data.url` = `/messages/<thread_id>` (`sales`, `other`, nulo) ou `/inbox/<thread_id>` (`customer_service`).
