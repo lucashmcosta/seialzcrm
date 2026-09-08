@@ -14,12 +14,13 @@ Motivo documentado: em 2026-07 o banco tinha 184 migrations aplicadas vs 261 no 
 
 Ver ADR [`decisions/0007-drift-rule.md`](../decisions/0007-drift-rule.md).
 
-## Processos agendados (pg_cron — 15 jobs)
+## Processos agendados (pg_cron — 16 jobs)
 
 | Frequência | Job | Alvo |
 |---|---|---|
 | 30s | `integration-worker` | edge fn `integration-worker` (outbox → destinos) |
 | 30s | `intelligence-worker-30s` | edge fn `intelligence-worker` (fila de IA) |
+| 30s | `push-dispatch` | edge fn `push-dispatch` (fila `push_delivery_jobs` → Expo Push) |
 | 1min | `outbox-reaper` | `fn_reap_stuck_jobs(5)` |
 | 2min | `intelligence-backfill-tick` | retoma backfill runs ativas |
 | 3min | `meta-lead-ads-poll` | poll de leads Meta |
