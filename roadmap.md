@@ -9,7 +9,7 @@
 
 ## Peça 2 (separada, não bloqueia a Peça 1)
 - [x] `finishTerminal` em `meta-whatsapp-send`: recusas terminais (415 do guard de áudio) marcam `failed` + motivo persistido; `catch` da Graph reusa o helper com semântica idêntica.
-- [ ] Validação em produção: recusa terminal → `failed` visível; M4A/AAC válido → `delivered`; Web OGG/Opus → `delivered`.
+- [x] Validação em produção: recusa terminal (msg 3e70f72a) → `failed` + motivo persistido; M4A/AAC válido (5d6c3092) → `delivered`; Web OGG/Opus (09701b11) → `delivered`.
 
 ## Mobile — mídia
 - [ ] Enviar/exibir os 4 tipos (áudio, vídeo, documento, vCard) com paridade de regras com o Web.
