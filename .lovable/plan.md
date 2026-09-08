@@ -1,35 +1,34 @@
-# Peça 2 — recusa terminal do envio deixa de travar a mensagem em "enviando"
+# Push notification de mensagem nova (app mobile)
 
-## Diagnóstico (verificado no código)
-- `supabase/functions/meta-whatsapp-send/index.ts:772-839` insere a mensagem com `whatsapp_status: "sending"` **antes** de baixar/validar a mídia.
-- O `catch` final (linhas 1105-1119) já faz o certo: marca `whatsapp_status = "failed"`, grava `error_code`, `error_message` e o detalhe em `metadata.meta_cloud.error`.
-- O problema está nos dois `return new Response(... 415 ...)` do guard de áudio (linhas 920-927 e 941-948): eles saem **antes** do `catch`, então a mensagem já criada fica em `sending` para sempre, sem motivo salvo. Foi exatamente o caso do áudio do celular às 19:28.
-- Auditoria dos outros provedores: `evolution-whatsapp-send` (falha marcada nas linhas 557 e 599) e `twilio-whatsapp-send` (linha 1075) **não** têm saída antecipada entre o insert e o tratamento de falha — nada a corrigir neles.
-- A UI já sabe exibir: `MessageStatusIndicator.tsx` mostra ícone de falha com o motivo legível quando `whatsapp_status = 'failed'`, e as duas listas (`src/pages/messages/MessagesList.tsx`, `src/components/mobile/MobileMessagesList.tsx`) já leem `error_message`.
+## Situação atual (verificada)
 
-## Correção proposta (mínima, isolada do codec)
-1. Criar no `meta-whatsapp-send` um helper único de encerramento terminal — algo como `finishTerminal(messageId, { status, code, reason, details })` — que:
-   - atualiza a mensagem para `failed` com `error_code`, `error_message` e o detalhe em `metadata`, no mesmo formato que o `catch` já usa (nenhum campo novo, nenhuma migração);
-   - devolve a resposta HTTP com o status original (415), preservando o corpo atual (`error`, `message`, `details`).
-2. Trocar apenas os dois `return new Response(...)` do guard de áudio por esse helper. **A decisão de aceitar ou recusar codec não muda em nada** — o parser MP4/M4A, a normalização de alias e o caminho OGG/Opus do Web ficam idênticos.
-3. Reaproveitar o mesmo helper no `catch` final, para que exista um único ponto que persiste falha (mesmo comportamento de hoje, sem mudança de semântica).
+- O web não tem push do navegador nem som. Existe apenas o sininho (`src/components/Notifications.tsx`) lendo a tabela `notifications` em tempo real, com aviso na tela enquanto o sistema está aberto.
+- O disparo é um gatilho no banco: `new_message_notification` → `notify_new_message()`, em `AFTER INSERT ON messages` quando `deleted_at IS NULL`. Ele grava em `notifications` só para mensagens `inbound` e só para o **responsável pelo contato** (`contacts.owner_user_id`) — hoje ignora `message_threads.assigned_user_id`.
+- Não existe nenhuma tabela de token de dispositivo/inscrição de push: greenfield.
+- Mensagem recebida já dispara vários gatilhos (última mensagem da conversa, reabertura, tempo de resposta, eventos de integração). O push pode se encaixar no mesmo ponto de notificação, sem criar caminho paralelo.
 
-## O que explicitamente não muda
-- Caminho de sucesso: `sending` → `sent` (linha 1028) e a evolução para `delivered`/`read` pelo webhook continuam intactos.
-- Nenhuma recusa transitória passa a ser marcada antes da hora: só as saídas que **já hoje** encerram a requisição definitivamente passam a gravar `failed`. Erros da Graph (rate limit, 5xx) seguem exatamente pelo `catch` atual, sem alteração — não existe mecanismo de retry automático nesse envio que possa ser marcado prematuramente.
-- Sem mudança em `audio/webm`, no sanitizador OGG do Web, na Peça 1 ou nos outros provedores.
+## Decisões assumidas (padrões, ajustáveis)
 
-## Testes antes de concluir
-| Caso | Esperado |
-|---|---|
-| Envio de áudio recusado pelo guard (MP4 com Opus / arquivo truncado) | resposta 415 e mensagem gravada como `failed` |
-| Mesma mensagem no banco | `error_code`/`error_message` preenchidos e motivo visível na conversa |
-| Envio válido (OGG/Opus do Web) | `sending` → `sent` → `delivered`, sem regressão |
-| Falha transitória da Graph | continua no comportamento atual, sem marcação antecipada |
+- Destinatário: responsável da conversa (`assigned_user_id`); se não houver, responsável do contato; se não houver nenhum, ninguém recebe push (fica só no sininho).
+- Vale para os dois módulos (Comercial e Atendimento), diferenciados por `message_threads.business_context`, com o mesmo comportamento.
+- Envio via Expo Push (sem exigir credenciais Firebase/Apple). O plano isola o envio para permitir trocar o provedor depois.
+- Uma notificação por conversa (agrupada por `thread_id`), substituindo a anterior não lida.
 
-Verificação em produção com envio real controlado: um áudio recusado (mostrando a mensagem com falha e o motivo na conversa) e um áudio válido em seguida (mostrando entrega normal).
+## O que será construído
+
+1. **Guardar dispositivos**: nova tabela `user_push_tokens` (organização, usuário, token, plataforma, ativo, últimos acessos), com permissões e políticas de acesso para o próprio usuário. O app registra/atualiza o token ao entrar e remove ao sair.
+2. **Ajustar a regra de destinatário**: `notify_new_message()` passa a priorizar `assigned_user_id` da conversa e usar o responsável do contato como reserva. Nada muda no sininho do web além de o aviso chegar à pessoa certa.
+3. **Enfileirar o push**: o gatilho grava a intenção de envio numa fila leve (`push_delivery_jobs`) em vez de chamar serviço externo dentro da transação.
+4. **Entregar**: nova função de servidor `push-dispatch` consome a fila, monta título (nome do contato) e corpo (prévia da mensagem, com rótulo para áudio/imagem/documento), envia ao Expo, marca entregue/erro e desativa tokens rejeitados.
+5. **Rodar sozinho**: agendamento a cada 30s para consumir a fila, com tentativas e limite de repetição.
+6. **Abrir no lugar certo**: o push carrega `thread_id` e módulo, para o app abrir a conversa correspondente.
+7. **Não incomodar**: se o app informar que a conversa já está aberta na tela (registro de leitura recente em `message_thread_reads`), o envio é suprimido.
 
 ## Detalhes técnicos
-- Arquivo alterado: `supabase/functions/meta-whatsapp-send/index.ts` (helper novo + substituição dos dois `return` do guard e reuso no `catch`).
-- Sem migração de banco, sem alteração de frontend, sem novo campo.
-- Deploy explícito da função e registro no drift do dia.
+
+- Migração: `create table public.user_push_tokens` + GRANT (`authenticated`, `service_role`) + RLS por `current_user_id()`; `create table public.push_delivery_jobs` (service_role apenas); índice em `(status, next_attempt_at)` e único em `(user_id, token)`.
+- `notify_new_message()`: substituição via `CREATE OR REPLACE`, mantendo o insert em `notifications`; recipiente = `coalesce(mt.assigned_user_id, c.owner_user_id)`; só `direction = 'inbound'`; enfileira job com `organization_id`, `thread_id`, `message_id`, `recipient_user_id`, `business_context`.
+- Edge function `supabase/functions/push-dispatch/index.ts`: autenticada por `x-worker-token` (segredo novo), claim de lote com `FOR UPDATE SKIP LOCKED`, POST para `https://exp.host/--/api/v2/push/send`, `collapseId`/`channelId` por `thread_id`, backoff exponencial, desativa token em `DeviceNotRegistered`.
+- Cron `pg_cron` a cada 30s chamando a function (mesmo padrão do `integration-worker`).
+- Documentação: atualizar `docs/modules/messages/README.md`, `docs/modules/inbox/README.md` e `docs/operations/README.md` (novo cron).
+- Fora de escopo: push no navegador (web) e notificação para supervisores.
