@@ -1,51 +1,35 @@
-# Liberar áudio `audio/mp4` (AAC) no envio Meta — sem tocar no Web
+# Peça 2 — recusa terminal do envio deixa de travar a mensagem em "enviando"
 
-## Resposta curta
-A trava pode ser ajustada. Ela não existe porque `audio/mp4` seja proibido pela Meta — existe porque o **navegador** produzia mp4 com codec **Opus** (saída do polyfill de gravação no desktop), que a Meta aceita no upload e depois rejeita com 131053. O comentário no próprio código diz isso: "audio/mp4 (que costuma vir com codec Opus)". Foi um bloqueio preventivo contra o caso do desktop, e acabou pegando o caso legítimo do celular.
+## Diagnóstico (verificado no código)
+- `supabase/functions/meta-whatsapp-send/index.ts:772-839` insere a mensagem com `whatsapp_status: "sending"` **antes** de baixar/validar a mídia.
+- O `catch` final (linhas 1105-1119) já faz o certo: marca `whatsapp_status = "failed"`, grava `error_code`, `error_message` e o detalhe em `metadata.meta_cloud.error`.
+- O problema está nos dois `return new Response(... 415 ...)` do guard de áudio (linhas 920-927 e 941-948): eles saem **antes** do `catch`, então a mensagem já criada fica em `sending` para sempre, sem motivo salvo. Foi exatamente o caso do áudio do celular às 19:28.
+- Auditoria dos outros provedores: `evolution-whatsapp-send` (falha marcada nas linhas 557 e 599) e `twilio-whatsapp-send` (linha 1075) **não** têm saída antecipada entre o insert e o tratamento de falha — nada a corrigir neles.
+- A UI já sabe exibir: `MessageStatusIndicator.tsx` mostra ícone de falha com o motivo legível quando `whatsapp_status = 'failed'`, e as duas listas (`src/pages/messages/MessagesList.tsx`, `src/components/mobile/MobileMessagesList.tsx`) já leem `error_message`.
 
-## O que os dados mostram
-- Áudio de saída nos últimos 120 dias: 40.324 entregues/lidos/enviados, nenhum com extensão `.m4a`.
-- Só existem **2** tentativas com `.m4a` no período: uma de 07/07 que falhou com 131053 (desktop, caminho `fallback_mp4` do gravador web, mp4/Opus) e a de 04/09 do app, que nem chegou à Meta — foi barrada pela nossa própria trava (status `sending`, sem erro registrado).
-- Ou seja: **não há nenhum caso real de AAC dentro de .m4a rejeitado pela Meta** no nosso histórico. Não existe impedimento comprovado, nem restrição a "nota de voz com waveform" no nosso lado.
+## Correção proposta (mínima, isolada do codec)
+1. Criar no `meta-whatsapp-send` um helper único de encerramento terminal — algo como `finishTerminal(messageId, { status, code, reason, details })` — que:
+   - atualiza a mensagem para `failed` com `error_code`, `error_message` e o detalhe em `metadata`, no mesmo formato que o `catch` já usa (nenhum campo novo, nenhuma migração);
+   - devolve a resposta HTTP com o status original (415), preservando o corpo atual (`error`, `message`, `details`).
+2. Trocar apenas os dois `return new Response(...)` do guard de áudio por esse helper. **A decisão de aceitar ou recusar codec não muda em nada** — o parser MP4/M4A, a normalização de alias e o caminho OGG/Opus do Web ficam idênticos.
+3. Reaproveitar o mesmo helper no `catch` final, para que exista um único ponto que persiste falha (mesmo comportamento de hoje, sem mudança de semântica).
 
-## Peça 1 — liberação de codec (isolada do Web)
+## O que explicitamente não muda
+- Caminho de sucesso: `sending` → `sent` (linha 1028) e a evolução para `delivered`/`read` pelo webhook continuam intactos.
+- Nenhuma recusa transitória passa a ser marcada antes da hora: só as saídas que **já hoje** encerram a requisição definitivamente passam a gravar `failed`. Erros da Graph (rate limit, 5xx) seguem exatamente pelo `catch` atual, sem alteração — não existe mecanismo de retry automático nesse envio que possa ser marcado prematuramente.
+- Sem mudança em `audio/webm`, no sanitizador OGG do Web, na Peça 1 ou nos outros provedores.
 
-### Garantia de não-regressão do Web
-O caminho atual de `audio/ogg` / Opus fica **byte-por-byte inalterado**: mesma sanitização (`src/lib/sanitizeOggOpus.ts`), mesmo MIME, mesmo upload, mesmo fluxo. A nova lógica é um ramo novo que só é alcançado quando o MIME efetivo é MP4/M4A. Nenhuma linha compartilhada com o ramo OGG é reescrita; `audio/webm` continua bloqueado exatamente como hoje.
-
-### Regra nova
-1. MIMEs de entrada aceitos: `audio/mp4`, `audio/m4a`, `audio/x-m4a`. Ao subir para a Meta, os aliases M4A são **normalizados para `audio/mp4`** (um só valor sai da nossa borda).
-2. A decisão é tomada pelo **conteúdo real**, nunca pela extensão nem pelo MIME informado pelo cliente.
-3. **Parser mínimo de boxes MP4** sobre `fileBytes` (já em memória; limite de áudio da Meta é 16 MB, então varredura completa é segura): descer `ftyp` → `moov` → `trak` → `mdia` → `minf` → `stbl` → `stsd` e ler a sample entry, sem depender de o `moov` estar no início do arquivo (em gravação iOS ele frequentemente fica no fim).
-   - sample entry `mp4a` → **liberar**;
-   - `Opus` / `dOps` → **bloquear**;
-   - arquivo truncado, tamanho de box inconsistente, `moov`/`stsd` ausente ou codec não identificado → **bloquear (fail-closed)**.
-4. Telemetria: registrar o veredito em `audio_record_events` com um evento novo, para medir as primeiras 48h.
-
-## Peça 2 — status travado em "enviando" (entrega separada)
-Independente da peça 1 e sem acoplamento a áudio: qualquer resposta **definitiva** de recusa do envio (415 e demais recusas terminais) passa a marcar a mensagem como `failed`, persistir o motivo e exibi-lo na conversa, em vez de deixá-la eternamente com o relógio.
-
-## Testes obrigatórios antes do deploy
+## Testes antes de concluir
 | Caso | Esperado |
 |---|---|
-| M4A/AAC real gerado pelo app iOS | liberado |
-| Arquivo real do Android (se o app suportar) | liberado |
-| OGG/Opus real do Web atual | passa pelo caminho antigo, sem regressão |
-| MP4 com Opus | bloqueado |
-| Arquivo inválido/truncado | bloqueado |
+| Envio de áudio recusado pelo guard (MP4 com Opus / arquivo truncado) | resposta 415 e mensagem gravada como `failed` |
+| Mesma mensagem no banco | `error_code`/`error_message` preenchidos e motivo visível na conversa |
+| Envio válido (OGG/Opus do Web) | `sending` → `sent` → `delivered`, sem regressão |
+| Falha transitória da Graph | continua no comportamento atual, sem marcação antecipada |
 
-Testes de unidade cobrem os cinco casos com fixtures reais; o parser é um helper puro testável.
-
-## Validação em produção (rollout controlado, sem liberação ampla)
-1. Deploy explícito da função (não sai por push).
-2. Envio real **do app** para número interno; confirmar `sent`/`delivered` pelo webhook e reprodução no WhatsApp.
-3. Em seguida, envio **Web OGG/Opus** e prova de que continua `sent`/`delivered`.
-4. Só então discutir liberação ampla. Entrego o diff conceitual e os resultados dos dois envios antes de considerar concluído.
+Verificação em produção com envio real controlado: um áudio recusado (mostrando a mensagem com falha e o motivo na conversa) e um áudio válido em seguida (mostrando entrega normal).
 
 ## Detalhes técnicos
-- `supabase/functions/meta-whatsapp-send/index.ts`, bloco `if (kind === "audio")` (~899-916): a lista permitida ganha os MIMEs MP4/M4A, e apenas para esses MIMEs roda o parser + normalização. Demais MIMEs seguem o fluxo atual sem alteração.
-- Parser novo em `supabase/functions/_shared/meta-whatsapp/` como módulo puro (sem I/O, sem dependência de Deno), com testes de unidade próprios.
-- Documentar em `docs/operations/audio-telemetry.md` e no drift do dia.
-
-## Fora de escopo
-Sem transcodificação no servidor, sem biblioteca de conversão no app, sem mudança no gravador do web, sem alteração de roteamento ou de versão da Graph API, sem mexer em `audio/webm`.
+- Arquivo alterado: `supabase/functions/meta-whatsapp-send/index.ts` (helper novo + substituição dos dois `return` do guard e reuso no `catch`).
+- Sem migração de banco, sem alteração de frontend, sem novo campo.
+- Deploy explícito da função e registro no drift do dia.
