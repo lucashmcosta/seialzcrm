@@ -1,34 +1,63 @@
 # Push notification de mensagem nova (app mobile)
 
-## Situação atual (verificada)
+## Regras confirmadas
 
-- O web não tem push do navegador nem som. Existe apenas o sininho (`src/components/Notifications.tsx`) lendo a tabela `notifications` em tempo real, com aviso na tela enquanto o sistema está aberto.
-- O disparo é um gatilho no banco: `new_message_notification` → `notify_new_message()`, em `AFTER INSERT ON messages` quando `deleted_at IS NULL`. Ele grava em `notifications` só para mensagens `inbound` e só para o **responsável pelo contato** (`contacts.owner_user_id`) — hoje ignora `message_threads.assigned_user_id`.
-- Não existe nenhuma tabela de token de dispositivo/inscrição de push: greenfield.
-- Mensagem recebida já dispara vários gatilhos (última mensagem da conversa, reabertura, tempo de resposta, eventos de integração). O push pode se encaixar no mesmo ponto de notificação, sem criar caminho paralelo.
+- Destinatário: `message_threads.assigned_user_id`. Sem responsável, nenhum push.
+- Vale para Comercial e Atendimento.
+- Só mensagens recebidas (`direction = 'inbound'`, `deleted_at IS NULL`).
+- O sininho/toast do web e o insert em `notifications` ficam exatamente como estão.
 
-## Decisões assumidas (padrões, ajustáveis)
+## Contrato para o app
 
-- Destinatário: responsável da conversa (`assigned_user_id`); se não houver, responsável do contato; se não houver nenhum, ninguém recebe push (fica só no sininho).
-- Vale para os dois módulos (Comercial e Atendimento), diferenciados por `message_threads.business_context`, com o mesmo comportamento.
-- Envio via Expo Push (sem exigir credenciais Firebase/Apple). O plano isola o envio para permitir trocar o provedor depois.
-- Uma notificação por conversa (agrupada por `thread_id`), substituindo a anterior não lida.
+Tabela `public.user_push_tokens`:
+
+| coluna | tipo | observação |
+|---|---|---|
+| `id` | uuid PK | default `gen_random_uuid()` |
+| `user_id` | uuid | id interno de `public.users` (não `auth.uid()`) |
+| `expo_push_token` | text | token do Expo |
+| `platform` | text | `'ios'` ou `'android'` |
+| `is_active` | boolean | default `true`; virar `false` no logout |
+| `last_seen_at` | timestamptz | default `now()` |
+| `created_at` / `updated_at` | timestamptz | `updated_at` por trigger |
+
+Único: `(user_id, expo_push_token)`.
+
+Registro no app: **RPC** `rpc_register_push_token(p_expo_push_token text, p_platform text)` e
+`rpc_deactivate_push_token(p_expo_push_token text)`. Motivo: o app não precisa descobrir o
+`users.id` interno nem o `organization_id` — a RPC resolve via `current_user_id()` e faz o upsert
+reativando a linha e atualizando `last_seen_at`. O insert direto continua possível (RLS permite a
+própria linha), mas a RPC é o caminho recomendado.
+
+Payload enviado:
+
+```json
+{ "title": "<nome do contato>",
+  "body": "<prévia da mensagem>",
+  "data": { "url": "/messages/<thread_id>", "thread_id": "...", "business_context": "sales" } }
+```
+
+`url` = `/inbox/<thread_id>` quando `business_context = 'customer_service'`;
+`/messages/<thread_id>` para `sales`, `other` e nulo.
 
 ## O que será construído
 
-1. **Guardar dispositivos**: nova tabela `user_push_tokens` (organização, usuário, token, plataforma, ativo, últimos acessos), com permissões e políticas de acesso para o próprio usuário. O app registra/atualiza o token ao entrar e remove ao sair.
-2. **Ajustar a regra de destinatário**: `notify_new_message()` passa a priorizar `assigned_user_id` da conversa e usar o responsável do contato como reserva. Nada muda no sininho do web além de o aviso chegar à pessoa certa.
-3. **Enfileirar o push**: o gatilho grava a intenção de envio numa fila leve (`push_delivery_jobs`) em vez de chamar serviço externo dentro da transação.
-4. **Entregar**: nova função de servidor `push-dispatch` consome a fila, monta título (nome do contato) e corpo (prévia da mensagem, com rótulo para áudio/imagem/documento), envia ao Expo, marca entregue/erro e desativa tokens rejeitados.
-5. **Rodar sozinho**: agendamento a cada 30s para consumir a fila, com tentativas e limite de repetição.
-6. **Abrir no lugar certo**: o push carrega `thread_id` e módulo, para o app abrir a conversa correspondente.
-7. **Não incomodar**: se o app informar que a conversa já está aberta na tela (registro de leitura recente em `message_thread_reads`), o envio é suprimido.
+1. Migração: `user_push_tokens` (GRANT `authenticated`/`service_role`, RLS por `current_user_id()`)
+   e `push_delivery_jobs` (fila, apenas `service_role`), com índice `(status, next_attempt_at)`.
+2. As duas RPCs de registro/desativação (`SECURITY DEFINER`, escopo do próprio usuário).
+3. `notify_new_message()` via `CREATE OR REPLACE`: mantém o insert em `notifications` byte-a-byte e
+   acrescenta o enfileiramento em `push_delivery_jobs` quando há `assigned_user_id`.
+4. Edge function `push-dispatch`: autenticada por `x-worker-token` (segredo novo, padrão do
+   `integration-worker`), claim com `FOR UPDATE SKIP LOCKED`, POST para
+   `https://exp.host/--/api/v2/push/send`, título com nome do contato, corpo com prévia
+   (rótulo para áudio/imagem/documento/contato), backoff exponencial com limite de tentativas,
+   erro persistido no job e `is_active = false` quando a Expo devolve `DeviceNotRegistered`.
+5. Cron `pg_cron` a cada 30s chamando a function (mesmo padrão dos workers atuais).
+6. Documentação: `docs/modules/messages/README.md`, `docs/modules/inbox/README.md` e
+   `docs/operations/README.md` (novo cron).
 
-## Detalhes técnicos
+## Fora de escopo
 
-- Migração: `create table public.user_push_tokens` + GRANT (`authenticated`, `service_role`) + RLS por `current_user_id()`; `create table public.push_delivery_jobs` (service_role apenas); índice em `(status, next_attempt_at)` e único em `(user_id, token)`.
-- `notify_new_message()`: substituição via `CREATE OR REPLACE`, mantendo o insert em `notifications`; recipiente = `coalesce(mt.assigned_user_id, c.owner_user_id)`; só `direction = 'inbound'`; enfileira job com `organization_id`, `thread_id`, `message_id`, `recipient_user_id`, `business_context`.
-- Edge function `supabase/functions/push-dispatch/index.ts`: autenticada por `x-worker-token` (segredo novo), claim de lote com `FOR UPDATE SKIP LOCKED`, POST para `https://exp.host/--/api/v2/push/send`, `collapseId`/`channelId` por `thread_id`, backoff exponencial, desativa token em `DeviceNotRegistered`.
-- Cron `pg_cron` a cada 30s chamando a function (mesmo padrão do `integration-worker`).
-- Documentação: atualizar `docs/modules/messages/README.md`, `docs/modules/inbox/README.md` e `docs/operations/README.md` (novo cron).
-- Fora de escopo: push no navegador (web) e notificação para supervisores.
+- Push no navegador (web) e som/badge no web.
+- Notificação para supervisores ou não atribuídos.
+- Supressão quando a conversa já está aberta na tela.
