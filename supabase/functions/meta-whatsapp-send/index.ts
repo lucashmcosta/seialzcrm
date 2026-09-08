@@ -16,6 +16,12 @@ import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared
 import { getServiceWindow, type ContactCtwaInputs } from "../_shared/service-window.ts";
 import { resolveManualReplyEndpoint, replyChoiceMetadata } from "../_shared/manual-reply-endpoint.ts";
 import { sanitizeTemplateParam } from "../_shared/template-param-text.ts";
+import {
+  inspectMp4AudioCodec,
+  isMp4AudioMime,
+  normalizeMp4AudioMime,
+} from "../_shared/meta-whatsapp/mp4-audio-codec.ts";
+
 
 
 
