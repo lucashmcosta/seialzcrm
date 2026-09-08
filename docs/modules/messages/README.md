@@ -22,3 +22,9 @@ Superfície de conversas da **equipe comercial**: qualificação de leads, follo
 
 ## Hooks
 `useMessageThreads`, `useThreadBusinessContext`, `useThreadEndpointMap`, `useServiceWindow`, `useSnippets`.
+
+## Push mobile (mensagem nova)
+- Trigger `new_message_notification` → `notify_new_message()` mantém o insert em `notifications` (sininho/toast web, destinatário = `contacts.owner_user_id`) **e** enfileira `push_delivery_jobs` quando a thread tem `assigned_user_id`. Sem responsável, nenhum push.
+- Worker: edge fn `push-dispatch` (cron 30s) consome a fila com `rpc_claim_push_delivery_jobs`, envia ao Expo (`https://exp.host/--/api/v2/push/send`), aplica backoff (5 tentativas → `dead_letter`) e desativa token em `DeviceNotRegistered`.
+- Tokens de aparelho: `user_push_tokens` (RLS por `current_user_id()`); app registra/desativa via `rpc_register_push_token(p_expo_push_token, p_platform)` e `rpc_deactivate_push_token(p_expo_push_token)`.
+- `data.url` = `/messages/<thread_id>` (`sales`, `other`, nulo) ou `/inbox/<thread_id>` (`customer_service`).

@@ -14,3 +14,6 @@ Superfície de conversas da **equipe de atendimento / customer success**: suport
 
 ## Hooks
 `src/hooks/inbox/` — `useInboxThreads`, `useInboxThread`, `useInboxThreadMessages`, `useInboxQueueCounts`. RPCs `rpc_list_inbox_threads`, `rpc_inbox_queue_counts`.
+
+## Push mobile (mensagem nova)
+- Mesmo caminho de Messages: `notify_new_message()` enfileira `push_delivery_jobs` para o `assigned_user_id` da thread; worker `push-dispatch` (cron 30s) entrega via Expo. Threads `customer_service` recebem `data.url = /inbox/<thread_id>`. Detalhes em [`modules/messages/README.md`](../messages/README.md).
