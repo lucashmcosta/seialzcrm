@@ -9996,6 +9996,66 @@ export type Database = {
         }
         Relationships: []
       }
+      push_delivery_jobs: {
+        Row: {
+          attempts: number
+          body: string
+          business_context: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          last_error_at: string | null
+          message_id: string
+          next_attempt_at: string
+          organization_id: string
+          recipient_user_id: string
+          status: string
+          target_url: string
+          thread_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          body: string
+          business_context?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_error_at?: string | null
+          message_id: string
+          next_attempt_at?: string
+          organization_id: string
+          recipient_user_id: string
+          status?: string
+          target_url: string
+          thread_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          body?: string
+          business_context?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_error_at?: string | null
+          message_id?: string
+          next_attempt_at?: string
+          organization_id?: string
+          recipient_user_id?: string
+          status?: string
+          target_url?: string
+          thread_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       registry_backfill_jobs: {
         Row: {
           completed_at: string | null
@@ -11770,6 +11830,47 @@ export type Database = {
           },
           {
             foreignKeyName: "user_organizations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_push_tokens: {
+        Row: {
+          created_at: string
+          expo_push_token: string
+          id: string
+          is_active: boolean
+          last_seen_at: string
+          platform: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expo_push_token: string
+          id?: string
+          is_active?: boolean
+          last_seen_at?: string
+          platform: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expo_push_token?: string
+          id?: string
+          is_active?: boolean
+          last_seen_at?: string
+          platform?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_push_tokens_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -14128,6 +14229,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      rpc_deactivate_push_token: {
+        Args: { p_expo_push_token: string }
+        Returns: boolean
+      }
       rpc_dismiss_integration_job: {
         Args: { p_job_id: string }
         Returns: undefined
@@ -14264,6 +14369,10 @@ export type Database = {
               whatsapp_last_inbound_at: string
             }[]
           }
+      rpc_register_push_token: {
+        Args: { p_expo_push_token: string; p_platform: string }
+        Returns: string
+      }
       rpc_resolve_integration_job_manually: {
         Args: { p_job_id: string; p_note: string }
         Returns: undefined
