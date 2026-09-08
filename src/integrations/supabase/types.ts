@@ -14206,6 +14206,34 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      rpc_claim_push_delivery_jobs: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          body: string
+          business_context: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          last_error_at: string | null
+          message_id: string
+          next_attempt_at: string
+          organization_id: string
+          recipient_user_id: string
+          status: string
+          target_url: string
+          thread_id: string
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "push_delivery_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       rpc_configure_cpf_registry: {
         Args: {
           p_documented_purpose?: string
