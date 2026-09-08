@@ -951,14 +951,16 @@ serve(async (req) => {
                 reason: verdict.reason,
                 sizeBytes: fileBytes.length,
               });
-              return new Response(
-                JSON.stringify({
-                  error: "unsupported_audio_mime",
-                  message: "Formato de áudio não suportado pela Meta. Envie como arquivo ou grave novamente.",
-                  details: { received: effectiveCt, reason: verdict.reason },
-                }),
-                { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-              );
+              const details = { received: effectiveCt, reason: verdict.reason };
+              const message = "Formato de áudio não suportado pela Meta. Envie como arquivo ou grave novamente.";
+              return await finishTerminal(supabase, insertedMsg.id, {
+                status: 415,
+                body: { error: "unsupported_audio_mime", message, details },
+                errorCode: "unsupported_audio_mime",
+                errorMessage: message,
+                metadata: { meta_cloud: { ...baseMeta, error: { code: "unsupported_audio_mime", ...details } } },
+              });
+
             }
             // Normaliza aliases M4A para o único valor enviado à Meta.
             mimeUsed = normalizeMp4AudioMime(effectiveCt);
