@@ -34,11 +34,9 @@ function backoffMs(attempts: number) {
 }
 
 Deno.serve(async (req) => {
-  const auth = req.headers.get("Authorization") ?? "";
-  const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (!SERVICE_ROLE_KEY || bearer !== SERVICE_ROLE_KEY) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), {
-      status: 401,
+  if (!SERVICE_ROLE_KEY) {
+    return new Response(JSON.stringify({ error: "misconfigured" }), {
+      status: 500,
       headers: { "Content-Type": "application/json" },
     });
   }
@@ -46,6 +44,19 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
+
+  // Autenticação server-to-server: x-worker-token comparado ao segredo do cofre
+  // (vault `push_dispatch_worker_token`), o mesmo que o cron envia.
+  const workerToken = req.headers.get("x-worker-token") ?? "";
+  const { data: expectedToken, error: tokenErr } = await supabase.rpc("fn_get_push_dispatch_token");
+  if (tokenErr || !expectedToken || workerToken !== expectedToken) {
+    if (tokenErr) console.error("[push-dispatch] token lookup failed", tokenErr.message);
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
 
   const startedAt = performance.now();
   const summary = { sent: 0, no_token: 0, retried: 0, dead_letter: 0, errors: 0 };
