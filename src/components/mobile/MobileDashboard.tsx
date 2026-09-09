@@ -128,7 +128,7 @@ export function MobileDashboard() {
     const isUp = value > 0;
     const Arrow = isFlat ? Minus : isUp ? ArrowUp : ArrowDown;
     const color = isFlat
-      ? 'text-muted-foreground'
+      ? 'text-warning'
       : isUp
         ? 'text-success'
         : 'text-destructive';
