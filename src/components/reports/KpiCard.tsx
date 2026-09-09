@@ -44,7 +44,7 @@ export function KpiCard({
     const Arrow = isFlat ? Minus : isUp ? ArrowUp : ArrowDown;
     const isGood = invertDelta ? !isUp : isUp;
     const color = isFlat
-      ? 'text-muted-foreground'
+      ? 'text-warning'
       : isGood
         ? 'text-success'
         : 'text-destructive';
