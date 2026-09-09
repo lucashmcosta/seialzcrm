@@ -82,7 +82,7 @@ button, nav, [role="tablist"], [role="tab"] {
     --success-foreground: 0 0% 100%;
 
     /* Cores Warning */
-    --warning: 45 93% 47%;
+    --warning: 43 100% 50%;
     --warning-foreground: 26 83% 14%;
 
     /* Cores Info (azul) */

@@ -49,7 +49,7 @@ export function KpiCard({
         ? 'text-success'
         : 'text-destructive';
     return (
-      <div className={cn('flex items-center gap-1 text-xs font-medium', color)}>
+      <div className={cn('flex items-center gap-1 text-xs font-semibold', color)}>
         <Arrow size={12} weight="bold" />
         <span>{Math.abs(delta).toFixed(1)}%</span>
       </div>
