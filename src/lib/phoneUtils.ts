@@ -11,7 +11,7 @@ export interface Country {
 }
 
 export const COUNTRIES: Country[] = [
-  { code: 'BR', name: 'Brasil', dialCode: '55', flag: '🇧🇷', placeholder: '(11) 96429-8621' },
+  { code: 'BR', name: 'Brasil', dialCode: '55', flag: '🇧🇷', placeholder: '(11) 90000-0000' },
   { code: 'US', name: 'EUA', dialCode: '1', flag: '🇺🇸', placeholder: '(555) 123-4567' },
   { code: 'PT', name: 'Portugal', dialCode: '351', flag: '🇵🇹', placeholder: '912 345 678' },
   { code: 'AR', name: 'Argentina', dialCode: '54', flag: '🇦🇷', placeholder: '11 1234-5678' },
@@ -161,8 +161,8 @@ export function buildE164(localNumber: string, countryCode: string): string {
 
 /**
  * Formata número para exibição no padrão brasileiro (legacy - mantido para compatibilidade)
- * Celular: (11) 96429-8621
- * Fixo: (11) 6429-8621
+ * Celular: (11) 90000-0000
+ * Fixo: (11) 0000-0000
  */
 export function formatPhoneDisplay(phone: string | null | undefined): string {
   if (!phone) return '';
@@ -171,8 +171,8 @@ export function formatPhoneDisplay(phone: string | null | undefined): string {
 
 /**
  * Formata número para E.164 (padrão internacional do Twilio)
- * Entrada: 11964298621 → Saída: +5511964298621
- * Entrada: (11) 96429-8621 → Saída: +5511964298621
+ * Entrada: 11900000000 → Saída: +5511900000000
+ * Entrada: (11) 90000-0000 → Saída: +5511900000000
  */
 export function formatPhoneE164(phone: string | null | undefined): string {
   if (!phone) return '';
