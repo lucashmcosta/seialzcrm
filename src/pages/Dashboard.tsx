@@ -375,32 +375,39 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <DashboardSingleMetricChart
-              data={stats.trend}
-              from={from}
-              to={to}
-              loading={loading}
-              title="Criadas"
-              metric="created"
-            />
-            <DashboardSingleMetricChart
-              data={stats.trend}
-              from={from}
-              to={to}
-              loading={loading}
-              title="Ganhas"
-              metric="won"
-            />
-            <DashboardSingleMetricChart
-              data={stats.trend}
-              from={from}
-              to={to}
-              loading={loading}
-              title="Conversão"
-              metric="conversion"
-              variant="line"
-            />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 flex flex-col gap-4">
+              <DashboardSingleMetricChart
+                data={stats.trend}
+                from={from}
+                to={to}
+                loading={loading}
+                title="Criadas"
+                metric="created"
+                height="h-44"
+              />
+              <DashboardSingleMetricChart
+                data={stats.trend}
+                from={from}
+                to={to}
+                loading={loading}
+                title="Ganhas"
+                metric="won"
+                height="h-44"
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <DashboardSingleMetricChart
+                data={stats.trend}
+                from={from}
+                to={to}
+                loading={loading}
+                title="Conversão"
+                metric="conversion"
+                variant="line"
+                height="h-[23rem]"
+              />
+            </div>
           </div>
         </div>
       </div>
