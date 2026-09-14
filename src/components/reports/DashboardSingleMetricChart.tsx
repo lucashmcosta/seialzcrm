@@ -28,6 +28,8 @@ interface Props {
   title: string;
   metric: Metric;
   variant?: 'bar' | 'line';
+  /** Tailwind height class for the chart area. Default: h-56 */
+  height?: string;
 }
 
 const COLOR: Record<Metric, string> = {
@@ -44,6 +46,7 @@ export function DashboardSingleMetricChart({
   title,
   metric,
   variant = 'bar',
+  height = 'h-56',
 }: Props) {
   const defaultGranularity = useMemo(() => defaultGranularityFor(from, to), [from, to]);
   const [granularity, setGranularity] = useState<Granularity>(defaultGranularity);
@@ -99,9 +102,9 @@ export function DashboardSingleMetricChart({
       </div>
 
       {loading ? (
-        <div className="h-56 animate-pulse rounded-md bg-muted/50" />
+        <div className={`${height} animate-pulse rounded-md bg-muted/50`} />
       ) : (
-        <div className="h-56 w-full">
+        <div className={`${height} w-full`}>
           <ResponsiveContainer width="100%" height="100%">
             {variant === 'line' ? (
               <LineChart data={series} margin={margin}>
