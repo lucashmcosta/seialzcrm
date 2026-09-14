@@ -28,6 +28,8 @@ interface Props {
   title: string;
   metric: Metric;
   variant?: 'bar' | 'line';
+  /** Tailwind height class for the chart area. Default: h-56 */
+  height?: string;
 }
 
 const COLOR: Record<Metric, string> = {
