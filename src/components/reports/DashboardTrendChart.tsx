@@ -46,7 +46,7 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
   );
 
   return (
-    <div className="rounded-md border border-border bg-card p-5">
+    <div className="flex h-full flex-col rounded-md border border-border bg-card p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-foreground">
