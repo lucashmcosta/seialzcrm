@@ -15,6 +15,7 @@ import { KpiCard } from '@/components/reports/KpiCard';
 import { computeRange, computeExplicitPreviousRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
 import { DashboardTrendChart } from '@/components/reports/DashboardTrendChart';
 import { DashboardStatusDonut } from '@/components/reports/DashboardStatusDonut';
+import { DashboardSingleMetricChart } from '@/components/reports/DashboardSingleMetricChart';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -372,6 +373,34 @@ export default function Dashboard() {
             <div className="lg:col-span-1">
               <DashboardStatusDonut data={stats.status} loading={loading} />
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <DashboardSingleMetricChart
+              data={stats.trend}
+              from={from}
+              to={to}
+              loading={loading}
+              title="Criadas"
+              metric="created"
+            />
+            <DashboardSingleMetricChart
+              data={stats.trend}
+              from={from}
+              to={to}
+              loading={loading}
+              title="Ganhas"
+              metric="won"
+            />
+            <DashboardSingleMetricChart
+              data={stats.trend}
+              from={from}
+              to={to}
+              loading={loading}
+              title="Conversão"
+              metric="conversion"
+              variant="line"
+            />
           </div>
         </div>
       </div>
