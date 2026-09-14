@@ -1420,7 +1420,15 @@ async function applyMessageStatus(
 ): Promise<{ messageId: string | null; error: string | null }> {
   const data = (envelope.data ?? {}) as Record<string, unknown>;
   const key = (data.key ?? {}) as Record<string, unknown>;
-  const wamid = isString(key.id) ? key.id : (isString(data.id) ? data.id as string : null);
+  // Evolution v2 envia o identificador achatado em `data.keyId` nos eventos
+  // messages.update; versões/rotas antigas usam `data.key.id` ou `data.id`.
+  const wamid = isString(key.id)
+    ? key.id
+    : isString(data.keyId)
+      ? (data.keyId as string)
+      : isString(data.id)
+        ? (data.id as string)
+        : null;
   if (!wamid) return { messageId: null, error: "missing_wamid" };
   const rawStatus = data.status ?? data.update ?? data.ack ?? null;
   const mapped = mapEvolutionStatus(
