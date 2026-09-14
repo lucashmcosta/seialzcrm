@@ -1,40 +1,24 @@
-# Quem desativou Tiago, Thauan e Leandro
+# Novos gráficos na tela Início: Criadas, Ganhas e Conversão
 
-## O que o sistema guarda hoje
+Mantém o gráfico atual "Criadas x Ganhas" como está e adiciona três gráficos individuais logo abaixo, usando exatamente os mesmos dados já carregados (nenhum novo cálculo, filtro ou consulta ao banco).
 
-Os três estão desativados na Central Trabalhista, com estes horários de alteração:
+## O que muda
 
-- Thauan Xavier — 11/09/2026, 13:27 (horário de São Paulo)
-- Leandro Buttini — 11/09/2026, 13:28
-- Tiago Ribeiro — 11/09/2026, 13:28
+1. **Criadas** — gráfico de barras azuis por período (mesma cor do card Criadas).
+2. **Ganhas** — gráfico de barras verdes por período.
+3. **Conversão** — gráfico de linha laranja, calculado por bucket como Ganhas ÷ Criadas em porcentagem; buckets sem Criadas aparecem vazios (sem ponto), evitando 0% enganoso.
 
-O autor da ação **não foi registrado**. O histórico de alterações só é gravado para
-contatos, oportunidades, tarefas, empresas, organizações e uma configuração de consulta —
-a tabela de vínculos de usuário não tem registro de histórico. Também não há nada nos
-registros da área administrativa nem de acesso em nome de outra pessoa nesse período.
+Cada um dos três cards:
+- tem o mesmo switch **Diária / Semanal** já usado no gráfico atual, com a mesma regra padrão;
+- respeita os filtros de período e responsável já selecionados na tela;
+- segue o mesmo visual dos cards existentes (borda, título, subtítulo de agregação, altura do gráfico).
 
-Ou seja: sabemos exatamente quando, mas hoje é impossível dizer quem. As três ações
-aconteceram em menos de um minuto e meio, o que indica uma única pessoa desativando em
-sequência na tela de Usuários.
-
-## Correção proposta
-
-Passar a registrar ativação/desativação de usuários, para que a próxima vez tenha autor:
-
-1. Gravar no histórico toda mudança no vínculo do usuário com a organização (quem alterou,
-   o que mudou, quando).
-2. Mostrar essa informação na tela de Usuários, na linha de cada pessoa (ex.: "Desativado
-   por Junior Domingos em 11/09/2026 13:28").
-
-Isso não muda nada no comportamento atual de ativar/desativar.
+Disposição: o bloco atual (Criadas x Ganhas + Status) permanece no topo; abaixo entra uma faixa com os três novos gráficos, em três colunas no desktop e empilhados no celular. A versão mobile da tela Início continua apenas com os cards de números, sem os novos gráficos.
 
 ## Detalhes técnicos
 
-- Trigger `AFTER INSERT/UPDATE/DELETE` em `public.user_organizations` gravando em
-  `public.audit_logs` (`entity_type = 'user_organizations'`), com `changed_by_user_id =
-  current_user_id()` e `organization_id` da linha; reaproveitar o padrão de
-  `audit_log_trigger` já usado nas outras tabelas.
-- Sem alteração de schema em `user_organizations`, sem novos grants, sem mudança de RLS.
-- Frontend: leitura dos eventos `user_organizations` em `audit_logs` na tela
-  Configurações → Usuários para exibir autor/data da última mudança de status.
-- Não é possível reconstruir retroativamente o autor das três desativações de 11/09.
+- Novo componente `src/components/reports/DashboardSingleMetricChart.tsx`, reutilizando a bucketização (`startOfDay`/`startOfWeek`, `parseLocalDate`) e o switch de granularidade de `DashboardTrendChart.tsx`; para evitar duplicação, essas funções e o toggle são extraídos para `src/components/reports/trendBuckets.ts` e um subcomponente `GranularityToggle`, e `DashboardTrendChart` passa a consumi-los sem mudança de comportamento.
+- Props: `data: HomeTrendRow[]`, `from`, `to`, `loading`, `title`, `metric: 'created' | 'won' | 'conversion'`, `variant: 'bar' | 'line'`, cor via token semântico (`--info`, `--success`, `--orange`).
+- Conversão: `won / created * 100` por bucket, `null` quando `created === 0` (recharts com `connectNulls={false}`), eixo Y com sufixo `%` e 2 casas decimais no tooltip.
+- `src/pages/Dashboard.tsx`: adiciona um grid `md:grid-cols-3` com os três novos cards após a linha existente, alimentado por `stats.trend`.
+- Nenhuma alteração em `useHomeDashboardStats.ts`, nas RPCs ou em KPIs.
