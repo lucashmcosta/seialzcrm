@@ -46,6 +46,7 @@ export function DashboardSingleMetricChart({
   title,
   metric,
   variant = 'bar',
+  height = 'h-56',
 }: Props) {
   const defaultGranularity = useMemo(() => defaultGranularityFor(from, to), [from, to]);
   const [granularity, setGranularity] = useState<Granularity>(defaultGranularity);
