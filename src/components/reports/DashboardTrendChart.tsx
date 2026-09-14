@@ -60,9 +60,9 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
       </div>
 
       {loading ? (
-        <div className="h-64 animate-pulse rounded-md bg-muted/50" />
+        <div className="min-h-64 flex-1 animate-pulse rounded-md bg-muted/50" />
       ) : (
-        <div className="h-64 w-full">
+        <div className="min-h-64 w-full flex-1">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={series} margin={{ top: 8, right: 12, left: -16, bottom: 0 }} barGap={2} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
