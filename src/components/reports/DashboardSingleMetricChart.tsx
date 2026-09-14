@@ -102,9 +102,9 @@ export function DashboardSingleMetricChart({
       </div>
 
       {loading ? (
-        <div className="h-56 animate-pulse rounded-md bg-muted/50" />
+        <div className={`${height} animate-pulse rounded-md bg-muted/50`} />
       ) : (
-        <div className="h-56 w-full">
+        <div className={`${height} w-full`}>
           <ResponsiveContainer width="100%" height="100%">
             {variant === 'line' ? (
               <LineChart data={series} margin={margin}>
