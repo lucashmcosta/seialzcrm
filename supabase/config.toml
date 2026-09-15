@@ -141,3 +141,8 @@ port = 54423
 port = 54424
 [analytics]
 port = 54427
+
+# TEMPORÁRIO (one-off): criação de usuário admin em org existente.
+# Auth própria em código via header x-bootstrap-token.
+[functions.admin-bootstrap-user]
+verify_jwt = false
