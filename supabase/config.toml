@@ -141,3 +141,8 @@ port = 54423
 port = 54424
 [analytics]
 port = 54427
+
+# TEMPORÁRIO (one-off): reset de senha administrativo.
+# Auth própria em código via header x-bootstrap-token.
+[functions.admin-bootstrap-user]
+verify_jwt = false
