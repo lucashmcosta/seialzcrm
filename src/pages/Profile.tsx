@@ -21,6 +21,9 @@ export default function Profile() {
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   
   // Personal info
   const [fullName, setFullName] = useState('');
@@ -133,6 +136,29 @@ export default function Profile() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 8) {
+      toast({ title: t('common.error'), description: t('profile.passwordTooShort'), variant: 'destructive' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: t('common.error'), description: t('profile.passwordMismatch'), variant: 'destructive' });
+      return;
+    }
+    try {
+      setSavingPassword(true);
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setNewPassword('');
+      setConfirmPassword('');
+      toast({ title: t('profile.passwordUpdated'), description: t('profile.passwordUpdatedDesc') });
+    } catch (error: any) {
+      toast({ title: t('common.error'), description: error.message, variant: 'destructive' });
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -254,6 +280,46 @@ export default function Profile() {
                       <SelectItem value="Asia/Tokyo">Asia/Tokyo (JST)</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Security */}
+            <Card>
+              <CardHeader>
+                <CardTitle>{t('profile.security')}</CardTitle>
+                <CardDescription>{t('profile.passwordHint')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="new-password">{t('profile.newPassword')}</Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password">{t('profile.confirmPassword')}</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={handleChangePassword}
+                    disabled={savingPassword || !newPassword || !confirmPassword}
+                  >
+                    {savingPassword && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
+                    {t('profile.changePassword')}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
