@@ -1,5 +1,10 @@
 project_id = "qvmtzfvkhkhkhdpclzua"
 
+# Criação de conta (tenant) pelo Portal Admin. Auth própria em código:
+# valida JWT + admin_users ativo com MFA, igual ao admin-impersonate.
+[functions.admin-create-organization]
+verify_jwt = false
+
 # Meta Data Deletion Callback: público (a Meta chama sem JWT; valida signed_request).
 [functions.meta-data-deletion-callback]
 verify_jwt = false
