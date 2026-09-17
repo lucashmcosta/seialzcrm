@@ -888,7 +888,6 @@ export const translations = {
     'profile.email': 'Email',
     'profile.language': 'Language',
     'profile.timezone': 'Timezone',
-    'profile.changePassword': 'Change Password',
     'profile.updated': 'Profile updated',
     
     // Activity Timeline
