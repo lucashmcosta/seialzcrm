@@ -139,6 +139,29 @@ export default function Profile() {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (newPassword.length < 8) {
+      toast({ title: t('common.error'), description: t('profile.passwordTooShort'), variant: 'destructive' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: t('common.error'), description: t('profile.passwordMismatch'), variant: 'destructive' });
+      return;
+    }
+    try {
+      setSavingPassword(true);
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setNewPassword('');
+      setConfirmPassword('');
+      toast({ title: t('profile.passwordUpdated'), description: t('profile.passwordUpdatedDesc') });
+    } catch (error: any) {
+      toast({ title: t('common.error'), description: error.message, variant: 'destructive' });
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   const getInitials = () => {
     if (fullName) {
       const parts = fullName.split(' ');
