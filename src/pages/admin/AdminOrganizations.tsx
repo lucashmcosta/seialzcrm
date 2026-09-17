@@ -12,7 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { MagnifyingGlass, Eye, SignIn, SpinnerGap } from '@phosphor-icons/react';
+import { MagnifyingGlass, Eye, SignIn, SpinnerGap, Plus } from '@phosphor-icons/react';
+import { AdminCreateOrganizationDialog } from '@/components/admin/AdminCreateOrganizationDialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from '@/hooks/use-toast';
@@ -32,6 +33,7 @@ export default function AdminOrganizations() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [accessingId, setAccessingId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const navigate = useNavigate();
 
   const handleAccess = async (org: Organization) => {
@@ -130,7 +132,19 @@ export default function AdminOrganizations() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Contas</h1>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-3xl font-bold">Contas</h1>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova conta
+          </Button>
+        </div>
+
+        <AdminCreateOrganizationDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          onCreated={fetchOrganizations}
+        />
 
         <div className="flex items-center gap-4">
           <div className="relative flex-1">
