@@ -403,7 +403,6 @@ export const translations = {
     'profile.email': 'E-mail',
     'profile.language': 'Idioma',
     'profile.timezone': 'Fuso Horário',
-    'profile.changePassword': 'Alterar Senha',
     'profile.updated': 'Perfil atualizado',
     
     // Activity Timeline
