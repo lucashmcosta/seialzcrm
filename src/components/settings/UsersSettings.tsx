@@ -12,11 +12,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { SpinnerGap, UserPlus, CaretDown, EnvelopeSimple, UserCirclePlus, Clock, X } from '@phosphor-icons/react';
+import { SpinnerGap, UserPlus, CaretDown, EnvelopeSimple, UserCirclePlus, Clock, X, ArrowsClockwise, Copy } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { EditUserDialog, EditableUser } from './EditUserDialog';
 import { TabGroup } from '@/components/common/TabGroup';
+
+function generateStrongPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+  const bytes = new Uint32Array(14);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+}
+
+async function readFunctionErrorMessage(error: any): Promise<string | null> {
+  try {
+    const res = (error as any)?.context;
+    if (res && typeof res.json === 'function') {
+      const body = await res.clone().json();
+      if (body?.error) return String(body.error);
+    }
+  } catch {
+    // corpo não-JSON: ignora e usa a mensagem genérica
+  }
+  return null;
+}
 
 interface UserMembership {
   id: string;
@@ -239,7 +259,8 @@ export function UsersSettings() {
       });
 
       if (response.error) {
-        throw new Error(response.error.message || 'Erro ao criar usuário');
+        const serverMessage = await readFunctionErrorMessage(response.error);
+        throw new Error(serverMessage || response.error.message || 'Erro ao criar usuário');
       }
 
       if (response.data?.error) {
@@ -668,17 +689,40 @@ export function UsersSettings() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="create-password">Senha temporária *</Label>
-                <Input
-                  id="create-password"
-                  type="password"
-                  value={createForm.password}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder="••••••••"
-                  minLength={6}
-                  required
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="create-password"
+                    type="text"
+                    value={createForm.password}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="••••••••"
+                    minLength={6}
+                    required
+                    className="font-mono"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCreateForm(prev => ({ ...prev, password: generateStrongPassword() }))}
+                    title="Gerar senha forte"
+                  >
+                    <ArrowsClockwise className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      if (!createForm.password) return;
+                      navigator.clipboard.writeText(createForm.password);
+                      toast({ description: 'Senha copiada.' });
+                    }}
+                    title="Copiar senha"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Mínimo 6 caracteres. O usuário poderá alterar depois.
+                  Mínimo 6 caracteres. Evite senhas comuns (como 123456 ou o nome da empresa com o ano) — elas são recusadas. O usuário poderá alterar depois.
                 </p>
               </div>
               <div className="space-y-2">
