@@ -155,8 +155,14 @@ serve(async (req) => {
 
     if (createAuthError || !newAuthUser.user) {
       console.error('Error creating auth user:', createAuthError);
+      const isWeakPassword =
+        (createAuthError as any)?.code === 'weak_password' ||
+        /weak.*password|known to be weak/i.test(createAuthError?.message || '');
+      const message = isWeakPassword
+        ? 'Essa senha é muito comum e foi recusada. Use o gerador de senha ou escolha outra.'
+        : createAuthError?.message || 'Failed to create user';
       return new Response(
-        JSON.stringify({ error: createAuthError?.message || 'Failed to create user' }),
+        JSON.stringify({ error: message }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

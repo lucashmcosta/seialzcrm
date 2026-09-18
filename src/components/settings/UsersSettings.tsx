@@ -259,7 +259,8 @@ export function UsersSettings() {
       });
 
       if (response.error) {
-        throw new Error(response.error.message || 'Erro ao criar usuário');
+        const serverMessage = await readFunctionErrorMessage(response.error);
+        throw new Error(serverMessage || response.error.message || 'Erro ao criar usuário');
       }
 
       if (response.data?.error) {
