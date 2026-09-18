@@ -18,6 +18,26 @@ import { ptBR } from 'date-fns/locale';
 import { EditUserDialog, EditableUser } from './EditUserDialog';
 import { TabGroup } from '@/components/common/TabGroup';
 
+function generateStrongPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+  const bytes = new Uint32Array(14);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+}
+
+async function readFunctionErrorMessage(error: any): Promise<string | null> {
+  try {
+    const res = (error as any)?.context;
+    if (res && typeof res.json === 'function') {
+      const body = await res.clone().json();
+      if (body?.error) return String(body.error);
+    }
+  } catch {
+    // corpo não-JSON: ignora e usa a mensagem genérica
+  }
+  return null;
+}
+
 interface UserMembership {
   id: string;
   user_id: string;
