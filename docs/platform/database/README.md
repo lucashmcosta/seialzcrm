@@ -68,7 +68,7 @@ Ver `docs/operations/drift/2026-07-04.md` — itens que afetam schema:
 - **P0 #2**: `marketing-campaign-enrich`, `twilio-message-debug`, `meta-capi-raw-test` deployadas fora do repo.
 - **P1 #4**: 184 migrations no banco vs 261 no repo.
 - **P2 #6**: 8 tabelas de backfill/backup em `public` (`messages_endpoint_backfill_2b` = 92 K linhas!). Padrão futuro: schema `_scratch`.
-- **P2 #7**: overloads a consolidar (`rpc_list_message_threads`, `validate_message_analysis_v2/v21`, `assign_round_robin`).
+- **P2 #7**: overloads a consolidar (`validate_message_analysis_v2/v21`, `assign_round_robin`). `rpc_list_message_threads` consolidado em 2026-09-21 (overload único com `p_search` + `p_endpoint_ids`).
 - **P2 #8**: UUID da Central Trabalhista hardcoded em `parse_lead_source_marker_from_message`.
 
 ## Regeneração

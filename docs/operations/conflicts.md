@@ -57,7 +57,7 @@ Este arquivo registra divergências entre a documentação que existia no reposi
 - **Ação:** drift P2 #8 (não urgente).
 
 ### 7. Overloads duplicados
-- `rpc_list_message_threads` com 2 overloads.
+- ~~`rpc_list_message_threads` com 2 overloads~~ — **resolvido em 2026-09-21**: havia 3 overloads (8, 9 e 10 parâmetros); os de 8 e 9 foram removidos, restando apenas a assinatura com `p_search` + `p_endpoint_ids`. Motivo: chamadas sem `p_endpoint_ids` (app mobile nativo publicado) retornavam `PGRST203` e a lista de Mensagens ficava vazia. Regra: esta RPC deve permanecer com overload único — novos parâmetros entram na mesma assinatura, com default.
 - `validate_message_analysis_v2` + `v21` (duas triggers na mesma tabela `message_analyses`).
 - `assign_round_robin` com 2 assinaturas.
 - **Ação:** drift P2 #7.

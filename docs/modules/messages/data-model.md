@@ -46,7 +46,7 @@
 ## RPCs
 - `rpc_list_inbox_threads(p_organization_id, p_tab, p_only_mine, p_assigned_user_id, p_resolved_since, ...)`.
 - `rpc_inbox_queue_counts(...)`.
-- `rpc_list_message_threads(...)` — ⚠️ 2 overloads (drift #7).
+- `rpc_list_message_threads(p_organization_id, p_status, p_channels, p_assigned_user_id, p_unassigned_only, p_cursor_updated_at, p_cursor_id, p_limit, p_search, p_endpoint_ids)` — **overload único desde 2026-09-21**. Os overloads de 8 (sem `p_search`) e 9 parâmetros (sem `p_endpoint_ids`) foram removidos: como todos os parâmetros tinham default, chamadas que omitiam `p_endpoint_ids` (app mobile nativo) casavam com dois candidatos e o PostgREST recusava com `PGRST203`. Todos os parâmetros após `p_organization_id` têm default; `p_endpoint_ids IS NULL` = sem filtro por número. Drift #7 (overloads) resolvido para esta RPC.
 - `rpc_get_message_threads_by_ids(...)`.
 - `merge_message_threads` / `unmerge_message_thread`.
 - `resolve_communication_endpoint(_organization_id, _channel, _address)`.
