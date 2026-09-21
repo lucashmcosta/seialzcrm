@@ -781,10 +781,7 @@ function DesktopMessagesList() {
   const invalidateThreadLastEndpoint = useInvalidateThreadLastEndpoint();
 
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false);
-  const salesEndpoints = useMemo(
-    () => filterEndpointsByIntent(orgEndpoints, 'sales'),
-    [orgEndpoints],
-  );
+  void filterEndpointsByIntent;
   // Filtro por número: opções vêm de TODAS as fichas comerciais (inclusive
   // inativas/Evolution), agrupadas por número. Chave = dígitos do número.
   const endpointFilterOptions = useSalesEndpointFilterOptions(organization?.id);
@@ -3241,7 +3238,7 @@ function DesktopMessagesList() {
         intent="sales"
         onSelectContact={async (_contactId, threadId, endpointId) => {
           setSearchQuery('');
-          if (endpointFilter !== 'all' && endpointFilter !== endpointId) {
+          if (activeEndpointFilterIds && (!endpointId || !activeEndpointFilterIds.has(endpointId))) {
             setEndpointFilter('all');
           }
 
