@@ -105,8 +105,11 @@ import { LastMessagePreview } from '@/components/messages/LastMessagePreview';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
+import { AssigneeFilterDialog } from '@/components/messages/AssigneeFilterDialog';
+import { useOrgUserFilterOptions } from '@/hooks/useOrgUserFilterOptions';
 import { TimelineEventMarker } from '@/components/messages/timeline/TimelineEventMarker';
-import { FunnelSimple } from '@phosphor-icons/react';
+import { FunnelSimple, UserCircle } from '@phosphor-icons/react';
+
 import { formatEndpointIdentity, formatEndpointMigrationAuditLine, whatsappProviderLabel, whatsappProviderShortLabel } from '@/lib/whatsappEndpointDisplay';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 
