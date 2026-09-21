@@ -116,6 +116,38 @@ export function Notifications() {
     fetchNotifications();
   };
 
+  const navigateToThreadNotification = async (entityId: string) => {
+    // entity_id pode ser o id da thread ou o id da mensagem.
+    let threadId: string | null = null;
+    let businessContext: string | null = null;
+
+    const { data: threadRow } = await supabase
+      .from('message_threads')
+      .select('id, business_context')
+      .eq('id', entityId)
+      .maybeSingle();
+
+    if (threadRow) {
+      threadId = threadRow.id;
+      businessContext = (threadRow as { business_context: string | null }).business_context;
+    } else {
+      const { data: messageRow } = await supabase
+        .from('messages')
+        .select('thread_id, message_threads ( id, business_context )')
+        .eq('id', entityId)
+        .maybeSingle();
+      const thread = (messageRow as any)?.message_threads;
+      threadId = thread?.id ?? (messageRow as any)?.thread_id ?? null;
+      businessContext = thread?.business_context ?? null;
+    }
+
+    if (businessContext === 'customer_service') {
+      navigate(threadId ? `/inbox?thread=${threadId}` : '/inbox');
+      return;
+    }
+    navigate(threadId ? `/commercial?thread=${threadId}` : '/commercial');
+  };
+
   const handleNotificationClick = (notification: Notification) => {
     markAsRead(notification.id);
 
@@ -127,10 +159,11 @@ export function Notifications() {
       } else if (notification.entity_type === 'task') {
         navigate('/tasks');
       } else if (notification.entity_type === 'message_thread' || notification.entity_type === 'message') {
-        navigate('/commercial');
+        void navigateToThreadNotification(notification.entity_id);
       }
     }
   };
+
 
   return (
     <DropdownMenu>
