@@ -716,21 +716,7 @@ function DesktopMessagesList() {
   // Multi-number support (temporary CT transition period).
   // Only renders selector + per-thread badge when the org has 2+ active endpoints.
   const { endpoints: orgEndpoints, officialNumbers, hasMultiple: hasMultipleEndpoints } = useOrgWhatsAppEndpoints(organization?.id);
-  // Fase 2.5 — o filtro por número do Comercial só considera endpoints comerciais.
-  // Números de Atendimento (purpose = 'customer_service') não listam conversas aqui.
-  const salesEndpoints = useMemo(
-    () => orgEndpoints.filter((ep) => ep.purpose !== 'customer_service'),
-    [orgEndpoints],
-  );
-  const hasMultipleSalesEndpoints = salesEndpoints.length >= 2;
   const threadIdsForEndpointMap = (threads ?? []).map((t) => t.id);
-  // Se o endpoint filtrado deixou de ser comercial (ou saiu da lista), volta a "todos".
-  useEffect(() => {
-    if (endpointFilter === 'all') return;
-    if (!salesEndpoints.some((ep) => ep.id === endpointFilter)) {
-      setEndpointFilter('all');
-    }
-  }, [endpointFilter, salesEndpoints]);
   const threadEndpointMap = useThreadEndpointMap(threadIdsForEndpointMap, hasMultipleEndpoints);
   // Badge da lista lateral (somente exibição): endpoint da última mensagem,
   // com `primary_endpoint_id` como fallback.
