@@ -724,6 +724,13 @@ function DesktopMessagesList() {
   );
   const hasMultipleSalesEndpoints = salesEndpoints.length >= 2;
   const threadIdsForEndpointMap = (threads ?? []).map((t) => t.id);
+  // Se o endpoint filtrado deixou de ser comercial (ou saiu da lista), volta a "todos".
+  useEffect(() => {
+    if (endpointFilter === 'all') return;
+    if (!salesEndpoints.some((ep) => ep.id === endpointFilter)) {
+      setEndpointFilter('all');
+    }
+  }, [endpointFilter, salesEndpoints]);
   const threadEndpointMap = useThreadEndpointMap(threadIdsForEndpointMap, hasMultipleEndpoints);
   // Badge da lista lateral (somente exibição): endpoint da última mensagem,
   // com `primary_endpoint_id` como fallback.
