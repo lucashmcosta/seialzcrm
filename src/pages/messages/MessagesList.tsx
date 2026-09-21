@@ -784,14 +784,22 @@ function DesktopMessagesList() {
     () => filterEndpointsByIntent(orgEndpoints, 'sales'),
     [orgEndpoints],
   );
-  // Filtro por número: só números comerciais; aparece havendo ao menos um.
-  const hasSalesEndpointFilter = salesEndpoints.length >= 1;
+  // Filtro por número: opções vêm de TODAS as fichas comerciais (inclusive
+  // inativas/Evolution), agrupadas por número. Chave = dígitos do número.
+  const endpointFilterOptions = useSalesEndpointFilterOptions(organization?.id);
+  const hasSalesEndpointFilter = endpointFilterOptions.length >= 1;
+  const activeEndpointFilterIds = useMemo(() => {
+    if (endpointFilter === 'all') return null;
+    const opt = endpointFilterOptions.find((o) => o.key === endpointFilter);
+    return opt ? new Set(opt.endpointIds) : null;
+  }, [endpointFilter, endpointFilterOptions]);
   useEffect(() => {
     if (endpointFilter === 'all') return;
-    if (!salesEndpoints.some((ep) => ep.id === endpointFilter)) {
+    if (endpointFilterOptions.length === 0) return;
+    if (!endpointFilterOptions.some((o) => o.key === endpointFilter)) {
       setEndpointFilter('all');
     }
-  }, [endpointFilter, salesEndpoints]);
+  }, [endpointFilter, endpointFilterOptions]);
 
 
 
