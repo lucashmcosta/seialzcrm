@@ -142,7 +142,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [orgId, channelKey, limit, searchTerm, endpointKey]);
+  }, [orgId, channelKey, limit, searchTerm, endpointKey, assigneeKey]);
 
   // Load more — cursor-based pagination
   const loadMore = useCallback(async () => {
