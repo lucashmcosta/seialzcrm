@@ -251,14 +251,17 @@ export function MobileMessagesList() {
         // Check for existing thread not in current list (e.g. resolved and filtered out)
         const { data: existingThread } = await supabase
           .from('message_threads')
-          .select('id')
+          .select('id, business_context')
           .eq('organization_id', organization.id)
           .eq('contact_id', fromContactId)
           .eq('channel', 'whatsapp')
+          .or('business_context.eq.sales,business_context.is.null')
+          .order('last_message_at', { ascending: false, nullsFirst: false })
+          .limit(1)
           .maybeSingle();
 
         if (existingThread) {
-          setSelectedThreadId(existingThread.id);
+          setSelectedThreadId((existingThread as any).id);
           setFilter('all_open');
           refetchThreads();
           return;
@@ -271,9 +274,11 @@ export function MobileMessagesList() {
             organization_id: organization.id,
             contact_id: fromContactId,
             channel: 'whatsapp',
+            business_context: 'sales',
           })
           .select('id')
           .single();
+
 
         if (!error && newThread) {
           setSelectedThreadId(newThread.id);

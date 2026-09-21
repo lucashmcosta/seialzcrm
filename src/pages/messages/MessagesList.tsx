@@ -1820,7 +1820,7 @@ function DesktopMessagesList() {
 
     const { data: row, error } = await supabase
       .from('message_threads')
-      .select('id, contact_id, status, updated_at, created_at, last_message_at, whatsapp_last_inbound_at, last_inbound_at, needs_human_attention, assigned_user_id, primary_endpoint_id, last_message_id, last_message_content, last_message_direction')
+      .select('id, contact_id, status, updated_at, created_at, last_message_at, whatsapp_last_inbound_at, last_inbound_at, needs_human_attention, assigned_user_id, primary_endpoint_id, last_message_id, last_message_content, last_message_direction, business_context')
       .eq('organization_id', organization.id)
       .eq('id', threadId)
       .maybeSingle();
@@ -1830,6 +1830,10 @@ function DesktopMessagesList() {
       return null;
     }
     if (!row) return null;
+    // Comercial nunca exibe conversas de Atendimento (ex.: número 7027).
+    const rowContext = (row as any).business_context as string | null;
+    if (rowContext && rowContext !== 'sales') return null;
+
 
     const { data: contact } = await supabase
       .from('contacts')
