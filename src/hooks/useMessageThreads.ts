@@ -176,7 +176,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     } finally {
       setLoadingMore(false);
     }
-  }, [orgId, channelKey, limit, hasMore, loadingMore, threads, searchTerm, endpointKey]);
+  }, [orgId, channelKey, limit, hasMore, loadingMore, threads, searchTerm, endpointKey, assigneeKey]);
 
   // ---------------------------------------------------------------
   // Realtime: patch-local por thread (sem refetch da lista inteira)
