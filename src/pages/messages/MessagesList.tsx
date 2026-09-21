@@ -64,7 +64,7 @@ import { useThreadBusinessContext, type ThreadBusinessContext } from '@/hooks/us
 import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
 import { useThreadSendEndpoint } from '@/hooks/useThreadSendEndpoint';
 import { useEndpointNumbers } from '@/hooks/useEndpointNumbers';
-import { pickPreferredEndpoint, filterEndpointsByIntent } from '@/lib/composerEndpoint';
+import { pickPreferredEndpoint } from '@/lib/composerEndpoint';
 import { isSalesPurpose } from '@/lib/endpointPurpose';
 import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown } from '@phosphor-icons/react';
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
@@ -781,7 +781,6 @@ function DesktopMessagesList() {
   const invalidateThreadLastEndpoint = useInvalidateThreadLastEndpoint();
 
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false);
-  void filterEndpointsByIntent;
   // Filtro por número: opções vêm de TODAS as fichas comerciais (inclusive
   // inativas/Evolution), agrupadas por número. Chave = dígitos do número.
   const endpointFilterOptions = useSalesEndpointFilterOptions(organization?.id);
