@@ -338,6 +338,6 @@ Nunca chamar `twilio-whatsapp-send` / `meta-whatsapp-send` diretamente. Nunca es
 ## 11. Pendências / drifts a ter em mente
 
 - `scheduled-messages-cron` sem cron (drift #3) — evitar prometer envio agendado.
-- `rpc_list_message_threads` tem 2 overloads (drift #7) — chamar com todos os 4 parâmetros nomeados como no `useMessageThreads.ts` para não cair no overload errado.
+- `rpc_list_message_threads` tem **overload único** desde 2026-09-21 (assinatura com `p_search` + `p_endpoint_ids`, todos com default). Qualquer subconjunto de parâmetros nomeados resolve sem ambiguidade; `p_endpoint_ids` é opcional (null = sem filtro por número). Não recriar overloads desta RPC — quebra o app publicado com `PGRST203`.
 - `messages_endpoint_backfill_2b` (92k linhas) e outros backfills de `message_threads.business_context` ainda ativos — thread nova pode nascer com `business_context=null` antes do trigger consolidar; tratar `null` como "sales" default em `/messages` só para efeito de UI.
 - Inbox v2 em rollout com flag off — o mobile deve começar por `/messages` (comercial). Inbox mobile é escopo separado.
