@@ -1,25 +1,37 @@
 # Corrigir o filtro por número do Comercial
 
-## Problema
+## Diagnóstico confirmado
 
-No Comercial, a janela "Filtrar por número" lista o número **+55 11 5028-7027**, que é do Atendimento (e ainda com o selo "Principal"). Filtrar por ele nunca traz conversa nenhuma, já que o Comercial não mostra mais conversas do Atendimento.
+O filtro por número é aplicado hoje no navegador **depois** que a tela recebe uma página geral de 50 conversas. A RPC `rpc_list_message_threads` não recebe o número/endpoint escolhido; por isso, ao selecionar 7020, a primeira página pode ficar vazia mesmo existindo conversas em páginas posteriores.
 
-A lista vem de todos os números de WhatsApp ativos da conta, sem separar o propósito de cada um.
+Na Central Trabalhista, a validação do banco confirmou o caso exato: há **1.286 conversas abertas do 7020**, mas a primeira aparece apenas na posição geral **374**; nenhuma está nas primeiras 50.
 
-## O que muda
+## Alterações
 
-- A janela passa a listar **somente os números do Comercial** — números de Atendimento ficam fora.
-- O botão do filtro (funil) só aparece quando a conta tem **dois ou mais números comerciais**. Na Central Trabalhista, hoje só existe um número comercial ativo, então o botão deixa de aparecer — o que é o comportamento correto, já que não há o que filtrar.
-- Se um filtro estiver ativo em um número que saiu da lista, ele volta automaticamente para "Todos os números".
-- O Atendimento e o envio de mensagens continuam exatamente como estão.
+1. **Filtrar no banco antes de paginar**
+   - Estender a assinatura usada de `rpc_list_message_threads` com uma lista opcional de endpoints.
+   - Aplicar o mesmo critério visual já usado na tela: endpoint da última mensagem; quando ausente, `primary_endpoint_id` da conversa.
+   - Manter organização, permissões, contexto Comercial, busca, status, ordenação e cursor atuais.
 
-## Detalhes técnicos
+2. **Enviar o número selecionado para a consulta**
+   - Fazer `useMessageThreads` receber os IDs agrupados do número escolhido — incluindo as duas fichas do 7020, histórica Meta e atual Evolution.
+   - Ao trocar o filtro, reiniciar a paginação e buscar diretamente a primeira página daquele número.
+   - “Carregar mais” continuará usando cursor, mas agora dentro do resultado filtrado.
 
-Arquivo: `src/pages/messages/MessagesList.tsx`
+3. **Remover a dependência do filtro tardio**
+   - Ajustar `MessagesList` para não depender somente das conversas já carregadas para decidir quais mostrar.
+   - Preservar o botão, o diálogo e as opções 7067/7020 exatamente como estão.
 
-1. Derivar `salesEndpoints = orgEndpoints.filter(ep => ep.purpose !== 'customer_service')` (memoizado).
-2. Passar `salesEndpoints` para `EndpointFilterDialog` (prop `endpoints`).
-3. Nova flag `hasMultipleSalesEndpoints = salesEndpoints.length >= 2` usada apenas na condição de render do botão de funil (linha ~1935). `hasMultipleEndpoints` do hook `useOrgWhatsAppEndpoints` permanece intacto para `useThreadEndpointMap` / `useThreadBadgeEndpoints` / badges de rota.
-4. `useEffect` que reseta `endpointFilter` para `'all'` quando o id selecionado não está em `salesEndpoints`.
+4. **Validar**
+   - Confirmar que 7020 mostra resultados imediatamente, sem clicar antes em “Carregar mais”.
+   - Confirmar paginação, busca e abas “Minhas”, “Não atribuídas”, “Todas abertas” e “Resolvidas”.
+   - Confirmar que 7067 continua correto e que o 7027/Atendimento permanece fora do Comercial.
 
-Nada de mudança em banco, RPC, RLS ou edge functions; `EndpointFilterDialog.tsx` e o hook não são alterados.
+## Impacto técnico
+
+- **Módulo afetado:** Comercial/Messages.
+- **Banco:** sim, alteração compatível de RPC via migration; nenhuma tabela ou dado será alterado.
+- **RLS e multi-tenancy:** preservados; a RPC continuará validando associação ativa à organização e as permissões existentes.
+- **Edge Functions e integrações externas:** não afetadas.
+- **Documentação consultada:** `docs/README.md`, `docs/STATUS.md`, `docs/modules/messages/README.md`, `docs/modules/messages/data-model.md`, `docs/product/channel-boundaries.md`, ADRs 0001 e 0009, `docs/operations/conflicts.md` e drift de 2026-07-04.
+- **Descoberta adicional:** concluída; não é necessária nenhuma regra de negócio nova.
