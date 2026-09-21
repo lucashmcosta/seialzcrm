@@ -64,7 +64,7 @@ import { useThreadBusinessContext, type ThreadBusinessContext } from '@/hooks/us
 import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
 import { useThreadSendEndpoint } from '@/hooks/useThreadSendEndpoint';
 import { useEndpointNumbers } from '@/hooks/useEndpointNumbers';
-import { pickPreferredEndpoint, filterEndpointsByIntent } from '@/lib/composerEndpoint';
+import { pickPreferredEndpoint } from '@/lib/composerEndpoint';
 import { isSalesPurpose } from '@/lib/endpointPurpose';
 import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown } from '@phosphor-icons/react';
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
@@ -97,6 +97,7 @@ import { SnippetsPickerPanel, extractSnippetQuery } from '@/components/whatsapp/
 import { useAI } from '@/hooks/useAI';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
+import { useSalesEndpointFilterOptions } from '@/hooks/useSalesEndpointFilterOptions';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { useThreadBadgeEndpoints } from '@/hooks/useThreadBadgeEndpoints';
 import { useThreadLastMessageMeta } from '@/hooks/messages/useThreadLastMessageMeta';
@@ -780,18 +781,22 @@ function DesktopMessagesList() {
   const invalidateThreadLastEndpoint = useInvalidateThreadLastEndpoint();
 
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false);
-  const salesEndpoints = useMemo(
-    () => filterEndpointsByIntent(orgEndpoints, 'sales'),
-    [orgEndpoints],
-  );
-  // Filtro por número: só números comerciais; aparece havendo ao menos um.
-  const hasSalesEndpointFilter = salesEndpoints.length >= 1;
+  // Filtro por número: opções vêm de TODAS as fichas comerciais (inclusive
+  // inativas/Evolution), agrupadas por número. Chave = dígitos do número.
+  const endpointFilterOptions = useSalesEndpointFilterOptions(organization?.id);
+  const hasSalesEndpointFilter = endpointFilterOptions.length >= 1;
+  const activeEndpointFilterIds = useMemo(() => {
+    if (endpointFilter === 'all') return null;
+    const opt = endpointFilterOptions.find((o) => o.key === endpointFilter);
+    return opt ? new Set(opt.endpointIds) : null;
+  }, [endpointFilter, endpointFilterOptions]);
   useEffect(() => {
     if (endpointFilter === 'all') return;
-    if (!salesEndpoints.some((ep) => ep.id === endpointFilter)) {
+    if (endpointFilterOptions.length === 0) return;
+    if (!endpointFilterOptions.some((o) => o.key === endpointFilter)) {
       setEndpointFilter('all');
     }
-  }, [endpointFilter, salesEndpoints]);
+  }, [endpointFilter, endpointFilterOptions]);
 
 
 
@@ -1790,7 +1795,12 @@ function DesktopMessagesList() {
   const visibleThreads = filteredThreads
     ?.filter((t) => !consolidatedThreadIds.has(t.id))
     .filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at))
-    .filter((t) => endpointFilter === 'all' || threadEndpointMap[t.id] === endpointFilter);
+    .filter((t) => {
+      if (!activeEndpointFilterIds) return true;
+      const badgeId = threadBadgeEndpoints[t.id]?.endpointId ?? null;
+      const resolved = badgeId ?? threadEndpointMap[t.id] ?? null;
+      return !!resolved && activeEndpointFilterIds.has(resolved);
+    });
 
   const visibleThreadsWithSelectedRaw = selectedThreadOverride
     && selectedThreadId === selectedThreadOverride.id
@@ -3227,7 +3237,7 @@ function DesktopMessagesList() {
         intent="sales"
         onSelectContact={async (_contactId, threadId, endpointId) => {
           setSearchQuery('');
-          if (endpointFilter !== 'all' && endpointFilter !== endpointId) {
+          if (activeEndpointFilterIds && (!endpointId || !activeEndpointFilterIds.has(endpointId))) {
             setEndpointFilter('all');
           }
 
@@ -3242,8 +3252,7 @@ function DesktopMessagesList() {
       <EndpointFilterDialog
         open={endpointFilterOpen}
         onOpenChange={setEndpointFilterOpen}
-        endpoints={salesEndpoints}
-        officialNumbers={officialNumbers}
+        options={endpointFilterOptions}
         value={endpointFilter}
         onChange={setEndpointFilter}
       />
