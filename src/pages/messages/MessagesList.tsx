@@ -430,6 +430,10 @@ function DesktopMessagesList() {
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [endpointFilter, setEndpointFilter] = useState<string>('all');
   const [endpointFilterOpen, setEndpointFilterOpen] = useState(false);
+  // Filtro por responsável: 'all' | 'unassigned' | userId
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
+  const [assigneeFilterOpen, setAssigneeFilterOpen] = useState(false);
+
   const [selectedEndpointDetails, setSelectedEndpointDetails] = useState<{ threadId: string; endpoint: any | null } | null>(null);
 
   // Auth token for Twilio media proxy
