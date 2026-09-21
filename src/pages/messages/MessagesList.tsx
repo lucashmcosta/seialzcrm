@@ -708,27 +708,9 @@ function DesktopMessagesList() {
       .eq('id', threadId);
   };
 
-  // Fetch threads via RPC (replaces N+1 query)
-  const { threads, loading: threadsLoading, error: threadsError, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'], search: debouncedSearch });
-
-  const selectedThread = threads?.find((t) => t.id === selectedThreadId)
-    ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
-
   // Multi-number support (temporary CT transition period).
   // Only renders selector + per-thread badge when the org has 2+ active endpoints.
   const { endpoints: orgEndpoints, officialNumbers, hasMultiple: hasMultipleEndpoints } = useOrgWhatsAppEndpoints(organization?.id);
-  const threadIdsForEndpointMap = (threads ?? []).map((t) => t.id);
-  const threadEndpointMap = useThreadEndpointMap(threadIdsForEndpointMap, hasMultipleEndpoints);
-  // Badge da lista lateral (somente exibição): endpoint da última mensagem,
-  // com `primary_endpoint_id` como fallback.
-  const threadBadgeEndpoints = useThreadBadgeEndpoints(threadIdsForEndpointMap, hasMultipleEndpoints);
-  // Preview da última mensagem (somente exibição): resolve media_type/whatsapp_status
-  // em lote pelos `last_message_id` das threads carregadas.
-  const lastMessageMeta = useThreadLastMessageMeta(
-    (threads ?? []).map((t) => t.last_message_id),
-    true,
-  );
-  const endpointById: Record<string, typeof orgEndpoints[number]> = Object.fromEntries(orgEndpoints.map((e) => [e.id, e]));
 
   // PR4: business_context da thread selecionada. Quando 'sales', o composer
   // deve preferir endpoint com purpose ∈ SALES_PURPOSES (comercial). Ex.:
@@ -790,6 +772,10 @@ function DesktopMessagesList() {
     const opt = endpointFilterOptions.find((o) => o.key === endpointFilter);
     return opt ? new Set(opt.endpointIds) : null;
   }, [endpointFilter, endpointFilterOptions]);
+  const activeEndpointFilterIdList = useMemo(
+    () => activeEndpointFilterIds ? Array.from(activeEndpointFilterIds).sort() : undefined,
+    [activeEndpointFilterIds],
+  );
   useEffect(() => {
     if (endpointFilter === 'all') return;
     if (endpointFilterOptions.length === 0) return;
@@ -797,6 +783,29 @@ function DesktopMessagesList() {
       setEndpointFilter('all');
     }
   }, [endpointFilter, endpointFilterOptions]);
+
+  // A RPC aplica o número antes do LIMIT/cursor. Assim, a primeira página do
+  // 7020 não depende de carregar páginas gerais até encontrar uma ocorrência.
+  const { threads, loading: threadsLoading, error: threadsError, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({
+    channels: ['whatsapp'],
+    search: debouncedSearch,
+    endpointIds: activeEndpointFilterIdList,
+  });
+
+  const selectedThread = threads?.find((t) => t.id === selectedThreadId)
+    ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
+  const threadIdsForEndpointMap = (threads ?? []).map((t) => t.id);
+  const threadEndpointMap = useThreadEndpointMap(threadIdsForEndpointMap, hasMultipleEndpoints);
+  // Badge da lista lateral (somente exibição): endpoint da última mensagem,
+  // com `primary_endpoint_id` como fallback.
+  const threadBadgeEndpoints = useThreadBadgeEndpoints(threadIdsForEndpointMap, hasMultipleEndpoints);
+  // Preview da última mensagem (somente exibição): resolve media_type/whatsapp_status
+  // em lote pelos `last_message_id` das threads carregadas.
+  const lastMessageMeta = useThreadLastMessageMeta(
+    (threads ?? []).map((t) => t.last_message_id),
+    true,
+  );
+  const endpointById: Record<string, typeof orgEndpoints[number]> = Object.fromEntries(orgEndpoints.map((e) => [e.id, e]));
 
 
 

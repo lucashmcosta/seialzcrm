@@ -72,14 +72,17 @@ interface UseMessageThreadsOptions {
   channels?: string[];
   limit?: number;
   search?: string;
+  endpointIds?: string[];
 }
 
 const REALTIME_FLUSH_MS = 400;
 const VISIBILITY_REFETCH_MS = 60_000;
 
 export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
-  const { channels = ['whatsapp'], limit = 50, search } = options;
+  const { channels = ['whatsapp'], limit = 50, search, endpointIds } = options;
   const searchTerm = search && search.trim().length > 0 ? search.trim() : null;
+  const endpointKey = endpointIds?.slice().sort().join(',') ?? '';
+  const endpointFilter = endpointKey.length > 0 ? endpointKey.split(',') : null;
   const { organization, userProfile } = useOrganization();
 
   const [threads, setThreads] = useState<ChatThread[]>([]);
@@ -106,6 +109,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_channels: channels,
         p_limit: limit,
         p_search: searchTerm,
+        p_endpoint_ids: endpointFilter,
       });
 
       if (rpcError) {
@@ -129,7 +133,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [orgId, channelKey, limit, searchTerm]);
+  }, [orgId, channelKey, limit, searchTerm, endpointKey]);
 
   // Load more — cursor-based pagination
   const loadMore = useCallback(async () => {
@@ -146,6 +150,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_cursor_updated_at: lastThread.last_message_at ?? lastThread.created_at,
         p_cursor_id: lastThread.id,
         p_search: searchTerm,
+        p_endpoint_ids: endpointFilter,
       });
 
       if (rpcError) throw rpcError;
@@ -159,7 +164,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     } finally {
       setLoadingMore(false);
     }
-  }, [orgId, channelKey, limit, hasMore, loadingMore, threads, searchTerm]);
+  }, [orgId, channelKey, limit, hasMore, loadingMore, threads, searchTerm, endpointKey]);
 
   // ---------------------------------------------------------------
   // Realtime: patch-local por thread (sem refetch da lista inteira)
@@ -208,6 +213,16 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     (id: string, rowChannel?: string) => {
       // Ignora eventos de canais que este hook não consome.
       if (rowChannel && channels.length > 0 && !channels.includes(rowChannel)) return;
+      // Com filtro por número, a RPC precisa decidir se a thread pertence ao
+      // resultado. Um upsert local não tem o endpoint da última mensagem e
+      // poderia inserir uma conversa de outro número na lista filtrada.
+      if (endpointFilter) {
+        if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = setTimeout(() => {
+          fetchThreads();
+        }, REALTIME_FLUSH_MS);
+        return;
+      }
       pendingIdsRef.current.add(id);
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
       flushTimerRef.current = setTimeout(() => {
@@ -215,7 +230,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
       }, REALTIME_FLUSH_MS);
     },
     // channelKey estável evita re-subscribe
-    [enrichAndUpsert, channelKey] // eslint-disable-line react-hooks/exhaustive-deps
+    [enrichAndUpsert, fetchThreads, channelKey, endpointKey] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Initial load
