@@ -243,7 +243,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
       }, REALTIME_FLUSH_MS);
     },
     // channelKey estável evita re-subscribe
-    [enrichAndUpsert, fetchThreads, channelKey, endpointKey] // eslint-disable-line react-hooks/exhaustive-deps
+    [enrichAndUpsert, fetchThreads, channelKey, endpointKey, assigneeKey] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Initial load
