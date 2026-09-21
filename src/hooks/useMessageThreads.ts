@@ -73,16 +73,22 @@ interface UseMessageThreadsOptions {
   limit?: number;
   search?: string;
   endpointIds?: string[];
+  assignedUserId?: string | null;
+  unassignedOnly?: boolean;
 }
 
 const REALTIME_FLUSH_MS = 400;
 const VISIBILITY_REFETCH_MS = 60_000;
 
 export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
-  const { channels = ['whatsapp'], limit = 50, search, endpointIds } = options;
+  const { channels = ['whatsapp'], limit = 50, search, endpointIds, assignedUserId, unassignedOnly = false } = options;
   const searchTerm = search && search.trim().length > 0 ? search.trim() : null;
   const endpointKey = endpointIds?.slice().sort().join(',') ?? '';
   const endpointFilter = endpointKey.length > 0 ? endpointKey.split(',') : null;
+  const assigneeFilter = assignedUserId ?? null;
+  const assigneeKey = `${assigneeFilter ?? ''}|${unassignedOnly ? '1' : '0'}`;
+  const hasServerSideListFilter = endpointFilter !== null || assigneeFilter !== null || unassignedOnly;
+
   const { organization, userProfile } = useOrganization();
 
   const [threads, setThreads] = useState<ChatThread[]>([]);
@@ -110,7 +116,10 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_limit: limit,
         p_search: searchTerm,
         p_endpoint_ids: endpointFilter,
+        p_assigned_user_id: assigneeFilter ?? undefined,
+        p_unassigned_only: unassignedOnly,
       });
+
 
       if (rpcError) {
         if (rpcError.message?.includes('ACCESS_DENIED') || rpcError.code === 'P0002') {
@@ -133,7 +142,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [orgId, channelKey, limit, searchTerm, endpointKey]);
+  }, [orgId, channelKey, limit, searchTerm, endpointKey, assigneeKey]);
 
   // Load more — cursor-based pagination
   const loadMore = useCallback(async () => {
@@ -151,7 +160,10 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_cursor_id: lastThread.id,
         p_search: searchTerm,
         p_endpoint_ids: endpointFilter,
+        p_assigned_user_id: assigneeFilter ?? undefined,
+        p_unassigned_only: unassignedOnly,
       });
+
 
       if (rpcError) throw rpcError;
 
@@ -164,7 +176,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     } finally {
       setLoadingMore(false);
     }
-  }, [orgId, channelKey, limit, hasMore, loadingMore, threads, searchTerm, endpointKey]);
+  }, [orgId, channelKey, limit, hasMore, loadingMore, threads, searchTerm, endpointKey, assigneeKey]);
 
   // ---------------------------------------------------------------
   // Realtime: patch-local por thread (sem refetch da lista inteira)
@@ -213,10 +225,11 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     (id: string, rowChannel?: string) => {
       // Ignora eventos de canais que este hook não consome.
       if (rowChannel && channels.length > 0 && !channels.includes(rowChannel)) return;
-      // Com filtro por número, a RPC precisa decidir se a thread pertence ao
-      // resultado. Um upsert local não tem o endpoint da última mensagem e
-      // poderia inserir uma conversa de outro número na lista filtrada.
-      if (endpointFilter) {
+      // Com filtro por número ou por responsável, a RPC precisa decidir se a
+      // thread pertence ao resultado. Um upsert local poderia inserir uma
+      // conversa fora do filtro na lista.
+      if (hasServerSideListFilter) {
+
         if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
         flushTimerRef.current = setTimeout(() => {
           fetchThreads();
@@ -230,7 +243,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
       }, REALTIME_FLUSH_MS);
     },
     // channelKey estável evita re-subscribe
-    [enrichAndUpsert, fetchThreads, channelKey, endpointKey] // eslint-disable-line react-hooks/exhaustive-deps
+    [enrichAndUpsert, fetchThreads, channelKey, endpointKey, assigneeKey] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Initial load

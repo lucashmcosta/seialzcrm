@@ -105,8 +105,11 @@ import { LastMessagePreview } from '@/components/messages/LastMessagePreview';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
+import { AssigneeFilterDialog } from '@/components/messages/AssigneeFilterDialog';
+import { useOrgUserFilterOptions } from '@/hooks/useOrgUserFilterOptions';
 import { TimelineEventMarker } from '@/components/messages/timeline/TimelineEventMarker';
-import { FunnelSimple } from '@phosphor-icons/react';
+import { FunnelSimple, UserCircle } from '@phosphor-icons/react';
+
 import { formatEndpointIdentity, formatEndpointMigrationAuditLine, whatsappProviderLabel, whatsappProviderShortLabel } from '@/lib/whatsappEndpointDisplay';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 
@@ -430,6 +433,10 @@ function DesktopMessagesList() {
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [endpointFilter, setEndpointFilter] = useState<string>('all');
   const [endpointFilterOpen, setEndpointFilterOpen] = useState(false);
+  // Filtro por responsável: 'all' | 'unassigned' | userId
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
+  const [assigneeFilterOpen, setAssigneeFilterOpen] = useState(false);
+
   const [selectedEndpointDetails, setSelectedEndpointDetails] = useState<{ threadId: string; endpoint: any | null } | null>(null);
 
   // Auth token for Twilio media proxy
@@ -733,13 +740,27 @@ function DesktopMessagesList() {
     }
   }, [endpointFilter, endpointFilterOptions]);
 
+  // Filtro por responsável: usuários ativos da organização. A RPC aplica o
+  // responsável antes do LIMIT/cursor, igual ao filtro por número.
+  const assigneeFilterUsers = useOrgUserFilterOptions(organization?.id);
+  useEffect(() => {
+    if (assigneeFilter === 'all' || assigneeFilter === 'unassigned') return;
+    if (assigneeFilterUsers.length === 0) return;
+    if (!assigneeFilterUsers.some((u) => u.id === assigneeFilter)) {
+      setAssigneeFilter('all');
+    }
+  }, [assigneeFilter, assigneeFilterUsers]);
+
   // A RPC aplica o número antes do LIMIT/cursor. Assim, a primeira página do
   // 7020 não depende de carregar páginas gerais até encontrar uma ocorrência.
   const { threads, loading: threadsLoading, error: threadsError, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({
     channels: ['whatsapp'],
     search: debouncedSearch,
     endpointIds: activeEndpointFilterIdList,
+    assignedUserId: assigneeFilter !== 'all' && assigneeFilter !== 'unassigned' ? assigneeFilter : null,
+    unassignedOnly: assigneeFilter === 'unassigned',
   });
+
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId)
     ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
@@ -1827,12 +1848,14 @@ function DesktopMessagesList() {
   // Fase Final — vazio contextual da lista: distingue "sem conversas" de
   // "busca/filtro sem resultado". Não altera nenhuma query.
   const hasActiveListFilters =
-    searchQuery.trim().length > 0 || endpointFilter !== 'all' || (filter !== null && filter !== 'all_open');
+    searchQuery.trim().length > 0 || endpointFilter !== 'all' || assigneeFilter !== 'all' || (filter !== null && filter !== 'all_open');
   const clearListFilters = () => {
     setSearchQuery('');
     setEndpointFilter('all');
+    setAssigneeFilter('all');
     setFilter('all_open');
   };
+
 
   const loadThreadForSelection = async (
     threadId: string,
@@ -1968,6 +1991,19 @@ function DesktopMessagesList() {
                       )}
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 relative"
+                    onClick={() => setAssigneeFilterOpen(true)}
+                    title={locale === 'pt-BR' ? 'Filtrar por responsável' : 'Filter by assignee'}
+                  >
+                    <UserCircle className="w-4 h-4" />
+                    {assigneeFilter !== 'all' && (
+                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500" />
+                    )}
+                  </Button>
+
                   <Badge color="gray" size="md">
                     {visibleThreadsWithSelected?.length || 0}
                   </Badge>
@@ -3258,6 +3294,15 @@ function DesktopMessagesList() {
         value={endpointFilter}
         onChange={setEndpointFilter}
       />
+
+      <AssigneeFilterDialog
+        open={assigneeFilterOpen}
+        onOpenChange={setAssigneeFilterOpen}
+        users={assigneeFilterUsers}
+        value={assigneeFilter}
+        onChange={setAssigneeFilter}
+      />
+
 
       {/* Confirm Mark Won/Lost */}
       <ConfirmDialog
