@@ -784,6 +784,16 @@ function DesktopMessagesList() {
     () => filterEndpointsByIntent(orgEndpoints, 'sales'),
     [orgEndpoints],
   );
+  // Filtro por número: só números comerciais; some quando há menos de dois.
+  const hasMultipleSalesEndpoints = salesEndpoints.length >= 2;
+  useEffect(() => {
+    if (endpointFilter === 'all') return;
+    if (!salesEndpoints.some((ep) => ep.id === endpointFilter)) {
+      setEndpointFilter('all');
+    }
+  }, [endpointFilter, salesEndpoints]);
+
+
 
   // Per-thread composer endpoint choice. Defaults respeitam business_context.
   // Does NOT persist back to the thread — purely a per-send choice.
@@ -1932,7 +1942,7 @@ function DesktopMessagesList() {
                   >
                     <ChatCircleDots className="w-4 h-4" />
                   </Button>
-                  {hasMultipleEndpoints && (
+                  {hasMultipleSalesEndpoints && (
                     <Button
                       variant="outline"
                       size="icon"
@@ -3232,7 +3242,7 @@ function DesktopMessagesList() {
       <EndpointFilterDialog
         open={endpointFilterOpen}
         onOpenChange={setEndpointFilterOpen}
-        endpoints={orgEndpoints}
+        endpoints={salesEndpoints}
         officialNumbers={officialNumbers}
         value={endpointFilter}
         onChange={setEndpointFilter}
