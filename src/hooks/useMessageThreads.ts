@@ -225,10 +225,11 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     (id: string, rowChannel?: string) => {
       // Ignora eventos de canais que este hook não consome.
       if (rowChannel && channels.length > 0 && !channels.includes(rowChannel)) return;
-      // Com filtro por número, a RPC precisa decidir se a thread pertence ao
-      // resultado. Um upsert local não tem o endpoint da última mensagem e
-      // poderia inserir uma conversa de outro número na lista filtrada.
-      if (endpointFilter) {
+      // Com filtro por número ou por responsável, a RPC precisa decidir se a
+      // thread pertence ao resultado. Um upsert local poderia inserir uma
+      // conversa fora do filtro na lista.
+      if (hasServerSideListFilter) {
+
         if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
         flushTimerRef.current = setTimeout(() => {
           fetchThreads();
