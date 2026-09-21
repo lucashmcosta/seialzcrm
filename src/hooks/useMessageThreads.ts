@@ -160,7 +160,10 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_cursor_id: lastThread.id,
         p_search: searchTerm,
         p_endpoint_ids: endpointFilter,
+        p_assigned_user_id: assigneeFilter ?? undefined,
+        p_unassigned_only: unassignedOnly,
       });
+
 
       if (rpcError) throw rpcError;
 
