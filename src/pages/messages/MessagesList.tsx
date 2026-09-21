@@ -1991,6 +1991,19 @@ function DesktopMessagesList() {
                       )}
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 relative"
+                    onClick={() => setAssigneeFilterOpen(true)}
+                    title={locale === 'pt-BR' ? 'Filtrar por responsável' : 'Filter by assignee'}
+                  >
+                    <UserCircle className="w-4 h-4" />
+                    {assigneeFilter !== 'all' && (
+                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500" />
+                    )}
+                  </Button>
+
                   <Badge color="gray" size="md">
                     {visibleThreadsWithSelected?.length || 0}
                   </Badge>
