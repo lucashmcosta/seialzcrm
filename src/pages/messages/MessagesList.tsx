@@ -708,15 +708,41 @@ function DesktopMessagesList() {
       .eq('id', threadId);
   };
 
-  // Fetch threads via RPC (replaces N+1 query)
-  const { threads, loading: threadsLoading, error: threadsError, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'], search: debouncedSearch });
-
-  const selectedThread = threads?.find((t) => t.id === selectedThreadId)
-    ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
-
   // Multi-number support (temporary CT transition period).
   // Only renders selector + per-thread badge when the org has 2+ active endpoints.
   const { endpoints: orgEndpoints, officialNumbers, hasMultiple: hasMultipleEndpoints } = useOrgWhatsAppEndpoints(organization?.id);
+
+  // Filtro por número: opções vêm de TODAS as fichas comerciais (inclusive
+  // inativas/Evolution), agrupadas por número. Chave = dígitos do número.
+  const endpointFilterOptions = useSalesEndpointFilterOptions(organization?.id);
+  const hasSalesEndpointFilter = endpointFilterOptions.length >= 1;
+  const activeEndpointFilterIds = useMemo(() => {
+    if (endpointFilter === 'all') return null;
+    const opt = endpointFilterOptions.find((o) => o.key === endpointFilter);
+    return opt ? new Set(opt.endpointIds) : null;
+  }, [endpointFilter, endpointFilterOptions]);
+  const activeEndpointFilterIdList = useMemo(
+    () => activeEndpointFilterIds ? Array.from(activeEndpointFilterIds).sort() : undefined,
+    [activeEndpointFilterIds],
+  );
+  useEffect(() => {
+    if (endpointFilter === 'all') return;
+    if (endpointFilterOptions.length === 0) return;
+    if (!endpointFilterOptions.some((o) => o.key === endpointFilter)) {
+      setEndpointFilter('all');
+    }
+  }, [endpointFilter, endpointFilterOptions]);
+
+  // A RPC aplica o número antes do LIMIT/cursor. Assim, a primeira página do
+  // 7020 não depende de carregar páginas gerais até encontrar uma ocorrência.
+  const { threads, loading: threadsLoading, error: threadsError, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({
+    channels: ['whatsapp'],
+    search: debouncedSearch,
+    endpointIds: activeEndpointFilterIdList,
+  });
+
+  const selectedThread = threads?.find((t) => t.id === selectedThreadId)
+    ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
   const threadIdsForEndpointMap = (threads ?? []).map((t) => t.id);
   const threadEndpointMap = useThreadEndpointMap(threadIdsForEndpointMap, hasMultipleEndpoints);
   // Badge da lista lateral (somente exibição): endpoint da última mensagem,
@@ -781,24 +807,6 @@ function DesktopMessagesList() {
   const invalidateThreadLastEndpoint = useInvalidateThreadLastEndpoint();
 
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false);
-  // Filtro por número: opções vêm de TODAS as fichas comerciais (inclusive
-  // inativas/Evolution), agrupadas por número. Chave = dígitos do número.
-  const endpointFilterOptions = useSalesEndpointFilterOptions(organization?.id);
-  const hasSalesEndpointFilter = endpointFilterOptions.length >= 1;
-  const activeEndpointFilterIds = useMemo(() => {
-    if (endpointFilter === 'all') return null;
-    const opt = endpointFilterOptions.find((o) => o.key === endpointFilter);
-    return opt ? new Set(opt.endpointIds) : null;
-  }, [endpointFilter, endpointFilterOptions]);
-  useEffect(() => {
-    if (endpointFilter === 'all') return;
-    if (endpointFilterOptions.length === 0) return;
-    if (!endpointFilterOptions.some((o) => o.key === endpointFilter)) {
-      setEndpointFilter('all');
-    }
-  }, [endpointFilter, endpointFilterOptions]);
-
-
 
   // Per-thread composer endpoint choice. Defaults respeitam business_context.
   // Does NOT persist back to the thread — purely a per-send choice.
@@ -1794,13 +1802,7 @@ function DesktopMessagesList() {
   );
   const visibleThreads = filteredThreads
     ?.filter((t) => !consolidatedThreadIds.has(t.id))
-    .filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at))
-    .filter((t) => {
-      if (!activeEndpointFilterIds) return true;
-      const badgeId = threadBadgeEndpoints[t.id]?.endpointId ?? null;
-      const resolved = badgeId ?? threadEndpointMap[t.id] ?? null;
-      return !!resolved && activeEndpointFilterIds.has(resolved);
-    });
+    .filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at));
 
   const visibleThreadsWithSelectedRaw = selectedThreadOverride
     && selectedThreadId === selectedThreadOverride.id
