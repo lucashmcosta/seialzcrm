@@ -3295,6 +3295,15 @@ function DesktopMessagesList() {
         onChange={setEndpointFilter}
       />
 
+      <AssigneeFilterDialog
+        open={assigneeFilterOpen}
+        onOpenChange={setAssigneeFilterOpen}
+        users={assigneeFilterUsers}
+        value={assigneeFilter}
+        onChange={setAssigneeFilter}
+      />
+
+
       {/* Confirm Mark Won/Lost */}
       <ConfirmDialog
         open={!!confirmAction}
