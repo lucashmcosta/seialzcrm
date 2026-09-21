@@ -97,6 +97,7 @@ import { SnippetsPickerPanel, extractSnippetQuery } from '@/components/whatsapp/
 import { useAI } from '@/hooks/useAI';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
+import { useSalesEndpointFilterOptions } from '@/hooks/useSalesEndpointFilterOptions';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { useThreadBadgeEndpoints } from '@/hooks/useThreadBadgeEndpoints';
 import { useThreadLastMessageMeta } from '@/hooks/messages/useThreadLastMessageMeta';
@@ -1798,7 +1799,12 @@ function DesktopMessagesList() {
   const visibleThreads = filteredThreads
     ?.filter((t) => !consolidatedThreadIds.has(t.id))
     .filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at))
-    .filter((t) => endpointFilter === 'all' || threadEndpointMap[t.id] === endpointFilter);
+    .filter((t) => {
+      if (!activeEndpointFilterIds) return true;
+      const badgeId = threadBadgeEndpoints[t.id]?.endpointId ?? null;
+      const resolved = badgeId ?? threadEndpointMap[t.id] ?? null;
+      return !!resolved && activeEndpointFilterIds.has(resolved);
+    });
 
   const visibleThreadsWithSelectedRaw = selectedThreadOverride
     && selectedThreadId === selectedThreadOverride.id
@@ -3250,8 +3256,7 @@ function DesktopMessagesList() {
       <EndpointFilterDialog
         open={endpointFilterOpen}
         onOpenChange={setEndpointFilterOpen}
-        endpoints={salesEndpoints}
-        officialNumbers={officialNumbers}
+        options={endpointFilterOptions}
         value={endpointFilter}
         onChange={setEndpointFilter}
       />
