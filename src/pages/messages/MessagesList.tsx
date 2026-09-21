@@ -1946,7 +1946,7 @@ function DesktopMessagesList() {
                   >
                     <ChatCircleDots className="w-4 h-4" />
                   </Button>
-                  {hasMultipleEndpoints && (
+                  {hasMultipleSalesEndpoints && (
                     <Button
                       variant="outline"
                       size="icon"
@@ -3246,7 +3246,7 @@ function DesktopMessagesList() {
       <EndpointFilterDialog
         open={endpointFilterOpen}
         onOpenChange={setEndpointFilterOpen}
-        endpoints={orgEndpoints}
+        endpoints={salesEndpoints}
         officialNumbers={officialNumbers}
         value={endpointFilter}
         onChange={setEndpointFilter}
