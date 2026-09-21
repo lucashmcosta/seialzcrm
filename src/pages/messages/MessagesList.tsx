@@ -784,8 +784,8 @@ function DesktopMessagesList() {
     () => filterEndpointsByIntent(orgEndpoints, 'sales'),
     [orgEndpoints],
   );
-  // Filtro por número: só números comerciais; some quando há menos de dois.
-  const hasMultipleSalesEndpoints = salesEndpoints.length >= 2;
+  // Filtro por número: só números comerciais; aparece havendo ao menos um.
+  const hasSalesEndpointFilter = salesEndpoints.length >= 1;
   useEffect(() => {
     if (endpointFilter === 'all') return;
     if (!salesEndpoints.some((ep) => ep.id === endpointFilter)) {
@@ -1942,7 +1942,7 @@ function DesktopMessagesList() {
                   >
                     <ChatCircleDots className="w-4 h-4" />
                   </Button>
-                  {hasMultipleSalesEndpoints && (
+                  {hasSalesEndpointFilter && (
                     <Button
                       variant="outline"
                       size="icon"
