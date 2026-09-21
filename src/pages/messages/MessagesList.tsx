@@ -737,13 +737,27 @@ function DesktopMessagesList() {
     }
   }, [endpointFilter, endpointFilterOptions]);
 
+  // Filtro por responsável: usuários ativos da organização. A RPC aplica o
+  // responsável antes do LIMIT/cursor, igual ao filtro por número.
+  const assigneeFilterUsers = useOrgUserFilterOptions(organization?.id);
+  useEffect(() => {
+    if (assigneeFilter === 'all' || assigneeFilter === 'unassigned') return;
+    if (assigneeFilterUsers.length === 0) return;
+    if (!assigneeFilterUsers.some((u) => u.id === assigneeFilter)) {
+      setAssigneeFilter('all');
+    }
+  }, [assigneeFilter, assigneeFilterUsers]);
+
   // A RPC aplica o número antes do LIMIT/cursor. Assim, a primeira página do
   // 7020 não depende de carregar páginas gerais até encontrar uma ocorrência.
   const { threads, loading: threadsLoading, error: threadsError, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({
     channels: ['whatsapp'],
     search: debouncedSearch,
     endpointIds: activeEndpointFilterIdList,
+    assignedUserId: assigneeFilter !== 'all' && assigneeFilter !== 'unassigned' ? assigneeFilter : null,
+    unassignedOnly: assigneeFilter === 'unassigned',
   });
+
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId)
     ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
