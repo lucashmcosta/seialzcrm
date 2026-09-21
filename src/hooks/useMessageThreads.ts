@@ -73,16 +73,22 @@ interface UseMessageThreadsOptions {
   limit?: number;
   search?: string;
   endpointIds?: string[];
+  assignedUserId?: string | null;
+  unassignedOnly?: boolean;
 }
 
 const REALTIME_FLUSH_MS = 400;
 const VISIBILITY_REFETCH_MS = 60_000;
 
 export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
-  const { channels = ['whatsapp'], limit = 50, search, endpointIds } = options;
+  const { channels = ['whatsapp'], limit = 50, search, endpointIds, assignedUserId, unassignedOnly = false } = options;
   const searchTerm = search && search.trim().length > 0 ? search.trim() : null;
   const endpointKey = endpointIds?.slice().sort().join(',') ?? '';
   const endpointFilter = endpointKey.length > 0 ? endpointKey.split(',') : null;
+  const assigneeFilter = assignedUserId ?? null;
+  const assigneeKey = `${assigneeFilter ?? ''}|${unassignedOnly ? '1' : '0'}`;
+  const hasServerSideListFilter = endpointFilter !== null || assigneeFilter !== null || unassignedOnly;
+
   const { organization, userProfile } = useOrganization();
 
   const [threads, setThreads] = useState<ChatThread[]>([]);
