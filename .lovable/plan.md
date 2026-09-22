@@ -90,8 +90,9 @@ badge, sem push de dados — comportamento idêntico ao de hoje.
    Nada do fluxo de mensagem muda.
 7. **`push-dispatch`** ganha o ramo `read_sync`: seleciona apenas tokens ativos
    **`supports_read_sync = true`**, exceto o de origem. Se sobrar zero token, o job encerra como
-   `skipped` sem chamar a Expo. Payload data-only: `_contentAvailable: true`, `priority: 'high'`,
-   sem `title`/`body`/`sound`, `data: { type: 'thread_read', thread_ids: [...] }`.
+   `skipped` **sem chamar a Expo, sem contar como tentativa nem erro** — nada vai para `dead_letter`
+   enquanto ninguém tiver a versão nova. Payload data-only: `_contentAvailable: true`,
+   `priority: 'high'`, sem `title`/`body`/`sound`, `data: { type: 'thread_read', thread_ids: [...] }`.
 8. **Badge**: enviado **apenas** para tokens `supports_read_sync = true`, nos dois tipos de push.
    Para os demais, nenhum campo `badge` — evita a bolinha permanente no app publicado, que não sabe
    limpar badge.
