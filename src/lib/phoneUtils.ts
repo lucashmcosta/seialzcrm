@@ -49,6 +49,11 @@ export function detectCountryFromE164(phone: string): string {
       if (country.code === 'BR' && cleaned.length !== 12 && cleaned.length !== 13) {
         continue;
       }
+      // FR special case: dial code "33" collides with DDD 33 (BR).
+      // Only treat leading "33" as country code if total length matches E.164 FR (11 digits).
+      if (country.code === 'FR' && cleaned.length !== 11) {
+        continue;
+      }
       return country.code;
     }
   }
