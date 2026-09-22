@@ -55,6 +55,7 @@ import { useConsolidatedThreadIds } from '@/hooks/messages/useConsolidatedThread
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
+import { markThreadReadRemote } from '@/lib/markThreadReadRemote';
 import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
