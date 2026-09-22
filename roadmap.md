@@ -14,3 +14,12 @@
 ## Mobile — mídia
 - [ ] Enviar/exibir os 4 tipos (áudio, vídeo, documento, vCard) com paridade de regras com o Web.
 - [ ] Decisão: envio de vCard (origem — contato do CRM vs agenda do aparelho).
+
+## Read-sync push (2026-09-22)
+- [x] Conferido: push_delivery_jobs.target_url e NOT NULL -> incluir DROP NOT NULL
+- [x] Conferido: user_organizations.is_active existe (boolean)
+- [ ] rpc_claim_push_delivery_jobs restrita a kind = message ate o dispatcher novo estar no ar
+- [ ] Deploy push-dispatch com ramo read_sync + filtro supports_read_sync
+- [ ] Liberar claim para read_sync apos o deploy
+- [ ] Web grava leitura via rpc_mark_thread_read (Comercial, mobile, Atendimento)
+- [ ] Docs
