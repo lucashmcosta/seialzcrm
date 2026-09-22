@@ -155,6 +155,32 @@ serve(async (req) => {
     ]);
     if (stagesError) throw new Error(stagesError.message);
 
+    // --- WhatsApp routes (messaging_lines) ---
+    // Sem estas rotas, vincular um número de WhatsApp falha com
+    // SALES_ROUTE_NOT_FOUND / CUSTOMER_SERVICE_ROUTE_NOT_FOUND.
+    // `active_endpoint_id` fica nulo: quem preenche é provision_line_endpoint.
+    const { error: linesError } = await supabase.from('messaging_lines').insert([
+      {
+        organization_id: org.id,
+        key: 'commercial',
+        name: 'Comercial',
+        channel: 'whatsapp',
+        inbox_key: 'sales',
+        route_slug: 'commercial',
+        is_active: true,
+      },
+      {
+        organization_id: org.id,
+        key: 'customer_service',
+        name: 'Atendimento',
+        channel: 'whatsapp',
+        inbox_key: 'customer_service',
+        route_slug: 'customer_service',
+        is_active: true,
+      },
+    ]);
+    if (linesError) throw new Error(`Falha ao criar as rotas de WhatsApp: ${linesError.message}`);
+
     // --- Subscription ---
     const { error: subError } = await supabase.from('subscriptions').insert({
       organization_id: org.id,
@@ -203,6 +229,7 @@ serve(async (req) => {
           if (link.organization_id === org.id) continue;
           await supabase.from('user_organizations').delete().eq('id', link.id);
           await supabase.from('pipeline_stages').delete().eq('organization_id', link.organization_id);
+          await supabase.from('messaging_lines').delete().eq('organization_id', link.organization_id);
           await supabase.from('permission_profiles').delete().eq('organization_id', link.organization_id);
           await supabase.from('subscriptions').delete().eq('organization_id', link.organization_id);
           await supabase.from('intelligence_settings').delete().eq('organization_id', link.organization_id);
@@ -261,6 +288,7 @@ serve(async (req) => {
     if (createdOrgId) {
       await supabase.from('user_organizations').delete().eq('organization_id', createdOrgId);
       await supabase.from('pipeline_stages').delete().eq('organization_id', createdOrgId);
+      await supabase.from('messaging_lines').delete().eq('organization_id', createdOrgId);
       await supabase.from('permission_profiles').delete().eq('organization_id', createdOrgId);
       await supabase.from('subscriptions').delete().eq('organization_id', createdOrgId);
       await supabase.from('intelligence_settings').delete().eq('organization_id', createdOrgId);

@@ -79,9 +79,10 @@ const LINK_ERROR: Record<string, string> = {
     'Número da sessão ainda desconhecido. Aguarde "Finalizando conexão…" concluir.',
   INSTANCE_NOT_CONNECTED: 'A sessão não está conectada. Leia o QR Code novamente.',
   INSTANCE_ALREADY_LINKED: 'Esta sessão já está vinculada.',
-  SALES_ROUTE_NOT_FOUND: 'Nenhuma Route de WhatsApp Comercial encontrada nesta organização.',
+  SALES_ROUTE_NOT_FOUND:
+    'Esta conta não tem a rota de WhatsApp Comercial cadastrada. Fale com o suporte Seialz para criar a rota antes de vincular o número.',
   CUSTOMER_SERVICE_ROUTE_NOT_FOUND:
-    'Nenhuma Route de WhatsApp de Atendimento encontrada nesta organização.',
+    'Esta conta não tem a rota de WhatsApp de Atendimento cadastrada. Fale com o suporte Seialz para criar a rota antes de vincular o número.',
   PROVISION_FORBIDDEN: 'Você não tem permissão para gerenciar integrações nesta organização.',
   PROVISION_ASSIGNED_USER_REQUIRED: 'Escolha o usuário responsável pelo número pessoal.',
   PROVISION_ASSIGNED_USER_INVALID:
