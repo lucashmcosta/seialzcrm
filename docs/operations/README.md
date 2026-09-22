@@ -20,7 +20,7 @@ Ver ADR [`decisions/0007-drift-rule.md`](../decisions/0007-drift-rule.md).
 |---|---|---|
 | 30s | `integration-worker` | edge fn `integration-worker` (outbox → destinos) |
 | 30s | `intelligence-worker-30s` | edge fn `intelligence-worker` (fila de IA) |
-| 30s | `push-dispatch` | edge fn `push-dispatch` (fila `push_delivery_jobs` → Expo Push) |
+| 30s | `push-dispatch` | edge fn `push-dispatch` (fila `push_delivery_jobs` → Expo Push; `kind = 'message'` visível e `kind = 'read_sync'` silencioso — este só para tokens `supports_read_sync = true`, senão `skipped` sem tentativa) |
 | 1min | `outbox-reaper` | `fn_reap_stuck_jobs(5)` |
 | 2min | `intelligence-backfill-tick` | retoma backfill runs ativas |
 | 3min | `meta-lead-ads-poll` | poll de leads Meta |
