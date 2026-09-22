@@ -23,3 +23,4 @@
 - [ ] Liberar claim para read_sync apos o deploy
 - [ ] Web grava leitura via rpc_mark_thread_read (Comercial, mobile, Atendimento)
 - [ ] Docs
+- [ ] Pos-migration: validar que push de mensagem nova continua chegando (teste real no celular)
