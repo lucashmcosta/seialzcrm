@@ -5,6 +5,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { supabase } from '@/integrations/supabase/client';
+import { markThreadReadRemote } from '@/lib/markThreadReadRemote';
 
 import { MobileInbox } from '@/components/mobile/MobileInbox';
 import { InboxThreadList } from '@/components/inbox/InboxThreadList';
@@ -61,6 +62,14 @@ export default function InboxPage() {
     deepLinkHandledRef.current = deepLinkThreadId;
     setSelectedId(deepLinkThreadId);
   }, [deepLinkThreadId]);
+
+  // Atendimento passa a gravar leitura (antes só o Comercial gravava). Isso faz
+  // a conversa lida no computador aparecer como lida no celular e permite ao
+  // servidor avisar os outros aparelhos para apagar a notificação.
+  useEffect(() => {
+    if (!selectedId || !internalUserId) return;
+    void markThreadReadRemote(selectedId, internalUserId, 'web');
+  }, [selectedId, internalUserId]);
 
 
 
