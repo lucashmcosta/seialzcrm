@@ -9999,59 +9999,68 @@ export type Database = {
       push_delivery_jobs: {
         Row: {
           attempts: number
-          body: string
+          body: string | null
           business_context: string | null
           completed_at: string | null
           created_at: string
+          exclude_push_token: string | null
           id: string
+          kind: string
           last_error: string | null
           last_error_at: string | null
-          message_id: string
+          message_id: string | null
           next_attempt_at: string
           organization_id: string
+          payload: Json | null
           recipient_user_id: string
           status: string
-          target_url: string
-          thread_id: string
-          title: string
+          target_url: string | null
+          thread_id: string | null
+          title: string | null
           updated_at: string
         }
         Insert: {
           attempts?: number
-          body: string
+          body?: string | null
           business_context?: string | null
           completed_at?: string | null
           created_at?: string
+          exclude_push_token?: string | null
           id?: string
+          kind?: string
           last_error?: string | null
           last_error_at?: string | null
-          message_id: string
+          message_id?: string | null
           next_attempt_at?: string
           organization_id: string
+          payload?: Json | null
           recipient_user_id: string
           status?: string
-          target_url: string
-          thread_id: string
-          title: string
+          target_url?: string | null
+          thread_id?: string | null
+          title?: string | null
           updated_at?: string
         }
         Update: {
           attempts?: number
-          body?: string
+          body?: string | null
           business_context?: string | null
           completed_at?: string | null
           created_at?: string
+          exclude_push_token?: string | null
           id?: string
+          kind?: string
           last_error?: string | null
           last_error_at?: string | null
-          message_id?: string
+          message_id?: string | null
           next_attempt_at?: string
           organization_id?: string
+          payload?: Json | null
           recipient_user_id?: string
           status?: string
-          target_url?: string
-          thread_id?: string
-          title?: string
+          target_url?: string | null
+          thread_id?: string | null
+          title?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -11839,32 +11848,38 @@ export type Database = {
       }
       user_push_tokens: {
         Row: {
+          app_version: string | null
           created_at: string
           expo_push_token: string
           id: string
           is_active: boolean
           last_seen_at: string
           platform: string
+          supports_read_sync: boolean
           updated_at: string
           user_id: string
         }
         Insert: {
+          app_version?: string | null
           created_at?: string
           expo_push_token: string
           id?: string
           is_active?: boolean
           last_seen_at?: string
           platform: string
+          supports_read_sync?: boolean
           updated_at?: string
           user_id: string
         }
         Update: {
+          app_version?: string | null
           created_at?: string
           expo_push_token?: string
           id?: string
           is_active?: boolean
           last_seen_at?: string
           platform?: string
+          supports_read_sync?: boolean
           updated_at?: string
           user_id?: string
         }
@@ -13411,6 +13426,10 @@ export type Database = {
           sample_integration_slug: string
         }[]
       }
+      fn_push_unread_thread_count: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       fn_reap_stuck_jobs: {
         Args: { p_threshold_minutes?: number }
         Returns: number
@@ -14211,21 +14230,24 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: {
           attempts: number
-          body: string
+          body: string | null
           business_context: string | null
           completed_at: string | null
           created_at: string
+          exclude_push_token: string | null
           id: string
+          kind: string
           last_error: string | null
           last_error_at: string | null
-          message_id: string
+          message_id: string | null
           next_attempt_at: string
           organization_id: string
+          payload: Json | null
           recipient_user_id: string
           status: string
-          target_url: string
-          thread_id: string
-          title: string
+          target_url: string | null
+          thread_id: string | null
+          title: string | null
           updated_at: string
         }[]
         SetofOptions: {
@@ -14363,8 +14385,25 @@ export type Database = {
           whatsapp_last_inbound_at: string
         }[]
       }
+      rpc_mark_thread_read: {
+        Args: {
+          p_device_token?: string
+          p_source?: string
+          p_thread_id: string
+        }
+        Returns: boolean
+      }
       rpc_register_push_token: {
         Args: { p_expo_push_token: string; p_platform: string }
+        Returns: string
+      }
+      rpc_register_push_token_v2: {
+        Args: {
+          p_app_version?: string
+          p_expo_push_token: string
+          p_platform: string
+          p_supports_read_sync?: boolean
+        }
         Returns: string
       }
       rpc_resolve_integration_job_manually: {
