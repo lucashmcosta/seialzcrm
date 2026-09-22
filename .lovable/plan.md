@@ -58,11 +58,18 @@ declaram suporte**. Quem está na build publicada (iOS 26 / Android 10) não rec
 badge, sem push de dados — comportamento idêntico ao de hoje.
 
 1. **Capacidade por aparelho**: `user_push_tokens` ganha `app_version text` e
-   `supports_read_sync boolean not null default false`. `rpc_register_push_token` é **substituída
-   com `CREATE OR REPLACE`, mesma assinatura acrescida de parâmetros com default**
-   (`p_app_version text default null`, `p_supports_read_sync boolean default false`) — nunca uma
-   segunda versão. A chamada de 2 parâmetros do app publicado continua resolvendo sem ambiguidade
-   (mesma regra do incidente `rpc_list_message_threads`).
+   `supports_read_sync boolean not null default false`.
+   Correção aceita: `CREATE OR REPLACE` com parâmetros extras **criaria uma sobrecarga**, porque no
+   Postgres a identidade é nome + tipos dos argumentos — a chamada de 2 parâmetros do app publicado
+   ficaria ambígua (PGRST203) e o registro de push cairia para todos. Escolhido o **caminho (a)**:
+   `rpc_register_push_token(text, text)` fica **intocada** (assinatura e grants conferidos no banco:
+   `EXECUTE` para `anon`, `authenticated`, `service_role`; o app publicado grava
+   `supports_read_sync = false`, que é o desejado) e criamos **`rpc_register_push_token_v2(
+   p_expo_push_token text, p_platform text, p_app_version text default null,
+   p_supports_read_sync boolean default false)`** para a nova versão do app. Nenhum `DROP`, nenhum
+   grant a refazer, nenhum instante de ambiguidade.
+   Validação obrigatória depois da migration: chamar a função antiga com exatamente
+   `p_expo_push_token` + `p_platform` e confirmar que resolve sem PGRST203.
 2. **Gravação de leitura passa por RPC** `rpc_mark_thread_read(p_thread_id, p_source, p_device_token)`:
    resolve o usuário por `current_user_id()`, faz o upsert e devolve se a leitura zerou não lidas.
    `p_device_token` identifica o aparelho de origem para não avisar quem já leu. O upsert direto
@@ -83,8 +90,9 @@ badge, sem push de dados — comportamento idêntico ao de hoje.
    Nada do fluxo de mensagem muda.
 7. **`push-dispatch`** ganha o ramo `read_sync`: seleciona apenas tokens ativos
    **`supports_read_sync = true`**, exceto o de origem. Se sobrar zero token, o job encerra como
-   `skipped` sem chamar a Expo. Payload data-only: `_contentAvailable: true`, `priority: 'high'`,
-   sem `title`/`body`/`sound`, `data: { type: 'thread_read', thread_ids: [...] }`.
+   `skipped` **sem chamar a Expo, sem contar como tentativa nem erro** — nada vai para `dead_letter`
+   enquanto ninguém tiver a versão nova. Payload data-only: `_contentAvailable: true`,
+   `priority: 'high'`, sem `title`/`body`/`sound`, `data: { type: 'thread_read', thread_ids: [...] }`.
 8. **Badge**: enviado **apenas** para tokens `supports_read_sync = true`, nos dois tipos de push.
    Para os demais, nenhum campo `badge` — evita a bolinha permanente no app publicado, que não sabe
    limpar badge.
