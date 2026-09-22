@@ -65,9 +65,25 @@ export function useWhatsAppIntegration() {
         .in('admin_integrations.slug', ['twilio-whatsapp', 'meta-whatsapp-cloud']);
       if (error) {
         console.error('Error checking WhatsApp integrations:', error);
+      } else if ((rows?.length ?? 0) > 0) {
+        return true;
+      }
+
+      // Evolution API não cria linha em organization_integrations: o vínculo do
+      // número grava direto em communication_endpoints. Sem este fallback, contas
+      // que usam só Evolution ficavam sem o menu Comercial.
+      const { data: endpoints, error: endpointsError } = await supabase
+        .from('communication_endpoints')
+        .select('id')
+        .eq('organization_id', organization.id)
+        .eq('channel', 'whatsapp')
+        .eq('is_active', true)
+        .limit(1);
+      if (endpointsError) {
+        console.error('Error checking WhatsApp endpoints:', endpointsError);
         return false;
       }
-      return (rows?.length ?? 0) > 0;
+      return (endpoints?.length ?? 0) > 0;
     },
   });
 
