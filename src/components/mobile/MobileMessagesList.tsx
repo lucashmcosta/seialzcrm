@@ -378,12 +378,7 @@ export function MobileMessagesList() {
       const lastInboundTime = getLastInboundTime(thread, (data as Message[]) || []);
       setIsIn24hWindow(lastInboundTime ? (Date.now() - lastInboundTime.getTime()) / 3600000 < 24 : false);
 
-      if (userProfile?.id) {
-        await supabase.from('message_thread_reads' as any).upsert(
-          { thread_id: threadId, user_id: userProfile.id, last_read_at: new Date().toISOString() },
-          { onConflict: 'thread_id,user_id' }
-        );
-      }
+      await markThreadReadRemote(threadId, userProfile?.id, 'web');
       scrollToBottom();
     } catch (error) {
       console.error('Error fetching messages:', error);
