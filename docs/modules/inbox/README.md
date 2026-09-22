@@ -17,3 +17,7 @@ Superfície de conversas da **equipe de atendimento / customer success**: suport
 
 ## Push mobile (mensagem nova)
 - Mesmo caminho de Messages: `notify_new_message()` enfileira `push_delivery_jobs` para o `assigned_user_id` da thread; worker `push-dispatch` (cron 30s) entrega via Expo. Threads `customer_service` recebem `data.url = /inbox/<thread_id>`. Detalhes em [`modules/messages/README.md`](../messages/README.md).
+
+## Leitura da conversa (mudança 2026-09-22)
+- O Atendimento no web **passa a gravar leitura** em `message_thread_reads` via `rpc_mark_thread_read` (`InboxPage.tsx` e `MobileInbox.tsx`, efeito ao selecionar a thread). Antes só o app e o Comercial gravavam.
+- Efeito visível: conversa lida no computador aparece como lida no celular, e o servidor enfileira o push silencioso `read_sync` para apagar a notificação nos outros aparelhos do mesmo usuário (só nos que declaram `supports_read_sync`). Contrato completo em [`modules/messages/README.md`](../messages/README.md).

@@ -19,6 +19,7 @@ import {
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
+import { markThreadReadRemote } from '@/lib/markThreadReadRemote';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
@@ -378,12 +379,7 @@ export function MobileMessagesList() {
       const lastInboundTime = getLastInboundTime(thread, (data as Message[]) || []);
       setIsIn24hWindow(lastInboundTime ? (Date.now() - lastInboundTime.getTime()) / 3600000 < 24 : false);
 
-      if (userProfile?.id) {
-        await supabase.from('message_thread_reads' as any).upsert(
-          { thread_id: threadId, user_id: userProfile.id, last_read_at: new Date().toISOString() },
-          { onConflict: 'thread_id,user_id' }
-        );
-      }
+      await markThreadReadRemote(threadId, userProfile?.id, 'web');
       scrollToBottom();
     } catch (error) {
       console.error('Error fetching messages:', error);

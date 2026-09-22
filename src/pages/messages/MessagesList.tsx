@@ -55,6 +55,7 @@ import { useConsolidatedThreadIds } from '@/hooks/messages/useConsolidatedThread
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
+import { markThreadReadRemote } from '@/lib/markThreadReadRemote';
 import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
@@ -1310,16 +1311,9 @@ function DesktopMessagesList() {
       // (removido) recomputo local de 24h; `useServiceWindow` cuida disso.
 
 
-      // Upsert last_read_at for current user
-      if (userProfile?.id) {
-        await supabase
-          .from('message_thread_reads' as any)
-          .upsert({
-            thread_id: threadId,
-            user_id: userProfile.id,
-            last_read_at: new Date().toISOString()
-          }, { onConflict: 'thread_id,user_id' });
-      }
+      // Grava a leitura no servidor (informa a origem para o aviso silencioso
+      // de leitura chegar aos outros aparelhos do usuário, nunca a este).
+      await markThreadReadRemote(threadId, userProfile?.id, 'web');
 
       scrollToBottom();
     } catch (error) {
