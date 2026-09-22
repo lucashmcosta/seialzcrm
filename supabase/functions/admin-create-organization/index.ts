@@ -156,30 +156,21 @@ serve(async (req) => {
     if (stagesError) throw new Error(stagesError.message);
 
     // --- WhatsApp routes (messaging_lines) ---
-    // Sem estas rotas, vincular um número de WhatsApp falha com
-    // SALES_ROUTE_NOT_FOUND / CUSTOMER_SERVICE_ROUTE_NOT_FOUND.
-    // `active_endpoint_id` fica nulo: quem preenche é provision_line_endpoint.
-    const { error: linesError } = await supabase.from('messaging_lines').insert([
-      {
-        organization_id: org.id,
-        key: 'commercial',
-        name: 'Comercial',
-        channel: 'whatsapp',
-        inbox_key: 'sales',
-        route_slug: 'commercial',
-        is_active: true,
-      },
-      {
-        organization_id: org.id,
-        key: 'customer_service',
-        name: 'Atendimento',
-        channel: 'whatsapp',
-        inbox_key: 'customer_service',
-        route_slug: 'customer_service',
-        is_active: true,
-      },
-    ]);
-    if (linesError) throw new Error(`Falha ao criar as rotas de WhatsApp: ${linesError.message}`);
+    // Semeadas automaticamente pela trigger `trg_seed_default_messaging_lines`
+    // em public.organizations (Comercial + Atendimento, channel='whatsapp').
+    // Não inserir aqui: a trigger é a única fonte, para qualquer caminho de
+    // criação de conta (Portal Admin, signup, insert direto).
+    const { data: seededLines, error: linesError } = await supabase
+      .from('messaging_lines')
+      .select('id, key')
+      .eq('organization_id', org.id)
+      .eq('channel', 'whatsapp');
+    if (linesError) throw new Error(`Falha ao verificar as rotas de WhatsApp: ${linesError.message}`);
+    const seededKeys = new Set((seededLines ?? []).map((l: { key: string }) => l.key));
+    if (!seededKeys.has('commercial') || !seededKeys.has('customer_service')) {
+      throw new Error('Rotas de WhatsApp (Comercial/Atendimento) não foram criadas para a nova conta');
+    }
+
 
     // --- Subscription ---
     const { error: subError } = await supabase.from('subscriptions').insert({
