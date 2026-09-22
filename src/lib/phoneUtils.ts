@@ -18,7 +18,18 @@ export const COUNTRIES: Country[] = [
   { code: 'CL', name: 'Chile', dialCode: '56', flag: '🇨🇱', placeholder: '9 1234 5678' },
   { code: 'MX', name: 'México', dialCode: '52', flag: '🇲🇽', placeholder: '55 1234 5678' },
   { code: 'AU', name: 'Australia', dialCode: '61', flag: '🇦🇺', placeholder: '412 345 678' },
+  { code: 'FR', name: 'França', dialCode: '33', flag: '🇫🇷', placeholder: '6 12 34 56 78' },
 ];
+
+/**
+ * França: remove o zero de tronco (06 12 34 56 78 → 612345678)
+ */
+function stripFrTrunkZero(digits: string): string {
+  if (digits.length === 10 && digits.startsWith('0')) {
+    return digits.substring(1);
+  }
+  return digits;
+}
 
 /**
  * Detecta o país a partir de um número E.164
