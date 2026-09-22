@@ -176,17 +176,26 @@ export function formatPhoneForCountry(phone: string, countryCode: string): strin
 export function buildE164(localNumber: string, countryCode: string): string {
   if (!localNumber) return '';
   
-  const cleaned = localNumber.replace(/\D/g, '');
+  let cleaned = localNumber.replace(/\D/g, '');
   if (!cleaned) return '';
   
   const country = COUNTRIES.find(c => c.code === countryCode);
   if (!country) return `+55${cleaned}`;
+
+  // FR: remove o zero de tronco (0612345678 → 612345678)
+  if (country.code === 'FR') {
+    cleaned = stripFrTrunkZero(cleaned);
+  }
   
   // Se já começa com o código do país, não duplica
   if (cleaned.startsWith(country.dialCode)) {
     // BR special case: "55" inicial pode ser DDD, não country code.
     // Só tratar como country code se o comprimento total for válido (12 ou 13).
     if (country.code === 'BR' && cleaned.length !== 12 && cleaned.length !== 13) {
+      return `+${country.dialCode}${cleaned}`;
+    }
+    // FR special case: "33" inicial só é código de país se o total for 11 dígitos.
+    if (country.code === 'FR' && cleaned.length !== 11) {
       return `+${country.dialCode}${cleaned}`;
     }
     return `+${cleaned}`;
