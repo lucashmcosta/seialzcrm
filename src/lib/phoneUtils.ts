@@ -158,6 +158,13 @@ export function formatPhoneForCountry(phone: string, countryCode: string): strin
         return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6)}`;
       }
       break;
+
+    case 'FR':
+      // 9 dígitos = 6 12 34 56 78
+      if (cleaned.length === 9) {
+        return `${cleaned.slice(0, 1)} ${cleaned.slice(1, 3)} ${cleaned.slice(3, 5)} ${cleaned.slice(5, 7)} ${cleaned.slice(7)}`;
+      }
+      break;
   }
   
   return cleaned;
