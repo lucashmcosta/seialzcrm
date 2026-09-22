@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MobileLayout } from './MobileLayout';
 import { supabase } from '@/integrations/supabase/client';
+import { markThreadReadRemote } from '@/lib/markThreadReadRemote';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { useToast } from '@/hooks/use-toast';
@@ -150,6 +151,12 @@ export function MobileInbox() {
   }, [threads, search]);
 
   const inChat = !!selectedId;
+
+  // Atendimento também grava leitura na versão mobile do site.
+  useEffect(() => {
+    if (!selectedId || !internalUserId) return;
+    void markThreadReadRemote(selectedId, internalUserId, 'web');
+  }, [selectedId, internalUserId]);
 
   const handleAfterChange = () => {
     refreshCounts();
