@@ -229,6 +229,7 @@ serve(async (req) => {
           if (link.organization_id === org.id) continue;
           await supabase.from('user_organizations').delete().eq('id', link.id);
           await supabase.from('pipeline_stages').delete().eq('organization_id', link.organization_id);
+          await supabase.from('messaging_lines').delete().eq('organization_id', link.organization_id);
           await supabase.from('permission_profiles').delete().eq('organization_id', link.organization_id);
           await supabase.from('subscriptions').delete().eq('organization_id', link.organization_id);
           await supabase.from('intelligence_settings').delete().eq('organization_id', link.organization_id);
@@ -287,6 +288,7 @@ serve(async (req) => {
     if (createdOrgId) {
       await supabase.from('user_organizations').delete().eq('organization_id', createdOrgId);
       await supabase.from('pipeline_stages').delete().eq('organization_id', createdOrgId);
+      await supabase.from('messaging_lines').delete().eq('organization_id', createdOrgId);
       await supabase.from('permission_profiles').delete().eq('organization_id', createdOrgId);
       await supabase.from('subscriptions').delete().eq('organization_id', createdOrgId);
       await supabase.from('intelligence_settings').delete().eq('organization_id', createdOrgId);
