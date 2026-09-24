@@ -51,6 +51,17 @@ Deno.serve(async (req) => {
   if (event === "document.completed") {
     const res = await storePdf(admin, r, payload);
     if (!res.ok) return json({ error: res.error }, 500); // retry da SuvSign mantém o mesmo delivery
+    // Paridade Nammux: mesmo chokepoint da V1 (trigger fn_emit_nammux_contact_contract_v1 no insert
+    // + replay idempotente por idempotency_key). Reforço explícito cobre o caminho "documento já existia".
+    const docRef = String(payload?.data?.document_id ?? payload?.document?.id ?? "");
+    if (docRef) {
+      const { data: d } = await admin.from("documents").select("id").eq("organization_id", r.organization_id)
+        .eq("external_source", "suvsign_v2").eq("external_ref", docRef).is("deleted_at", null).maybeSingle();
+      if (d?.id) {
+        const { error: e } = await admin.rpc("fn_enqueue_nammux_contact_contract_replays_v1", { _document_id: d.id, _replay_reason: "document_added_after_win" });
+        if (e) return json({ error: "nammux_enqueue_failed" }, 500);
+      }
+    }
   }
 
   if (!seen) {
