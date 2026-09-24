@@ -24,3 +24,25 @@ Estado: implementado e desligado (`signing.suvsign_v2` global OFF, nenhuma org h
 4. Inserir `integration_feature_flags(flag_key='signing.suvsign_v2', organization_id=<org>, enabled=true)`.
 
 Rollback: flag da org OFF (efeito em até 60 s) e depois a regra live OFF.
+
+## Fechamento técnico pré-homologação (2026-09-24)
+
+### Nammux (paridade V1)
+- Mesmo chokepoint da V1: trigger `fn_emit_nammux_contact_contract_v1` em `documents` + RPC `fn_enqueue_nammux_contact_contract_replays_v1`. Ambos agora aceitam `external_source in ('suvsign','suvsign_v2')` (V1 sem mudança de comportamento).
+- `suvsign-v2-webhook` em `document.completed` chama a mesma RPC também quando o documento já existia (retry). Idempotência pela `idempotency_key` da RPC.
+- Teste em transação revertida: insert gerou 1 job; 2 replays extras geraram 0 (`events_inserted=0`); duplicar o documento foi bloqueado (unique).
+
+### Webhook separado
+- Org resolvida só por `data.operation_id` → `signature_requests`; secret = `suvsign_v2_credentials.webhook_secret_ciphertext` da org dona.
+- URL exibida em Integrações (`/functions/v1/suvsign-v2-webhook`). [INCERTO] se o webhook na SuvSign é por conta ou por operação — confirmar com a SuvSign antes do E2E.
+- V1 e V2 coexistem na mesma org. V2 recusa payload sem `engine:"v2"`; V1 agora ignora (200 skipped) payload com `engine:"v2"`.
+- Rollback: flag OFF bloqueia novos envios; operações V2 existentes continuam chegando no mesmo endpoint V2.
+
+### Ações `signature-requests` (11)
+get_capability, get_credentials_status*, save_credentials*, test_connection*, list_templates, prepare_contract, get_preview*, send_for_signature, get_signature_status, cancel_signature, get_download_url.
+(*) extras: status mascarado da credencial; gravação cifrada (admin da org); teste de conexão (só contagem de templates); preview do snapshot congelado. Nenhuma é proxy genérico nem retorna segredo.
+
+### Verificações
+- Credenciais: anon/authenticated sem nenhum privilégio; nenhuma view/função referencia a tabela; só colunas `*_ciphertext` + `api_key_last4`; único log registra ação + mensagem de erro.
+- RLS (transação revertida, org 40ae…, 15 usuários da org + 3 de outras): visibilidade da solicitação = visibilidade da oportunidade em 18/18 casos; usuários de outra org = 0.
+- Template do piloto: BLOQUEADO — sem credencial V2 não dá pra listar variáveis; é preciso informar o template.

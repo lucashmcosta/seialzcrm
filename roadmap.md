@@ -33,3 +33,10 @@
 - [x] Fase 4 ramo V2 no suvsign-webhook + regressão V1
 - [x] Fase 5 UI (Sheet + acompanhamento)
 - [x] Fase 6 testes + estado final (flag OFF, 0 orgs)
+
+## SuvSign V2 — fechamento pré-homologação
+- [x] Paridade Nammux V2 + idempotência
+- [x] Coexistência de webhooks V1/V2 (guard V1)
+- [x] 11 ações, credenciais só no servidor, RLS A/B e dono
+- [ ] Template do piloto — bloqueado: definir template/credencial QA
+- [ ] Confirmar com a SuvSign se o webhook é por conta ou por operação
