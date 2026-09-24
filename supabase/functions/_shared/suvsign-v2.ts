@@ -131,6 +131,20 @@ export function fillFrozenContent(frozen: Any, ctx: Parameters<typeof applyVaria
   return clone;
 }
 
+// Placeholders suportados que sobraram após applyVariables (lista deduplicada).
+export function findUnresolvedPlaceholders(frozen: Any, roleRefs: string[] = []): string[] {
+  const ns = ["Custom", "Contact", "Client", "Deal", "Document", ...roleRefs.map(esc)];
+  const re = new RegExp(`\\[\\[?((?:${ns.join("|")})\\.[A-Za-z0-9_À-ÿ]+)\\]\\]?`, "gi");
+  const found = new Set<string>();
+  const walk = (x: Any) => {
+    if (typeof x === "string") { if (!x.startsWith("data:")) for (const m of x.matchAll(re)) found.add(m[1]); }
+    else if (Array.isArray(x)) x.forEach(walk);
+    else if (x && typeof x === "object") Object.values(x).forEach(walk);
+  };
+  walk(frozen);
+  return [...found];
+}
+
 export function friendlyTemplateError(code: string | undefined): string {
   if (code === "template_not_v2_compatible" || code === "template_has_no_v2_definition" || code === "template_has_invalid_fields") {
     return "Este modelo ainda não é compatível com o novo fluxo de assinatura.";
