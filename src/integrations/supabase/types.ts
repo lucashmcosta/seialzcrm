@@ -10725,6 +10725,186 @@ export type Database = {
         }
         Relationships: []
       }
+      signature_request_participants: {
+        Row: {
+          cpf: string | null
+          created_at: string
+          email: string
+          id: string
+          name: string
+          opened_at: string | null
+          order_index: number
+          organization_id: string
+          phone: string | null
+          provider_participant_id: string | null
+          ref: string
+          request_id: string
+          role: string
+          signed_at: string | null
+          status: string
+          template_role: string | null
+          updated_at: string
+        }
+        Insert: {
+          cpf?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          opened_at?: string | null
+          order_index?: number
+          organization_id: string
+          phone?: string | null
+          provider_participant_id?: string | null
+          ref: string
+          request_id: string
+          role?: string
+          signed_at?: string | null
+          status?: string
+          template_role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cpf?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          opened_at?: string | null
+          order_index?: number
+          organization_id?: string
+          phone?: string | null
+          provider_participant_id?: string | null
+          ref?: string
+          request_id?: string
+          role?: string
+          signed_at?: string | null
+          status?: string
+          template_role?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_request_participants_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_request_participants_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "signature_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signature_requests: {
+        Row: {
+          cancelled_at: string | null
+          completed_at: string | null
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          engine: string
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          opportunity_id: string
+          organization_id: string
+          provider_documents: Json
+          provider_operation_id: string | null
+          sent_at: string | null
+          snapshot: Json
+          snapshot_sha256: string
+          status: string
+          template_id: string | null
+          template_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          engine?: string
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          opportunity_id: string
+          organization_id: string
+          provider_documents?: Json
+          provider_operation_id?: string | null
+          sent_at?: string | null
+          snapshot: Json
+          snapshot_sha256: string
+          status?: string
+          template_id?: string | null
+          template_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          engine?: string
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          opportunity_id?: string
+          organization_id?: string
+          provider_documents?: Json
+          provider_operation_id?: string | null
+          sent_at?: string | null
+          snapshot?: Json
+          snapshot_sha256?: string
+          status?: string
+          template_id?: string | null
+          template_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_requests_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_requests_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_requests_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
+            foreignKeyName: "signature_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       social_conversations: {
         Row: {
           avatar_url: string | null
@@ -11020,6 +11200,60 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suvsign_v2_credentials: {
+        Row: {
+          api_key_ciphertext: string
+          api_key_last4: string | null
+          base_url: string
+          created_at: string
+          last_test_at: string | null
+          last_test_ok: boolean | null
+          organization_id: string
+          updated_at: string
+          updated_by: string | null
+          webhook_secret_ciphertext: string | null
+        }
+        Insert: {
+          api_key_ciphertext: string
+          api_key_last4?: string | null
+          base_url?: string
+          created_at?: string
+          last_test_at?: string | null
+          last_test_ok?: boolean | null
+          organization_id: string
+          updated_at?: string
+          updated_by?: string | null
+          webhook_secret_ciphertext?: string | null
+        }
+        Update: {
+          api_key_ciphertext?: string
+          api_key_last4?: string | null
+          base_url?: string
+          created_at?: string
+          last_test_at?: string | null
+          last_test_ok?: boolean | null
+          organization_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          webhook_secret_ciphertext?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suvsign_v2_credentials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suvsign_v2_credentials_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
