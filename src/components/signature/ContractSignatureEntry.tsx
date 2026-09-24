@@ -6,11 +6,11 @@ import { SendToSignatureButton } from './SendToSignatureButton';
 import { SignatureV2Sheet } from './SignatureV2Sheet';
 import { callSignatureRequests } from '@/lib/signatureRequestsApi';
 
-interface Props { contactId: string; opportunityId: string; size?: 'default' | 'sm' | 'lg' | 'icon' }
+interface Props { contactId: string; opportunityId: string; size?: 'default' | 'sm' | 'lg' | 'icon'; hidePilot?: boolean }
 
 // Decide entre V1 (inalterada) e V2. A capability só decide NOVOS envios;
 // solicitações V2 existentes continuam visíveis mesmo com a flag OFF.
-export function ContractSignatureEntry({ contactId, opportunityId, size = 'icon' }: Props) {
+export function ContractSignatureEntry({ contactId, opportunityId, size = 'icon', hidePilot = false }: Props) {
   const [open, setOpen] = useState(false);
   const { data } = useQuery({
     queryKey: ['signature-capability', opportunityId],
@@ -24,7 +24,7 @@ export function ContractSignatureEntry({ contactId, opportunityId, size = 'icon'
   const [pilotOpen, setPilotOpen] = useState(false);
 
   // Botão V2 de piloto: ao lado, sem mudar a lógica do botão V1.
-  const pilotButton = pilot && !v2 ? (
+  const pilotButton = pilot && !v2 && !hidePilot ? (
     <>
       <Button variant="outline" size={size === 'icon' ? 'sm' : size} onClick={() => setPilotOpen(true)} aria-label="Enviar contrato V2 (Piloto)">
         <PenNib className="h-4 w-4 mr-2" weight="fill" />
@@ -50,4 +50,18 @@ export function ContractSignatureEntry({ contactId, opportunityId, size = 'icon'
       <SignatureV2Sheet open={open} onOpenChange={setOpen} opportunityId={opportunityId} canCreate={v2} />
     </>
   );
+}
+
+// Item "Enviar contrato V2 (Piloto)" para menus (3 pontinhos).
+export function useSignatureV2Pilot(opportunityId: string) {
+  const [open, setOpen] = useState(false);
+  const { data } = useQuery({
+    queryKey: ['signature-capability', opportunityId],
+    queryFn: () => callSignatureRequests<{ v2_enabled: boolean; pilot_enabled?: boolean; has_credentials: boolean; requests: any[] }>('get_capability', { opportunity_id: opportunityId }),
+    staleTime: 30_000,
+    retry: false,
+  });
+  const available = !!data?.pilot_enabled && !data?.v2_enabled;
+  const sheet = available ? <SignatureV2Sheet open={open} onOpenChange={setOpen} opportunityId={opportunityId} canCreate /> : null;
+  return { available, openSheet: () => setOpen(true), sheet };
 }
