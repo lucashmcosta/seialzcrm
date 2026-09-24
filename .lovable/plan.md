@@ -84,12 +84,17 @@ Autenticação por JWT via `_shared/auth.ts`, org resolvida no servidor e creden
 4. `content_sha256` (PDF assinado antes do certificado) e `final_sha256` (PDF final) são hashes dos PDFs da SuvSign: ficam guardados para auditoria e não entram na comparação.
 5. Mudou algo no CRM: é preciso um novo `prepare`, que gera outra solicitação.
 
-### Verificação do item 2 — campos de assinatura (somente leitura, SuvSign Flow)
-- Onde estão hoje: dentro do conteúdo JSON do modelo, gravado em `templates.file_url`. Exemplo real em `src/lib/templates/asilo-template.ts:311-330`: `fields[] {id, type:"signature"|"initials"|..., filledBy, page, position{x,y}, size{width,height}, signatoryId}` e `signatories[] {id, name:"[Contact.FirstName] ...", email}`. Variáveis no formato `[Role.Campo]` (`api-handler` ~linha 555).
-- Associação por role: sim, `field.signatoryId` aponta para `signatories[].id` e para `templates.roles`. Um modelo pode ter vários campos e vários signatários.
-- `GET /templates/{id}` não devolve esses dados (`api-handler/index.ts:1240-1270`): retorna só id, name, description, category, version, roles, variables e datas. Sem conteúdo, sem `fields` e sem `signatories`. Nenhum outro endpoint da API por chave expõe `file_url`.
-- Sistema de coordenadas: NÃO CONFIRMADO. O editor V1 usa px na tela (`position`/`size`) e o V2 renderiza em pontos pdf-lib (`render.ts`), mas não há conversão documentada entre os dois.
-- Conclusão: pelas APIs disponíveis ao Seialz, os fields não podem ser obtidos. Inventar coordenadas foi vetado.
+### Definição V2 do modelo (gate resolvido pela SuvSign)
+- Fonte: `GET /templates/{id}?include=v2_definition` (`x-api-key`). Traz `frozen_content`, `layout_mode` (ex.: `legacy_template_816x1056`), roles, variables, signatários e `fields` já com coordenadas V2. O Seialz não converte coordenadas.
+- `prepare_contract`:
+  1. busca a definição;
+  2. valida a compatibilidade;
+  3. substitui as `variables` pelos dados do CRM (mapa V1);
+  4. liga cada role/ref de signatário a um participante real do CRM (nunca o e-mail que vem do modelo);
+  5. grava o snapshot.
+- Sem definição (`422 template_has_no_v2_definition`) ou com recurso incompatível (tabela ou imagem no corpo): bloqueia antes de criar qualquer operação. Mensagem ao usuário: "Este modelo ainda não é compatível com o novo fluxo de assinatura." Nenhum erro técnico é exibido.
+- `list_templates` marca a compatibilidade de cada modelo. Os incompatíveis aparecem desabilitados, com o motivo na dica. Nenhum modelo é alterado.
+- NÃO CONFIRMADO: nome exato do sinal de incompatibilidade no retorno da definição. Leio no código da SuvSign na Fase 3; se não existir um sinal explícito, trato como incompatível só a resposta 422.
 
 ## F. Webhook V2 (extensão de `suvsign-webhook`)
 - A rota V2 é escolhida quando `engine==="v2"` e `data.operation_id` existe em `signature_requests`. A org vem dessa linha, não do payload. Qualquer outro caso segue o caminho V1, byte a byte igual.
@@ -129,14 +134,18 @@ CTA "Enviar para assinatura". Depois vira acompanhamento: Enviado, Visualizado (
 - Novos: migration (2 tabelas + flag OFF), `supabase/functions/signature-requests/index.ts`, `supabase/functions/_shared/suvsign-v2/{client,prepare,credentials}.ts`, `src/components/signature/v2/{SignatureRequestSheet,SignatureRequestTimeline}.tsx`, `src/hooks/useSignatureCapability.ts`, `useSignatureRequests.ts`, docs `docs/integrations/suvsign/v2.md`, ADR 0011 do Seialz, `catalog.md`.
 - Alterados: `suvsign-webhook/index.ts` (ramo V2), `SendToSignatureButton.tsx` (só a decisão pela capability), `OpportunityDetail.tsx` (timeline), a tela de detalhe da integração (campos V2 mascarados + testar).
 
-## K. Plano de implementação
-0. Gate (lado SuvSign, fora deste projeto): a SuvSign expõe por API o conteúdo do modelo com `fields` e `signatories`, com o sistema de coordenadas documentado ou já convertido para o V2. Exemplo: `GET /templates/{id}` passa a incluir o conteúdo, ou um endpoint novo que já devolve o formato `documents[]` do V2.
-1. Persistência + flag OFF: migration conforme a seção C, com testes de RLS em duas orgs.
-2. Credencial criptografada e "Testar conexão".
-3. Backend `signature-requests`, com `prepare_contract` montando o snapshot completo a partir do endpoint do passo 0.
-4. Webhook V2 por `operation_id`, com regressão da V1.
-5. UI (painel + acompanhamento). A leitura das solicitações existentes funciona mesmo com a flag OFF.
-6. Rollout em uma org controlada, depois o teste de rollback.
+## K. Plano de implementação (sem rollout nesta rodada)
+1. Banco:
+   - migration com as 2 tabelas (SELECT para authenticated via RLS da org, escrita só por service_role, sem anon);
+   - flag `signing.suvsign_v2` global OFF;
+   - testes com duas organizações.
+2. Credenciais: API key V2 + webhook secret V2 criptografados no servidor (`integration-credentials.ts`), UI mascarada e "Testar conexão" via `GET /templates`.
+3. Backend `signature-requests`: `get_capability`, `list_templates` (com compatibilidade), `prepare_contract` (definição V2 + validação + preenchimento + snapshot), `send_for_signature` (snapshot salvo, Idempotency-Key), `get_signature_status`, `cancel_signature`, `get_download_url`.
+4. Webhook: ramo V2 por `operation_id` (sent / signed / completed), dedupe por `X-SuvSign-Delivery` e regressão completa da V1.
+5. UI: capability, painel lateral (Documento / Dados / Signatários / Preview), envio e acompanhamento. Solicitações existentes continuam visíveis com a flag OFF.
+6. Testes: multi-tenant, V1, modelo compatível e incompatível, preenchimento, snapshot, idempotência, webhook, PDF, rollback, segurança.
+
+Estado final da rodada: flag global OFF, 0 orgs reais habilitadas, nenhuma regra live da SuvSign alterada pelo Seialz, V1 intacta.
 
 ## L. Critérios de aceite
 - A nunca acessa solicitações de B.
@@ -144,25 +153,24 @@ CTA "Enviar para assinatura". Depois vira acompanhamento: Enviado, Visualizado (
 - Nenhum dado pessoal em query string na V2.
 - Com a capability OFF e sem solicitação V2, V1 idêntica.
 - Pelo menos paridade com o mapa atual de preenchimento.
-- Preview e envio usam o mesmo snapshot persistido, provado pelo `snapshot_sha256` local. `content_sha256`/`final_sha256` só para auditoria, nunca comparados ao snapshot.
+- Preview e envio usam o mesmo snapshot persistido, provado pelo `snapshot_sha256` local. `content_sha256`/`final_sha256` só para auditoria, nunca comparados.
 - O envio não relê o CRM.
-- Assinaturas posicionadas pelos fields do próprio modelo, nunca por coordenadas inventadas.
+- Coordenadas vêm da definição oficial da SuvSign.
+- Modelo incompatível é bloqueado antes do envio.
 - Status local espelha os 6 estados do provedor.
 - Retry ou clique duplo não duplica a operação.
-- Webhook duplicado não duplica timeline nem documento.
+- Webhook duplicado não duplica timeline nem PDF.
 - Status real por signatário.
 - Vários documentos representáveis.
-- `document.completed` salva o PDF.
+- PDF final aparece no Seialz.
 - Com a capability OFF, solicitações V2 existentes continuam visíveis e acompanháveis.
 - O mobile consome o mesmo backend.
 
 ## M. Lacunas restantes
-- BLOQUEANTE: os fields, os signatários e o conteúdo do modelo não saem pela API (`GET /templates/{id}` não os devolve), e o sistema de coordenadas V1 -> V2 está NÃO CONFIRMADO.
-- Sem webhook de visualizado ou cancelado: status vem de polling/resposta.
+- Limitação conhecida: 2 modelos com tabela e 1 com imagem no corpo são incompatíveis. Tratados como incompatibilidade explícita do modelo, não como bloqueio da integração.
+- Sem webhook de visualizado ou cancelado: status vem de GET/resposta do `/cancel`.
 - Payload traz só `metadata.custom`: correlação por `operation_id`.
-- Regra live SuvSign e piloto dependem do lado SuvSign.
+- Regra live da SuvSign e piloto: fora desta rodada.
 
 ## N. Decisão
-`BLOQUEADO — CAMPOS DE ASSINATURA DO TEMPLATE NÃO RESOLVIDOS`
-
-Para desbloquear: a SuvSign expõe, pela API com `x-api-key`, o conteúdo do modelo com `fields`/`signatories` e o sistema de coordenadas compatível com o V2. Nada será implementado no Seialz antes disso.
+`PRONTO PARA IMPLEMENTAR ENVIO SUVSIGN V2 DENTRO DO SEIALZ WEB`. Ao aprovar, executo as fases 1 a 6 e entrego o relatório final nos 22 itens.
