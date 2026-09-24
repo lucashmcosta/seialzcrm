@@ -5,6 +5,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { encryptSecret } from "../_shared/crypto.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
+const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
 import {
   canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, friendlyTemplateError, loadV2Credentials,
   mapOperationStatus, sha256Hex, SIGNING_V2_FLAG, suvsignFetch,
@@ -68,6 +69,10 @@ Deno.serve(async (req) => {
     return orgId;
   }
 
+  // Piloto: flag separada libera só novos envios V2, sem trocar o botão V1.
+  const v2SendAllowed = async (orgId: string) =>
+    (await featureFlagEnabled(admin, SIGNING_V2_FLAG, orgId)) || (await featureFlagEnabled(admin, SIGNING_V2_PILOT_FLAG, orgId));
+
   try {
     switch (action) {
       // ---------------- Capability + solicitações existentes ----------------
@@ -79,7 +84,8 @@ Deno.serve(async (req) => {
         const { data: requests } = await userDb.from("signature_requests")
           .select("id, status, template_name, provider_operation_id, sent_at, completed_at, cancelled_at, created_at, last_error, provider_documents, signature_request_participants(id, ref, name, email, role, status, opened_at, signed_at, order_index)")
           .eq("opportunity_id", opp.id).order("created_at", { ascending: false });
-        return json({ v2_enabled: enabled, has_credentials: !!cred, requests: requests ?? [] });
+        const pilot = await featureFlagEnabled(admin, SIGNING_V2_PILOT_FLAG, opp.organization_id);
+        return json({ v2_enabled: enabled, pilot_enabled: pilot, has_credentials: !!cred, requests: requests ?? [] });
       }
 
       // ---------------- Credenciais (admin da org) ----------------
@@ -127,7 +133,7 @@ Deno.serve(async (req) => {
       case "list_templates": {
         const opp = await loadOpp(body.opportunity_id);
         if (!opp) return fail("not_found", "Oportunidade não encontrada", 404);
-        if (!(await featureFlagEnabled(admin, SIGNING_V2_FLAG, opp.organization_id))) return fail("v2_disabled", "Novo fluxo de assinatura não habilitado", 409);
+        if (!(await v2SendAllowed(opp.organization_id))) return fail("v2_disabled", "Novo fluxo de assinatura não habilitado", 409);
         const creds = await loadV2Credentials(admin, opp.organization_id);
         if (!creds) return fail("not_configured", "Credencial V2 não configurada", 409);
         const r = await suvsignFetch(creds, "api-handler", "/templates", { method: "GET" });
@@ -144,7 +150,7 @@ Deno.serve(async (req) => {
       case "prepare_contract": {
         const opp = await loadOpp(body.opportunity_id);
         if (!opp) return fail("not_found", "Oportunidade não encontrada", 404);
-        if (!(await featureFlagEnabled(admin, SIGNING_V2_FLAG, opp.organization_id))) return fail("v2_disabled", "Novo fluxo de assinatura não habilitado", 409);
+        if (!(await v2SendAllowed(opp.organization_id))) return fail("v2_disabled", "Novo fluxo de assinatura não habilitado", 409);
         const templateId = typeof body.template_id === "string" ? body.template_id.trim() : "";
         if (!templateId || templateId.length > 100) return fail("template_required", "Escolha um modelo");
         const creds = await loadV2Credentials(admin, opp.organization_id);
@@ -253,7 +259,7 @@ Deno.serve(async (req) => {
         const r = await loadRequest(body.request_id);
         if (!r) return fail("not_found", "Solicitação não encontrada", 404);
         if (r.status !== "draft") return json({ request_id: r.id, status: r.status, already: true });
-        if (!(await featureFlagEnabled(admin, SIGNING_V2_FLAG, r.organization_id))) return fail("v2_disabled", "Novo fluxo de assinatura não habilitado", 409);
+        if (!(await v2SendAllowed(r.organization_id))) return fail("v2_disabled", "Novo fluxo de assinatura não habilitado", 409);
         if ((await sha256Hex(canonicalJson(r.snapshot))) !== r.snapshot_sha256) return fail("snapshot_mismatch", "O conteúdo preparado foi alterado. Prepare novamente.", 409);
         const creds = await loadV2Credentials(admin, r.organization_id);
         if (!creds) return fail("not_configured", "Credencial V2 não configurada", 409);
