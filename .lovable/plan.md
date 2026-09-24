@@ -53,10 +53,17 @@ De onde vem cada campo:
 ## C. Persistência local mínima
 Reaproveitado: `documents` (PDF final, dedup por `external_source='suvsign'` + `external_ref=<document_id V2>`), `activities` (timeline), `integration_inbound_events` (evento bruto + dedupe por `X-SuvSign-Delivery`).
 
-O que não cabe no modelo atual: estado da operação, participantes, snapshot e hash. Por isso mantenho as duas tabelas:
-- `signature_requests`: org, opportunity, contact, created_by, `engine='suvsign_v2'`, `provider_operation_id` (único por org), `idempotency_key` (único), `status` (draft/sent/completed/cancelled), `snapshot` jsonb (frozen_content + variáveis resolvidas), `snapshot_sha256`, `provider_documents` jsonb, sent/completed/cancelled_at.
+Tabelas novas:
+- `signature_requests`:
+  - org, opportunity, contact, created_by;
+  - `engine='suvsign_v2'`: decide como uma solicitação existente é lida, independente da flag;
+  - `provider_operation_id` (único por org) e `idempotency_key` (único);
+  - `status`, espelhando o provedor: draft / sent / in_progress / completing / completed / cancelled;
+  - `snapshot` jsonb (frozen_content + fields + variáveis resolvidas) e `snapshot_sha256`, hash local do snapshot;
+  - `provider_documents` jsonb (`document_id`, `content_sha256`, `final_sha256`, `verification_code`), guardados só para auditoria e nunca comparados ao `snapshot_sha256`;
+  - sent/completed/cancelled_at.
 - `signature_request_participants`: request, org, ref, name, email, phone, cpf, role, order_index, `provider_participant_id`, status, opened_at, signed_at.
-- Ambas com GRANT authenticated/service_role, RLS `organization_id = ANY(current_user_org_ids())` e escrita só pelo servidor.
+- Permissões: `authenticated` só SELECT com RLS `organization_id = ANY(current_user_org_ids())`; `service_role` escreve; `anon` sem acesso.
 
 ## D. Ponto central no backend
 Uma edge function `signature-requests` com ações de negócio (não é um proxy genérico):
@@ -71,11 +78,18 @@ Uma edge function `signature-requests` com ações de negócio (não é um proxy
 Autenticação por JWT via `_shared/auth.ts`, org resolvida no servidor e credencial lida só no servidor. O mesmo contrato serve para Web e Mobile.
 
 ## E. Autopreenchimento, preview e snapshot
-1. `prepare_contract`: o servidor lê o contato e a oportunidade e aplica exatamente as transformações da V1 (fallback de nome, trim, `deal_amount` String, `deal_close_date` longa pt-BR). Busca `GET /templates/{id}`, substitui as variáveis e grava `snapshot` + `snapshot_sha256` em uma solicitação `draft`. Campos ausentes voltam listados, com as mesmas 12 obrigatoriedades da V1.
-2. O preview renderiza o próprio `snapshot` gravado, não os dados atuais.
-3. `send_for_signature` só aceita `snapshot_sha256` igual ao exibido. Envia esse mesmo `frozen_content` e compara com o `content_sha256` devolvido.
-4. Conteúdo imutável: mudou algo no CRM, é preciso um novo `prepare`, que gera outra solicitação.
-- NÃO CONFIRMADO: formato interno do conteúdo do modelo V1 (`file_url` JSON) e a sintaxe das variáveis. Verifico no primeiro passo da implementação. Não bloqueia, porque o endpoint existe e devolve `variables`.
+1. `prepare_contract` roda uma única vez. O servidor lê o contato e a oportunidade e aplica as transformações da V1. Monta o snapshot completo (modelo -> conteúdo -> roles -> variables -> fields) e grava `snapshot` + `snapshot_sha256` em uma solicitação `draft`.
+2. O preview renderiza o snapshot gravado.
+3. `send_for_signature` envia exatamente esse snapshot salvo. Não relê contato nem oportunidade e confere só o `snapshot_sha256` local.
+4. `content_sha256` (PDF assinado antes do certificado) e `final_sha256` (PDF final) são hashes dos PDFs da SuvSign: ficam guardados para auditoria e não entram na comparação.
+5. Mudou algo no CRM: é preciso um novo `prepare`, que gera outra solicitação.
+
+### Verificação do item 2 — campos de assinatura (somente leitura, SuvSign Flow)
+- Onde estão hoje: dentro do conteúdo JSON do modelo, gravado em `templates.file_url`. Exemplo real em `src/lib/templates/asilo-template.ts:311-330`: `fields[] {id, type:"signature"|"initials"|..., filledBy, page, position{x,y}, size{width,height}, signatoryId}` e `signatories[] {id, name:"[Contact.FirstName] ...", email}`. Variáveis no formato `[Role.Campo]` (`api-handler` ~linha 555).
+- Associação por role: sim, `field.signatoryId` aponta para `signatories[].id` e para `templates.roles`. Um modelo pode ter vários campos e vários signatários.
+- `GET /templates/{id}` não devolve esses dados (`api-handler/index.ts:1240-1270`): retorna só id, name, description, category, version, roles, variables e datas. Sem conteúdo, sem `fields` e sem `signatories`. Nenhum outro endpoint da API por chave expõe `file_url`.
+- Sistema de coordenadas: NÃO CONFIRMADO. O editor V1 usa px na tela (`position`/`size`) e o V2 renderiza em pontos pdf-lib (`render.ts`), mas não há conversão documentada entre os dois.
+- Conclusão: pelas APIs disponíveis ao Seialz, os fields não podem ser obtidos. Inventar coordenadas foi vetado.
 
 ## F. Webhook V2 (extensão de `suvsign-webhook`)
 - A rota V2 é escolhida quando `engine==="v2"` e `data.operation_id` existe em `signature_requests`. A org vem dessa linha, não do payload. Qualquer outro caso segue o caminho V1, byte a byte igual.
@@ -94,10 +108,13 @@ Autenticação por JWT via `_shared/auth.ts`, org resolvida no servidor e creden
 
 ## H. Coexistência, rollout e rollback
 - Precedência da flag (confirmada no banco): `fn_feature_flag_enabled` usa primeiro a linha da org, depois a global, e na falta das duas devolve false.
-- Flag `signing.suvsign_v2`: global false, ligada só na org escolhida.
-- Ordem para habilitar: credencial V2, regra live SuvSign (conta + `seialz`), teste de conexão, e só então a flag.
-- Rollback: desligar a flag (novos envios voltam à V1) e depois a regra live. Solicitações V2 existentes continuam identificadas pelo `provider_operation_id` e recebendo webhook, porque o dispatcher não depende da regra.
-- Se a flag estiver ON e a regra OFF, o `409 signing_engine_v2_not_enabled` vira a mensagem clara "V2 não habilitado na SuvSign". Não há volta silenciosa para a V1.
+- A flag `signing.suvsign_v2` decide apenas se é possível criar um novo envio V2.
+- Capability OFF e nenhuma solicitação V2: "Enviar contrato" = V1 exatamente como hoje.
+- Capability ON: "Enviar contrato" abre a experiência V2.
+- Capability OFF com solicitação V2 existente: novos envios voltam à V1, mas a solicitação V2 continua visível (status, participantes, timeline, PDF, download, e cancelar só se o estado/API ainda permitir). A leitura é decidida por `signature_requests.engine`, não pela flag.
+- Ordem para habilitar: credencial V2, regra live SuvSign (conta + `seialz`), teste de conexão, e então a flag.
+- Rollback: flag OFF, depois regra live OFF. O webhook e o acompanhamento seguem pelo `provider_operation_id`.
+- Flag ON com regra OFF: `409 signing_engine_v2_not_enabled` vira a mensagem clara "V2 não habilitado na SuvSign", sem volta silenciosa para a V1.
 
 ## I. Tela interna
 Um painel lateral (`Sheet` existente), aberto pelo mesmo botão quando a capability está ON:
@@ -113,34 +130,39 @@ CTA "Enviar para assinatura". Depois vira acompanhamento: Enviado, Visualizado (
 - Alterados: `suvsign-webhook/index.ts` (ramo V2), `SendToSignatureButton.tsx` (só a decisão pela capability), `OpportunityDetail.tsx` (timeline), a tela de detalhe da integração (campos V2 mascarados + testar).
 
 ## K. Plano de implementação
-1. Persistência + flag OFF: migration e testes de RLS com duas orgs.
-2. Credencial: salvar/testar pelo servidor, criptografada; confirmar que o navegador não lê a chave.
-3. Backend `signature-requests`: prepare/send/status/cancel/download; testes Deno (idempotência, cross-org 403, 409 traduzido).
-4. Webhook V2: ramo por `operation_id`; teste de regressão V1 com um payload real.
-5. UI: painel lateral + acompanhamento, tudo atrás da capability.
-6. Rollout: org controlada, ciclo completo real, depois rollback.
+0. Gate (lado SuvSign, fora deste projeto): a SuvSign expõe por API o conteúdo do modelo com `fields` e `signatories`, com o sistema de coordenadas documentado ou já convertido para o V2. Exemplo: `GET /templates/{id}` passa a incluir o conteúdo, ou um endpoint novo que já devolve o formato `documents[]` do V2.
+1. Persistência + flag OFF: migration conforme a seção C, com testes de RLS em duas orgs.
+2. Credencial criptografada e "Testar conexão".
+3. Backend `signature-requests`, com `prepare_contract` montando o snapshot completo a partir do endpoint do passo 0.
+4. Webhook V2 por `operation_id`, com regressão da V1.
+5. UI (painel + acompanhamento). A leitura das solicitações existentes funciona mesmo com a flag OFF.
+6. Rollout em uma org controlada, depois o teste de rollback.
 
 ## L. Critérios de aceite
 - A nunca acessa solicitações de B.
 - A chave nunca chega ao navegador.
 - Nenhum dado pessoal em query string na V2.
-- Com a capability OFF, V1 idêntica.
+- Com a capability OFF e sem solicitação V2, V1 idêntica.
 - Pelo menos paridade com o mapa atual de preenchimento.
-- Preview e envio com o mesmo `snapshot_sha256`.
+- Preview e envio usam o mesmo snapshot persistido, provado pelo `snapshot_sha256` local. `content_sha256`/`final_sha256` só para auditoria, nunca comparados ao snapshot.
+- O envio não relê o CRM.
+- Assinaturas posicionadas pelos fields do próprio modelo, nunca por coordenadas inventadas.
+- Status local espelha os 6 estados do provedor.
 - Retry ou clique duplo não duplica a operação.
 - Webhook duplicado não duplica timeline nem documento.
 - Status real por signatário.
 - Vários documentos representáveis.
 - `document.completed` salva o PDF.
-- O rollback preserva as solicitações existentes.
+- Com a capability OFF, solicitações V2 existentes continuam visíveis e acompanháveis.
 - O mobile consome o mesmo backend.
 
-## M. Lacunas restantes (nenhuma bloqueia a implementação)
-- Formato do conteúdo do modelo V1 e sintaxe das variáveis: validar no passo 3.
+## M. Lacunas restantes
+- BLOQUEANTE: os fields, os signatários e o conteúdo do modelo não saem pela API (`GET /templates/{id}` não os devolve), e o sistema de coordenadas V1 -> V2 está NÃO CONFIRMADO.
 - Sem webhook de visualizado ou cancelado: status vem de polling/resposta.
-- Posição dos campos de assinatura no `frozen_content` precisa vir do modelo (NÃO CONFIRMADO onde a V1 guarda).
 - Payload traz só `metadata.custom`: correlação por `operation_id`.
 - Regra live SuvSign e piloto dependem do lado SuvSign.
 
 ## N. Decisão
-`PRONTO PARA IMPLEMENTAR ENVIO SUVSIGN V2 DENTRO DO SEIALZ WEB`
+`BLOQUEADO — CAMPOS DE ASSINATURA DO TEMPLATE NÃO RESOLVIDOS`
+
+Para desbloquear: a SuvSign expõe, pela API com `x-api-key`, o conteúdo do modelo com `fields`/`signatories` e o sistema de coordenadas compatível com o V2. Nada será implementado no Seialz antes disso.
