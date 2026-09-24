@@ -87,11 +87,13 @@ Autenticação por JWT via `_shared/auth.ts`, org resolvida no servidor e creden
 4. `content_sha256` (PDF assinado antes do certificado) e `final_sha256` (PDF final) são hashes dos PDFs da SuvSign: ficam guardados para auditoria e não entram na comparação.
 5. Mudou algo no CRM: é preciso um novo `prepare`, que gera outra solicitação.
 
-### Sinal de compatibilidade (lido na SuvSign publicada, commit 1f0d0bf1)
-- Modelo compatível: `200` com `v2_definition {layout_mode, coordinate_system, page, frozen_content, signatories, fields, array_variables}` (`_shared/template-v2-definition.ts`).
-- Modelo não JSON ou sem páginas: `422 template_has_no_v2_definition`. Geometria inválida: `template_has_invalid_fields`.
-- Modelo com tabela ou com imagem no corpo: também responde `200` com `v2_definition`, sem nenhum campo de compatibilidade. A recusa só acontece no render (`legacy-layout.ts:201`, `UnsupportedLegacyContent`), depois de a operação existir. A própria doc confirma: "o render falha e reprocessa".
-- Não existe `compatible`, `unsupported_features` nem 422 específico. Deduzir pelo tipo dos blocos seria o Seialz copiar uma regra interna do renderer da SuvSign, o que foi vetado.
+### Sinal de compatibilidade (contrato publicado pela SuvSign)
+- Compatível: `200` com `v2_definition`.
+- Incompatível (tabela ou imagem no corpo): `422 template_not_v2_compatible` com `unsupported_features`.
+- Sem definição: `422 template_has_no_v2_definition`. Fields inválidos: `422 template_has_invalid_fields`. Modelo de outra conta: `404`.
+- `GET /templates` expõe `v2_compatible` e `v2_unsupported_features`: `list_templates` desabilita os incompatíveis e mostra o motivo.
+- `prepare_contract` repete a checagem pelo endpoint de detalhe e bloqueia antes de criar qualquer operação. O Seialz não infere nada.
+- Na execução, confirmo esse sinal no código publicado da SuvSign antes de consumi-lo.
 
 ### Definição V2 do modelo (gate resolvido pela SuvSign)
 - Fonte: `GET /templates/{id}?include=v2_definition` (`x-api-key`). Traz `frozen_content`, `layout_mode` (ex.: `legacy_template_816x1056`), roles, variables, signatários e `fields` já com coordenadas V2. O Seialz não converte coordenadas.
@@ -182,8 +184,8 @@ Estado final da rodada: flag global OFF, 0 orgs reais habilitadas, nenhuma regra
 - Regra live da SuvSign e piloto: fora desta rodada.
 
 ## N. Decisão
-`BLOQUEADO — API DA SUVSIGN NÃO EXPÕE COMPATIBILIDADE DO TEMPLATE`
+`PRONTO PARA IMPLEMENTAR ENVIO SUVSIGN V2 DENTRO DO SEIALZ WEB`
 
-- RLS: resolvida. Herda a regra de acesso da oportunidade (seção C).
-- Ajuste pequeno necessário na SuvSign: o `buildTemplateV2Definition` passa a validar os blocos e a responder `422 template_not_v2_compatible` com `unsupported_features: ["table"|"image"]` (ou devolver `compatible:false` + `unsupported_features`). O nome final fica a critério da SuvSign.
-- Assim que esse ajuste for publicado, executo as fases 1 a 6 sem nova rodada de planejamento.
+- Compatibilidade: sinal explícito publicado pela SuvSign.
+- RLS: herda o acesso da oportunidade (seção C).
+- Ao aprovar, executo as fases 1 a 6 e entrego o relatório dos 22 itens. Ao final: flag global OFF, 0 orgs habilitadas, nenhuma regra live alterada e sem rollout.
