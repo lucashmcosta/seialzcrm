@@ -35,6 +35,7 @@ import { transitionOpportunityStage } from '@/lib/opportunityClose';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { ContractSignatureEntry, useSignatureV2Pilot } from '@/components/signature/ContractSignatureEntry';
+import { PenNib } from '@phosphor-icons/react';
 import { TagSelector } from '@/components/common/TagSelector';
 import { NammuxOpportunityTab } from '@/components/opportunities/NammuxOpportunityTab';
 
@@ -60,6 +61,7 @@ interface PipelineStage {
 
 export default function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
+  const v2Pilot = useSignatureV2Pilot(id ?? '');
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { organization, locale } = useOrganization();
