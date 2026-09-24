@@ -1,0 +1,2 @@
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.signature_requests, public.signature_request_participants FROM authenticated;
+GRANT SELECT ON public.signature_requests, public.signature_request_participants TO authenticated;

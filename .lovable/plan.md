@@ -105,7 +105,6 @@ Autenticação por JWT via `_shared/auth.ts`, org resolvida no servidor e creden
   5. grava o snapshot.
 - Sem definição (`422 template_has_no_v2_definition`) ou com recurso incompatível (tabela ou imagem no corpo): bloqueia antes de criar qualquer operação. Mensagem ao usuário: "Este modelo ainda não é compatível com o novo fluxo de assinatura." Nenhum erro técnico é exibido.
 - `list_templates` marca a compatibilidade de cada modelo. Os incompatíveis aparecem desabilitados, com o motivo na dica. Nenhum modelo é alterado.
-- NÃO CONFIRMADO: nome exato do sinal de incompatibilidade no retorno da definição. Leio no código da SuvSign na Fase 3; se não existir um sinal explícito, trato como incompatível só a resposta 422.
 
 ## F. Webhook V2 (extensão de `suvsign-webhook`)
 - A rota V2 é escolhida quando `engine==="v2"` e `data.operation_id` existe em `signature_requests`. A org vem dessa linha, não do payload. Qualquer outro caso segue o caminho V1, byte a byte igual.
