@@ -25,3 +25,11 @@
 - [x] Docs
 - [x] Pos-migration: validar que push de mensagem nova continua chegando (teste real no celular)
 - [ ] App: publicar versao que chama rpc_register_push_token_v2 com supports_read_sync=true, trata push silencioso e limpa badge
+
+## SuvSign V2 no Seialz Web (2026-09-24)
+- [ ] Fase 1 banco (signature_requests, participants, credenciais, flag OFF, RLS herdando oportunidade)
+- [ ] Fase 2 credenciais V2 criptografadas + testar conexão
+- [ ] Fase 3 edge function signature-requests
+- [ ] Fase 4 ramo V2 no suvsign-webhook + regressão V1
+- [ ] Fase 5 UI (Sheet + acompanhamento)
+- [ ] Fase 6 testes + estado final (flag OFF, 0 orgs)
