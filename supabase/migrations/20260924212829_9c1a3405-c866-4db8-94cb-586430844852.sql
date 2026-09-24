@@ -1,0 +1,2 @@
+update public.integration_feature_flags set enabled=false where flag_key='signing.suvsign_v2' and organization_id='40ae935c-a7f7-4ad7-8ea4-91be6404a95f';
+insert into public.integration_feature_flags(flag_key, organization_id, enabled) values ('signing.suvsign_v2_pilot','40ae935c-a7f7-4ad7-8ea4-91be6404a95f',true);
