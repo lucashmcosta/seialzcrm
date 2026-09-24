@@ -1,127 +1,146 @@
-# Auditoria READ-ONLY — Seialz Web x SuvSign Signing Engine V2
+# Seialz Web x SuvSign V2 — continuação da auditoria (itens I/J desbloqueados)
 
-Nada foi alterado. Fontes: código do repo e consultas somente de leitura ao banco. O que não pude comprovar está marcado NÃO CONFIRMADO.
+Fontes lidas por completo, direto do projeto SuvSign Flow (somente leitura): `docs/reference/api/signing-engine-v2.md`, `docs/decisions/0011-signing-engine-v2.md` e o código de `api-v2`, `api-router`, `api-handler` (V1) e `_shared/signing-v2/render.ts`. Nada foi alterado em nenhum dos dois projetos.
 
-## A. Fluxo atual de "Enviar contrato"
-```text
-OpportunityDetail.tsx:576
-  -> SendToSignatureButton.tsx (aparece só se a org tem a integração suvsign ativa)
-  -> navegador lê contacts + opportunities
-  -> valida 12 campos obrigatórios (bloqueia se faltar algum)
-  -> window.open(base_url/create-from-template?template_id&connector_id&data=<JSON>)
-  -> SuvSign (tela pública dela gera o documento e colhe as assinaturas)
-  -> POST suvsign-webhook (só document.completed)
-  -> documents (external_source='suvsign') + Storage 'attachments' + activities
-  -> outbox do Nammux (ADR-0010)
-  -> UI (documentos do contato)
+## A. Contrato Seialz -> SuvSign V2
+- Endereço base: `https://vpysvlbfsvomwrgbpybc.supabase.co/functions/v1/api-router`. O router manda `/signing-operations*` para o `api-v2` e o resto para a V1, e devolve o header `X-Signing-Engine`.
+- Autenticação: header `x-api-key`, uma chave por conta SuvSign. Sem chave ou com chave inválida: `401 invalid_api_key`.
+- Origem: `source: "seialz"` existe na lista aceita (`api | suvsign_web | seialz | seialz_mobile`). Sem divergência. Para o Mobile futuro existe `seialz_mobile`.
+- Pré-condição: regra live para (conta, `seialz`). Sem ela, `409 signing_engine_v2_not_enabled`.
+- Rotas:
+  - `POST /signing-operations`: header `Idempotency-Key` obrigatório. Respostas `201` / `200` (repetição) / `409 idempotency_conflict` / `400` / `422`.
+  - `POST /signing-operations/{id}/send`: só em draft. Devolve `signing_links[]`, ou `409 invalid_state`.
+  - `GET /signing-operations/{id}`: operação, documentos (`content_sha256`, `final_sha256`, `verification_code`) e participantes (`status`, `opened_at`, `signed_at`).
+  - `POST /signing-operations/{id}/cancel`: `409` se já estiver completed/completing/cancelled.
+  - `GET /signing-operations/{id}/documents/{docId}/download`: URL assinada válida por 300 s, ou `409 not_finalized`.
+- Modelos (API V1, confirmado no código, fora da spec V2): `GET /templates` e `GET /templates/{id}` com a mesma chave, devolvem roles e variables.
+- Conteúdo: o V2 recebe só `frozen_content` (páginas com blocos, `content` com HTML ou runs, `type`, `props.fontSize`). Não existe template+variables nem PDF no V2, então a resposta à pergunta A/B/C/D é B (conteúdo congelado).
+
+Exemplo real de criação:
+```json
+POST /signing-operations
+Idempotency-Key: seialz:<org_id>:<request_id>
+{ "source": "seialz", "external_id": "<signature_request_id>",
+  "metadata": { "organization_id": "...", "opportunity_id": "...", "contact_id": "...", "user_id": "...", "origin": "seialz_web" },
+  "participants": [{ "ref": "p1", "name": "Maria Silva", "email": "maria@ex.com", "phone": "+5511999990000", "cpf": "00000000000", "birth_date": null, "role": "signer", "order_index": 0 }],
+  "documents": [{ "ref": "d1", "title": "Contrato de Honorários", "frozen_content": { "pages": [{ "blocks": [ { "type": "paragraph", "content": "Contratante: Maria Silva, CPF ..." } ] }] },
+    "fields": [{ "participant_ref": "p1", "field_type": "signature", "page_number": 1, "position_x": 60, "position_y": 700, "width": 200, "height": 50, "is_required": true, "metadata": {} }] }] }
 ```
-- Não existe backend no envio: o navegador monta a URL com os dados pessoais na query string.
-- Só existe um ponto de uso: a página da oportunidade. Nenhum na página do contato.
+De onde vem cada campo:
 
-## B. Autopreenchimento atual
-Não existe merge no Seialz. Ele só envia um JSON, e a troca das variáveis acontece dentro da SuvSign (NÃO CONFIRMADO como ela faz).
+| Campo | Origem no Seialz |
+|---|---|
+| `participants[].name` | nome resolvido do contato (mesmo fallback da V1) |
+| `email`, `phone`, `cpf` | `contacts.email`, `contacts.phone`, `contacts.cpf` |
+| `external_id` | id da solicitação local |
+| `metadata` | só ids, sem dado pessoal |
+| texto do `frozen_content` | modelo da SuvSign + variáveis da seção E, substituídas no servidor |
 
-| Chave enviada | Origem | Transformação |
-|---|---|---|
-| client.firstName / lastName | contacts.first_name/last_name, com full_name dividido por espaço como reserva | trim |
-| client.email / phone | contacts.email / phone | trim |
-| custom.contact_id | id do contato | — |
-| custom.cpf, rg, rg_issuer, nationality | contacts | só entra se não estiver vazio |
-| custom.address_street/neighborhood/city/state/zip | contacts | só entra se não estiver vazio |
-| custom.deal_id / deal_title | opportunities.id / title | — |
-| custom.deal_amount | opportunities.amount | String() |
-| custom.deal_close_date | opportunities.close_date | data longa pt-BR |
+## B. Contrato SuvSign V2 -> Seialz
+- Eventos documentados: `document.sent`, `signatory.signed`, `document.completed`.
+  - `document.created`: não existe no V2. A confirmação vem da resposta 201.
+  - `document.cancelled`: não existe como evento. Cancelamento só pela resposta do `/cancel`.
+  - "Visualizado": não existe webhook. Só via `GET` (`opened_at`).
+- Headers:
+  - `X-Webhook-Event` / `X-SuvSign-Event`.
+  - `X-SuvSign-Delivery`: estável entre retries, é a chave de dedupe.
+  - `X-Webhook-Signature` = hex(HMAC-SHA256(secret, body)), formato legado igual à V1.
+  - `X-SuvSign-Signature` = hex(HMAC(secret, `${X-SuvSign-Timestamp}.${body}`)), com `X-SuvSign-Hmac-Version: 1`.
+- Payload: `{event, engine:"v2", timestamp, document_id, data:{operation_id, external_id, document_id, title, status, signed_file_url (só em completed), signatory{id,name,email,signed_at}, artifact{id,sha256}, documents[], ...metadata.custom}, document{id,status,signed_file_url,file_url}}`.
+- Retry: `min(3600, 30*2^(n-1))` s. Qualquer resposta fora de 2xx conta como falha.
+- NÃO CONFIRMADO: se `metadata` inteira vem no payload ou só `metadata.custom`. Por isso a correlação usa `operation_id`/`external_id`, nunca `deal_id`.
 
-O que não é enviado hoje: dados da organização, filial, responsável, campos customizados, produtos, honorários e forma de pagamento (nenhuma referência no código). Não há condicionais nem foreach, e o conteúdo não fica congelado no Seialz antes do envio.
+## C. Persistência local mínima
+Reaproveitado: `documents` (PDF final, dedup por `external_source='suvsign'` + `external_ref=<document_id V2>`), `activities` (timeline), `integration_inbound_events` (evento bruto + dedupe por `X-SuvSign-Delivery`).
 
-## C. Integração SuvSign atual na UI
-- Usa o fluxo genérico de integrações: `IntegrationsSettings.tsx`, `IntegrationConnectDialog.tsx` e `IntegrationDetailDialog.tsx`.
-- Cadastro em `admin_integrations` (slug `suvsign`). No banco: 2 orgs conectadas, as 2 ativas. Campos em `config_values`: `base_url`, `template_id`, `connector_id`, `webhook_secret`.
-- Conectar faz um upsert direto em `organization_integrations`, feito pelo navegador. Desconectar grava `is_enabled=false`.
-- Não existe botão "Testar conexão" para a SuvSign.
+O que não cabe no modelo atual: estado da operação, participantes, snapshot e hash. Por isso mantenho as duas tabelas:
+- `signature_requests`: org, opportunity, contact, created_by, `engine='suvsign_v2'`, `provider_operation_id` (único por org), `idempotency_key` (único), `status` (draft/sent/completed/cancelled), `snapshot` jsonb (frozen_content + variáveis resolvidas), `snapshot_sha256`, `provider_documents` jsonb, sent/completed/cancelled_at.
+- `signature_request_participants`: request, org, ref, name, email, phone, cpf, role, order_index, `provider_participant_id`, status, opened_at, signed_at.
+- Ambas com GRANT authenticated/service_role, RLS `organization_id = ANY(current_user_org_ids())` e escrita só pelo servidor.
 
-## D. Multi-tenancy
-- Tenant resolvido por `user_organizations`, `current_user_org_ids()` e RLS por `organization_id`. Documentação em `docs/audit/05-multi-tenancy.md`.
-- Envio atual: o navegador lê os dados sob RLS, mas o próprio navegador é quem monta o pedido. Não há autoridade do servidor.
-- Webhook: a org vem de `deal_id` (oportunidade), com checagem cruzada entre contato e org, mais o HMAC do connector daquela org.
+## D. Ponto central no backend
+Uma edge function `signature-requests` com ações de negócio (não é um proxy genérico):
+- `get_capability`
+- `list_templates`
+- `prepare_contract` (resolve dados e modelo, gera o snapshot)
+- `send_for_signature` (usa o snapshot salvo; create + send com Idempotency-Key derivada do id local)
+- `get_signature_status` (GET + sincronização local)
+- `cancel_signature`
+- `get_download_url`
 
-## E. Modelo de dados atual
-- `documents` tem `external_source` e `external_ref`, versionamento (`version`, `root_document_id`, `superseded_*`) e `content_hash`. Não tem status de assinatura, signatários nem `engine_version`.
-- `activities` guarda a timeline (`activity_type='system'`).
-- `integration_inbound_events` recebe um espelho (shadow) dos eventos SuvSign, com `handler_key='suvsign.v1'`.
-- `integration_events` guarda o outbox (Nammux).
-- No banco: 421 documentos SuvSign, o último em 24/09/2026.
+Autenticação por JWT via `_shared/auth.ts`, org resolvida no servidor e credencial lida só no servidor. O mesmo contrato serve para Web e Mobile.
 
-## F. Webhook atual (`suvsign-webhook`)
-- HMAC-SHA256 no header `x-webhook-signature`. O secret é por org: vem de `config_values.webhook_secret` do connector correspondente.
-- Só trata `document.completed`; os outros eventos voltam como "skipped".
-- Idempotência por (org, 'suvsign', id do documento no provedor), com proteção contra 23505.
-- `file_url`: só https e só hosts permitidos (suvsign.com(.br), amazonaws.com e o Storage do próprio projeto).
-- Grava o PDF assinado, registra a atividade e dispara o replay no Nammux.
-- Flag `inbox_v2.ingest.suvsign` (global ON): liga só a gravação espelho. O fluxo legado roda sempre.
+## E. Autopreenchimento, preview e snapshot
+1. `prepare_contract`: o servidor lê o contato e a oportunidade e aplica exatamente as transformações da V1 (fallback de nome, trim, `deal_amount` String, `deal_close_date` longa pt-BR). Busca `GET /templates/{id}`, substitui as variáveis e grava `snapshot` + `snapshot_sha256` em uma solicitação `draft`. Campos ausentes voltam listados, com as mesmas 12 obrigatoriedades da V1.
+2. O preview renderiza o próprio `snapshot` gravado, não os dados atuais.
+3. `send_for_signature` só aceita `snapshot_sha256` igual ao exibido. Envia esse mesmo `frozen_content` e compara com o `content_sha256` devolvido.
+4. Conteúdo imutável: mudou algo no CRM, é preciso um novo `prepare`, que gera outra solicitação.
+- NÃO CONFIRMADO: formato interno do conteúdo do modelo V1 (`file_url` JSON) e a sintaxe das variáveis. Verifico no primeiro passo da implementação. Não bloqueia, porque o endpoint existe e devolve `variables`.
 
-## G. Nova experiência (proposta)
-Um painel lateral dentro da oportunidade, em 4 passos: documento/modelo, conferir os dados já preenchidos, signatários, preview. O envio passa pelo backend do Seialz e o operador não sai da tela. A partir daí o painel mostra: Enviado, Visualizado (só com evento real), Assinado por participante, Concluído, PDF, download e timeline. "Entregue" só aparece se houver confirmação real.
+## F. Webhook V2 (extensão de `suvsign-webhook`)
+- A rota V2 é escolhida quando `engine==="v2"` e `data.operation_id` existe em `signature_requests`. A org vem dessa linha, não do payload. Qualquer outro caso segue o caminho V1, byte a byte igual.
+- HMAC: aceita `X-SuvSign-Signature` (timestamp) e, como reserva, `X-Webhook-Signature`, com o secret V2 da org.
+- Por evento:
+  - `document.sent`: status `sent` + atividade.
+  - `signatory.signed`: participante `signed` + atividade.
+  - `document.completed`: reaproveita o fluxo atual (host permitido `vpysvlbfsvomwrgbpybc.supabase.co`, que já está na allowlist; Storage; `documents`; `activities`; Nammux via `ensureContactContractOwnershipAndDelivery`), com `external_ref = document_id` V2.
+- Dedupe por `X-SuvSign-Delivery`.
 
-## H. Ponto central no backend
-Uma edge function nova, `suvsign-v2`, com o mesmo contrato para Web e Mobile. Credencial e `organization_id` são resolvidos no servidor a partir do JWT (`_shared/auth.ts`). O webhook existente é estendido para rotear V1 ou V2. Nenhuma chave vai para o navegador.
+## G. Credencial
+- Campos novos no cadastro `suvsign`: chave de API V2 e webhook secret V2.
+- Gravação e leitura só pelo servidor, com `_shared/integration-credentials.ts` (AES-GCM). O navegador recebe apenas "configurado / ****".
+- "Testar conexão": `GET /templates` (espera 200; se vier 401, a chave é inválida).
+- O `webhook_secret` da V1 continua como está. Fica registrado como dívida técnica separada.
 
-## I / J. Contratos com o SuvSign V2
-NÃO CONFIRMADO. Este repositório não tem a especificação da API V2: endpoints, autenticação, formato de campos e eventos. Não vou documentar nada de memória.
+## H. Coexistência, rollout e rollback
+- Precedência da flag (confirmada no banco): `fn_feature_flag_enabled` usa primeiro a linha da org, depois a global, e na falta das duas devolve false.
+- Flag `signing.suvsign_v2`: global false, ligada só na org escolhida.
+- Ordem para habilitar: credencial V2, regra live SuvSign (conta + `seialz`), teste de conexão, e só então a flag.
+- Rollback: desligar a flag (novos envios voltam à V1) e depois a regra live. Solicitações V2 existentes continuam identificadas pelo `provider_operation_id` e recebendo webhook, porque o dispatcher não depende da regra.
+- Se a flag estiver ON e a regra OFF, o `409 signing_engine_v2_not_enabled` vira a mensagem clara "V2 não habilitado na SuvSign". Não há volta silenciosa para a V1.
 
-## K. Persistência: o que existe e o que falta
-- Reaproveitado: `documents` para o PDF final (dedup atual), `activities` para a timeline, `integration_inbound_events` para os eventos.
-- Falta, e o modelo atual não suporta:
-  - estado da solicitação de assinatura (operação, status, id externo, snapshot/hash do conteúdo enviado);
-  - estado por signatário.
-- Proposta: uma tabela `signature_requests` e uma `signature_request_participants`, ambas com RLS por org. A decisão final depende da API V2.
+## I. Tela interna
+Um painel lateral (`Sheet` existente), aberto pelo mesmo botão quando a capability está ON:
+1. Documento (lista de modelos; aceita vários documentos).
+2. Dados (preenchimento automático + campos faltando, com link para o contato).
+3. Signatários (nome, email, telefone, CPF, papel, ordem sequencial opcional).
+4. Preview do snapshot.
 
-## L. Coexistência V1/V2
-- Mecanismo existente: `integration_feature_flags` + `fn_feature_flag_enabled`, com override por org (a ordem de precedência está NÃO CONFIRMADA).
-- Proposta: uma flag nova `signing.suvsign_v2`, lida pelo backend, que devolve uma "capability" à UI. Um único ponto de decisão, sem `if v2` espalhado e sem o usuário escolher.
-- Com a flag OFF, o botão atual continua idêntico.
-- A regra da própria SuvSign (conta + source `seialz`) precisa bater com a flag. Fonte de verdade proposta: a flag do Seialz decide o envio; a SuvSign só recusa quando a conta não estiver habilitada.
+CTA "Enviar para assinatura". Depois vira acompanhamento: Enviado, Visualizado (via `opened_at`), Assinado por participante, Concluído, Cancelado, e PDF/download. Nada de "Entregue".
 
-## M. Configuração na tela de Integrações
-Continuar no mesmo cadastro `suvsign`, com campos V2 (chave de API) guardados de forma criptografada através de uma edge function. Não gravar pelo navegador em `config_values`. Adicionar "Testar conexão".
+## J. Arquivos
+- Novos: migration (2 tabelas + flag OFF), `supabase/functions/signature-requests/index.ts`, `supabase/functions/_shared/suvsign-v2/{client,prepare,credentials}.ts`, `src/components/signature/v2/{SignatureRequestSheet,SignatureRequestTimeline}.tsx`, `src/hooks/useSignatureCapability.ts`, `useSignatureRequests.ts`, docs `docs/integrations/suvsign/v2.md`, ADR 0011 do Seialz, `catalog.md`.
+- Alterados: `suvsign-webhook/index.ts` (ramo V2), `SendToSignatureButton.tsx` (só a decisão pela capability), `OpportunityDetail.tsx` (timeline), a tela de detalhe da integração (campos V2 mascarados + testar).
 
-## N. Segurança — gaps atuais
-1. `webhook_secret` fica em texto puro em `config_values` e é gravado pelo navegador.
-2. Dados pessoais (CPF/RG/endereço) viajam na URL da SuvSign pelo `window.open`.
-3. O envio não passa pela validação do servidor.
+## K. Plano de implementação
+1. Persistência + flag OFF: migration e testes de RLS com duas orgs.
+2. Credencial: salvar/testar pelo servidor, criptografada; confirmar que o navegador não lê a chave.
+3. Backend `signature-requests`: prepare/send/status/cancel/download; testes Deno (idempotência, cross-org 403, 409 traduzido).
+4. Webhook V2: ramo por `operation_id`; teste de regressão V1 com um payload real.
+5. UI: painel lateral + acompanhamento, tudo atrás da capability.
+6. Rollout: org controlada, ciclo completo real, depois rollback.
 
-## O. Arquivos envolvidos
-`src/components/signature/SendToSignatureButton.tsx`, `src/pages/opportunities/OpportunityDetail.tsx`, `src/components/settings/Integration{sSettings,ConnectDialog,DetailDialog}.tsx`, `supabase/functions/suvsign-webhook/index.ts`, `_shared/feature-flags.ts`, `_shared/integration-credentials.ts`, `_shared/auth.ts`, `docs/decisions/0010-post-win-document-sync.md`.
+## L. Critérios de aceite
+- A nunca acessa solicitações de B.
+- A chave nunca chega ao navegador.
+- Nenhum dado pessoal em query string na V2.
+- Com a capability OFF, V1 idêntica.
+- Pelo menos paridade com o mapa atual de preenchimento.
+- Preview e envio com o mesmo `snapshot_sha256`.
+- Retry ou clique duplo não duplica a operação.
+- Webhook duplicado não duplica timeline nem documento.
+- Status real por signatário.
+- Vários documentos representáveis.
+- `document.completed` salva o PDF.
+- O rollback preserva as solicitações existentes.
+- O mobile consome o mesmo backend.
 
-## P. Gaps reais
-- Especificação da API V2 ausente no repo.
-- Sem merge, preview ou snapshot no Seialz.
-- Sem estado de assinatura.
-- Secret em texto puro.
-- Webhook só trata `completed`.
-- Sem teste de conexão.
-- Dados de organização/responsável/produto/honorários não entram no contrato hoje.
+## M. Lacunas restantes (nenhuma bloqueia a implementação)
+- Formato do conteúdo do modelo V1 e sintaxe das variáveis: validar no passo 3.
+- Sem webhook de visualizado ou cancelado: status vem de polling/resposta.
+- Posição dos campos de assinatura no `frozen_content` precisa vir do modelo (NÃO CONFIRMADO onde a V1 guarda).
+- Payload traz só `metadata.custom`: correlação por `operation_id`.
+- Regra live SuvSign e piloto dependem do lado SuvSign.
 
-## Q. Plano único de implementação (depois do desbloqueio)
-1. Receber a especificação da API V2 e registrar em `docs/integrations/suvsign/`.
-2. Migration com `signature_requests` + participantes (GRANT, RLS por org) e a flag `signing.suvsign_v2` OFF.
-3. Guardar a credencial V2 criptografada (`integration-credentials.ts`) e criar "Testar conexão".
-4. Edge function `suvsign-v2` com as ações: `prepare` (monta os dados do CRM no servidor, mesmo mapa da seção B), `preview`, `send` (congela o snapshot e o hash), `status`, `cancel`.
-5. Webhook: roteia V2 por id externo e trata os eventos V2. O caminho V1 fica intacto.
-6. Painel lateral na oportunidade, que aparece só com a capability ativa.
-7. Docs, catálogo e ADR.
-
-## R. Critérios de aceite
-- Com a flag OFF, V1 fica idêntico.
-- Nenhum `organization_id` vem do cliente.
-- Preview igual ao documento assinado (mesmo hash).
-- Nenhum dado redigitado.
-- Webhook idempotente.
-- PDF final nos documentos.
-- Nenhum status "Entregue" sem evento real.
-
-## S. Primeiro rollout
-Uma org controlada, com a flag ligada só para ela, contato e oportunidade de teste. Roteiro: envio pela UI, assinatura em `/s/:token`, webhook, timeline e PDF. Rollback: desligar a flag.
-
-## T. Decisão
-`BLOQUEADO` — falta a especificação real da API V2 da SuvSign (itens I/J). Com ela em mãos, o plano acima está pronto para implementar.
+## N. Decisão
+`PRONTO PARA IMPLEMENTAR ENVIO SUVSIGN V2 DENTRO DO SEIALZ WEB`
