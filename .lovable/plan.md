@@ -3,14 +3,24 @@
 O modo atual só me deixa agir depois da sua aprovação. Ao aprovar, executo tudo abaixo direto e só volto com o relatório final nos 10 itens pedidos.
 
 ## 1. Resend — `delivered_at` ponta a ponta
-Configuração manual no painel do Resend (o segredo não passa pelo chat):
-- Resend → Webhooks → Add Endpoint
-- URL: `https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/resend-webhook-handler`
-- Eventos: `email.sent`, `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained`, `email.opened`. Se o handler só tratar parte deles, o relatório lista os eventos exatos.
-- Signing Secret: abra o endpoint criado → "Signing Secret" → Reveal/Copy (começa com `whsec_`).
-- Supabase → Edge Functions → Secrets: `RESEND_WEBHOOK_SECRET` = o valor copiado.
+Antes de mexer em qualquer configuração, confiro nesta ordem:
+1. No código: se a V1 já usa `resend-webhook-handler` e como ele valida o secret.
+2. No banco e nos logs: se ele já recebe eventos do Resend em produção.
+3. Se já existe endpoint configurado para `https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/resend-webhook-handler`.
+4. Se `RESEND_WEBHOOK_SECRET` já existe no ambiente (confiro só se existe, sem ler o valor).
 
-Execução: antes de tudo, confiro no código a URL, a lista de eventos e o nome do secret. Se o secret ainda não existir, paro nesse ponto e reporto BLOQUEADO com as instruções acima. Se existir, sigo esta ordem: convite V2 real, depois conferência de `resend_email_id`, Svix válido, `provider_event_id`, `applied=true`, `delivered_at`, replay sem duplicar, contador "Entregue" de 0 para 1, `opened` diferente de `document_viewed` e V1 sem mudança.
+O que faço em cada caso:
+- **Endpoint já existe:** reuso o atual, sem criar outro e sem trocar o secret. Só confirmo que `email.delivered` e os demais eventos da V2 estão ligados. O handler passa a separar V1 e V2 pelo `resend_email_id`, e a V1 continua exatamente igual.
+- **Endpoint não existe:** paro e te passo as instruções abaixo. Você cola o secret direto no Supabase, sem passar pelo chat.
+- **Vários endpoints com secrets diferentes:** paro e te mostro a situação exata, sem alterar nada.
+
+Instruções (só se for preciso criar):
+- Resend → Webhooks → Add Endpoint, com a URL acima.
+- Eventos: `email.sent`, `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained`, `email.opened`.
+- Signing Secret: no endpoint → Reveal/Copy (começa com `whsec_`).
+- Supabase → Edge Functions → Secrets: `RESEND_WEBHOOK_SECRET`.
+
+Com isso resolvido, faço o teste: convite V2 real e conferência de `resend_email_id`, Svix válido, `provider_event_id`, `applied=true`, `delivered_at`, replay sem duplicar, contador "Entregue" de 0 para 1, `opened` diferente de `document_viewed` e V1 sem mudança.
 
 ## 2. HMAC com um único webhook QA
 - Desativar os webhooks QA duplicados e criar um único webhook QA com um único secret conhecido pelo sink.
