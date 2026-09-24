@@ -7,7 +7,7 @@ import { encryptSecret } from "../_shared/crypto.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
 import {
-  canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, friendlyTemplateError, loadV2Credentials,
+  canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, findUnresolvedPlaceholders, friendlyTemplateError, loadV2Credentials,
   mapOperationStatus, sha256Hex, SIGNING_V2_FLAG, suvsignFetch,
 } from "../_shared/suvsign-v2.ts";
 
@@ -167,7 +167,7 @@ Deno.serve(async (req) => {
         // 2) CRM (paridade SendToSignatureButton)
         if (!opp.contact_id) return fail("contact_required", "Oportunidade sem contato");
         const { data: contact } = await userDb.from("contacts")
-          .select("id, full_name, first_name, last_name, email, phone, cpf, rg, rg_issuer, nationality, address_street, address_neighborhood, address_city, address_state, address_zip")
+          .select("id, full_name, first_name, last_name, email, phone, cpf, rg, rg_issuer, nationality, address_street, address_number, address_neighborhood, address_city, address_state, address_zip")
           .eq("id", opp.contact_id).maybeSingle();
         if (!contact) return fail("contact_not_found", "Contato não encontrado", 404);
         const v = (s: unknown) => (typeof s === "string" ? s : s == null ? "" : String(s)).trim();
@@ -187,6 +187,12 @@ Deno.serve(async (req) => {
         for (const k of ["cpf", "rg", "rg_issuer", "nationality", "address_street", "address_neighborhood", "address_city", "address_state", "address_zip"]) {
           if (v((contact as Any)[k])) custom[k] = v((contact as Any)[k]);
         }
+        // Aliases aditivos p/ templates legados (chaves atuais preservadas).
+        const num = v((contact as Any).address_number);
+        custom.Endereco = num ? `${v(contact.address_street)}, ${num}` : v(contact.address_street);
+        custom.Bairro = v(contact.address_neighborhood); custom.Cidade = v(contact.address_city); custom.Estado = v(contact.address_state);
+        const zipDigits = v(contact.address_zip).replace(/\D/g, "");
+        custom.CEP = zipDigits.length === 8 ? `${zipDigits.slice(0, 5)}-${zipDigits.slice(5)}` : v(contact.address_zip);
         custom.deal_id = opp.id; custom.deal_title = opp.title ?? "";
         if (opp.amount) custom.deal_amount = String(opp.amount);
         if (opp.close_date) custom.deal_close_date = new Date(`${opp.close_date}T00:00:00`).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
@@ -221,6 +227,8 @@ Deno.serve(async (req) => {
 
         const ctx = { roles: roleData, contact: client, deal: {}, custom, templateName: t.body.name ?? "", now: new Date() };
         const frozen = fillFrozenContent(def.frozen_content, ctx);
+        const unresolvedVars = findUnresolvedPlaceholders(frozen, Object.keys(roleData));
+        if (unresolvedVars.length) return fail("unresolved_template_variables", `Variáveis do modelo sem valor: ${unresolvedVars.join(", ")}`, 422, { unresolved_variables: unresolvedVars });
         const refs = new Set(participants.map((p) => p.ref));
         const fields = (def.fields ?? []).filter((f: Any) => refs.has(f.template_signatory_ref)).map((f: Any) => ({
           participant_ref: f.template_signatory_ref, field_type: f.field_type, label: f.label ?? null, page_number: f.page_number,
