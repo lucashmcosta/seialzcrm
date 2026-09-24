@@ -247,6 +247,15 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Coexistência V1/V2: eventos do Signing Engine V2 pertencem ao suvsign-v2-webhook.
+  // Guard defensivo — V1 nunca processa payload V2 (nenhuma outra mudança no V1).
+  if (payload?.engine === "v2") {
+    return new Response(JSON.stringify({ ok: true, skipped: true, reason: "v2_event_use_suvsign_v2_webhook" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   // Only handle document.completed
   if (payload.event !== "document.completed") {
     return new Response(JSON.stringify({ ok: true, skipped: true }), {
