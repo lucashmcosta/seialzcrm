@@ -1,0 +1,1 @@
+insert into public.integration_feature_flags(flag_key, organization_id, enabled) values ('signing.suvsign_v2','40ae935c-a7f7-4ad7-8ea4-91be6404a95f',true);
