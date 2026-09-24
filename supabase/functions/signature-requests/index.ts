@@ -7,7 +7,7 @@ import { encryptSecret } from "../_shared/crypto.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
 import {
-  canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, friendlyTemplateError, loadV2Credentials,
+  canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, findUnresolvedPlaceholders, friendlyTemplateError, loadV2Credentials,
   mapOperationStatus, sha256Hex, SIGNING_V2_FLAG, suvsignFetch,
 } from "../_shared/suvsign-v2.ts";
 
