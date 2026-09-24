@@ -146,3 +146,11 @@ port = 54423
 port = 54424
 [analytics]
 port = 54427
+
+# SuvSign V2 — JWT do usuário validado em código (auth.getUser + RLS da oportunidade)
+[functions.signature-requests]
+verify_jwt = false
+
+# SuvSign V2 webhook — público por necessidade (provedor externo); autenticidade por HMAC do secret V2 da org
+[functions.suvsign-v2-webhook]
+verify_jwt = false

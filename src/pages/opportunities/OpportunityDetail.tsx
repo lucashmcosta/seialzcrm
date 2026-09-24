@@ -34,7 +34,7 @@ import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
 import { transitionOpportunityStage } from '@/lib/opportunityClose';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
-import { SendToSignatureButton } from '@/components/signature/SendToSignatureButton';
+import { ContractSignatureEntry } from '@/components/signature/ContractSignatureEntry';
 import { TagSelector } from '@/components/common/TagSelector';
 import { NammuxOpportunityTab } from '@/components/opportunities/NammuxOpportunityTab';
 
@@ -573,7 +573,7 @@ export default function OpportunityDetail() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span>
-                          <SendToSignatureButton
+                          <ContractSignatureEntry
                             contactId={opportunity.contact_id}
                             opportunityId={opportunity.id}
                             size="icon"
