@@ -34,7 +34,7 @@ import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
 import { transitionOpportunityStage } from '@/lib/opportunityClose';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
-import { ContractSignatureEntry } from '@/components/signature/ContractSignatureEntry';
+import { ContractSignatureEntry, useSignatureV2Pilot } from '@/components/signature/ContractSignatureEntry';
 import { TagSelector } from '@/components/common/TagSelector';
 import { NammuxOpportunityTab } from '@/components/opportunities/NammuxOpportunityTab';
 
@@ -577,6 +577,7 @@ export default function OpportunityDetail() {
                             contactId={opportunity.contact_id}
                             opportunityId={opportunity.id}
                             size="icon"
+                            hidePilot
                           />
                         </span>
                       </TooltipTrigger>
@@ -616,6 +617,15 @@ export default function OpportunityDetail() {
                             Reabrir
                           </DropdownMenuItem>
                         )}
+                        {v2Pilot.available && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={v2Pilot.openSheet}>
+                              <PenNib className="h-4 w-4 mr-2" />
+                              Enviar contrato V2 (Piloto)
+                            </DropdownMenuItem>
+                          </>
+                        )}
                         {opportunity.status === 'won' && permissions.canManageIntegrations && (
                           <>
                             <DropdownMenuSeparator />
@@ -628,6 +638,7 @@ export default function OpportunityDetail() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
+                  {v2Pilot.sheet}
 
                   <div className="h-6 w-px bg-border mx-1" />
 
