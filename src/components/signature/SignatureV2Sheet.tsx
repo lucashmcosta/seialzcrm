@@ -141,9 +141,11 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
   // ---------- Lista (coluna esquerda) ----------
   const listCol = (
     <div className="flex flex-col min-h-0 gap-2">
-      {canCreate && <Button className="w-full justify-center" onClick={() => { setTemplateIds([]); setSigners({}); setStep('template'); }}><Plus className="h-4 w-4 mr-2" />Novo envio</Button>}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Solicitações</p>
+        {canCreate && <Button size="sm" className="h-8 px-3" onClick={() => { setTemplateIds([]); setSigners({}); setStep('template'); }}><Plus className="h-3.5 w-3.5 mr-1.5" />Novo envio</Button>}
+      </div>
       {!canCreate && <p className="text-xs text-muted-foreground">Novos envios usam o fluxo atual. Os envios abaixo continuam acompanháveis.</p>}
-      <p className="text-xs font-medium text-muted-foreground pt-2">Solicitações</p>
       {cap.isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
       {!cap.isLoading && requests.length === 0 && <p className="text-sm text-muted-foreground py-6 text-center">Nenhum envio por este fluxo ainda.</p>}
       <div className="flex flex-col gap-1">
@@ -151,8 +153,8 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
           const titles = docTitlesOf(r); const main = participantsOf(r)[0];
           const active = r.id === selectedId;
           return (
-            <button key={r.id} type="button" onClick={() => { setSelectedId(r.id); setMobileDetail(true); }}
-              className={`text-left rounded-[6px] px-3 py-2.5 border transition-colors ${active ? 'border-primary bg-muted' : 'border-transparent hover:bg-muted'}`}>
+            <button key={r.id} type="button" aria-pressed={active} onClick={() => { setSelectedId(r.id); setMobileDetail(true); }}
+              className={`relative text-left rounded-[6px] pl-3.5 pr-3 py-2 transition-colors ${active ? 'bg-muted before:absolute before:left-0 before:top-2 before:bottom-2 before:w-0.5 before:rounded-full before:bg-primary' : 'hover:bg-muted'}`}>
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm font-medium truncate">{titles.join(' + ')}</p>
                 <StatusBadge status={r.status} />
@@ -251,8 +253,8 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
 
         {step === 'list' && (
           <div className="flex-1 min-h-0 flex overflow-hidden">
-            <aside className={`${mobileDetail ? 'hidden' : 'flex'} md:flex w-full md:w-[300px] shrink-0 flex-col border-r border-border p-4 overflow-y-auto scrollbar-hide`}>{listCol}</aside>
-            <main className={`${mobileDetail ? 'block' : 'hidden'} md:block flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-hide p-5`}>
+            <aside data-sv2="list" className={`${mobileDetail ? 'hidden' : 'flex'} md:flex w-full md:w-[320px] shrink-0 flex-col border-r border-border p-4 overflow-y-auto scrollbar-hide`}>{listCol}</aside>
+            <main data-sv2="detail" className={`${mobileDetail ? 'block' : 'hidden'} md:block flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-hide p-6`}>
               <Button variant="ghost" size="sm" className="md:hidden mb-3 -ml-2" onClick={() => setMobileDetail(false)}><ArrowLeft className="h-4 w-4 mr-1" />Voltar</Button>
               {selected ? detail(selected) : <p className="text-sm text-muted-foreground">Selecione uma solicitação ou crie um novo envio.</p>}
             </main>
