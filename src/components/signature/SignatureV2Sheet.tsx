@@ -330,7 +330,7 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                   {templateList.map((t: any) => {
                     const checked = templateIds.includes(t.id); const ok = !!t.v2_compatible;
                     const sub = !ok ? `Incompatível${(t.v2_unsupported_features ?? []).length ? `: ${t.v2_unsupported_features.join(', ')}` : ''}`
-                      : t.description ?? (t.page_count != null ? plural(t.page_count, 'página', 'páginas') : null);
+                      : (isFriendlyDescription(t.description) ? t.description : null) ?? (t.page_count != null ? plural(t.page_count, 'página', 'páginas') : null);
                     return (
                       <button key={t.id} type="button" disabled={!ok} role="checkbox" aria-checked={checked}
                         onClick={() => { setTemplateIds((ids) => ids.includes(t.id) ? ids.filter((x) => x !== t.id) : [...ids, t.id]); setUnresolved([]); }}
@@ -464,4 +464,13 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
       </DialogContent>
     </Dialog>
   );
+}
+
+// Esconde descrições técnicas (UUID ou código sem espaço com ':'/'-', ex.: qa-legacy-copy-of:<uuid>). Só apresentação.
+function isFriendlyDescription(d: unknown): d is string {
+  if (typeof d !== 'string' || !d.trim()) return false;
+  const s = d.trim();
+  if (/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(s)) return false;
+  if (!/\s/.test(s) && /[:\-_]/.test(s)) return false;
+  return true;
 }
