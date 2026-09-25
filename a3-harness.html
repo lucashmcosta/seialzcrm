@@ -1,8 +1,0 @@
-<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body><div id="r"></div>
-<script type="module">
-import React from 'react'; import { createRoot } from 'react-dom/client'; import '/src/index.css';
-import { FrozenDocumentPreview } from '/src/components/signature/FrozenDocumentPreview.tsx';
-const fc = await (await fetch('/__a3_fc.json')).json();
-createRoot(document.getElementById('r')).render(React.createElement('div',{style:{display:'flex',height:'100vh'}},
- React.createElement('aside',{style:{width: innerWidth<768?0:240}}), React.createElement(FrozenDocumentPreview,{frozen:fc,resetKey:0})));
-</script></body></html>
