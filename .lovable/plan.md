@@ -1,51 +1,50 @@
-# E2E V2 — diagnóstico do preview (request `a699c424-786f-4122-8537-4f670afc728b`)
+# SuvSign V2 — seleção dinâmica e multidocumento
 
-Nada foi alterado nem enviado. Status do request: preparado, sem `provider_operation_id`, `sent_at` nulo.
+Escopo: somente o painel V2 (piloto) e a Edge `signature-requests`. Não mudam: V1 e o botão V1, a SuvSign, o webhook V2, o Nammux, o renderer, as credenciais e as flags. Nenhuma operação real será criada ou enviada.
 
-## 1. Dados no CRM (contato `c90e9e78…`, Joao Teste)
+## Achados (lidos no código)
+- **Hardcode: NÃO.** `SignatureV2Sheet` chama `list_templates`, que faz `GET /templates` na SuvSign e mostra o retorno. Não há template_id, nome ou ref fixo no painel nem na Edge. Só existe a seleção única (`templateId` string).
+- `prepare_contract` recebe hoje só `template_id` e monta `documents: [d1]`. `send_for_signature` já envia `s.documents` inteiro em UMA operação, com `Idempotency-Key` fixa.
+- O webhook V2 já grava um `documents` por `data.document_id` (dedupe por `external_ref`). `get_download_url` e a lista de concluídos já funcionam por documento. Com isso, a persistência separada dos PDFs não precisa de mudança.
 
-| Campo | Valor no CRM |
-|---|---|
-| address_street | Rua teste (address_number vazio) |
-| address_neighborhood | Bairro Teste |
-| address_city | Cidade Teste |
-| address_state | SP |
-| address_zip | 12345600 |
+## 1. Painel "Escolha os documentos" (multiseleção)
+- Lista com checkbox, vinda só de `list_templates`. Templates com `v2_compatible=false` aparecem desabilitados, com o motivo (`v2_unsupported_features`).
+- Sem limite artificial de quantidade.
+- O preview abre em abas: "Documento 1 — <nome>", "Documento 2 — …", com um aviso claro de que é uma única solicitação.
+- O botão mostra a quantidade: "Enviar N documentos para assinatura" (singular quando for 1).
+- No acompanhamento: status geral, participantes com status e a lista de documentos da operação (título, status e baixar quando concluído).
 
-Os dados existem. O caso A está descartado.
+## 2. `prepare_contract` com `template_ids: string[]`
+- Aceita `template_ids` (1..N, sem duplicatas, cada id ≤100). `template_id` continua aceito como `[template_id]`, por compatibilidade.
+- Busca o CRM e valida os campos obrigatórios uma vez só.
+- Para cada template, em ordem:
+  1. busca a `v2_definition`; qualquer 422/404 bloqueia tudo e informa qual template falhou;
+  2. resolve os roles para participantes reais;
+  3. preenche o `frozen_content`;
+  4. bloqueia placeholders não resolvidos, informando o documento;
+  5. filtra os `fields` oficiais.
+- Participantes são unificados entre os documentos pela chave e-mail + ref. O cliente é sempre o mesmo participante, e cada field aponta para o `participant_ref` unificado.
+- Snapshot `version: 2`, com `templates: [{id,name,layout_mode,coordinate_system}]`, `participants` e `documents: [{ref:"d1".."dN", title, template_id, frozen_content, fields}]`. O `snapshot_sha256` cobre o snapshot inteiro.
+- Cria UMA `signature_request`. `template_id` guarda o primeiro template e `template_name` os nomes juntos ("A + B"); as colunas não mudam.
+- `get_preview` e `send_for_signature` não mudam, porque já usam o snapshot inteiro. A atividade de envio passa a citar os N documentos.
 
-## 2–3. Mapa CRM → chave Seialz → variável do template → valor final
+## 3. Idempotência
+- Clique duplo: o botão fica travado durante o envio, e o servidor mantém `status !== draft → already` e a `Idempotency-Key` fixa.
+- Webhook: continua o dedupe atual (`external_ref` por documento e activity por `source_external_id`). Uma operação de 3 documentos gera exatamente 3 documentos locais.
 
-| CRM | Chave gerada no snapshot (`variables.custom`) | Variável do template | Valor final no snapshot |
-|---|---|---|---|
-| address_street | `address_street` = "Rua teste" | `Custom.Endereco` | `[Custom.Endereco]` literal |
-| address_neighborhood | `address_neighborhood` = "Bairro Teste" | `Custom.Bairro` | `[Custom.Bairro]` literal |
-| address_city | `address_city` = "Cidade Teste" | `Custom.Cidade` | `[Custom.Cidade]` literal |
-| address_state | `address_state` = "SP" | `Custom.Estado` | `[Custom.Estado]` literal |
-| address_zip | `address_zip` = "12345600" | `Custom.CEP` | `[Custom.CEP]` literal |
+## 4. Assinatura única (item 5 do pedido)
+Pelo contrato V2 já publicado, a operação é multi-documento e o participante assina uma única vez. Nada muda na SuvSign. [INCERTO] vou citar o trecho do contrato no relatório; se não estiver explícito, marco como pendente de confirmação no E2E.
 
-`frozen_content` contém exatamente 10 placeholders não resolvidos: esses 5, nas páginas 1 e 2.
+## 5. Testes (sem operação real)
+- Testes Deno do agrupamento: 2 templates → 1 snapshot com 2 documentos, participantes unificados, hash estável, e um placeholder faltando bloqueia.
+- Chamada real de `list_templates` na Central, só leitura, para contar os templates ativos na conta QA.
+- Deploy de `signature-requests` e confirmação de build OK.
+- Se houver só 1 template ativo: `MULTISELECT IMPLEMENTADO — E2E MULTIDOCUMENTO AGUARDA SEGUNDO TEMPLATE QA`.
 
-## 4. Caso: B
+## 6. Documentação
+Atualizar `docs/integrations/suvsign-v2.md` (multidocumento, snapshot v2) e `roadmap.md`.
 
-`applyVariables` (`_shared/suvsign-v2.ts`, linha 117) só substitui `[Custom.<chave>]` quando a chave existe em `custom`. Hoje o `prepare_contract` (`signature-requests/index.ts`, linhas 186–189) grava as chaves com os nomes das colunas do CRM (`address_street`, `address_zip`…). Já o template usa `Endereco`, `Bairro`, `Cidade`, `Estado` e `CEP`. Por isso nenhuma das cinco chaves bate e os placeholders ficam no texto. Nome, CPF e e-mail foram resolvidos porque o template usa variáveis que batem com as chaves geradas.
-
-## 5. Por que a validação deixou passar
-
-- `missing_contact_fields` (linhas 182–184) só confere se o CRM tem os dados. Esses dados existem, então a checagem passa.
-- Depois da substituição, nada verifica se sobrou algum `[Custom.*]`, `[Client.*]`, `[Contact.*]` ou `[Deal.*]` no `frozen_content`. O snapshot é congelado mesmo com placeholders.
-
-## Correção proposta (aguardando aprovação; não aplicada)
-
-1. No `prepare_contract`, incluir em `custom` os apelidos que o template usa:
-   - `Endereco` = rua (e número, se houver);
-   - `Bairro`, `Cidade`, `Estado`;
-   - `CEP` = 8 dígitos formatados como 00000-000.
-
-   As chaves atuais continuam iguais.
-2. Depois de `applyVariables`, bloquear a preparação quando sobrar placeholder no conteúdo. A resposta seria 422 `unresolved_template_variables`, com a lista de variáveis, e nenhum snapshot seria gravado.
-3. Descartar o request `a699c424…` (nunca enviado) e preparar de novo pelo mesmo botão V2. Conferir no preview que os 5 campos aparecem preenchidos antes de enviar.
-
-Template, SuvSign, V1 e Nammux não mudam, e não há fallback para V1.
-
-`CAUSA IDENTIFICADA — o Seialz grava o endereço com chaves do CRM (address_street, address_neighborhood, address_city, address_state, address_zip), mas o template espera Custom.Endereco/Bairro/Cidade/Estado/CEP; não há checagem de placeholders não resolvidos antes de congelar o snapshot`
+## Detalhes técnicos
+- Arquivos: `supabase/functions/signature-requests/index.ts` (prepare_contract e texto da activity), `src/components/signature/SignatureV2Sheet.tsx`. Opcionalmente, um helper puro em `_shared/suvsign-v2.ts` para unificar participantes e montar documentos, com teste.
+- Sem migration: `snapshot` é jsonb e `provider_documents` já é uma lista.
+- Relatório final no formato pedido (hardcode, listagem, multiselect, prepare, snapshot, operação única, acompanhamento, PDFs separados, nº de templates, build/deploy).
