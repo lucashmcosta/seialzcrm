@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowClockwise, ArrowLeft, CheckCircle, DownloadSimple, PaperPlaneTilt, Plus, WarningCircle, X } from '@phosphor-icons/react';
+import { ArrowClockwise, ArrowLeft, Check, DownloadSimple, FileText, Plus, WarningCircle } from '@phosphor-icons/react';
 import { callSignatureRequests, SignatureApiError, SIGNATURE_STATUS_LABEL, PARTICIPANT_STATUS_LABEL } from '@/lib/signatureRequestsApi';
 
 interface Props { open: boolean; onOpenChange: (o: boolean) => void; opportunityId: string; canCreate: boolean }
@@ -30,9 +30,41 @@ const docTitlesOf = (r: any): string[] => {
 };
 const relevantDate = (r: any) => r.completed_at ?? r.cancelled_at ?? r.sent_at ?? r.created_at;
 
+const STATUS_TONE: Record<string, { pill: string; dot: string }> = {
+  sent: { pill: 'bg-info/10 text-info', dot: 'bg-info' },
+  completing: { pill: 'bg-info/10 text-info', dot: 'bg-info' },
+  in_progress: { pill: 'bg-warning/15 text-warning', dot: 'bg-warning' },
+  completed: { pill: 'bg-success/15 text-success', dot: 'bg-success' },
+  cancelled: { pill: 'bg-muted text-muted-foreground', dot: 'border border-muted-foreground' },
+  draft: { pill: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground' },
+};
 function StatusBadge({ status }: { status: string }) {
-  const variant = status === 'completed' ? 'default' : status === 'cancelled' ? 'secondary' : 'outline';
-  return <Badge variant={variant} className="font-medium">{SIGNATURE_STATUS_LABEL[status] ?? status}</Badge>;
+  const t = STATUS_TONE[status] ?? STATUS_TONE.draft;
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${t.pill}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />{SIGNATURE_STATUS_LABEL[status] ?? status}
+    </span>
+  );
+}
+
+const STEPS: [Step, string][] = [['template', 'Documentos'], ['data', 'Dados e signatários'], ['preview', 'Revisar e enviar']];
+function Stepper({ step }: { step: Step }) {
+  const cur = STEPS.findIndex(([s]) => s === step);
+  return (
+    <ol className="flex items-center gap-3">
+      {STEPS.map(([s, label], i) => (
+        <li key={s} className="flex items-center gap-3">
+          {i > 0 && <span className={`h-px w-8 ${i <= cur ? 'bg-primary' : 'bg-border'}`} />}
+          <span className="flex items-center gap-2">
+            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-medium ${i === cur ? 'bg-primary text-primary-foreground' : i < cur ? 'bg-success/15 text-success' : 'border border-border text-muted-foreground'}`}>
+              {i < cur ? <Check className="h-3 w-3" weight="bold" /> : i + 1}
+            </span>
+            <span className={`hidden sm:inline text-xs ${i <= cur ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>{label}</span>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 const CLIENT_LABELS: [string, string][] = [['name', 'Nome'], ['email', 'E-mail'], ['phone', 'Telefone']];
