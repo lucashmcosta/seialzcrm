@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowClockwise, ArrowLeft, Check, DownloadSimple, FileText, Plus, WarningCircle } from '@phosphor-icons/react';
+import { ArrowClockwise, ArrowLeft, Check, DownloadSimple, FileText, LinkSimple, Plus, WarningCircle } from '@phosphor-icons/react';
 import { callSignatureRequests, SignatureApiError, SIGNATURE_STATUS_LABEL, PARTICIPANT_STATUS_LABEL } from '@/lib/signatureRequestsApi';
 
 interface Props { open: boolean; onOpenChange: (o: boolean) => void; opportunityId: string; canCreate: boolean }
@@ -147,6 +147,19 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
       refresh();
     } catch (e) { showErr(e); } finally { setBusy(false); }
   };
+  const [linkBusy, setLinkBusy] = useState<string | null>(null);
+  // Link vem só do servidor; não é guardado nem registrado.
+  const copyLink = async (requestId: string, participantId: string) => {
+    setLinkBusy(participantId);
+    try {
+      const r = await callSignatureRequests<{ signing_url: string }>('get_signing_link', { request_id: requestId, participant_id: participantId });
+      await navigator.clipboard.writeText(r.signing_url);
+      toast.success('Link de assinatura copiado');
+    } catch (e) {
+      if (e instanceof SignatureApiError && e.code === 'participant_already_signed') { toast.info('Este participante já assinou'); refresh(); }
+      else showErr(e);
+    } finally { setLinkBusy(null); }
+  };
   // Retoma no estado correto: snapshot completo → prévia; senão → dados (A2).
   const resumeDraft = async (requestId: string) => {
     setBusy(true);
@@ -226,7 +239,7 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
             {parts.map((p) => {
               const signed = p.status === 'signed';
               return (
-                <li key={p.id ?? p.email} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr] items-center gap-x-4 gap-y-1 py-3">
+                <li key={p.id ?? p.email} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] items-center gap-x-4 gap-y-1 py-3">
                   <div className="min-w-0 flex gap-2">
                     {done && signed && <Check className="h-4 w-4 text-success mt-0.5 shrink-0" weight="bold" />}
                     <div className="min-w-0"><p className="text-sm font-medium truncate">{p.name}</p><p className="text-xs text-muted-foreground truncate">{p.email}</p></div>
@@ -237,6 +250,13 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                       {signed ? `Assinou${p.signed_at ? ` em ${fmt(p.signed_at)}` : ''}` : ['sent', 'in_progress'].includes(r.status) ? 'Aguardando assinatura' : PARTICIPANT_STATUS_LABEL[p.status] ?? p.status}
                     </p>
                   )}
+                  <div className="sm:justify-self-end">
+                    {!signed && p.id && r.provider_operation_id && ['sent', 'in_progress'].includes(r.status) && (
+                      <Button size="sm" variant="outline" className="h-8 px-3" disabled={linkBusy === p.id} onClick={() => copyLink(r.id, p.id)}>
+                        <LinkSimple className="h-3.5 w-3.5 mr-1.5" />{linkBusy === p.id ? 'Copiando…' : 'Copiar link'}
+                      </Button>
+                    )}
+                  </div>
                 </li>
               );
             })}
