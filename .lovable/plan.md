@@ -1,53 +1,26 @@
-# Copiar link V2
+# Prévia do A3 — ajustar a folha à largura, sem mexer no documento
 
-Entra apenas o botão "Copiar link", com uma ação nova no servidor. V1, SuvSign, schema e o resto do modal não mudam, e não há migration.
+Muda somente a área da prévia em "Revisar e enviar" (`SignatureV2Sheet.tsx`, linhas 455–461). O restante do modal, o renderer, o snapshot, o template, o PDF final, a SuvSign e a V1 ficam intactos.
 
-## Servidor: ação `get_signing_link` em `signature-requests`
-Entrada: `request_id` e `participant_id` (o id local do participante, em formato UUID).
+## Auditoria (estado atual, lido no código)
+1. **Componente:** `SignatureV2Sheet.tsx`. O `previewHtml` (linha 177) monta a prévia a partir de `snapshot.documents[docTab].frozen_content.pages[].blocks`.
+2. **Mecanismo:** HTML direto no DOM (`dangerouslySetInnerHTML` sanitizado com DOMPurify). Não é iframe, PDF nem imagem. Só entram blocos `text`/`heading`.
+3. **Tamanho lógico:** nenhum. A folha usa `max-w-[500px]`, padding de 48px e `min-h-[600px]`. Ela ignora os 816x1056 do layout `legacy_template_816x1056`.
+4. **Scroll:** fica no `div` `flex-1 overflow-y-auto` da coluna direita. Nada volta esse scroll para o topo ao entrar no A3 ou ao trocar de documento.
+5. **Escala:** não existe `transform: scale`, `zoom` nem cálculo responsivo.
+6. **Por que aparece cortada ou ampliada:** o conteúdo do template foi feito para 816px de largura (larguras e estilos inline) e está sendo espremido numa caixa de 500px com `prose` e `break-words`. O texto quebra e transborda, a folha perde a proporção e não há reenquadramento. Também não há reset de scroll, então a prévia pode abrir fora do início da página.
 
-1. **Autenticação e acesso:** reaproveita o que já existe.
-   - O usuário é autenticado.
-   - `loadRequest` lê a solicitação com o banco do próprio usuário, então só encontra o que a política de acesso deixa ele ver (a mesma visibilidade da oportunidade), e ainda confere que ele é membro da organização.
-   - A organização vem da própria solicitação, nunca do navegador.
-2. **Validações:**
-   - a solicitação precisa ter `provider_operation_id` e estar em `sent` ou `in_progress`; se não, responde 409 `invalid_state`;
-   - o participante precisa pertencer a essa solicitação e ter `provider_participant_id`; se não, responde 404;
-   - participante com status `signed` responde 409 `participant_already_signed`, sem chamar a SuvSign.
-3. **Chamada à SuvSign:** `POST /api-v2/signing-operations/{op}/participants/{provider_participant_id}/signing-link`.
-   - Usa a credencial V2 da organização, que é decifrada só no servidor.
-   - `Idempotency-Key` fixa: `seialz:signing-link:<request_id>:<participant_id>:v1`.
-4. **Respostas da SuvSign:**
-   - **409 `participant_already_signed`:** marca o participante como `signed` localmente e devolve o mesmo código;
-   - **409 `invalid_state`:** "Esta solicitação não aceita mais novos links.";
-   - **429:** "Muitas tentativas. Aguarde um instante e tente novamente.";
-   - **503:** "SuvSign temporariamente indisponível.";
-   - **qualquer outro erro:** 502 genérico.
-5. **Retorno:** só `{ signing_url, expires_at }`. Nada vai para activity, `last_error` ou log: nem o link, nem o token.
+## Correção (só apresentação)
+- Cada página é renderizada no **tamanho lógico original**. Uso a largura e a altura da página ou do `coordinate_system` do snapshot quando vierem. Se não vierem, uso 816x1056.
+- Um medidor lê a largura disponível da coluna e calcula `escala = min(1, (largura − margens) / largura lógica)`. A folha é reduzida com `transform: scale`, com origem no canto superior. Um invólucro ocupa o tamanho já reduzido, para o scroll ficar correto e sem espaço sobrando. A folha nunca é ampliada acima de 100% e nunca é deformada.
+- As classes `prose`, `break-words`, `max-w-[500px]` e `min-h-[600px]` saem da folha. Ela fica branca, com sombra, centralizada e com páginas empilhadas, sobre o fundo neutro atual.
+- O scroll continua só nessa coluna, sem scroll horizontal. Ele volta ao topo ao entrar no A3 e ao trocar de documento. O cabeçalho e o rodapé ("Voltar" / "Enviar N documentos") continuam fixos.
+- No mobile é a mesma lógica: o seletor fica acima e a folha se ajusta à largura.
 
-Deploy só de `signature-requests`.
+## Validação
+- Abro o A3 com o `frozen_content` real da solicitação QA-LEGACY Procuração já existente, sem fazer novo envio. Se o preview de teste não permitir login, uso uma cópia desse snapshot lida do banco e renderizada no mesmo componente.
+- Prints no desktop: topo da folha, margens, página centralizada e inteira na largura, rodapé visível. Depois rolo até o fim e volto ao topo. Tiro também um print no mobile.
+- Informo a escala e as larguras medidas.
+- Regressão: A1, A2, A4, lista/detalhe, envio, Copiar link, download e V1 não são tocados, porque a alteração fica limitada ao bloco da prévia.
 
-## Tela: só a linha do participante no detalhe
-- O botão contornado "Copiar link", com ícone de link, aparece à direita **somente** quando:
-  - a solicitação está em `sent` ou `in_progress`;
-  - o participante não assinou.
-- Ao clicar:
-  - chama `get_signing_link` e copia o `signing_url` para a área de transferência;
-  - mostra o toast "Link de assinatura copiado";
-  - o botão fica desabilitado enquanto a chamada roda.
-- Em caso de `participant_already_signed`, atualiza a lista (o botão some) e mostra o toast "Este participante já assinou".
-- Para os outros erros, mostra no toast a mensagem que o servidor devolveu.
-
-## E2E
-- Depende de uma operação QA pendente, com credencial real e login na conta.
-- O preview de teste não me deixa entrar na sua conta. Então eu:
-  - chamo a ação direto pelo servidor, usando uma sessão sua se você autorizar ou se já estiver ativa;
-  - comparo o link do 1º e do 2º clique;
-  - abro o link e confiro qual participante carrega, sem assinar.
-- Se não houver sessão disponível, entrego a ação publicada e o roteiro de teste (clicar 2x, comparar os links, abrir, conferir o participante e o link do e-mail), e fica o E2E pendente com você.
-- Sem PASS até o E2E rodar.
-
-## Docs
-- `docs/integrations/suvsign-v2.md`: incluir a ação na lista, com a regra da chave fixa.
-- Tirar o bloqueio do "Copiar link" no roadmap.
-
-Resultado esperado: `COPIAR LINK V2 INTEGRADO AO SEIALZ — PRONTO PARA LIMPEZA FINAL QA`
+Resultado esperado: `PREVIEW A3 AJUSTADO À LARGURA, PROPORÇÃO PRESERVADA E PDF/RENDERER INALTERADOS`
