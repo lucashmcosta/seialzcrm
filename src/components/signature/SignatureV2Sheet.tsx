@@ -465,3 +465,12 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
     </Dialog>
   );
 }
+
+// Esconde descrições técnicas (UUID ou código sem espaço com ':'/'-', ex.: qa-legacy-copy-of:<uuid>). Só apresentação.
+function isFriendlyDescription(d: unknown): d is string {
+  if (typeof d !== 'string' || !d.trim()) return false;
+  const s = d.trim();
+  if (/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(s)) return false;
+  if (!/\s/.test(s) && /[:\-_]/.test(s)) return false;
+  return true;
+}
