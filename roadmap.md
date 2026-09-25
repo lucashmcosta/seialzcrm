@@ -49,3 +49,5 @@
 - [x] Lista + detalhe, A1, A2, A3, enviado, concluído no modal V2
 - [ ] Copiar link — aguarda contrato SuvSign (links não persistidos; endpoint de recuperação [INCERTO])
 - [ ] Descartar rascunho — omitido até teste E2E de cancel_signature sem provider_operation_id
+
+- [x] Proposta A master/detail do modal V2 corrigido (estilos desatualizados no preview) — validado com dados simulados; conferência com login real pendente
