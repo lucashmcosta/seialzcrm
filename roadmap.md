@@ -51,3 +51,4 @@
 - [ ] Descartar rascunho — omitido até teste E2E de cancel_signature sem provider_operation_id
 
 - [x] Proposta A master/detail do modal V2 corrigido (estilos desatualizados no preview) — validado com dados simulados; conferência com login real pendente
+- [ ] E2E Copiar link V2 — aguarda operação QA pendente (hoje 0 solicitações sent/in_progress)
