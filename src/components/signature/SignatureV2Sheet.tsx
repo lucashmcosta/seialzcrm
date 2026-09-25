@@ -1,14 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import DOMPurify from 'dompurify';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ArrowClockwise, ArrowLeft, Check, DownloadSimple, FileText, Plus, WarningCircle } from '@phosphor-icons/react';
 import { callSignatureRequests, SignatureApiError, SIGNATURE_STATUS_LABEL, PARTICIPANT_STATUS_LABEL } from '@/lib/signatureRequestsApi';
 
@@ -172,27 +170,24 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
 
   // ---------- Lista (coluna esquerda) ----------
   const listCol = (
-    <div className="flex flex-col min-h-0 gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Solicitações</p>
-        {canCreate && <Button size="sm" className="h-8 px-3" onClick={() => { setTemplateIds([]); setSigners({}); setStep('template'); }}><Plus className="h-3.5 w-3.5 mr-1.5" />Novo envio</Button>}
-      </div>
-      {!canCreate && <p className="text-xs text-muted-foreground">Novos envios usam o fluxo atual. Os envios abaixo continuam acompanháveis.</p>}
-      {cap.isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+    <div className="flex flex-col min-h-0">
+      <p className="text-xs font-semibold text-muted-foreground px-3 pb-3">Solicitações</p>
+      {!canCreate && <p className="text-xs text-muted-foreground px-3 pb-3">Novos envios usam o fluxo atual. Os envios abaixo continuam acompanháveis.</p>}
+      {cap.isLoading && <p className="text-sm text-muted-foreground px-3">Carregando…</p>}
       {!cap.isLoading && requests.length === 0 && <p className="text-sm text-muted-foreground py-6 text-center">Nenhum envio por este fluxo ainda.</p>}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-0.5">
         {requests.map((r) => {
-          const titles = docTitlesOf(r); const main = participantsOf(r)[0];
+          const titles = docTitlesOf(r); const parts = participantsOf(r); const main = parts[0];
           const active = r.id === selectedId;
           return (
             <button key={r.id} type="button" aria-pressed={active} onClick={() => { setSelectedId(r.id); setMobileDetail(true); }}
-              className={`relative text-left rounded-[6px] pl-3.5 pr-3 py-2 transition-colors ${active ? 'bg-muted before:absolute before:left-0 before:top-2 before:bottom-2 before:w-0.5 before:rounded-full before:bg-primary' : 'hover:bg-muted'}`}>
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-medium truncate">{titles.join(' + ')}</p>
+              className={`text-left rounded-[6px] px-3 py-2.5 border transition-colors ${active ? 'bg-primary/5 border-primary/25' : 'border-transparent hover:bg-muted'}`}>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold leading-snug line-clamp-2">{titles.join(' + ')}</p>
                 <StatusBadge status={r.status} />
               </div>
-              <p className="text-xs text-muted-foreground truncate mt-0.5">{main?.name ?? '—'} · {plural(titles.length, 'documento', 'documentos')}</p>
-              <p className="text-xs text-muted-foreground font-data mt-0.5">{fmtDay(relevantDate(r))}</p>
+              <p className="text-xs text-muted-foreground truncate mt-1">{main?.name ?? '—'}{parts.length > 1 ? ` +${parts.length - 1}` : ''} · {plural(titles.length, 'documento', 'documentos')}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{fmtDay(relevantDate(r))}</p>
             </button>
           );
         })}
@@ -200,71 +195,75 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
     </div>
   );
 
-  // ---------- Detalhe ----------
+  // ---------- Detalhe (painel direito) ----------
+  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <section>
+      <p className="text-xs font-semibold text-foreground pb-2 border-b border-border">{title}</p>
+      <ul className="divide-y divide-border">{children}</ul>
+    </section>
+  );
   const detail = (r: any) => {
     const parts = participantsOf(r); const titles = docTitlesOf(r);
     const docs: any[] = r.provider_documents ?? [];
     const done = r.status === 'completed';
-    if (r.status === 'draft') {
-      return (
-        <div className="space-y-5">
-          <div className="space-y-1"><StatusBadge status="draft" /><p className="text-lg font-medium pt-2">{titles.join(' + ')}</p>
-            <p className="text-sm text-muted-foreground">{parts.map((p) => p.name).join(', ') || '—'}</p>
-            <p className="text-xs text-muted-foreground font-data">Criado em {fmt(r.created_at)}</p></div>
-          {canCreate && <Button disabled={busy} onClick={() => resumeDraft(r.id)}>Continuar preparação</Button>}
-        </div>
-      );
-    }
+    const draftRow = r.status === 'draft';
+    const dateLine = draftRow ? `Criado em ${fmt(r.created_at)} · ainda não enviado`
+      : r.completed_at ? `Concluído em ${fmt(r.completed_at)}`
+      : r.cancelled_at ? `Cancelado em ${fmt(r.cancelled_at)}`
+      : r.sent_at ? `Enviado em ${fmt(r.sent_at)}` : `Criado em ${fmt(r.created_at)}`;
+    const canRefresh = !!r.provider_operation_id && !['completed', 'cancelled'].includes(r.status);
+    const canCancel = !!r.provider_operation_id && ['sent', 'in_progress'].includes(r.status);
     return (
-      <div className="space-y-6">
-        <div className="space-y-1">
+      <div className="flex flex-col min-h-full">
+        <div className="space-y-2">
           <StatusBadge status={r.status} />
-          <p className="text-lg font-medium pt-2 break-words">{titles.join(' + ')}</p>
-          <div className="flex flex-wrap gap-x-4 text-xs text-muted-foreground font-data">
-            {r.sent_at && <span>Enviado em {fmt(r.sent_at)}</span>}
-            {r.completed_at && <span>Concluído em {fmt(r.completed_at)}</span>}
-            {r.cancelled_at && <span>Cancelado em {fmt(r.cancelled_at)}</span>}
-          </div>
+          <h3 className="text-xl font-semibold leading-tight break-words">{titles.join(' + ')}</h3>
+          <p className="text-xs text-muted-foreground">{dateLine}</p>
         </div>
-        <section className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">Participantes</p>
-          <ul className="divide-y divide-border border border-border rounded-[6px]">
-            {parts.map((p) => (
-              <li key={p.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-2.5">
-                <div className="min-w-0 flex gap-2">
-                  {p.status === 'signed' && <CheckCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" weight="fill" />}
-                  <div className="min-w-0"><p className="text-sm truncate">{p.name}</p><p className="text-xs text-muted-foreground truncate">{p.email}</p></div>
-                </div>
-                <div className="text-right text-xs">
-                  <p className={p.status === 'signed' ? 'text-foreground' : 'text-muted-foreground'}>{p.status === 'signed' ? 'Assinou' : ['sent', 'in_progress'].includes(r.status) ? 'Aguardando assinatura' : PARTICIPANT_STATUS_LABEL[p.status] ?? p.status}</p>
-                  {p.signed_at ? <p className="text-muted-foreground font-data">{fmt(p.signed_at)}</p> : p.opened_at && <p className="text-muted-foreground font-data">Abriu {fmt(p.opened_at)}</p>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-        <section className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">Documentos</p>
-          <ul className="divide-y divide-border border border-border rounded-[6px]">
-            {(docs.length ? docs : titles.map((t) => ({ title: t }))).map((d: any, i: number) => {
-              const dDone = !!d.final_sha256 || done;
+        <div className="space-y-8 mt-8">
+          <Section title="Participantes">
+            {parts.length === 0 && <li className="py-3 text-sm text-muted-foreground">—</li>}
+            {parts.map((p) => {
+              const signed = p.status === 'signed';
               return (
-                <li key={d.document_id ?? i} className="flex items-center justify-between gap-2 px-3 py-2.5">
+                <li key={p.id ?? p.email} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr] items-center gap-x-4 gap-y-1 py-3">
                   <div className="min-w-0 flex gap-2">
-                    {dDone && <CheckCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" weight="fill" />}
-                    <div className="min-w-0"><p className="text-sm truncate">{d.title ?? 'Documento'}</p>
-                      <p className="text-xs text-muted-foreground">{dDone ? 'Concluído' : SIGNATURE_STATUS_LABEL[r.status] ?? r.status}</p></div>
+                    {done && signed && <Check className="h-4 w-4 text-success mt-0.5 shrink-0" weight="bold" />}
+                    <div className="min-w-0"><p className="text-sm font-medium truncate">{p.name}</p><p className="text-xs text-muted-foreground truncate">{p.email}</p></div>
                   </div>
-                  {dDone && d.document_id && <Button size="sm" variant="outline" className="h-7 px-2" disabled={busy} onClick={() => act('get_download_url', r.id, { document_id: d.document_id })}><DownloadSimple className="h-4 w-4 mr-1" />Baixar</Button>}
+                  {!draftRow && (
+                    <p className={`text-xs flex items-center gap-1.5 ${signed ? 'text-success' : 'text-warning'}`}>
+                      {signed && !done && <Check className="h-3.5 w-3.5" weight="bold" />}
+                      {signed ? `Assinou${p.signed_at ? ` em ${fmt(p.signed_at)}` : ''}` : ['sent', 'in_progress'].includes(r.status) ? 'Aguardando assinatura' : PARTICIPANT_STATUS_LABEL[p.status] ?? p.status}
+                    </p>
+                  )}
                 </li>
               );
             })}
-          </ul>
-        </section>
-        {r.provider_operation_id && !['completed', 'cancelled'].includes(r.status) && (
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="ghost" className="h-7 px-2" disabled={busy} onClick={() => act('get_signature_status', r.id)}><ArrowClockwise className="h-4 w-4 mr-1" />Atualizar</Button>
-            {['sent', 'in_progress'].includes(r.status) && <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground" disabled={busy} onClick={() => act('cancel_signature', r.id)}><X className="h-4 w-4 mr-1" />Cancelar</Button>}
+          </Section>
+          <Section title="Documentos">
+            {(docs.length ? docs : titles.map((t) => ({ title: t }))).map((d: any, i: number) => {
+              const dDone = !!d.final_sha256 || done;
+              return (
+                <li key={d.document_id ?? i} className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_1fr_auto] items-center gap-x-4 py-3 min-h-[48px]">
+                  <div className="min-w-0 flex items-center gap-2">
+                    {dDone ? <Check className="h-4 w-4 text-success shrink-0" weight="bold" /> : <FileText className="h-4 w-4 text-muted-foreground shrink-0" />}
+                    <p className="text-sm truncate">{d.title ?? 'Documento'}</p>
+                  </div>
+                  <p className="hidden sm:block text-xs text-muted-foreground">{draftRow ? '' : dDone ? 'Concluído' : r.status === 'in_progress' ? 'Aguardando assinaturas' : SIGNATURE_STATUS_LABEL[r.status] ?? r.status}</p>
+                  <div className="justify-self-end">
+                    {dDone && d.document_id && <Button size="sm" variant="outline" className="h-8 px-3" disabled={busy} onClick={() => act('get_download_url', r.id, { document_id: d.document_id })}><DownloadSimple className="h-3.5 w-3.5 mr-1.5" />Baixar</Button>}
+                  </div>
+                </li>
+              );
+            })}
+          </Section>
+        </div>
+        {(draftRow ? canCreate : canRefresh || canCancel) && (
+          <div className="mt-auto pt-10 flex flex-wrap items-center gap-5">
+            {draftRow && <Button disabled={busy} onClick={() => resumeDraft(r.id)}>Continuar preparação</Button>}
+            {canRefresh && <Button size="sm" variant="outline" className="h-8 px-3" disabled={busy} onClick={() => act('get_signature_status', r.id)}><ArrowClockwise className="h-3.5 w-3.5 mr-1.5" />Atualizar</Button>}
+            {canCancel && <button type="button" disabled={busy} className="text-sm text-destructive hover:underline disabled:opacity-50" onClick={() => act('cancel_signature', r.id)}>Cancelar solicitação</button>}
           </div>
         )}
       </div>
@@ -274,175 +273,178 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
   const vars = draft?.snapshot?.variables ?? {};
   const client = vars.client ?? {}; const custom = vars.custom ?? {};
   const cityUf = [custom.Cidade, custom.Estado].filter(Boolean).join(' / ');
+  const templateList: any[] = templates.data?.templates ?? [];
+  const footer = 'shrink-0 border-t border-border px-6 py-3 flex flex-wrap items-center justify-between gap-3';
 
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset(); }}>
-      <DialogContent className="w-[calc(100vw-16px)] max-w-[1120px] h-[90dvh] max-h-[90dvh] p-0 gap-0 flex flex-col overflow-hidden">
-        <DialogHeader className="px-5 py-4 border-b border-border shrink-0 text-left">
-          <DialogTitle>Assinatura de contrato</DialogTitle>
-          <DialogDescription>Prepare, confira e acompanhe o envio sem sair do Seialz.</DialogDescription>
+      <DialogContent className="w-[calc(100vw-16px)] max-w-[1100px] h-[90dvh] max-h-[860px] p-0 gap-0 flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0 border-b border-border pl-7 pr-14 py-4 min-h-[72px] flex flex-row items-center justify-between gap-4 space-y-0 text-left">
+          <DialogTitle className="text-lg font-semibold">{step === 'list' ? 'Assinatura de contrato' : 'Novo envio'}</DialogTitle>
+          <DialogDescription className="sr-only">Prepare, confira e acompanhe o envio sem sair do Seialz.</DialogDescription>
+          {step === 'list'
+            ? canCreate && <Button size="sm" className="h-9 px-4" onClick={() => { setTemplateIds([]); setSigners({}); setStep('template'); }}><Plus className="h-4 w-4 mr-1.5" />Novo envio</Button>
+            : <Stepper step={step} />}
         </DialogHeader>
 
         {step === 'list' && (
           <div className="flex-1 min-h-0 flex overflow-hidden">
-            <aside data-sv2="list" className={`${mobileDetail ? 'hidden' : 'flex'} md:flex w-full md:w-[320px] shrink-0 flex-col border-r border-border p-4 overflow-y-auto scrollbar-hide`}>{listCol}</aside>
-            <main data-sv2="detail" className={`${mobileDetail ? 'block' : 'hidden'} md:block flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-hide p-6`}>
-              <Button variant="ghost" size="sm" className="md:hidden mb-3 -ml-2" onClick={() => setMobileDetail(false)}><ArrowLeft className="h-4 w-4 mr-1" />Voltar</Button>
+            <aside data-sv2="list" className={`${mobileDetail ? 'hidden' : 'flex'} md:flex w-full md:w-[360px] shrink-0 flex-col md:border-r border-border px-3 py-5 overflow-y-auto scrollbar-hide`}>{listCol}</aside>
+            <main data-sv2="detail" className={`${mobileDetail ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-hide px-6 md:px-10 py-7`}>
+              <Button variant="ghost" size="sm" className="md:hidden mb-3 -ml-2 self-start" onClick={() => setMobileDetail(false)}><ArrowLeft className="h-4 w-4 mr-1" />Voltar</Button>
               {selected ? detail(selected) : <p className="text-sm text-muted-foreground">Selecione uma solicitação ou crie um novo envio.</p>}
             </main>
           </div>
         )}
 
-        {step !== 'list' && (
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide">
-            <div className="p-5 space-y-4">
-              {step === 'template' && (
-                <div className="space-y-4 max-w-[720px] mx-auto">
-                  <div><p className="text-base font-medium">Escolha os documentos</p>
-                    <p className="text-xs text-muted-foreground">Os documentos marcados vão juntos em um único envio, com um único link para o cliente.</p></div>
-                  {templates.isLoading && <p className="text-sm text-muted-foreground">Carregando modelos…</p>}
-                  {templates.error && <p className="text-sm text-destructive">{(templates.error as Error).message}</p>}
-                  <div className="flex flex-col gap-2">
-                    {(templates.data?.templates ?? []).map((t: any) => {
-                      const checked = templateIds.includes(t.id);
-                      const item = (
-                        <button key={t.id} type="button" disabled={!t.v2_compatible} role="checkbox" aria-checked={checked}
-                          onClick={() => { setTemplateIds((ids) => ids.includes(t.id) ? ids.filter((x) => x !== t.id) : [...ids, t.id]); setUnresolved([]); }}
-                          className={`w-full text-left border rounded-[6px] px-4 py-3 flex gap-3 items-start transition-colors ${checked ? 'border-primary bg-muted' : 'border-border hover:bg-muted'} ${!t.v2_compatible ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                          <Checkbox checked={checked} disabled={!t.v2_compatible} className="mt-0.5 h-5 w-5 pointer-events-none" tabIndex={-1} />
-                          <span className="min-w-0">
-                            <span className="block font-medium break-words">{t.name}</span>
-                            {t.description && <span className="block text-xs text-muted-foreground">{t.description}</span>}
-                            {t.page_count != null && <span className="block text-xs text-muted-foreground">{plural(t.page_count, 'página', 'páginas')}</span>}
-                            {!t.v2_compatible && <span className="block text-xs text-muted-foreground">Incompatível{(t.v2_unsupported_features ?? []).length ? `: ${t.v2_unsupported_features.join(', ')}` : ''}</span>}
-                          </span>
-                        </button>
-                      );
-                      return t.v2_compatible ? item : (
-                        <Tooltip key={t.id}><TooltipTrigger asChild><span className="block">{item}</span></TooltipTrigger>
-                          <TooltipContent>Este modelo ainda não é compatível com o novo fluxo de assinatura.</TooltipContent></Tooltip>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {step === 'data' && (
-                <div className="space-y-6 max-w-[820px] mx-auto">
-                  <div><p className="text-base font-medium">Dados e signatários</p>
-                    <p className="text-xs text-muted-foreground">O Seialz preencheu tudo a partir do CRM. Confira antes de ver a prévia.</p></div>
-                  {pending && (
-                    <div className="border border-destructive/40 bg-muted rounded-[6px] p-4 space-y-2">
-                      <p className="text-sm font-medium flex items-center gap-2"><WarningCircle className="h-4 w-4 text-destructive" />{pending.title}</p>
-                      <ul className="text-sm text-muted-foreground list-disc pl-5">{pending.items.map((i) => <li key={i}>{i}</li>)}</ul>
-                      {pending.contactId && <Button size="sm" variant="outline" onClick={() => window.open(`/contacts/${pending.contactId}`, '_blank', 'noopener')}>Abrir contato</Button>}
-                    </div>
-                  )}
-                  {draft && (
-                    <section className="space-y-3">
-                      <p className="text-xs font-medium text-muted-foreground">Dados preenchidos pelo CRM</p>
-                      <div className="border border-border rounded-[6px] divide-y divide-border">
-                        <div className="p-4 space-y-3"><p className="text-sm font-medium">Cliente</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            {CLIENT_LABELS.map(([k, l]) => <Field key={k} label={l} value={client[k]} />)}
-                            {CUSTOM_CLIENT.map(([k, l]) => <Field key={k} label={l} value={custom[k]} />)}
-                          </div></div>
-                        {(custom.Endereco || custom.Bairro || cityUf || custom.CEP) && (
-                          <div className="p-4 space-y-3"><p className="text-sm font-medium">Endereço</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                              {CUSTOM_ADDR.slice(0, 2).map(([k, l]) => <Field key={k} label={l} value={custom[k]} />)}
-                              <Field label="Cidade / UF" value={cityUf} />
-                              <Field label="CEP" value={custom.CEP} />
-                            </div></div>
-                        )}
-                        {CUSTOM_DEAL.some(([k]) => custom[k]) && (
-                          <div className="p-4 space-y-3"><p className="text-sm font-medium">Oportunidade</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{CUSTOM_DEAL.map(([k, l]) => <Field key={k} label={l} value={custom[k]} />)}</div></div>
-                        )}
-                      </div>
-                    </section>
-                  )}
-                  {(draft || unresolved.length > 0) && (
-                    <section className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">Signatários</p>
-                      {draft && (
-                        <ul className="divide-y divide-border border border-border rounded-[6px]">
-                          {draftParts.map((p) => (
-                            <li key={p.ref} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
-                              <div className="min-w-0"><p className="text-sm truncate">{p.name}</p><p className="text-xs text-muted-foreground truncate">{p.email}</p></div>
-                              <span className="text-xs text-muted-foreground">Assina {plural(docsForParticipant(p.ref), 'documento', 'documentos')}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      {unresolved.map((u) => (
-                        <div key={u.ref} className="grid sm:grid-cols-2 gap-2">
-                          <div><Label className="text-xs">{u.display_name} — nome</Label>
-                            <Input value={signers[u.ref]?.name ?? ''} maxLength={200} onChange={(e) => setSigners((s) => ({ ...s, [u.ref]: { ...s[u.ref], name: e.target.value, email: s[u.ref]?.email ?? '' } }))} /></div>
-                          <div><Label className="text-xs">E-mail</Label>
-                            <Input type="email" value={signers[u.ref]?.email ?? ''} maxLength={255} onChange={(e) => setSigners((s) => ({ ...s, [u.ref]: { ...s[u.ref], email: e.target.value, name: s[u.ref]?.name ?? '' } }))} /></div>
-                        </div>
-                      ))}
-                    </section>
-                  )}
-                </div>
-              )}
-
-              {step === 'preview' && draft && (
-                <div className="md:grid md:grid-cols-[240px_1fr] md:gap-5">
-                  <div className="space-y-3 mb-4 md:mb-0">
-                    <div className="text-xs text-muted-foreground space-y-0.5">
-                      <p>{plural(draftDocs.length, 'documento', 'documentos')} · 1 envio</p>
-                      <p className="truncate">{draftParts.map((p) => p.name).join(', ')}</p>
-                    </div>
-                    {draftDocs.length > 1 && (
-                      <select className="md:hidden w-full h-9 rounded-[6px] border border-input bg-background px-2 text-sm" value={docTab} onChange={(e) => setDocTab(Number(e.target.value))}>
-                        {draftDocs.map((d, i) => <option key={d.ref ?? i} value={i}>{d.title}</option>)}
-                      </select>
-                    )}
-                    <div className="hidden md:flex flex-col gap-1">
-                      <p className="text-xs font-medium text-muted-foreground">Documentos</p>
-                      {draftDocs.map((d, i) => (
-                        <button key={d.ref ?? i} type="button" onClick={() => setDocTab(i)}
-                          className={`text-left rounded-[6px] px-3 py-2 text-sm border transition-colors ${i === docTab ? 'bg-muted text-foreground border-primary' : 'text-muted-foreground hover:bg-muted border-transparent'}`}>
-                          <span className="block truncate">{d.title}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="min-w-0 space-y-4">
-                    {previewHtml.map((h: string, i: number) => (
-                      <div key={i} className="border border-border rounded-[6px] p-6 bg-card text-sm prose prose-sm max-w-none break-words" dangerouslySetInnerHTML={{ __html: h }} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {step === 'template' && (
-          <div className="shrink-0 border-t border-border px-5 py-3 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-sm text-muted-foreground">{plural(templateIds.length, 'documento selecionado', 'documentos selecionados')}</span>
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={reset}>Voltar</Button>
-              <Button disabled={!templateIds.length || busy} onClick={prepare}>{busy ? 'Preparando…' : 'Continuar'}</Button>
+          <>
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-5 py-10">
+              <div className="max-w-[620px] mx-auto space-y-6">
+                <div><h3 className="text-lg font-semibold">Escolha os documentos</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Os documentos selecionados são enviados juntos, em um único link de assinatura.</p></div>
+                {templates.isLoading && <p className="text-sm text-muted-foreground">Carregando modelos…</p>}
+                {templates.error && <p className="text-sm text-destructive">{(templates.error as Error).message}</p>}
+                <div className="flex flex-col gap-2">
+                  {templateList.map((t: any) => {
+                    const checked = templateIds.includes(t.id); const ok = !!t.v2_compatible;
+                    const sub = !ok ? `Incompatível${(t.v2_unsupported_features ?? []).length ? `: ${t.v2_unsupported_features.join(', ')}` : ''}`
+                      : t.description ?? (t.page_count != null ? plural(t.page_count, 'página', 'páginas') : null);
+                    return (
+                      <button key={t.id} type="button" disabled={!ok} role="checkbox" aria-checked={checked}
+                        onClick={() => { setTemplateIds((ids) => ids.includes(t.id) ? ids.filter((x) => x !== t.id) : [...ids, t.id]); setUnresolved([]); }}
+                        className={`w-full text-left border rounded-[6px] px-4 py-3.5 flex gap-3.5 items-center transition-colors ${checked ? 'border-primary/40 bg-primary/5' : 'border-border hover:bg-muted'} ${!ok ? 'bg-muted/50 cursor-not-allowed' : ''}`}>
+                        <Checkbox checked={checked} disabled={!ok} className="h-5 w-5 pointer-events-none" tabIndex={-1} />
+                        <span className="min-w-0">
+                          <span className={`block text-sm font-medium break-words ${!ok ? 'text-muted-foreground' : ''}`}>{t.name}</span>
+                          {sub && <span className="block text-xs text-muted-foreground mt-0.5">{sub}</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          </div>
+            <div className={footer}>
+              <span className="text-sm text-muted-foreground">{plural(templateIds.length, 'documento selecionado', 'documentos selecionados')}</span>
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={reset}>Cancelar</Button>
+                <Button disabled={!templateIds.length || busy} onClick={prepare}>{busy ? 'Preparando…' : 'Continuar'}</Button>
+              </div>
+            </div>
+          </>
         )}
+
         {step === 'data' && (
-          <div className="shrink-0 border-t border-border px-5 py-3 flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" onClick={() => { setStep('template'); setDraft(null); setPending(null); }}>Voltar</Button>
-            {draft
-              ? <Button onClick={() => { setDocTab(0); setStep('preview'); }}>Ver prévia</Button>
-              : <Button disabled={busy || !templateIds.length} onClick={prepare}>{busy ? 'Preparando…' : 'Preencher novamente'}</Button>}
-          </div>
+          <>
+            <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
+              <div className="flex-1 min-w-0 md:overflow-y-auto scrollbar-hide px-6 md:px-9 py-8 space-y-7">
+                <div><h3 className="text-lg font-semibold">Dados e signatários</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Confira as informações preenchidas automaticamente antes de revisar os documentos.</p></div>
+                {pending && (
+                  <div className="rounded-[6px] bg-warning/10 p-4 flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-2 min-w-0">
+                      <p className="text-sm font-semibold text-warning flex items-center gap-2"><WarningCircle className="h-4 w-4" />{pending.title}</p>
+                      <ul className="text-sm text-warning list-disc pl-11">{pending.items.map((i) => <li key={i}>{i}</li>)}</ul>
+                    </div>
+                    {pending.contactId && <Button size="sm" variant="outline" className="h-8 bg-background" onClick={() => window.open(`/contacts/${pending.contactId}`, '_blank', 'noopener')}>Abrir contato</Button>}
+                  </div>
+                )}
+                {draft && (
+                  <section className="space-y-4">
+                    <p className="text-xs font-semibold">Dados preenchidos pelo CRM</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-5">
+                      <Field label="Nome" value={client.name} />
+                      <Field label="CPF" value={custom.cpf} />
+                      <Field label="Telefone" value={client.phone} />
+                      <Field label="E-mail" value={client.email} />
+                      <Field label="Endereço" value={custom.Endereco} />
+                      <Field label="Bairro" value={custom.Bairro} />
+                      <Field label="Cidade / UF" value={cityUf} />
+                      <Field label="CEP" value={custom.CEP} />
+                      {CUSTOM_CLIENT.slice(1).map(([k, l]) => <Field key={k} label={l} value={custom[k]} />)}
+                      {CUSTOM_DEAL.map(([k, l]) => <Field key={k} label={l} value={custom[k]} />)}
+                    </div>
+                  </section>
+                )}
+                {unresolved.length > 0 && (
+                  <section className="space-y-3">
+                    <p className="text-xs font-semibold">Informe os signatários que faltam</p>
+                    {unresolved.map((u) => (
+                      <div key={u.ref} className="grid sm:grid-cols-2 gap-2">
+                        <div><Label className="text-xs">{u.display_name} — nome</Label>
+                          <Input value={signers[u.ref]?.name ?? ''} maxLength={200} onChange={(e) => setSigners((s) => ({ ...s, [u.ref]: { ...s[u.ref], name: e.target.value, email: s[u.ref]?.email ?? '' } }))} /></div>
+                        <div><Label className="text-xs">E-mail</Label>
+                          <Input type="email" value={signers[u.ref]?.email ?? ''} maxLength={255} onChange={(e) => setSigners((s) => ({ ...s, [u.ref]: { ...s[u.ref], email: e.target.value, name: s[u.ref]?.name ?? '' } }))} /></div>
+                      </div>
+                    ))}
+                  </section>
+                )}
+              </div>
+              <aside className="md:w-[340px] shrink-0 border-t md:border-t-0 md:border-l border-border px-7 py-8 md:overflow-y-auto scrollbar-hide">
+                <p className="text-xs font-semibold pb-3 border-b border-border">Signatários</p>
+                {!draftParts.length && <p className="text-sm text-muted-foreground py-4">—</p>}
+                <ul className="divide-y divide-border border-b border-border">
+                  {draftParts.map((p) => (
+                    <li key={p.ref} className="py-4">
+                      <p className="text-sm font-medium truncate">{p.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{p.email}</p>
+                      <p className="text-xs text-muted-foreground mt-2">Assina {plural(docsForParticipant(p.ref), 'documento', 'documentos')}</p>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            </div>
+            <div className={footer}>
+              <Button variant="ghost" onClick={() => { setStep('template'); setDraft(null); setPending(null); }}>Voltar</Button>
+              <div className="flex flex-wrap items-center gap-4">
+                {pending && <span className="text-xs text-warning">Corrija as pendências no CRM para enviar</span>}
+                {draft
+                  ? <Button onClick={() => { setDocTab(0); setStep('preview'); }}>Continuar</Button>
+                  : <Button disabled={busy || !templateIds.length} onClick={prepare}>{busy ? 'Preparando…' : pending ? 'Continuar' : 'Preencher novamente'}</Button>}
+              </div>
+            </div>
+          </>
         )}
+
         {step === 'preview' && draft && (
-          <div className="shrink-0 border-t border-border px-5 py-3 flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" onClick={() => setStep('data')}>Voltar</Button>
-            <Button disabled={busy} onClick={() => send(draft.request_id)}><PaperPlaneTilt className="h-4 w-4 mr-2" />{busy ? 'Enviando…' : `Enviar ${plural(draftDocs.length, 'documento', 'documentos')} para assinatura`}</Button>
-          </div>
+          <>
+            <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
+              <aside className="md:w-[240px] shrink-0 flex flex-col border-b md:border-b-0 md:border-r border-border bg-muted/40 p-4">
+                <p className="text-xs font-semibold text-muted-foreground px-2 pb-3">Documentos</p>
+                {draftDocs.length > 1 && (
+                  <select className="md:hidden w-full h-9 rounded-[6px] border border-input bg-background px-2 text-sm" value={docTab} onChange={(e) => setDocTab(Number(e.target.value))}>
+                    {draftDocs.map((d, i) => <option key={d.ref ?? i} value={i}>{d.title}</option>)}
+                  </select>
+                )}
+                <div className="hidden md:flex flex-col gap-1">
+                  {draftDocs.map((d, i) => (
+                    <button key={d.ref ?? i} type="button" onClick={() => setDocTab(i)}
+                      className={`text-left rounded-[6px] px-3 py-2.5 text-sm border flex items-center gap-2 transition-colors ${i === docTab ? 'bg-background border-border text-foreground' : 'border-transparent text-muted-foreground hover:bg-background'}`}>
+                      <FileText className="h-4 w-4 shrink-0" /><span className="truncate">{d.title}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="hidden md:block mt-auto pt-4 border-t border-border px-2 space-y-3">
+                  {draftParts.map((p) => (
+                    <div key={p.ref}><p className="text-xs text-muted-foreground">Signatário</p>
+                      <p className="text-sm font-medium truncate">{p.name}</p><p className="text-xs text-muted-foreground truncate">{p.email}</p></div>
+                  ))}
+                </div>
+              </aside>
+              <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-muted p-4 md:p-7">
+                <div className="max-w-[500px] mx-auto space-y-4">
+                  {previewHtml.map((h: string, i: number) => (
+                    <div key={i} className="bg-background border border-border shadow-sm p-8 md:p-12 min-h-[600px] text-sm prose prose-sm max-w-none break-words" dangerouslySetInnerHTML={{ __html: h }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className={footer}>
+              <Button variant="ghost" onClick={() => setStep('data')}>Voltar</Button>
+              <Button disabled={busy} onClick={() => send(draft.request_id)}>{busy ? 'Enviando…' : `Enviar ${plural(draftDocs.length, 'documento', 'documentos')} para assinatura`}</Button>
+            </div>
+          </>
         )}
       </DialogContent>
     </Dialog>
