@@ -151,3 +151,41 @@ export function friendlyTemplateError(code: string | undefined): string {
   }
   return "Não foi possível carregar o modelo na SuvSign.";
 }
+
+// ---------- Multidocumento: participantes únicos da operação ----------
+// A identidade vem da pessoa REAL (contact:<id> / user:<id> / manual:<email>),
+// nunca do ref local do template. Refs da operação: p1, p2, ...
+export interface ResolvedSignatory {
+  template_ref: string; identity: string;
+  person: { name: string; email: string; phone: string | null; cpf: string | null };
+  template_role: string | null;
+}
+export interface TemplateDocInput {
+  template_id: string; title: string; frozen_content: Any; signatories: ResolvedSignatory[]; fields: Any[];
+}
+export function buildMultiDocument(docs: TemplateDocInput[]) {
+  const byIdentity = new Map<string, Any>();
+  const participants: Any[] = [];
+  const documents = docs.map((d, di) => {
+    const refMap = new Map<string, string>();
+    for (const s of d.signatories) {
+      let p = byIdentity.get(s.identity);
+      if (!p) {
+        p = { ref: `p${participants.length + 1}`, identity: s.identity, name: s.person.name || s.person.email,
+          email: s.person.email, phone: s.person.phone, cpf: s.person.cpf, role: "signer",
+          template_role: s.template_role, order_index: participants.length };
+        byIdentity.set(s.identity, p); participants.push(p);
+      } else if (p.email.toLowerCase() !== s.person.email.toLowerCase()) {
+        throw new Error(`participant_email_mismatch:${s.identity}`);
+      }
+      refMap.set(s.template_ref, p.ref);
+    }
+    const fields = (d.fields ?? []).filter((f: Any) => refMap.has(f.template_signatory_ref)).map((f: Any) => ({
+      participant_ref: refMap.get(f.template_signatory_ref), field_type: f.field_type, label: f.label ?? null,
+      page_number: f.page_number, position_x: f.position_x, position_y: f.position_y, width: f.width, height: f.height,
+      is_required: f.is_required !== false, metadata: f.metadata ?? {},
+    }));
+    return { ref: `d${di + 1}`, title: d.title, template_id: d.template_id, frozen_content: d.frozen_content, fields };
+  });
+  return { participants, documents };
+}

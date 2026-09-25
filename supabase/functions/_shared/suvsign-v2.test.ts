@@ -39,3 +39,17 @@ Deno.test("status do provedor → 6 estados locais", () => {
   for (const s of ["draft", "sent", "in_progress", "completing", "completed", "cancelled"]) assertEquals(mapOperationStatus(s), s);
   assertEquals(mapOperationStatus("weird"), null);
 });
+
+import { buildMultiDocument as _bmd } from "./suvsign-v2.ts";
+Deno.test("multidoc: mesmo contato com refs diferentes vira 1 participante", () => {
+  const joao = { name: "João", email: "joao@x.com", phone: null, cpf: "1" };
+  const f = (ref: string) => ({ template_signatory_ref: ref, field_type: "signature", page_number: 1, position_x: 1, position_y: 1, width: 1, height: 1 });
+  const out = _bmd([
+    { template_id: "A", title: "A", frozen_content: {}, signatories: [{ template_ref: "role-client", identity: "contact:c1", person: joao, template_role: null }], fields: [f("role-client")] },
+    { template_id: "B", title: "B", frozen_content: {}, signatories: [{ template_ref: "client", identity: "contact:c1", person: joao, template_role: null }], fields: [f("client")] },
+  ]);
+  if (out.participants.length !== 1) throw new Error("participants");
+  if (out.documents.length !== 2) throw new Error("documents");
+  const refs = out.documents.flatMap((d) => d.fields.map((x: any) => x.participant_ref));
+  if (refs.length !== 2 || refs.some((r) => r !== "p1")) throw new Error("refs " + refs);
+});
