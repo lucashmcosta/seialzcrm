@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ArrowClockwise, DownloadSimple, PaperPlaneTilt, X } from '@phosphor-icons/react';
@@ -20,7 +21,8 @@ const fmt = (d?: string | null) => (d ? new Date(d).toLocaleString('pt-BR') : ''
 export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate }: Props) {
   const qc = useQueryClient();
   const [step, setStep] = useState<Step>('list');
-  const [templateId, setTemplateId] = useState<string>('');
+  const [templateIds, setTemplateIds] = useState<string[]>([]);
+  const [docTab, setDocTab] = useState(0);
   const [signers, setSigners] = useState<Record<string, { name: string; email: string }>>({});
   const [unresolved, setUnresolved] = useState<{ ref: string; display_name: string }[]>([]);
   const [draft, setDraft] = useState<{ request_id: string; snapshot: any; snapshot_sha256: string } | null>(null);
@@ -44,8 +46,8 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
   const prepare = async () => {
     setBusy(true);
     try {
-      const r = await callSignatureRequests('prepare_contract', { opportunity_id: opportunityId, template_id: templateId, signers });
-      setDraft(r); setUnresolved([]); setStep('preview'); refresh();
+      const r = await callSignatureRequests('prepare_contract', { opportunity_id: opportunityId, template_ids: templateIds, signers });
+      setDraft(r); setDocTab(0); setUnresolved([]); setStep('preview'); refresh();
     } catch (e) {
       if (e instanceof SignatureApiError && e.code === 'signers_required') setUnresolved((e.extra.unresolved as any[]) ?? []);
       showErr(e);
@@ -69,14 +71,15 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
     } catch (e) { showErr(e); } finally { setBusy(false); }
   };
   const openDraft = async (requestId: string) => {
-    try { const r = await callSignatureRequests('get_preview', { request_id: requestId }); setDraft(r); setStep('preview'); } catch (e) { showErr(e); }
+    try { const r = await callSignatureRequests('get_preview', { request_id: requestId }); setDraft(r); setDocTab(0); setStep('preview'); } catch (e) { showErr(e); }
   };
 
+  const draftDocs: any[] = draft?.snapshot?.documents ?? [];
   const previewHtml = useMemo(() => {
-    const pages = draft?.snapshot?.documents?.[0]?.frozen_content?.pages ?? [];
+    const pages = draftDocs[docTab]?.frozen_content?.pages ?? [];
     return pages.map((p: any) => (p.blocks ?? []).filter((b: any) => b.type === 'text' || b.type === 'heading')
       .map((b: any) => DOMPurify.sanitize(b.type === 'heading' ? `<h3>${b.content ?? ''}</h3>` : `<div>${b.content ?? ''}</div>`)).join(''));
-  }, [draft]);
+  }, [draft, docTab]);
 
   const requests = cap.data?.requests ?? [];
 
@@ -112,12 +115,20 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                         </li>
                       ))}
                     </ul>
+                    {(r.provider_documents ?? []).length > 0 && (
+                      <div className="text-sm space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">Documentos</p>
+                        {(r.provider_documents ?? []).map((d: any) => (
+                          <div key={d.document_id} className="flex items-center justify-between gap-2">
+                            <span className="truncate">{d.title ?? 'Documento'} <span className="text-xs text-muted-foreground">· {d.final_sha256 || r.status === 'completed' ? 'concluído' : SIGNATURE_STATUS_LABEL[d.status] ?? 'em andamento'}</span></span>
+                            {(d.final_sha256 || r.status === 'completed') && <Button size="sm" variant="outline" disabled={busy} onClick={() => act('get_download_url', r.id, { document_id: d.document_id })}><DownloadSimple className="h-4 w-4 mr-1" />Baixar</Button>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-2">
                       {r.status === 'draft' && canCreate && <Button size="sm" onClick={() => openDraft(r.id)}>Conferir e enviar</Button>}
                       {r.provider_operation_id && <Button size="sm" variant="outline" disabled={busy} onClick={() => act('get_signature_status', r.id)}><ArrowClockwise className="h-4 w-4 mr-1" />Atualizar</Button>}
-                      {r.status === 'completed' && (r.provider_documents ?? []).map((d: any) => (
-                        <Button key={d.document_id} size="sm" variant="outline" disabled={busy} onClick={() => act('get_download_url', r.id, { document_id: d.document_id })}><DownloadSimple className="h-4 w-4 mr-1" />{d.title ?? 'PDF'}</Button>
-                      ))}
                       {['draft', 'sent', 'in_progress'].includes(r.status) && <Button size="sm" variant="ghost" disabled={busy} onClick={() => act('cancel_signature', r.id)}><X className="h-4 w-4 mr-1" />Cancelar</Button>}
                     </div>
                   </div>
@@ -127,17 +138,23 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
 
             {step === 'template' && (
               <div className="space-y-4">
-                <p className="text-sm font-medium">Escolha o modelo</p>
+                <p className="text-sm font-medium">Escolha os documentos</p>
+                <p className="text-xs text-muted-foreground">Todos os documentos marcados vão juntos em um único envio, com um único link para o cliente.</p>
                 {templates.isLoading && <p className="text-sm text-muted-foreground">Carregando modelos…</p>}
                 {templates.error && <p className="text-sm text-destructive">{(templates.error as Error).message}</p>}
                 <div className="space-y-2">
                   {(templates.data?.templates ?? []).map((t: any) => {
                     const item = (
                       <button key={t.id} type="button" disabled={!t.v2_compatible}
-                        onClick={() => { setTemplateId(t.id); setUnresolved([]); setSigners({}); }}
-                        className={`w-full text-left border rounded-[6px] p-3 ${templateId === t.id ? 'border-primary bg-muted' : 'border-border'} ${!t.v2_compatible ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                        <p className="font-medium">{t.name}</p>
-                        {t.description && <p className="text-xs text-muted-foreground">{t.description}</p>}
+                        role="checkbox" aria-checked={templateIds.includes(t.id)}
+                        onClick={() => { setTemplateIds((ids) => ids.includes(t.id) ? ids.filter((x) => x !== t.id) : [...ids, t.id]); setUnresolved([]); }}
+                        className={`w-full text-left border rounded-[6px] p-3 flex gap-3 items-start ${templateIds.includes(t.id) ? 'border-primary bg-muted' : 'border-border'} ${!t.v2_compatible ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        <Checkbox checked={templateIds.includes(t.id)} disabled={!t.v2_compatible} className="mt-0.5 pointer-events-none" tabIndex={-1} />
+                        <span className="min-w-0">
+                          <span className="block font-medium">{t.name}</span>
+                          {t.description && <span className="block text-xs text-muted-foreground">{t.description}</span>}
+                          {!t.v2_compatible && <span className="block text-xs text-muted-foreground">Incompatível{(t.v2_unsupported_features ?? []).length ? `: ${t.v2_unsupported_features.join(', ')}` : ''}</span>}
+                        </span>
                       </button>
                     );
                     return t.v2_compatible ? item : (
@@ -161,7 +178,7 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                 )}
                 <div className="flex gap-2">
                   <Button variant="ghost" onClick={() => setStep('list')}>Voltar</Button>
-                  <Button disabled={!templateId || busy} onClick={prepare}>{busy ? 'Preparando…' : 'Preencher com dados do CRM'}</Button>
+                  <Button disabled={!templateIds.length || busy} onClick={prepare}>{busy ? 'Preparando…' : 'Preencher com dados do CRM'}</Button>
                 </div>
               </div>
             )}
@@ -173,7 +190,14 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                   <ul className="text-sm">{(draft.snapshot?.participants ?? []).map((p: any) => <li key={p.ref}>{p.name} — {p.email}</li>)}</ul>
                 </div>
                 <div>
-                  <p className="text-sm font-medium mb-2">Prévia do contrato</p>
+                  <p className="text-sm font-medium mb-2">Prévia — {draftDocs.length} documento(s) nesta solicitação</p>
+                  {draftDocs.length > 1 && (
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {draftDocs.map((d: any, i: number) => (
+                        <Button key={d.ref ?? i} size="sm" variant={i === docTab ? 'default' : 'outline'} onClick={() => setDocTab(i)}>Documento {i + 1} — {d.title}</Button>
+                      ))}
+                    </div>
+                  )}
                   <div className="space-y-4">
                     {previewHtml.map((h: string, i: number) => (
                       <div key={i} className="border border-border rounded-[6px] p-4 bg-card text-sm prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: h }} />
@@ -183,7 +207,7 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                 </div>
                 <div className="flex gap-2">
                   <Button variant="ghost" onClick={() => { setStep('list'); setDraft(null); }}>Voltar</Button>
-                  <Button disabled={busy} onClick={() => send(draft.request_id)}><PaperPlaneTilt className="h-4 w-4 mr-2" />{busy ? 'Enviando…' : 'Enviar para assinatura'}</Button>
+                  <Button disabled={busy} onClick={() => send(draft.request_id)}><PaperPlaneTilt className="h-4 w-4 mr-2" />{busy ? 'Enviando…' : draftDocs.length > 1 ? `Enviar ${draftDocs.length} documentos para assinatura` : 'Enviar 1 documento para assinatura'}</Button>
                 </div>
               </div>
             )}

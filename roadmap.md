@@ -40,3 +40,7 @@
 - [x] 11 ações, credenciais só no servidor, RLS A/B e dono
 - [ ] Template do piloto — bloqueado: definir template/credencial QA
 - [ ] Confirmar com a SuvSign se o webhook é por conta ou por operação
+
+## SuvSign V2 — multidocumento (2026-09-25)
+- [x] Multiseleção dinâmica, prepare multi-template, participantes por identidade real (p1..pN), 1 operação
+- [ ] E2E multidocumento — aguarda segundo template QA ativo na SuvSign

@@ -8,7 +8,7 @@ import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
 import {
   canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, findUnresolvedPlaceholders, friendlyTemplateError, loadV2Credentials,
-  mapOperationStatus, sha256Hex, SIGNING_V2_FLAG, suvsignFetch,
+  mapOperationStatus, sha256Hex, buildMultiDocument, SIGNING_V2_FLAG, suvsignFetch,
 } from "../_shared/suvsign-v2.ts";
 
 const cors = {
@@ -151,18 +151,22 @@ Deno.serve(async (req) => {
         const opp = await loadOpp(body.opportunity_id);
         if (!opp) return fail("not_found", "Oportunidade não encontrada", 404);
         if (!(await v2SendAllowed(opp.organization_id))) return fail("v2_disabled", "Novo fluxo de assinatura não habilitado", 409);
-        const templateId = typeof body.template_id === "string" ? body.template_id.trim() : "";
-        if (!templateId || templateId.length > 100) return fail("template_required", "Escolha um modelo");
+        const rawIds: unknown[] = Array.isArray(body.template_ids) ? body.template_ids : (typeof body.template_id === "string" ? [body.template_id] : []);
+        const templateIds = [...new Set(rawIds.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean))];
+        if (!templateIds.length || templateIds.some((x) => x.length > 100)) return fail("template_required", "Escolha ao menos um documento");
         const creds = await loadV2Credentials(admin, opp.organization_id);
         if (!creds) return fail("not_configured", "Credencial V2 não configurada", 409);
 
-        // 1) definição V2 oficial — qualquer 422/404 bloqueia ANTES de criar operação
-        const t = await suvsignFetch(creds, "api-handler", `/templates/${encodeURIComponent(templateId)}?include=v2_definition`, { method: "GET" });
-        if (!t.ok || !t.body?.v2_definition) {
-          return fail(t.body?.error ?? "template_unavailable", friendlyTemplateError(t.body?.error), t.status === 404 ? 404 : 422,
-            { unsupported_features: t.body?.unsupported_features ?? [] });
+        // 1) definições V2 oficiais — qualquer 422/404 bloqueia ANTES de criar operação
+        const defs: { id: string; name: string | null; def: Any }[] = [];
+        for (const id of templateIds) {
+          const t = await suvsignFetch(creds, "api-handler", `/templates/${encodeURIComponent(id)}?include=v2_definition`, { method: "GET" });
+          if (!t.ok || !t.body?.v2_definition) {
+            return fail(t.body?.error ?? "template_unavailable", friendlyTemplateError(t.body?.error), t.status === 404 ? 404 : 422,
+              { template_id: id, unsupported_features: t.body?.unsupported_features ?? [] });
+          }
+          defs.push({ id, name: t.body.name ?? null, def: t.body.v2_definition });
         }
-        const def = t.body.v2_definition;
 
         // 2) CRM (paridade SendToSignatureButton)
         if (!opp.contact_id) return fail("contact_required", "Oportunidade sem contato");
@@ -198,53 +202,58 @@ Deno.serve(async (req) => {
         if (opp.close_date) custom.deal_close_date = new Date(`${opp.close_date}T00:00:00`).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
         const client: CrmPerson = { first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}`.trim(), email: v(contact.email), phone: v(contact.phone) };
 
-        // 3) roles → participantes reais do CRM (nunca e-mail vindo do modelo)
+        // 3) roles → identidade REAL (contact:/user:/manual:), por template
         const extras: Record<string, { name?: string; email?: string }> = body.signers && typeof body.signers === "object" ? body.signers : {};
-        const signatories: Any[] = Array.isArray(def.signatories) ? def.signatories : [];
-        const nonCreator = signatories.filter((s) => !s.is_creator);
-        const participants: Any[] = []; const roleData: Record<string, CrmPerson> = {}; const unresolved: Any[] = [];
-        signatories.forEach((s, i) => {
-          let person: CrmPerson | null = null;
-          if (s.is_creator) {
-            const n = v(me.full_name); const p = n.split(/\s+/);
-            person = { first_name: p[0] ?? "", last_name: p.slice(1).join(" "), name: n, email: v(me.email), phone: "" };
-          } else if (s.ref === "client" || nonCreator.length === 1 || nonCreator[0]?.ref === s.ref) {
-            person = client;
-          } else {
-            const e = extras[s.ref];
-            const name = v(e?.name); const email = v(e?.email).toLowerCase();
-            if (name && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && name.length <= 200 && email.length <= 255) {
-              const p = name.split(/\s+/);
-              person = { first_name: p[0], last_name: p.slice(1).join(" "), name, email, phone: "" };
+        const docInputs: Any[] = []; const unresolved: Any[] = []; const unresolvedVars: string[] = [];
+        const now = new Date();
+        for (const { id, name, def } of defs) {
+          const signatories: Any[] = Array.isArray(def.signatories) ? def.signatories : [];
+          const nonCreator = signatories.filter((s) => !s.is_creator);
+          const resolved: Any[] = []; const roleData: Record<string, CrmPerson> = {};
+          for (const s of signatories) {
+            let person: CrmPerson | null = null; let identity = ""; let cpf: string | null = null;
+            if (s.is_creator) {
+              const n = v(me.full_name); const p = n.split(/\s+/);
+              person = { first_name: p[0] ?? "", last_name: p.slice(1).join(" "), name: n, email: v(me.email), phone: "" };
+              identity = `user:${me.id}`;
+            } else if (s.ref === "client" || nonCreator.length === 1 || nonCreator[0]?.ref === s.ref) {
+              person = client; identity = `contact:${contact.id}`; cpf = v(contact.cpf) || null;
+            } else {
+              const e = extras[s.ref];
+              const nm = v(e?.name); const email = v(e?.email).toLowerCase();
+              if (nm && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && nm.length <= 200 && email.length <= 255) {
+                const p = nm.split(/\s+/);
+                person = { first_name: p[0], last_name: p.slice(1).join(" "), name: nm, email, phone: "" };
+                identity = `manual:${email}`;
+              }
             }
+            if (!person || !person.email) { if (!unresolved.some((u) => u.ref === s.ref)) unresolved.push({ ref: s.ref, display_name: s.display_name }); continue; }
+            roleData[s.ref] = person;
+            resolved.push({ template_ref: s.ref, identity, person: { name: person.name, email: person.email, phone: person.phone || null, cpf }, template_role: s.role ?? s.display_name ?? null });
           }
-          if (!person || !person.email) { unresolved.push({ ref: s.ref, display_name: s.display_name }); return; }
-          roleData[s.ref] = person;
-          participants.push({ ref: s.ref, name: person.name || person.email, email: person.email, phone: person.phone || null,
-            cpf: person === client ? v(contact.cpf) || null : null, role: "signer", template_role: s.role ?? s.display_name ?? null, order_index: i });
-        });
+          const ctx = { roles: roleData, contact: client, deal: {}, custom, templateName: name ?? "", now };
+          const frozen = fillFrozenContent(def.frozen_content, ctx);
+          for (const x of findUnresolvedPlaceholders(frozen, Object.keys(roleData))) unresolvedVars.push(`${name ?? id}: ${x}`);
+          docInputs.push({ template_id: id, title: name ?? opp.title ?? "Contrato", frozen_content: frozen, signatories: resolved, fields: def.fields ?? [],
+            meta: { id, name, layout_mode: def.layout_mode, coordinate_system: def.coordinate_system } });
+        }
         if (unresolved.length) return fail("signers_required", "Informe nome e e-mail dos demais signatários", 422, { unresolved });
-
-        const ctx = { roles: roleData, contact: client, deal: {}, custom, templateName: t.body.name ?? "", now: new Date() };
-        const frozen = fillFrozenContent(def.frozen_content, ctx);
-        const unresolvedVars = findUnresolvedPlaceholders(frozen, Object.keys(roleData));
         if (unresolvedVars.length) return fail("unresolved_template_variables", `Variáveis do modelo sem valor: ${unresolvedVars.join(", ")}`, 422, { unresolved_variables: unresolvedVars });
-        const refs = new Set(participants.map((p) => p.ref));
-        const fields = (def.fields ?? []).filter((f: Any) => refs.has(f.template_signatory_ref)).map((f: Any) => ({
-          participant_ref: f.template_signatory_ref, field_type: f.field_type, label: f.label ?? null, page_number: f.page_number,
-          position_x: f.position_x, position_y: f.position_y, width: f.width, height: f.height,
-          is_required: f.is_required !== false, metadata: f.metadata ?? {},
-        }));
+        let built: Any;
+        try { built = buildMultiDocument(docInputs); }
+        catch { return fail("participant_conflict", "O mesmo signatário aparece com e-mails diferentes entre os documentos", 422); }
+        const participants: Any[] = built.participants;
+        const templateNames = defs.map((d) => d.name ?? "Contrato").join(" + ");
         const snapshot = {
-          version: 1, template: { id: templateId, name: t.body.name ?? null, layout_mode: def.layout_mode, coordinate_system: def.coordinate_system },
-          participants: participants.map(({ template_role: _r, ...p }) => p),
-          documents: [{ ref: "d1", title: t.body.name ?? opp.title ?? "Contrato", frozen_content: frozen, fields }],
-          variables: { client, custom }, prepared_at: ctx.now.toISOString(), prepared_by: me.id,
+          version: 2, templates: docInputs.map((d) => d.meta),
+          participants: participants.map(({ template_role: _r, identity: _i, ...p }) => p),
+          documents: built.documents,
+          variables: { client, custom }, prepared_at: now.toISOString(), prepared_by: me.id,
         };
         const snapshotSha = await sha256Hex(canonicalJson(snapshot));
         const { data: created, error } = await admin.from("signature_requests").insert({
           organization_id: opp.organization_id, opportunity_id: opp.id, contact_id: contact.id, created_by: me.id,
-          engine: "suvsign_v2", template_id: templateId, template_name: t.body.name ?? null,
+          engine: "suvsign_v2", template_id: templateIds[0], template_name: templateNames,
           idempotency_key: `seialz:${crypto.randomUUID()}`, status: "draft", snapshot, snapshot_sha256: snapshotSha,
         }).select("id").single();
         if (error) throw error;
@@ -304,7 +313,7 @@ Deno.serve(async (req) => {
         await syncFromOperation(admin, r, op);
         await admin.from("activities").insert({
           organization_id: r.organization_id, opportunity_id: r.opportunity_id, contact_id: r.contact_id, activity_type: "system",
-          title: "Contrato enviado para assinatura", body: `${r.template_name ?? "Contrato"} enviado pela SuvSign.`,
+          title: "Contrato enviado para assinatura", body: `${(r.snapshot?.documents?.length ?? 1)} documento(s) enviado(s) pela SuvSign: ${r.template_name ?? "Contrato"}.`,
           created_by_user_id: me.id, source_external_id: `suvsign_v2:${opId}:sent`,
         });
         return json({ request_id: r.id, status: "sent", provider_operation_id: opId });
