@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowClockwise, ArrowLeft, Check, DownloadSimple, FileText, Plus, WarningCircle } from '@phosphor-icons/react';
+import { ArrowClockwise, ArrowLeft, Check, DownloadSimple, FileText, LinkSimple, Plus, WarningCircle } from '@phosphor-icons/react';
 import { callSignatureRequests, SignatureApiError, SIGNATURE_STATUS_LABEL, PARTICIPANT_STATUS_LABEL } from '@/lib/signatureRequestsApi';
 
 interface Props { open: boolean; onOpenChange: (o: boolean) => void; opportunityId: string; canCreate: boolean }
@@ -146,6 +146,19 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
       if (action === 'cancel_signature') toast.success('Envio cancelado');
       refresh();
     } catch (e) { showErr(e); } finally { setBusy(false); }
+  };
+  const [linkBusy, setLinkBusy] = useState<string | null>(null);
+  // Link vem só do servidor; não é guardado nem registrado.
+  const copyLink = async (requestId: string, participantId: string) => {
+    setLinkBusy(participantId);
+    try {
+      const r = await callSignatureRequests<{ signing_url: string }>('get_signing_link', { request_id: requestId, participant_id: participantId });
+      await navigator.clipboard.writeText(r.signing_url);
+      toast.success('Link de assinatura copiado');
+    } catch (e) {
+      if (e instanceof SignatureApiError && e.code === 'participant_already_signed') { toast.info('Este participante já assinou'); refresh(); }
+      else showErr(e);
+    } finally { setLinkBusy(null); }
   };
   // Retoma no estado correto: snapshot completo → prévia; senão → dados (A2).
   const resumeDraft = async (requestId: string) => {
