@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowClockwise, ArrowLeft, Check, DownloadSimple, FileText, LinkSimple, Plus, WarningCircle } from '@phosphor-icons/react';
 import { callSignatureRequests, SignatureApiError, SIGNATURE_STATUS_LABEL, PARTICIPANT_STATUS_LABEL } from '@/lib/signatureRequestsApi';
+import { FrozenDocumentPreview } from './FrozenDocumentPreview';
 
 interface Props { open: boolean; onOpenChange: (o: boolean) => void; opportunityId: string; canCreate: boolean }
 type Step = 'list' | 'template' | 'data' | 'preview';
@@ -452,13 +453,7 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                   ))}
                 </div>
               </aside>
-              <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hide bg-muted p-4 md:p-7">
-                <div className="max-w-[500px] mx-auto space-y-4">
-                  {previewHtml.map((h: string, i: number) => (
-                    <div key={i} className="bg-background border border-border shadow-sm p-8 md:p-12 min-h-[600px] text-sm prose prose-sm max-w-none break-words" dangerouslySetInnerHTML={{ __html: h }} />
-                  ))}
-                </div>
-              </div>
+              <FrozenDocumentPreview frozen={draftDocs[docTab]?.frozen_content} resetKey={`${draft.request_id}:${docTab}`} />
             </div>
             <div className={footer}>
               <Button variant="ghost" onClick={() => setStep('data')}>Voltar</Button>
