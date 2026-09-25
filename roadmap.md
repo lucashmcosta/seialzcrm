@@ -44,3 +44,8 @@
 ## SuvSign V2 — multidocumento (2026-09-25)
 - [x] Multiseleção dinâmica, prepare multi-template, participantes por identidade real (p1..pN), 1 operação
 - [ ] E2E multidocumento — aguarda segundo template QA ativo na SuvSign
+
+## SuvSign V2 — Proposta A (2026-09-25)
+- [x] Lista + detalhe, A1, A2, A3, enviado, concluído no modal V2
+- [ ] Copiar link — aguarda contrato SuvSign (links não persistidos; endpoint de recuperação [INCERTO])
+- [ ] Descartar rascunho — omitido até teste E2E de cancel_signature sem provider_operation_id
