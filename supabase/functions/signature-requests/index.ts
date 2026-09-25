@@ -375,7 +375,7 @@ Deno.serve(async (req) => {
         if (typeof body.participant_id !== "string" || !UUID.test(body.participant_id)) return fail("invalid_input", "Participante inválido", 400);
         if (!r.provider_operation_id || !["sent", "in_progress"].includes(r.status)) return fail("invalid_state", "Esta solicitação não aceita mais novos links.", 409);
         const { data: p } = await admin.from("signature_request_participants").select("id, status, provider_participant_id")
-          .eq("id", body.participant_id).eq("signature_request_id", r.id).maybeSingle();
+          .eq("id", body.participant_id).eq("request_id", r.id).maybeSingle();
         if (!p?.provider_participant_id) return fail("not_found", "Participante não encontrado", 404);
         if (p.status === "signed") return fail("participant_already_signed", "Este participante já assinou.", 409);
         const creds = await loadV2Credentials(admin, r.organization_id);
