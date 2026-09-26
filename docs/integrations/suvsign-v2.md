@@ -54,3 +54,7 @@ get_capability, get_credentials_status*, save_credentials*, test_connection*, li
 - Retorna somente `signing_url` e `expires_at`. O link não é gravado em banco nem em activity, e não aparece em log.
 - Respostas: 409 `participant_already_signed` marca o participante como assinado; 409 `invalid_state`; 429 `rate_limited`; 503 `provider_unavailable`.
 - [TODO] E2E com uma operação QA pendente.
+
+### Eventos V1 no webhook V2 (2026-09-26)
+- O webhook na SuvSign é por conta, então eventos V1 também chegam em `suvsign-v2-webhook`.
+- Payload sem `engine:"v2"` → 200 `{ok:true, skipped:"not_v2"}`, antes de qualquer leitura/escrita (espelha o V1, que devolve 200 skipped para V2).
