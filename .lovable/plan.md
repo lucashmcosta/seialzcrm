@@ -1,26 +1,24 @@
-# V2 — resolver `Custom.DataFechamento` (paridade com V1)
+# Auditoria somente de leitura: Seialz ainda depende dos recursos QA da SuvSign?
 
-## O que já foi confirmado no código (só leitura)
-- O campo da oportunidade é `opportunities.close_date`, do tipo data.
-- **V1** (`SendToSignatureButton.tsx`, linhas 123-130) manda `custom.deal_close_date` no formato `toLocaleDateString('pt-BR', { day:'numeric', month:'long', year:'numeric' })`. Com 2026-05-07, isso vira **"7 de maio de 2026"**. O V1 nunca manda `DataFechamento`. Quem traduz `deal_close_date` para `DataFechamento` é o mapeamento do conector configurado dentro da SuvSign (V1 `applyFieldMapping`), e o Seialz não tem acesso a esse mapeamento. Isso já está anotado como [INCERTO] na documentação da V2.
-- **V2** (`signature-requests/index.ts`, linha 202) já calcula `custom.deal_close_date` com a mesma fórmula. Mas `applyVariables` só troca `[Custom.<chave>]` quando a chave existe em `custom`. Como `DataFechamento` não existe, o marcador fica sem valor e o bloqueio de pendências acusa.
-- **Causa provável: A, alias inexistente.** É o mesmo tipo de problema que aconteceu com Endereco, Bairro, Cidade, Estado e CEP. A data em si e o namespace `Custom` funcionam.
+Nesta rodada nada é alterado: nenhuma edição, deploy, secret, credencial ou operação.
 
-## Etapa 1 — confirmar (só leitura)
-1. Ler o `close_date` bruto da oportunidade do teste pelas ferramentas de banco. Esperado: `2026-05-07`.
-2. Levantar os marcadores usados nos 3 templates compatíveis (Procuração, Contrato Unificado e Contrato Unificado 2) a partir dos `frozen_content` já gravados em `signature_requests` da Central e dos erros `unresolved_template_variables` recentes. Se algum template não tiver snapshot salvo, ele fica marcado como "não inspecionado" [INCERTO]. Não chamo a SuvSign por fora.
-3. Classificar cada marcador em uma de cinco categorias: já resolvido pelo V2 / o V1 tem o dado, mas falta alias no V2 / sem fonte no CRM / resolvido pelo participante / desconhecido.
-4. Se aparecerem outros aliases óbvios, eu **só listo no relatório** e não implemento nada além de `DataFechamento`.
+## Já verificado no código
+- Origem da chave: `loadV2Credentials(admin, orgId)` lê somente `suvsign_v2_credentials` da organização dona e decifra `api_key_ciphertext`. Não existe fallback por variável de ambiente, chave global ou chave de outra organização. A base usa `base_url` do registro ou `DEFAULT_V2_BASE`.
+- O Web nunca recebe a chave: todas as chamadas passam por `signature-requests`, e o navegador só vê a máscara.
+- A busca no repositório por `a9819596`, `ef22a0d3`, `2ec1f238`, `Seialz E2E QA` e `QA Webhook Pilot` não encontrou nenhuma ocorrência. A única menção a `49cfac40` e `6cc4fc44` é o texto do pedido.
+- O V1 não usa `suvsign_v2_credentials` nem flags V2. Ele ignora eventos com `engine:"v2"`.
 
-## Etapa 2 — correção (só se a Etapa 1 confirmar)
-- Em `signature-requests`, logo após a linha 202: `custom.DataFechamento = custom.deal_close_date`. É a mesma fonte e o mesmo formato do V1, e a chave antiga continua existindo.
-- É um alias pelo significado do campo, sem condição por organização ou template.
-- Não mexo em V1, SuvSign, template, schema, webhook, flags nem na oportunidade.
+## Passos restantes (somente leitura)
+1. Ler no banco a credencial V2 da Central (org `40ae935c…`): `api_key_last4`, `base_url`, se existe webhook secret, `updated_at` e dados do último teste. Nenhum valor secreto é lido.
+2. Confirmar se `last4` deixou de ser `…6016` (chave antiga de conta não confirmada) e se `updated_at` é posterior à troca da chave `Seialz Central V2`.
+3. Conferir se existem outras linhas em `suvsign_v2_credentials` e se alguma organização ainda usa `…6016`.
+4. Ver as solicitações V2 mais recentes da Central, incluindo `provider_operation_id`, status e datas. Uma operação enviada depois da troca é evidência de uso real com a chave nova.
+5. Conferir `integration_feature_flags` `signing.%`, confirmando que o piloto continua ON só na Central.
+6. Procurar na lista de secrets das funções qualquer nome com SUVSIGN, QA ou V2. Só os nomes são lidos.
+7. Reler a configuração V1 da Central em `organization_integrations` (sem secrets) e confirmar que ela não aponta para a conta QA.
 
-## Etapa 3 — testes
-- Novo teste Deno: `applyVariables("[Custom.DataFechamento]")` com `custom` montado a partir de `2026-05-07` deve dar "7 de maio de 2026" e nenhuma pendência em `findUnresolvedPlaceholders`.
-- Rodar os 16 testes que já existem, incluindo role-client como contato, Kaik automático, `client` sem campo ignorado e 2 participantes.
-- Publicar somente `signature-requests`. Nenhuma operação real será criada.
+## Limite conhecido
+O Seialz não guarda `account_id` nem o ID da chave na SuvSign. A prova de que a chave é a `6cc4fc44…` será feita pelos últimos 4 dígitos comparados com a SuvSign, pela data da troca e pelo uso real após a troca. Se `last4` continuar `…6016`, o resultado será BLOQUEADO.
 
-## Entrega
-Relatório nos 16 itens pedidos. O item 10 (preparo real do Contrato Unificado 2) fica marcado como "a validar por você na tela", porque não consigo entrar como usuário da Central.
+## Resultado
+Responder aos 10 itens e terminar com CONFIRMADO ou BLOQUEADO, indicando a dependência exata quando houver.
