@@ -58,3 +58,9 @@ get_capability, get_credentials_status*, save_credentials*, test_connection*, li
 ### Eventos V1 no webhook V2 (2026-09-26)
 - O webhook na SuvSign é por conta, então eventos V1 também chegam em `suvsign-v2-webhook`.
 - Payload sem `engine:"v2"` → 200 `{ok:true, skipped:"not_v2"}`, antes de qualquer leitura/escrita (espelha o V1, que devolve 200 skipped para V2).
+
+## Ação `discard_draft` (descarte de rascunho local)
+- Permitida apenas para `status='draft'`, `provider_operation_id IS NULL` e `sent_at IS NULL`, validado server-side.
+- Acesso: `loadRequest` (RLS do usuário, herda visibilidade da oportunidade) + vínculo ativo com a organização. Falha → 404.
+- Atomicidade: um único DELETE condicional (id, organization_id, draft, sem operação, sem envio); 0 linhas → 409 `not_discardable`, registro preservado.
+- Participantes removidos por ON DELETE CASCADE. Não chama SuvSign, não cria activity, não altera documents. Não é `cancel_signature`.

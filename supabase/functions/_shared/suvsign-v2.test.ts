@@ -129,3 +129,55 @@ Deno.test("DataFechamento via montagem real do custom (close_date 2026-05-07)", 
   const frozen = fillFrozenContent({ pages: [{ blocks: [{ type: "text", content: "Em [Custom.DataFechamento]" }] }] }, c);
   assertEquals(_fup(frozen, []).filter((x: string) => x.includes("DataFechamento")), []);
 });
+
+// ---------------- discard_draft ----------------
+import { isDiscardableDraft, discardDraftAtomic } from "./suvsign-v2.ts";
+
+// Mock que aplica os filtros do DELETE sobre linhas em memória e registra tabelas tocadas.
+function mockAdmin(rows: any[]) {
+  const touched: string[] = [];
+  return {
+    touched, rows,
+    from(t: string) {
+      touched.push(t);
+      const f: [string, string, unknown][] = [];
+      const q: any = {
+        delete() { f.push(["op", "delete", null]); return q; },
+        eq(c: string, v: unknown) { f.push(["eq", c, v]); return q; },
+        is(c: string, v: unknown) { f.push(["is", c, v]); return q; },
+        select() {
+          const hit = rows.filter((r) => f.every(([k, c, v]) => k === "op" || (k === "eq" ? r[c] === v : (r[c] ?? null) === v)));
+          for (const h of hit) rows.splice(rows.indexOf(h), 1);
+          return Promise.resolve({ data: hit.map((h) => ({ id: h.id })), error: null });
+        },
+      };
+      return q;
+    },
+  };
+}
+const dBase = { id: "r1", organization_id: "o1", status: "draft", provider_operation_id: null, sent_at: null };
+
+Deno.test("discard A: draft local é descartável e é apagado", async () => {
+  assertEquals(isDiscardableDraft(dBase), true);
+  const a = mockAdmin([{ ...dBase }]);
+  assertEquals(await discardDraftAtomic(a, dBase), "discarded");
+  assertEquals(a.rows.length, 0);
+  assertEquals(a.touched, ["signature_requests"]); // J: nenhuma activity/document
+});
+Deno.test("discard B–F: estados não elegíveis bloqueados", () => {
+  for (const s of ["sent", "in_progress", "completing", "completed", "cancelled"]) assertEquals(isDiscardableDraft({ ...dBase, status: s }), false);
+  assertEquals(isDiscardableDraft({ ...dBase, provider_operation_id: "op" }), false);
+  assertEquals(isDiscardableDraft({ ...dBase, sent_at: "2026-09-26T00:00:00Z" }), false);
+  assertEquals(isDiscardableDraft(null), false); // G/H: loadRequest nulo
+});
+Deno.test("discard G: outra organização não apaga", async () => {
+  const a = mockAdmin([{ ...dBase, organization_id: "o2" }]);
+  assertEquals(await discardDraftAtomic(a, dBase), "not_discardable");
+  assertEquals(a.rows.length, 1);
+});
+Deno.test("discard I: enviado entre a leitura e o DELETE → preservado", async () => {
+  const stale = { ...dBase }; // UI leu como draft
+  const a = mockAdmin([{ ...dBase, status: "sent", provider_operation_id: "op", sent_at: "2026-09-26T00:00:00Z" }]);
+  assertEquals(await discardDraftAtomic(a, stale), "not_discardable");
+  assertEquals(a.rows.length, 1);
+});
