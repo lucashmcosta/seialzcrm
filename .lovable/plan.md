@@ -1,23 +1,28 @@
-# Auditoria read-only: prontidão da Central Trabalhista para o E2E V2
+# V2 — ignorar signatários sem campo antes de montar os participantes
 
-Nenhuma alteração. Nenhuma operação criada. Nenhum documento enviado.
+## Problema confirmado no código
+Em `prepare_contract` (signature-requests), a lista `nonCreator` e a escolha de quem recebe o contato são feitas sobre **todos** os `def.signatories`. Um ref sem campo (`client` no Contrato Unificado 2) ganha o contato pela regra `s.ref === "client"`. Aí `role-client`, que tem os campos, cai em "signatário manual" e gera `signers_required`, ou vira um participante extra.
 
-## Já confirmado (consultas feitas agora)
-- Flags: `signing.suvsign_v2` global OFF e da Central OFF. `signing.suvsign_v2_pilot` da Central ON.
-- Credencial V2 da Central: existe, com chave final `6016`, webhook secret salvo e base `vpysvlbfsvomwrgbpybc…/functions/v1`. Foi atualizada em 24/09 às 21:14 UTC.
-- V1 da Central: integração SuvSign habilitada. A configuração tem base_url, template_id, connector_id e webhook_secret e não mudou desde 13/03.
-- Solicitações V2 da Central: 3 rascunhos, 1 enviada, 2 concluídas. Todas vêm dos testes QA.
-- Código: `ContractSignatureEntry` mostra o botão V1 (`SendToSignatureButton`) sempre que `v2_enabled=false`. O botão V2 do piloto só abre o `SignatureV2Sheet`, que chama `signature-requests`, e fica ao lado do V1, sem substituí-lo.
+## Correção (só no Seialz, só na montagem do envio V2)
+1. Novo helper puro em `_shared/suvsign-v2.ts`: `signatoriesWithFields(def)`.
+   - Monta o conjunto de refs a partir de `def.fields[].template_signatory_ref`.
+   - Devolve somente os `def.signatories` cujo `ref` está nesse conjunto.
+   - Não altera a definição original.
+2. Em `prepare_contract`, trocar `signatories` por `signatoriesWithFields(def)` antes de calcular `nonCreator` e antes do laço de resolução. Todo o resto continua igual: contato, usuário/criador, manuais, `buildMultiDocument`, a deduplicação por identidade real, os refs p1…pN e o remapeamento dos campos.
+3. Regra: **SIGNATÁRIO SEM CAMPO NÃO VIRA PARTICIPANTE DA OPERAÇÃO.**
 
-## Falta verificar (só leitura, após aprovação)
-1. Reler `SendToSignatureButton.tsx` e `suvsign-webhook` e confirmar que não dependem de nada da V2.
-2. Chamar `test_connection` e `list_templates` do `signature-requests` com uma sessão de usuário da Central. Esse passo só lê dados. Serve para ver:
-   - se a conexão está OK;
-   - quantos templates existem, com id, nome, se estão ativos, `v2_compatible` e `v2_unsupported_features`, exatamente como a SuvSign devolve.
-3. Descobrir o `account_id` da SuvSign que corresponde à chave `…6016`, se a listagem ou a resposta da API trouxer esse dado. O Seialz não guarda o account_id.
-4. Regra LIVE `source=seialz`/`v2` e o cadastro do webhook V2 na SuvSign: o Seialz não tem acesso de leitura a essas configurações. Vou informá-las como "confirmar no painel da SuvSign", sem supor nada.
+Ponto de atenção [INCERTO]: se o texto do template usar variáveis de um ref descartado (ex.: `[client.FullName]`), o bloqueio de placeholders pendentes (422) continua valendo. Não vou inventar preenchimento para refs descartados. Se isso acontecer no Contrato Unificado 2, vou reportar.
 
-## Resultado
-Um relatório com os 13 itens e o veredito `CENTRAL TRABALHISTA — PRONTA / NÃO PRONTA PARA E2E V2 SEM IMPACTAR V1`.
+## Testes (Deno, no helper e builder reais)
+A combinação `signatoriesWithFields` + a regra de resolução vai para uma função testável `resolveTemplateSignatories(def, {contact, me, extras})`, extraída do laço atual sem mudar comportamento. O edge passa a chamá-la.
+- **Caso A**, Contrato Unificado com role-client e Kaik: 1 documento, 2 participantes, cliente = p1, Kaik = p2, campos certos.
+- **Caso B**, Procuração + Unificado: 2 documentos, 2 participantes, cliente único com campos nos dois documentos, Kaik só no Unificado.
+- **Caso C**, Unificado 2 com `client` sem campo, `role-client` com campos e Kaik: `client` ignorado, 2 participantes, cliente resolvido pelo contato, nenhum `signers_required`.
+- **Caso D**, um signatário sem campo e sem outro uso: não aparece em `participants[]`.
+- Os 6 testes existentes continuam passando.
 
-Ponto de atenção: a chave `…6016` foi salva durante os testes QA. Pode ser que ela seja da conta QA, e não da conta real da Central. O passo 3 existe para esclarecer isso.
+## Fora do escopo
+SuvSign, V1 (`SendToSignatureButton`, create-from-template, payload V1), schema, templates, webhook, Nammux e operação real: nada muda. Depois disso, só o deploy de `signature-requests`.
+
+## Entrega
+Arquivos alterados, a regra, PASS/FAIL dos casos A–D, participantes finais do Unificado 2, confirmação de que o V1 está intacto e build/typecheck.
