@@ -54,3 +54,5 @@
 - [ ] E2E Copiar link V2 — aguarda operação QA pendente (hoje 0 solicitações sent/in_progress)
 
 - [x] Prévia A3: folha 816x1056 com escala e cabeçalho do snapshot (falta comparar com o PDF final)
+
+- [x] V2: alias Custom.DataFechamento = deal_close_date (2026-09-26). [TODO] validar Contrato Unificado 2 na tela (usuário); inventário de placeholders dos templates reais da Central não disponível (só snapshots QA).
