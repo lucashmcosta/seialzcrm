@@ -1,25 +1,20 @@
-# Preparar a conta real da Central Trabalhista para o E2E V2
+# Webhook V2: eventos V1 viram "200 ignorado"
 
-## Quem faz cada parte
-Os itens 1–3 (criar a API key, o webhook V2 e a regra LIVE `source=seialz`) são configurações **dentro da SuvSign**. Este projeto (Seialz) não tem acesso ao painel nem ao banco da SuvSign, então não consigo criá-las daqui. Elas precisam ser feitas no projeto SuvSign. Do lado do Seialz, a minha parte é:
+## Mudança
+Em `supabase/functions/suvsign-v2-webhook/index.ts`, na linha 19, só a resposta muda:
 
-1. **Guardar a chave da Central no Seialz de forma segura**
-   - Você gera o valor da chave `Seialz Central V2` e um webhook secret forte (por exemplo, `openssl rand -hex 32`).
-   - Você cola os dois no cartão "SuvSign V2" em Integrações, logado na Central. Eles substituem a credencial atual `…6016`, de conta não confirmada.
-   - Os valores são gravados cifrados. Eu nunca vejo nem registro os valores.
-   - Na SuvSign, a mesma chave é registrada só como hash, na conta `49cfac40-…7815`. O mesmo secret vai no webhook `https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/suvsign-v2-webhook`, com os eventos document.sent, signatory.signed e document.completed.
-2. **Confirmar os templates reais (só leitura)**
-   - Com a chave nova, chamo `list_templates` e, para os 3 compatíveis, a definição V2 (`?include=v2_definition`). As chamadas passam pela própria função `signature-requests`, com uma sessão de usuário da Central.
-   - Esperado: Procuração, Contrato Unificado e Contrato Unificado 2 compatíveis; Contrato incompatível (`invalid_fields`).
-   - Nas definições V2: `role-client` e Kaik com fields. O `client` sem field pode aparecer no Unificado 2 e é ignorado.
-   - Também rodo a montagem de participantes em modo de teste, sem gravar nada, para mostrar os participantes finais de cada documento.
-3. **Não fazer:** criar operação, enviar, criar sessão de assinatura, mandar e-mail, mexer no V1, na QA, nos templates ou no schema. Também não chamo `test_connection`, porque ele grava log. Uso só leituras.
-4. **Relatório** nos 14 itens pedidos. Os itens 1–6 aparecem como "depende da SuvSign" até você confirmar que foram criados lá.
+```text
+antes:  if (payload?.engine !== "v2") return json({ error: "not_v2" }, 400);
+depois: if (payload?.engine !== "v2") return json({ ok: true, skipped: "not_v2" }, 200);
+```
 
-## Bloqueios
-- As sessões de teste do preview não entram como usuário da Central. Para o item 2, preciso que você me deixe entrar como um usuário da Central no preview, ou que você mesmo abra "Novo envio" logado e me mande um print da lista.
-- A chave e o secret só podem ser colados por você.
+- O guard continua no mesmo lugar: antes de `operation_id`, do banco, de `signature_requests`, do secret e do HMAC. Nada é gravado.
+- JSON inválido, `operation_id` ausente, assinatura inválida e operação desconhecida continuam com os mesmos erros de hoje.
+- Não mexo no V1, no Nammux, no schema nem nos templates, e não crio operação.
 
-## Detalhes técnicos
-- Nenhuma mudança de código ou banco no Seialz.
-- A credencial é gravada pela ação existente `save_credentials` (AES-GCM, só admin da org). As leituras usam `list_templates` e a mesma `suvsignFetch` / `baseUrl`.
+## Validação
+1. Repetir o teste local, com banco e SuvSign simulados:
+   - Casos A e B (document.completed, document.sent e signatory.signed): esperado 200 `skipped` e zero chamadas.
+   - Caso C (V2 válido): segue para a busca em `signature_requests`.
+2. Publicar somente `suvsign-v2-webhook`.
+3. Anotar em `docs/integrations/suvsign-v2.md` que eventos V1 recebem 200 `skipped`, como o V1 já faz com eventos V2.
