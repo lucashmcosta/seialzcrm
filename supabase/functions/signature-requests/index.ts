@@ -8,7 +8,7 @@ import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
 import {
   canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, findUnresolvedPlaceholders, friendlyTemplateError, loadV2Credentials,
-  mapOperationStatus, sha256Hex, buildMultiDocument, SIGNING_V2_FLAG, suvsignFetch,
+  mapOperationStatus, sha256Hex, buildMultiDocument, resolveTemplateSignatories, SIGNING_V2_FLAG, suvsignFetch,
 } from "../_shared/suvsign-v2.ts";
 
 const cors = {
@@ -207,30 +207,9 @@ Deno.serve(async (req) => {
         const docInputs: Any[] = []; const unresolved: Any[] = []; const unresolvedVars: string[] = [];
         const now = new Date();
         for (const { id, name, def } of defs) {
-          const signatories: Any[] = Array.isArray(def.signatories) ? def.signatories : [];
-          const nonCreator = signatories.filter((s) => !s.is_creator);
-          const resolved: Any[] = []; const roleData: Record<string, CrmPerson> = {};
-          for (const s of signatories) {
-            let person: CrmPerson | null = null; let identity = ""; let cpf: string | null = null;
-            if (s.is_creator) {
-              const n = v(me.full_name); const p = n.split(/\s+/);
-              person = { first_name: p[0] ?? "", last_name: p.slice(1).join(" "), name: n, email: v(me.email), phone: "" };
-              identity = `user:${me.id}`;
-            } else if (s.ref === "client" || nonCreator.length === 1 || nonCreator[0]?.ref === s.ref) {
-              person = client; identity = `contact:${contact.id}`; cpf = v(contact.cpf) || null;
-            } else {
-              const e = extras[s.ref];
-              const nm = v(e?.name); const email = v(e?.email).toLowerCase();
-              if (nm && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && nm.length <= 200 && email.length <= 255) {
-                const p = nm.split(/\s+/);
-                person = { first_name: p[0], last_name: p.slice(1).join(" "), name: nm, email, phone: "" };
-                identity = `manual:${email}`;
-              }
-            }
-            if (!person || !person.email) { if (!unresolved.some((u) => u.ref === s.ref)) unresolved.push({ ref: s.ref, display_name: s.display_name }); continue; }
-            roleData[s.ref] = person;
-            resolved.push({ template_ref: s.ref, identity, person: { name: person.name, email: person.email, phone: person.phone || null, cpf }, template_role: s.role ?? s.display_name ?? null });
-          }
+          const r = resolveTemplateSignatories(def, { client, contactId: contact.id, contactCpf: v(contact.cpf) || null, me, extras });
+          const resolved = r.resolved; const roleData = r.roleData;
+          for (const u of r.unresolved) if (!unresolved.some((x) => x.ref === u.ref)) unresolved.push(u);
           const ctx = { roles: roleData, contact: client, deal: {}, custom, templateName: name ?? "", now };
           const frozen = fillFrozenContent(def.frozen_content, ctx);
           for (const x of findUnresolvedPlaceholders(frozen, Object.keys(roleData))) unresolvedVars.push(`${name ?? id}: ${x}`);
