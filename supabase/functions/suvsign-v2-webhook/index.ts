@@ -16,7 +16,8 @@ Deno.serve(async (req) => {
   if (raw.length > 1_000_000) return json({ error: "payload_too_large" }, 413);
   let payload: Any;
   try { payload = JSON.parse(raw); } catch { return json({ error: "invalid_json" }, 400); }
-  if (payload?.engine !== "v2") return json({ error: "not_v2" }, 400);
+  // Webhook é por conta na SuvSign: eventos V1 também chegam aqui. 200 evita retry; nada é gravado.
+  if (payload?.engine !== "v2") return json({ ok: true, skipped: "not_v2" }, 200);
 
   const event = String(req.headers.get("x-suvsign-event") ?? payload.event ?? "");
   const delivery = req.headers.get("x-suvsign-delivery") ?? "";
