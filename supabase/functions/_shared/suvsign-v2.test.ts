@@ -118,3 +118,14 @@ Deno.test("Fixo F — template com e-mail inválido não vira cliente", () => {
   const r = _rts(d, noEx);
   assertEquals(r.resolved, []); assertEquals(r.unresolved[0].reason, "invalid_template_identity");
 });
+
+import { buildDealCustom as _bdc, findUnresolvedPlaceholders as _fup } from "./suvsign-v2.ts";
+Deno.test("DataFechamento via montagem real do custom (close_date 2026-05-07)", () => {
+  const custom = _bdc({ id: "o1", title: "T", amount: null, close_date: "2026-05-07" });
+  assertEquals(custom.deal_close_date, "7 de maio de 2026");
+  assertEquals(custom.DataFechamento, "7 de maio de 2026");
+  const c = { ...ctx, custom };
+  assertEquals(applyVariables("[Custom.DataFechamento]", c), "7 de maio de 2026");
+  const frozen = fillFrozenContent({ pages: [{ blocks: [{ type: "text", content: "Em [Custom.DataFechamento]" }] }] }, c);
+  assertEquals(_fup(frozen, []).filter((x: string) => x.includes("DataFechamento")), []);
+});
