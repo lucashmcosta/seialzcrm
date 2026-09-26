@@ -189,3 +189,44 @@ export function buildMultiDocument(docs: TemplateDocInput[]) {
   });
   return { participants, documents };
 }
+
+// ---------- Signatários do template → pessoas reais ----------
+// Regra: SIGNATÁRIO SEM FIELD NÃO VIRA PARTICIPANTE DA OPERAÇÃO. Não altera a definição.
+export function signatoriesWithFields(def: Any): Any[] {
+  const used = new Set<string>((Array.isArray(def?.fields) ? def.fields : []).map((f: Any) => f?.template_signatory_ref).filter(Boolean));
+  return (Array.isArray(def?.signatories) ? def.signatories : []).filter((s: Any) => used.has(s?.ref));
+}
+
+const str = (x: unknown) => (x == null ? "" : String(x).trim());
+export function resolveTemplateSignatories(def: Any, o: {
+  client: CrmPerson; contactId: string; contactCpf: string | null;
+  me: { id: string; full_name?: string | null; email?: string | null };
+  extras: Record<string, { name?: string; email?: string }>;
+}) {
+  const signatories = signatoriesWithFields(def);
+  const nonCreator = signatories.filter((s) => !s.is_creator);
+  const resolved: ResolvedSignatory[] = []; const roleData: Record<string, CrmPerson> = {};
+  const unresolved: { ref: string; display_name: unknown }[] = [];
+  for (const s of signatories) {
+    let person: CrmPerson | null = null; let identity = ""; let cpf: string | null = null;
+    if (s.is_creator) {
+      const n = str(o.me.full_name); const p = n.split(/\s+/);
+      person = { first_name: p[0] ?? "", last_name: p.slice(1).join(" "), name: n, email: str(o.me.email), phone: "" };
+      identity = `user:${o.me.id}`;
+    } else if (s.ref === "client" || nonCreator.length === 1 || nonCreator[0]?.ref === s.ref) {
+      person = o.client; identity = `contact:${o.contactId}`; cpf = o.contactCpf || null;
+    } else {
+      const e = o.extras[s.ref];
+      const nm = str(e?.name); const email = str(e?.email).toLowerCase();
+      if (nm && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && nm.length <= 200 && email.length <= 255) {
+        const p = nm.split(/\s+/);
+        person = { first_name: p[0], last_name: p.slice(1).join(" "), name: nm, email, phone: "" };
+        identity = `manual:${email}`;
+      }
+    }
+    if (!person || !person.email) { unresolved.push({ ref: s.ref, display_name: s.display_name }); continue; }
+    roleData[s.ref] = person;
+    resolved.push({ template_ref: s.ref, identity, person: { name: person.name, email: person.email, phone: person.phone || null, cpf }, template_role: s.role ?? s.display_name ?? null });
+  }
+  return { resolved, roleData, unresolved };
+}

@@ -53,3 +53,36 @@ Deno.test("multidoc: mesmo contato com refs diferentes vira 1 participante", () 
   const refs = out.documents.flatMap((d) => d.fields.map((x: any) => x.participant_ref));
   if (refs.length !== 2 || refs.some((r) => r !== "p1")) throw new Error("refs " + refs);
 });
+
+import { resolveTemplateSignatories as _rts } from "./suvsign-v2.ts";
+const cli = { first_name: "Joao", last_name: "Teste", name: "Joao Teste", email: "joao@x.com", phone: "" };
+const base = { client: cli, contactId: "c1", contactCpf: "1", me: { id: "u1", full_name: "Op", email: "op@x.com" }, extras: { "80b476d9": { name: "Kaik", email: "kaik@x.com" } } };
+const fld = (ref: string) => ({ template_signatory_ref: ref, field_type: "signature", page_number: 1, position_x: 1, position_y: 1, width: 1, height: 1 });
+const unif = { signatories: [{ ref: "role-client" }, { ref: "80b476d9" }], fields: [fld("role-client"), fld("role-client"), fld("80b476d9")] };
+const unif2 = { signatories: [{ ref: "client" }, { ref: "role-client" }, { ref: "80b476d9" }], fields: [fld("role-client"), fld("80b476d9")] };
+const proc = { signatories: [{ ref: "client" }], fields: [fld("client")] };
+const doc = (id: string, def: any) => { const r = _rts(def, base); if (r.unresolved.length) throw new Error("unresolved " + JSON.stringify(r.unresolved)); return { template_id: id, title: id, frozen_content: {}, signatories: r.resolved, fields: def.fields }; };
+const byP = (d: any) => d.fields.map((f: any) => f.participant_ref);
+
+Deno.test("Caso A — Contrato Unificado", () => {
+  const o = _bmd([doc("U", unif)]);
+  assertEquals(o.documents.length, 1); assertEquals(o.participants.length, 2);
+  assertEquals(o.participants[0].email, "joao@x.com"); assertEquals(o.participants[1].email, "kaik@x.com");
+  assertEquals(byP(o.documents[0]), ["p1", "p1", "p2"]);
+});
+Deno.test("Caso B — Procuração + Unificado", () => {
+  const o = _bmd([doc("P", proc), doc("U", unif)]);
+  assertEquals(o.documents.length, 2); assertEquals(o.participants.length, 2);
+  assertEquals(byP(o.documents[0]), ["p1"]); assertEquals(byP(o.documents[1]), ["p1", "p1", "p2"]);
+});
+Deno.test("Caso C — Unificado 2 ignora client sem field", () => {
+  const r = _rts(unif2, base);
+  assertEquals(r.unresolved, []); assertEquals(r.resolved.map((x) => x.template_ref), ["role-client", "80b476d9"]);
+  const o = _bmd([doc("U2", unif2)]);
+  assertEquals(o.participants.length, 2); assertEquals(o.participants[0].identity, "contact:c1"); assertEquals(o.participants[1].identity, "manual:kaik@x.com");
+  assertEquals(unif2.signatories.length, 3); // definição intacta
+});
+Deno.test("Caso D — signatário sem field não aparece", () => {
+  const o = _bmd([doc("D", { signatories: [{ ref: "role-client" }, { ref: "orfao" }], fields: [fld("role-client")] })]);
+  assertEquals(o.participants.length, 1);
+});
