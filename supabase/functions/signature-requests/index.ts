@@ -9,6 +9,7 @@ const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
 import {
   canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, findUnresolvedPlaceholders, friendlyTemplateError, loadV2Credentials,
   mapOperationStatus, sha256Hex, buildMultiDocument, resolveTemplateSignatories, buildDealCustom, SIGNING_V2_FLAG, suvsignFetch,
+  isDiscardableDraft, discardDraftAtomic,
 } from "../_shared/suvsign-v2.ts";
 
 const cors = {
@@ -330,6 +331,18 @@ Deno.serve(async (req) => {
           source_external_id: `suvsign_v2:${r.provider_operation_id ?? r.id}:cancelled`,
         });
         return json({ request_id: r.id, status: "cancelled" });
+      }
+
+      // Descarte de rascunho puramente local (nunca criou operação na SuvSign).
+      // Não é cancelamento: sem SuvSign, sem activity, sem documento.
+      case "discard_draft": {
+        const r = await loadRequest(body.request_id);
+        if (!r) return fail("not_found", "Solicitação não encontrada", 404);
+        if (!isDiscardableDraft(r)) return fail("not_discardable", "Só rascunhos que nunca foram enviados podem ser descartados", 409);
+        const res = await discardDraftAtomic(admin, r);
+        if (res === "error") return fail("discard_failed", "Não foi possível descartar o rascunho", 500);
+        if (res !== "discarded") return fail("not_discardable", "Este rascunho mudou de estado e não pode mais ser descartado", 409);
+        return json({ request_id: r.id, discarded: true });
       }
 
       case "get_download_url": {

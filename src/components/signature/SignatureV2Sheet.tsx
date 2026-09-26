@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import DOMPurify from 'dompurify';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -172,6 +173,15 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
       setStep(ok ? 'preview' : 'data');
     } catch (e) { showErr(e); } finally { setBusy(false); }
   };
+  const discardDraft = async (requestId: string) => {
+    setBusy(true);
+    try {
+      await callSignatureRequests('discard_draft', { request_id: requestId });
+      toast.success('Rascunho descartado');
+      setSelectedId(requests.find((x) => x.id !== requestId)?.id ?? null);
+      refresh();
+    } catch (e) { showErr(e); refresh(); } finally { setBusy(false); }
+  };
 
   const draftDocs: any[] = draft?.snapshot?.documents ?? [];
   const draftParts: any[] = draft?.snapshot?.participants ?? [];
@@ -283,6 +293,23 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
         {(draftRow ? canCreate : canRefresh || canCancel) && (
           <div className="mt-auto pt-10 flex flex-wrap items-center gap-5">
             {draftRow && <Button disabled={busy} onClick={() => resumeDraft(r.id)}>Continuar preparação</Button>}
+            {draftRow && !r.provider_operation_id && !r.sent_at && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button type="button" disabled={busy} className="text-sm text-muted-foreground hover:text-destructive hover:underline disabled:opacity-50">Descartar rascunho</button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Descartar rascunho?</AlertDialogTitle>
+                    <AlertDialogDescription>Este rascunho ainda não foi enviado e será removido da lista.</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Voltar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => discardDraft(r.id)}>Descartar</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
             {canRefresh && <Button size="sm" variant="outline" className="h-8 px-3" disabled={busy} onClick={() => act('get_signature_status', r.id)}><ArrowClockwise className="h-3.5 w-3.5 mr-1.5" />Atualizar</Button>}
             {canCancel && <button type="button" disabled={busy} className="text-sm text-destructive hover:underline disabled:opacity-50" onClick={() => act('cancel_signature', r.id)}>Cancelar solicitação</button>}
           </div>

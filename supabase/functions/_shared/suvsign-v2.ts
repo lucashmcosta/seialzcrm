@@ -252,3 +252,19 @@ export function buildDealCustom(opp: { id: string; title?: string | null; amount
   }
   return out;
 }
+
+// ---------------- Descarte de rascunho local (discard_draft) ----------------
+// Só rascunho puramente local: status draft, sem operação na SuvSign, nunca enviado.
+export function isDiscardableDraft(r: { status?: string | null; provider_operation_id?: string | null; sent_at?: string | null } | null): boolean {
+  return !!r && r.status === "draft" && !r.provider_operation_id && !r.sent_at;
+}
+// DELETE condicional único: as condições valem no instante da exclusão (à prova de corrida).
+// Participantes saem por ON DELETE CASCADE. Não chama SuvSign, não grava activity/document.
+// deno-lint-ignore no-explicit-any
+export async function discardDraftAtomic(admin: any, r: { id: string; organization_id: string }): Promise<"discarded" | "not_discardable" | "error"> {
+  const { data, error } = await admin.from("signature_requests").delete()
+    .eq("id", r.id).eq("organization_id", r.organization_id).eq("status", "draft")
+    .is("provider_operation_id", null).is("sent_at", null).select("id");
+  if (error) return "error";
+  return Array.isArray(data) && data.length === 1 ? "discarded" : "not_discardable";
+}
