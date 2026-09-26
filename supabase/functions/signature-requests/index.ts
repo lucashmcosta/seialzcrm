@@ -216,6 +216,8 @@ Deno.serve(async (req) => {
           docInputs.push({ template_id: id, title: name ?? opp.title ?? "Contrato", frozen_content: frozen, signatories: resolved, fields: def.fields ?? [],
             meta: { id, name, layout_mode: def.layout_mode, coordinate_system: def.coordinate_system } });
         }
+        const badFixed = unresolved.filter((u) => u.reason === "invalid_template_identity");
+        if (badFixed.length) return fail("invalid_template_signatory", `Signatário fixo do modelo sem nome ou e-mail válido na SuvSign: ${badFixed.map((u) => u.display_name ?? u.ref).join(", ")}`, 422, { unresolved: badFixed });
         if (unresolved.length) return fail("signers_required", "Informe nome e e-mail dos demais signatários", 422, { unresolved });
         if (unresolvedVars.length) return fail("unresolved_template_variables", `Variáveis do modelo sem valor: ${unresolvedVars.join(", ")}`, 422, { unresolved_variables: unresolvedVars });
         let built: Any;

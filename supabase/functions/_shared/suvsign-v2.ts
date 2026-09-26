@@ -204,12 +204,22 @@ export function resolveTemplateSignatories(def: Any, o: {
   extras: Record<string, { name?: string; email?: string }>;
 }) {
   const signatories = signatoriesWithFields(def);
-  const nonCreator = signatories.filter((s) => !s.is_creator);
+  const isFixed = (s: Any) => s?.identity_source === "template";
+  // Prioridade: 1) fixo válido 2) fixo inválido → unresolved 3) criador 4) cliente 5) manual.
+  const nonCreator = signatories.filter((s) => !s.is_creator && !isFixed(s));
   const resolved: ResolvedSignatory[] = []; const roleData: Record<string, CrmPerson> = {};
-  const unresolved: { ref: string; display_name: unknown }[] = [];
+  const unresolved: { ref: string; display_name: unknown; reason?: string }[] = [];
   for (const s of signatories) {
     let person: CrmPerson | null = null; let identity = ""; let cpf: string | null = null;
-    if (s.is_creator) {
+    if (isFixed(s)) {
+      const nm = str(s.name); const email = str(s.email).toLowerCase();
+      if (!nm || nm.length > 200 || email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        unresolved.push({ ref: s.ref, display_name: s.display_name, reason: "invalid_template_identity" }); continue;
+      }
+      const p = nm.split(/\s+/);
+      person = { first_name: p[0], last_name: p.slice(1).join(" "), name: nm, email, phone: "" };
+      identity = `manual:${email}`;
+    } else if (s.is_creator) {
       const n = str(o.me.full_name); const p = n.split(/\s+/);
       person = { first_name: p[0] ?? "", last_name: p.slice(1).join(" "), name: n, email: str(o.me.email), phone: "" };
       identity = `user:${o.me.id}`;

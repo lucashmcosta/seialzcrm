@@ -86,3 +86,35 @@ Deno.test("Caso D — signatário sem field não aparece", () => {
   const o = _bmd([doc("D", { signatories: [{ ref: "role-client" }, { ref: "orfao" }], fields: [fld("role-client")] })]);
   assertEquals(o.participants.length, 1);
 });
+
+const kaikT = { ref: "80b476d9", identity_source: "template", name: "Kaik Rebizzi", email: "krebizzi@x.com.br" };
+const cliC = { ref: "role-client", identity_source: "consumer", name: null, email: null };
+const noEx = { ...base, extras: {} };
+const docT = (id: string, def: any) => { const r = _rts(def, noEx); if (r.unresolved.length) throw new Error("unresolved"); return { template_id: id, title: id, frozen_content: {}, signatories: r.resolved, fields: def.fields }; };
+const unifT = { signatories: [cliC, kaikT], fields: [fld("role-client"), fld("80b476d9")] };
+Deno.test("Fixo A — Unificado sem input manual", () => {
+  const o = _bmd([docT("U", unifT)]);
+  assertEquals(o.participants.length, 2); assertEquals(o.participants[1].email, "krebizzi@x.com.br"); assertEquals(o.participants[1].name, "Kaik Rebizzi");
+});
+Deno.test("Fixo B — Procuração + Unificado", () => {
+  const o = _bmd([docT("P", { signatories: [cliC], fields: [fld("role-client")] }), docT("U", unifT)]);
+  assertEquals(o.documents.length, 2); assertEquals(o.participants.length, 2);
+});
+Deno.test("Fixo C — Unificado 2", () => {
+  const d = { signatories: [{ ref: "client" }, cliC, kaikT], fields: [fld("role-client"), fld("80b476d9")] };
+  const o = _bmd([docT("U2", d)]);
+  assertEquals(o.participants.length, 2); assertEquals(o.participants[0].identity, "contact:c1");
+});
+Deno.test("Fixo D — consumer desconhecido mantém manual", () => {
+  const d = { signatories: [cliC, { ref: "x", identity_source: "consumer" }], fields: [fld("role-client"), fld("x")] };
+  assertEquals(_rts(d, noEx).unresolved.map((u) => u.ref), ["x"]);
+  assertEquals(_rts(d, { ...noEx, extras: { x: { name: "Z", email: "z@x.com" } } }).unresolved, []);
+});
+Deno.test("Fixo E — sem identity_source igual ao antigo", () => {
+  assertEquals(_rts(unif, base).resolved.map((x) => x.identity), ["contact:c1", "manual:kaik@x.com"]);
+});
+Deno.test("Fixo F — template com e-mail inválido não vira cliente", () => {
+  const d = { signatories: [{ ...kaikT, ref: "t", email: "ruim" }], fields: [fld("t")] };
+  const r = _rts(d, noEx);
+  assertEquals(r.resolved, []); assertEquals(r.unresolved[0].reason, "invalid_template_identity");
+});
