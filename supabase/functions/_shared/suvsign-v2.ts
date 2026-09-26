@@ -240,3 +240,15 @@ export function resolveTemplateSignatories(def: Any, o: {
   }
   return { resolved, roleData, unresolved };
 }
+
+// Chaves de oportunidade no mapa custom (paridade V1 SendToSignatureButton).
+// DataFechamento: alias aditivo de deal_close_date (mesma fonte e formato).
+export function buildDealCustom(opp: { id: string; title?: string | null; amount?: number | string | null; close_date?: string | null }): Record<string, string> {
+  const out: Record<string, string> = { deal_id: opp.id, deal_title: opp.title ?? "" };
+  if (opp.amount) out.deal_amount = String(opp.amount);
+  if (opp.close_date) {
+    out.deal_close_date = new Date(`${opp.close_date}T00:00:00`).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+    out.DataFechamento = out.deal_close_date;
+  }
+  return out;
+}

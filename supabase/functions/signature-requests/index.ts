@@ -8,7 +8,7 @@ import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
 import {
   canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, findUnresolvedPlaceholders, friendlyTemplateError, loadV2Credentials,
-  mapOperationStatus, sha256Hex, buildMultiDocument, resolveTemplateSignatories, SIGNING_V2_FLAG, suvsignFetch,
+  mapOperationStatus, sha256Hex, buildMultiDocument, resolveTemplateSignatories, buildDealCustom, SIGNING_V2_FLAG, suvsignFetch,
 } from "../_shared/suvsign-v2.ts";
 
 const cors = {
@@ -197,9 +197,7 @@ Deno.serve(async (req) => {
         custom.Bairro = v(contact.address_neighborhood); custom.Cidade = v(contact.address_city); custom.Estado = v(contact.address_state);
         const zipDigits = v(contact.address_zip).replace(/\D/g, "");
         custom.CEP = zipDigits.length === 8 ? `${zipDigits.slice(0, 5)}-${zipDigits.slice(5)}` : v(contact.address_zip);
-        custom.deal_id = opp.id; custom.deal_title = opp.title ?? "";
-        if (opp.amount) custom.deal_amount = String(opp.amount);
-        if (opp.close_date) custom.deal_close_date = new Date(`${opp.close_date}T00:00:00`).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+        Object.assign(custom, buildDealCustom(opp));
         const client: CrmPerson = { first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}`.trim(), email: v(contact.email), phone: v(contact.phone) };
 
         // 3) roles → identidade REAL (contact:/user:/manual:), por template
