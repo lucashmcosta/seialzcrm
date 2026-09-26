@@ -1,29 +1,26 @@
-# V2 — usar automaticamente os signatários fixos da definição SuvSign
+# V2 — resolver `Custom.DataFechamento` (paridade com V1)
 
-## Situação atual
-`resolveTemplateSignatories` (em `_shared/suvsign-v2.ts`) usa três caminhos: criador, cliente (`ref === "client"`, o único não-criador ou o primeiro não-criador) e manual (`extras`). O Kaik só é resolvido pelo caminho manual. Por isso ele cai em `unresolved` e a tela pede nome e e-mail.
+## O que já foi confirmado no código (só leitura)
+- O campo da oportunidade é `opportunities.close_date`, do tipo data.
+- **V1** (`SendToSignatureButton.tsx`, linhas 123-130) manda `custom.deal_close_date` no formato `toLocaleDateString('pt-BR', { day:'numeric', month:'long', year:'numeric' })`. Com 2026-05-07, isso vira **"7 de maio de 2026"**. O V1 nunca manda `DataFechamento`. Quem traduz `deal_close_date` para `DataFechamento` é o mapeamento do conector configurado dentro da SuvSign (V1 `applyFieldMapping`), e o Seialz não tem acesso a esse mapeamento. Isso já está anotado como [INCERTO] na documentação da V2.
+- **V2** (`signature-requests/index.ts`, linha 202) já calcula `custom.deal_close_date` com a mesma fórmula. Mas `applyVariables` só troca `[Custom.<chave>]` quando a chave existe em `custom`. Como `DataFechamento` não existe, o marcador fica sem valor e o bloqueio de pendências acusa.
+- **Causa provável: A, alias inexistente.** É o mesmo tipo de problema que aconteceu com Endereco, Bairro, Cidade, Estado e CEP. A data em si e o namespace `Custom` funcionam.
 
-## Correção (somente no helper, com prioridade explícita)
-Para cada signatário com campo (o filtro `signatoriesWithFields` continua igual):
-1. **Fixo**: `identity_source === "template"`, com `name` preenchido e `email` válido. Usa os dados da definição e a identidade `manual:<email em minúsculas>`. Não pede nada ao usuário.
-2. **Criador** (`is_creator`): usuário logado, `user:<id>`.
-3. **Cliente**: contato do CRM, `contact:<id>`. Os candidatos a "primeiro/único não-criador" passam a excluir os signatários fixos, para que o Kaik nunca receba o contato e não impeça o `role-client` de receber.
-4. **Consumer restante**: `extras` manual, como hoje. Se não houver dados, vai para `unresolved` e a tela mostra o formulário.
+## Etapa 1 — confirmar (só leitura)
+1. Ler o `close_date` bruto da oportunidade do teste pelas ferramentas de banco. Esperado: `2026-05-07`.
+2. Levantar os marcadores usados nos 3 templates compatíveis (Procuração, Contrato Unificado e Contrato Unificado 2) a partir dos `frozen_content` já gravados em `signature_requests` da Central e dos erros `unresolved_template_variables` recentes. Se algum template não tiver snapshot salvo, ele fica marcado como "não inspecionado" [INCERTO]. Não chamo a SuvSign por fora.
+3. Classificar cada marcador em uma de cinco categorias: já resolvido pelo V2 / o V1 tem o dado, mas falta alias no V2 / sem fonte no CRM / resolvido pelo participante / desconhecido.
+4. Se aparecerem outros aliases óbvios, eu **só listo no relatório** e não implemento nada além de `DataFechamento`.
 
-Compatibilidade: definições sem `identity_source` seguem exatamente o comportamento atual. Se o fixo vier sem nome ou com e-mail inválido, ele cai nos passos seguintes, sem erro novo. Nada é fixado no código: nem Kaik, nem e-mail, nem regra da Central. A definição recebida não é alterada.
+## Etapa 2 — correção (só se a Etapa 1 confirmar)
+- Em `signature-requests`, logo após a linha 202: `custom.DataFechamento = custom.deal_close_date`. É a mesma fonte e o mesmo formato do V1, e a chave antiga continua existindo.
+- É um alias pelo significado do campo, sem condição por organização ou template.
+- Não mexo em V1, SuvSign, template, schema, webhook, flags nem na oportunidade.
 
-A tela já monta a lista de signatários a partir do resultado do preparo. Com o Kaik resolvido, o formulário dele deixa de aparecer, sem mudança na tela. Vou confirmar isso lendo `SignatureV2Sheet` antes de fechar e só mexo nela se ela exibir o formulário por conta própria.
+## Etapa 3 — testes
+- Novo teste Deno: `applyVariables("[Custom.DataFechamento]")` com `custom` montado a partir de `2026-05-07` deve dar "7 de maio de 2026" e nenhuma pendência em `findUnresolvedPlaceholders`.
+- Rodar os 16 testes que já existem, incluindo role-client como contato, Kaik automático, `client` sem campo ignorado e 2 participantes.
+- Publicar somente `signature-requests`. Nenhuma operação real será criada.
 
-## Testes (Deno, helper e builder reais)
-- A: Unificado (role-client consumer + Kaik template). 2 participantes, nenhum `unresolved` e `extras` vazio.
-- B: Procuração + Unificado. 2 documentos, 2 participantes, cliente único.
-- C: Unificado 2. `client` sem campo ignorado, role-client = contato, Kaik = fixo, 2 participantes.
-- D: consumer desconhecido sem extras vai para `unresolved`. Com extras, é resolvido como manual.
-- E: definição antiga sem `identity_source`, com o mesmo resultado de hoje.
-- Os 10 testes que já existem são ajustados só onde passam `extras` do Kaik e continuam passando.
-
-## Publicação
-Build/testes, depois o deploy apenas de `signature-requests`. Sem operação real.
-
-## Não muda
-V1, botão V1, SuvSign, schema, webhook, Nammux, templates, flags, renderer e snapshots/operações existentes.
+## Entrega
+Relatório nos 16 itens pedidos. O item 10 (preparo real do Contrato Unificado 2) fica marcado como "a validar por você na tela", porque não consigo entrar como usuário da Central.
