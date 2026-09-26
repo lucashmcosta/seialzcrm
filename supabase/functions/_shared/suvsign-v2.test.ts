@@ -155,29 +155,29 @@ function mockAdmin(rows: any[]) {
     },
   };
 }
-const base = { id: "r1", organization_id: "o1", status: "draft", provider_operation_id: null, sent_at: null };
+const dBase = { id: "r1", organization_id: "o1", status: "draft", provider_operation_id: null, sent_at: null };
 
 Deno.test("discard A: draft local é descartável e é apagado", async () => {
-  assertEquals(isDiscardableDraft(base), true);
-  const a = mockAdmin([{ ...base }]);
-  assertEquals(await discardDraftAtomic(a, base), "discarded");
+  assertEquals(isDiscardableDraft(dBase), true);
+  const a = mockAdmin([{ ...dBase }]);
+  assertEquals(await discardDraftAtomic(a, dBase), "discarded");
   assertEquals(a.rows.length, 0);
   assertEquals(a.touched, ["signature_requests"]); // J: nenhuma activity/document
 });
 Deno.test("discard B–F: estados não elegíveis bloqueados", () => {
-  for (const s of ["sent", "in_progress", "completing", "completed", "cancelled"]) assertEquals(isDiscardableDraft({ ...base, status: s }), false);
-  assertEquals(isDiscardableDraft({ ...base, provider_operation_id: "op" }), false);
-  assertEquals(isDiscardableDraft({ ...base, sent_at: "2026-09-26T00:00:00Z" }), false);
+  for (const s of ["sent", "in_progress", "completing", "completed", "cancelled"]) assertEquals(isDiscardableDraft({ ...dBase, status: s }), false);
+  assertEquals(isDiscardableDraft({ ...dBase, provider_operation_id: "op" }), false);
+  assertEquals(isDiscardableDraft({ ...dBase, sent_at: "2026-09-26T00:00:00Z" }), false);
   assertEquals(isDiscardableDraft(null), false); // G/H: loadRequest nulo
 });
 Deno.test("discard G: outra organização não apaga", async () => {
-  const a = mockAdmin([{ ...base, organization_id: "o2" }]);
-  assertEquals(await discardDraftAtomic(a, base), "not_discardable");
+  const a = mockAdmin([{ ...dBase, organization_id: "o2" }]);
+  assertEquals(await discardDraftAtomic(a, dBase), "not_discardable");
   assertEquals(a.rows.length, 1);
 });
 Deno.test("discard I: enviado entre a leitura e o DELETE → preservado", async () => {
-  const stale = { ...base }; // UI leu como draft
-  const a = mockAdmin([{ ...base, status: "sent", provider_operation_id: "op", sent_at: "2026-09-26T00:00:00Z" }]);
+  const stale = { ...dBase }; // UI leu como draft
+  const a = mockAdmin([{ ...dBase, status: "sent", provider_operation_id: "op", sent_at: "2026-09-26T00:00:00Z" }]);
   assertEquals(await discardDraftAtomic(a, stale), "not_discardable");
   assertEquals(a.rows.length, 1);
 });
