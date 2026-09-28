@@ -2102,6 +2102,47 @@ export type Database = {
           },
         ]
       }
+      commercial_history_jobs: {
+        Row: {
+          cursor_id: string | null
+          examined: number
+          finished_at: string | null
+          last_error: string | null
+          organization_id: string
+          requested_at: string
+          status: string
+          updated: number
+        }
+        Insert: {
+          cursor_id?: string | null
+          examined?: number
+          finished_at?: string | null
+          last_error?: string | null
+          organization_id: string
+          requested_at?: string
+          status?: string
+          updated?: number
+        }
+        Update: {
+          cursor_id?: string | null
+          examined?: number
+          finished_at?: string | null
+          last_error?: string | null
+          organization_id?: string
+          requested_at?: string
+          status?: string
+          updated?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_history_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commercial_message_rules: {
         Row: {
           active: boolean
@@ -13952,6 +13993,11 @@ export type Database = {
         Args: { p_org: string; p_permission: string }
         Returns: boolean
       }
+      commercial_history_run_batch: {
+        Args: { p_limit?: number; p_org: string }
+        Returns: Json
+      }
+      commercial_history_tick: { Args: never; Returns: undefined }
       commercial_import_history: {
         Args: {
           p_from: string
@@ -13966,11 +14012,13 @@ export type Database = {
         Args: { p_endpoint?: string; p_org: string; p_text: string }
         Returns: Json
       }
+      commercial_message_evidence: { Args: { p_metadata: Json }; Returns: Json }
       commercial_normalize: { Args: { p_text: string }; Returns: string }
       commercial_process_event: {
         Args: { p_enrich?: boolean; p_event: string }
         Returns: Json
       }
+      commercial_queue_history: { Args: { p_org: string }; Returns: undefined }
       commercial_records: {
         Args: {
           p_filters?: Json
@@ -13981,6 +14029,10 @@ export type Database = {
           p_type: string
         }
         Returns: Json
+      }
+      commercial_recover_contact: {
+        Args: { p_contact: string; p_org: string }
+        Returns: number
       }
       commercial_report: {
         Args: { p_filters?: Json; p_org: string }
