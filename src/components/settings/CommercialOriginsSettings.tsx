@@ -368,7 +368,7 @@ function CommercialOriginsSettingsContent() {
             >
               Limpar
             </Button>
-            <Button disabled={busy}>
+            <Button type="submit" disabled={busy}>
               {rule.id ? "Salvar alterações" : "Cadastrar regra"}
             </Button>
           </div>

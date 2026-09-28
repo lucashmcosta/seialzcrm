@@ -209,7 +209,7 @@ export function CommercialAttributionPanel(
               onChange={(e) => setReason(e.target.value)}
             />
           </label>
-          <Button disabled={busy}>Salvar correção</Button>
+          <Button type="submit" disabled={busy}>Salvar correção</Button>
         </form>
       )}
       <details>
