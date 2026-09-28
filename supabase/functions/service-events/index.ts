@@ -40,19 +40,11 @@ const SERVICES: Record<string, string> = {
   "inbox-dispatcher": "Inbox Dispatcher",
   "inbox-reaper": "Inbox Reaper",
   "evolution-api": "Evolution API",
-  "integration-worker": "Integration Worker",
-  "public-subscriber-worker": "Public Subscriber Worker",
-  redis: "Redis",
-  "railway-backend": "Railway Backend",
   scheduler: "Scheduler",
 };
 
-// Services with no telemetry source of their own today.
+// Services with no event history source of their own today.
 const NO_SOURCE = new Set([
-  "integration-worker",
-  "public-subscriber-worker",
-  "redis",
-  "railway-backend",
   "scheduler",
 ]);
 
