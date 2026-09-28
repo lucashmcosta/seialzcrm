@@ -11146,6 +11146,7 @@ export type Database = {
       }
       signature_request_participants: {
         Row: {
+          auto_error: string | null
           cpf: string | null
           created_at: string
           email: string
@@ -11159,14 +11160,14 @@ export type Database = {
           ref: string
           request_id: string
           role: string
-          signing_mode: string
-          auto_error: string | null
           signed_at: string | null
+          signing_mode: string
           status: string
           template_role: string | null
           updated_at: string
         }
         Insert: {
+          auto_error?: string | null
           cpf?: string | null
           created_at?: string
           email: string
@@ -11180,14 +11181,14 @@ export type Database = {
           ref: string
           request_id: string
           role?: string
-          signing_mode?: string
-          auto_error?: string | null
           signed_at?: string | null
+          signing_mode?: string
           status?: string
           template_role?: string | null
           updated_at?: string
         }
         Update: {
+          auto_error?: string | null
           cpf?: string | null
           created_at?: string
           email?: string
@@ -11201,9 +11202,8 @@ export type Database = {
           ref?: string
           request_id?: string
           role?: string
-          signing_mode?: string
-          auto_error?: string | null
           signed_at?: string | null
+          signing_mode?: string
           status?: string
           template_role?: string | null
           updated_at?: string
