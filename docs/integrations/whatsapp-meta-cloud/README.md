@@ -19,7 +19,8 @@ Canal WhatsApp oficial via Meta Cloud API — envio, templates e recepção.
 
 ## Envio
 - `meta-whatsapp-send` — chamada por `dispatchWhatsAppSend`.
-- Mensagens de texto solicitam a prévia de links com `text.preview_url: true`; o corpo deve conter a URL com `http://` ou `https://`. Referência: [objeto de texto da Meta](https://whatsapp.github.io/WhatsApp-Nodejs-SDK/api-reference/types/TextObject/).
+- Política global, para todas as organizações e todos os números Meta Cloud: mensagens de texto solicitam a prévia de links com `text.preview_url: true`; o corpo deve conter a URL com `http://` ou `https://`. Não existe exceção por número nem configuração por tenant. Referência: [objeto de texto da Meta](https://whatsapp.github.io/WhatsApp-Nodejs-SDK/api-reference/types/TextObject/).
+- A política cobre texto livre permitido pela janela de atendimento. Templates e anexos mantêm seus formatos próprios; não recebem `text.preview_url`. A integração Twilio usa a prévia automática do provedor, conforme seu [guia](../whatsapp-twilio/README.md).
 - Templates: `meta-whatsapp-templates-create`, `meta-whatsapp-templates-sync`.
 
 ## Diagnósticos
