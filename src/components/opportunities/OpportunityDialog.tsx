@@ -84,7 +84,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
         fetchCompanies();
       }
     }
-  }, [open, organization?.id, organization?.enable_companies_module]);
+  }, [open, organization?.id, organization?.enable_companies_module, opportunity?.contact_id]);
 
   const fetchContacts = async () => {
     if (!organization?.id) return;
@@ -97,7 +97,16 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
       .order('full_name');
 
     if (data) {
-      setContacts(data);
+      // Contact-detail creation can preselect a contact outside the first server page.
+      const selectedId = opportunity?.contact_id;
+      if (selectedId && !data.some((contact) => contact.id === selectedId)) {
+        const { data: selected } = await supabase.from('contacts')
+          .select('id, full_name').eq('organization_id', organization.id)
+          .eq('id', selectedId).is('deleted_at', null).maybeSingle();
+        setContacts(selected ? [selected, ...data] : data);
+      } else {
+        setContacts(data);
+      }
     }
   };
 
@@ -202,10 +211,10 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>
-              {opportunity ? t('opportunities.editOpportunity') : t('opportunities.newOpportunity')}
+              {opportunity?.id ? t('opportunities.editOpportunity') : t('opportunities.newOpportunity')}
             </DialogTitle>
             <DialogDescription>
-              {opportunity ? 'Edite os detalhes da oportunidade' : 'Crie uma nova oportunidade no pipeline'}
+              {opportunity?.id ? 'Edite os detalhes da oportunidade' : 'Crie uma nova oportunidade no pipeline'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -333,7 +342,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
               </>
             )}
           </div>
-          {!opportunity && <CommercialOriginSelection contactId={formData.contact_id} value={commercialSelection} onChange={setCommercialSelection} />}
+          {!opportunity?.id && <CommercialOriginSelection contactId={formData.contact_id} value={commercialSelection} onChange={setCommercialSelection} />}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
