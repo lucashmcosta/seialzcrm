@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   useCommercialCampaigns,
+  useCommercialHistoryJob,
   useCommercialOrigins,
   useCommercialRules,
 } from "@/hooks/useCommercialOrigins";
@@ -64,6 +65,7 @@ function CommercialOriginsSettingsContent() {
   const { permissions } = usePermissions();
   const { orgId, enabled, origins, error } = useCommercialOrigins();
   const queryClient = useQueryClient();
+  const historyJob = useCommercialHistoryJob(permissions.canManageSettings ? orgId : undefined);
   const { data: campaigns = [] } = useCommercialCampaigns(
     permissions.canManageSettings ? orgId : undefined,
   );
@@ -455,8 +457,31 @@ function CommercialOriginsSettingsContent() {
           </div>
         )}
       </section>
+      <section className="space-y-3" aria-label="Atualização automática do histórico">
+        <h2 className="text-lg font-medium">Atualização do histórico</h2>
+        <p className="text-sm text-muted-foreground">
+          Ativar a organização ou salvar uma regra atualiza as origens ainda não identificadas em segundo plano.
+          A recuperação usa evidências da entrada inicial e da própria oportunidade. Correções manuais são preservadas.
+        </p>
+        {historyJob.error && <p role="alert">Não foi possível consultar o processamento do histórico.</p>}
+        {historyJob.data && <p role="status" className="text-sm">
+          {historyJob.data.status === "complete" ? "Atualização concluída" :
+            historyJob.data.status === "error" ? "Atualização interrompida. Tente novamente." :
+            historyJob.data.status === "pending" ? "Atualização na fila" : "Atualizando histórico"}
+          {" · "}{historyJob.data.examined.toLocaleString("pt-BR")} contatos examinados
+          {" · "}{historyJob.data.updated.toLocaleString("pt-BR")} atribuições preenchidas
+        </p>}
+        <Button variant="outline" disabled={busy || !enabled || historyJob.data?.status === "pending" || historyJob.data?.status === "running"}
+          onClick={() => run(async () => {
+            await commercialRpc("commercial_queue_history", { p_org: orgId });
+            await refresh();
+            toast.success("Atualização iniciada. Você pode sair desta página.");
+          })}>
+          Atualizar histórico
+        </Button>
+      </section>
       <section className="space-y-3">
-        <h2 className="text-lg font-medium">Reprocessar histórico</h2>
+        <h2 className="text-lg font-medium">Revisão por período</h2>
         <p className="text-sm text-muted-foreground">
           Somente origens comerciais ainda não identificadas serão preenchidas.
           Entradas antigas sem vínculo comprovado ficam para revisão.

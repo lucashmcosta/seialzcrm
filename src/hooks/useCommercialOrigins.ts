@@ -76,3 +76,25 @@ export function useCommercialRules(orgId?: string) {
     },
   });
 }
+
+export interface CommercialHistoryJob {
+  status: "pending" | "running" | "complete" | "error";
+  examined: number;
+  updated: number;
+  finished_at: string | null;
+  last_error: string | null;
+}
+export function useCommercialHistoryJob(orgId?: string) {
+  return useQuery({
+    queryKey: ["commercial", orgId, "history-job"],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { data, error } = await commercialDb.from("commercial_history_jobs")
+        .select("status,examined,updated,finished_at,last_error")
+        .eq("organization_id", orgId!).maybeSingle();
+      if (error) throw error;
+      return data as CommercialHistoryJob | null;
+    },
+    refetchInterval: 10000,
+  });
+}

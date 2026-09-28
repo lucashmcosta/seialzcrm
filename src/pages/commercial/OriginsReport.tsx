@@ -1,10 +1,10 @@
 import { useOrganization } from "@/hooks/useOrganization";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useCommercialOrigins } from "@/hooks/useCommercialOrigins";
+import { useCommercialHistoryJob, useCommercialOrigins } from "@/hooks/useCommercialOrigins";
 import { usePersistedFilters } from "@/hooks/usePersistedFilters";
 import { CommercialFilters } from "@/components/commercial/CommercialFilters";
 import {
@@ -48,6 +48,7 @@ export default function OriginsReport() {
 function OriginsReportContent() {
   const { orgId, enabled, loading } = useCommercialOrigins();
   const { permissions } = usePermissions();
+  const historyJob = useCommercialHistoryJob(permissions.canManageSettings ? orgId : undefined);
   const [filters, setFilters, , hydrated] = usePersistedFilters(
     "commercial.report.filters",
     emptyCommercialFilters,
@@ -76,6 +77,11 @@ function OriginsReportContent() {
         p_filters: period,
       }),
   });
+  useEffect(() => {
+    if (historyJob.data) void report.refetch();
+    // Refresh totals as background recovery advances or finishes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyJob.data?.updated, historyJob.data?.status]);
   const records = useQuery({
     queryKey: ["commercial", orgId, "drill", period, drill, page],
     enabled: !!orgId && enabled && !!drill,
@@ -186,6 +192,16 @@ function OriginsReportContent() {
                 ? <p>Carregando resultados…</p>
                 : report.data && (
                   <>
+                    {historyJob.data && ["pending", "running"].includes(historyJob.data.status) && (
+                      <p role="status" className="text-sm text-muted-foreground">
+                        Histórico em atualização. Os totais serão atualizados conforme as evidências forem processadas.
+                      </p>
+                    )}
+                    {historyJob.data?.status === "error" && (
+                      <p role="alert" className="text-sm text-destructive">
+                        A atualização do histórico foi interrompida. Acesse Configurar origens para tentar novamente.
+                      </p>
+                    )}
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                       {[["Contatos adquiridos", report.data.contacts], [
                         "Oportunidades criadas",
@@ -194,10 +210,8 @@ function OriginsReportContent() {
                         "Sem origem identificada",
                         `${report.data.unidentified} (${
                           report.data.opportunities
-                            ? Math.round(
-                              report.data.unidentified /
-                                report.data.opportunities * 100,
-                            )
+                            ? (report.data.unidentified /
+                                report.data.opportunities * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })
                             : 0
                         }%)`,
                       ]].map(([label, value]) => (
