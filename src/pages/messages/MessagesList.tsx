@@ -64,7 +64,7 @@ import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 import { useThreadBusinessContext, type ThreadBusinessContext } from '@/hooks/useThreadBusinessContext';
 import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
 import { useThreadSendEndpoint } from '@/hooks/useThreadSendEndpoint';
-import { resolveComposerCapability } from '@/lib/composerEndpoint';
+import { resolveComposerCapability } from '@/lib/composerCapability';
 import { useEndpointNumbers } from '@/hooks/useEndpointNumbers';
 import { pickPreferredEndpoint } from '@/lib/composerEndpoint';
 import { isSalesPurpose } from '@/lib/endpointPurpose';
