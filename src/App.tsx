@@ -218,6 +218,9 @@ const MarketingComments = lazyWithRetry("MarketingComments", () => import("./pag
 const MarketingWebhooks = lazyWithRetry("MarketingWebhooks", () => import("./pages/marketing/webhooks/index"));
 const MarketingCampaigns = lazyWithRetry("MarketingCampaigns", () => import("./pages/marketing/campaigns/index"));
 const SocialInboxPage = lazyWithRetry("SocialInboxPage", () => import("./pages/social/index"));
+const CommercialOriginsSettings = lazyWithRetry("CommercialOriginsSettings", () => import("./components/settings/CommercialOriginsSettings"), "CommercialOriginsSettings");
+const CommercialOriginsReport = lazyWithRetry("CommercialOriginsReport", () => import("./pages/commercial/OriginsReport"));
+
 // Settings layout + grid (replaces old Settings page)
 const SettingsLayout = lazyWithRetry("SettingsLayout", () => import("./components/settings/SettingsLayout"), "SettingsLayout");
 const SettingsGrid = lazyWithRetry("SettingsGrid", () => import("./components/settings/SettingsGrid"), "SettingsGrid");
@@ -691,9 +694,11 @@ const App = () => (
           <Route path="/marketing/webhooks" element={<ProtectedRoute><MarketingWebhooks /></ProtectedRoute>} />
           <Route path="/marketing/campaigns" element={<ProtectedRoute><MarketingCampaigns /></ProtectedRoute>} />
           <Route path="/social" element={<ProtectedRoute><SocialInboxPage /></ProtectedRoute>} />
+          <Route path="/commercial/origins" element={<ProtectedRoute><CommercialOriginsReport /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
             <Route index element={<SettingsGrid />} />
             <Route path="general" element={<GeneralSettings />} />
+            <Route path="commercial-origins" element={<CommercialOriginsSettings />} />
             <Route path="theme" element={<ThemeSettings />} />
             <Route path="users" element={<UsersSettings />} />
             <Route path="permissions" element={<PermissionProfilesSettings />} />

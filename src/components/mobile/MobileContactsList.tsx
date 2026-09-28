@@ -1,3 +1,5 @@
+import { CommercialOriginBadge } from '@/components/commercial/CommercialOriginBadge';
+import type { CommercialOrigin } from '@/lib/commercialOrigins';
 import { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, MagnifyingGlass, Envelope, Phone } from '@phosphor-icons/react';
@@ -10,6 +12,7 @@ import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { cn } from '@/lib/utils';
 
 interface Contact {
+  commercial_origin?: CommercialOrigin | null;
   id: string;
   full_name: string;
   email: string | null;
@@ -154,6 +157,7 @@ export function MobileContactsList({
                   <p className="text-sm font-medium text-foreground truncate">
                     {contact.full_name}
                   </p>
+                  <CommercialOriginBadge origin={contact.commercial_origin} />
                   <div className="flex items-center gap-2 mt-0.5">
                     {contact.phone && (
                       <span className="text-xs text-muted-foreground flex items-center gap-1 truncate">

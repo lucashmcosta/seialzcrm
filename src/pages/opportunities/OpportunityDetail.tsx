@@ -1,3 +1,4 @@
+import { CommercialAttributionPanel } from '@/components/commercial/CommercialAttributionPanel';
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Key } from 'react-aria-components';
@@ -395,6 +396,7 @@ export default function OpportunityDetail() {
 
             {selectedTab === 'overview' && (
               <>
+              <CommercialAttributionPanel key={opportunity.id} entityType="opportunity" entityId={opportunity.id} contactId={opportunity.contact_id} />
               <Card>
                 <CardContent className="pt-6 space-y-4">
                   <div>
@@ -680,6 +682,7 @@ export default function OpportunityDetail() {
             </Tabs.List>
 
             <Tabs.Panel id="overview">
+              <CommercialAttributionPanel key={opportunity.id} entityType="opportunity" entityId={opportunity.id} contactId={opportunity.contact_id} />
               <Card>
                 <CardContent className="pt-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

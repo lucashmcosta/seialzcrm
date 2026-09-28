@@ -555,8 +555,8 @@ async function autoCreateOpportunityIfEnabled(
   contactName: string,
   contactOwnerId: string | null,
   inbound: InboundSettings,
-): Promise<void> {
-  if (!inbound.auto_create_opportunity) return;
+): Promise<string | null> {
+  if (!inbound.auto_create_opportunity) return null;
 
   try {
     const { data: existingOpen } = await supabase
@@ -571,7 +571,7 @@ async function autoCreateOpportunityIfEnabled(
 
     if (existingOpen) {
       console.log("[meta-wa-webhook] skip opp creation — open opp exists", existingOpen.id);
-      return;
+      return null;
     }
 
     let resolvedStageId: string | null = null;
@@ -596,7 +596,7 @@ async function autoCreateOpportunityIfEnabled(
     }
     if (!resolvedStageId) {
       console.error("[meta-wa-webhook] no pipeline_stages — skipping opp", endpoint.organization_id);
-      return;
+      return null;
     }
 
     const oppData: Record<string, any> = {
@@ -617,10 +617,12 @@ async function autoCreateOpportunityIfEnabled(
       console.error("[meta-wa-webhook] auto-create opp error", error);
     } else if (newOpp) {
       console.log("[meta-wa-webhook] auto-created opportunity", newOpp.id);
+      return newOpp.id;
     }
   } catch (e) {
     console.error("[meta-wa-webhook] auto-create opp exception", e);
   }
+  return null;
 }
 
 async function saveReferralFields(
@@ -829,8 +831,9 @@ async function handleInbound(
   }
 
   // 4) Auto-create opportunity quando contato foi recém-criado
+  let commercialOpportunityId: string | null = null;
   if (created) {
-    await autoCreateOpportunityIfEnabled(
+    commercialOpportunityId = await autoCreateOpportunityIfEnabled(
       supabase, endpoint, contactId,
       profileName || `WhatsApp ${fromE164}`,
       contactOwnerId, inboundSettings,
@@ -1072,7 +1075,7 @@ async function handleInbound(
     media_type: mediaType,
     reply_to_message_id: replyToMessageId,
     sent_at: new Date().toISOString(),
-    metadata: { meta_cloud: { ...mediaInfo, raw: msg, referral } },
+    metadata: { meta_cloud: { ...mediaInfo, raw: msg, referral }, commercial_entry: { first_contact_entry: created, opportunity_id: commercialOpportunityId } },
   }).select("id").single();
   if (msgInsErr) {
     console.error("[meta-wa-webhook] message insert error", msgInsErr);

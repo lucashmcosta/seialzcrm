@@ -1,3 +1,4 @@
+import { captureCommercialOrigin } from "../_shared/commercial-origin.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -49,6 +50,7 @@ interface LeadPayload {
   fbclid?: string;
   gclid?: string;
   all_params?: Record<string, unknown> | string;
+  commercial_event_id?: string;
   notes?: string;
   create_opportunity?: boolean;
   opportunity_title?: string;
@@ -523,6 +525,15 @@ serve(async (req) => {
 
       if (!activityError) activityId = activity?.id || null;
     }
+
+    let commercialParams: Record<string, unknown> = {};
+    try { commercialParams = typeof payload.all_params === 'string' ? JSON.parse(payload.all_params) : payload.all_params || {}; } catch { /* malformed optional evidence is ignored */ }
+    await captureCommercialOrigin(supabase, {
+      organizationId, key: `lead-webhook:${apiKeyData.id}:${typeof rawPayload.commercial_event_id === 'string' ? rawPayload.commercial_event_id.slice(0,200) : crypto.randomUUID()}`,
+      contactId, opportunityId, channel: 'form', firstContactEntry: !existingContactId,
+      evidence: { source: payload.source, gclid: payload.gclid || commercialParams.gclid,
+        utm_source: payload.utm_source, utm_medium: payload.utm_medium, utm_campaign: payload.utm_campaign },
+    });
 
     console.log(`Lead processed: contact_id=${contactId}, opportunity_id=${opportunityId}, mapping=${contactMappings && contactMappings.length > 0 ? 'yes' : 'no'}`);
 

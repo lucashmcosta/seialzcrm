@@ -1,3 +1,5 @@
+import { CommercialOriginBadge } from '@/components/commercial/CommercialOriginBadge';
+import type { CommercialOrigin } from '@/lib/commercialOrigins';
 import { User, Calendar, PencilSimple } from '@phosphor-icons/react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
@@ -12,6 +14,7 @@ interface TagInfo {
 
 interface SeialzOpportunityCardProps {
   id: string;
+  commercialOrigin?: CommercialOrigin | null;
   title: string;
   amount: number;
   currency: string;
@@ -32,6 +35,7 @@ interface SeialzOpportunityCardProps {
 
 export function SeialzOpportunityCard({
   title,
+  commercialOrigin,
   amount,
   currency,
   contactName,
@@ -94,6 +98,7 @@ export function SeialzOpportunityCard({
           )}
           <div className="flex-1 min-w-0">
             <h4 className="font-medium text-[13px] leading-snug text-foreground line-clamp-2 break-words" title={title}>{title}</h4>
+            <CommercialOriginBadge origin={commercialOrigin} />
           </div>
           {!selectionMode && (
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">

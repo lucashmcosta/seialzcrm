@@ -1,3 +1,5 @@
+import { CommercialOriginSelection } from '@/components/commercial/CommercialOriginSelection';
+import { commercialRpc, emptyCommercialSelection } from '@/lib/commercialOrigins';
 import { useState, useEffect } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
@@ -42,6 +44,7 @@ interface OpportunityDialogProps {
 }
 
 export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onSuccess, titleOnly = false }: OpportunityDialogProps) {
+  const [commercialSelection,setCommercialSelection]=useState(emptyCommercialSelection);
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as any);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -116,6 +119,8 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
   const selectedStage = stages.find((s) => s.id === formData.pipeline_stage_id);
   const closeDateRequired = selectedStage?.type === 'won' || selectedStage?.type === 'lost';
 
+  useEffect(()=>setCommercialSelection(emptyCommercialSelection),[open,formData.contact_id,organization?.id]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization?.id || !userProfile?.id) return;
@@ -151,7 +156,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
         toast.success(t('opportunities.updated'));
       } else {
         // Create new opportunity
-        const { error } = await supabase
+        const { data: createdOpportunity, error } = await supabase
           .from('opportunities')
           .insert({
             organization_id: organization.id,
@@ -165,9 +170,19 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
             close_date: formData.close_date,
             status: 'open',
             created_by: userProfile.id,
-          } as any);
+          } as any).select('id').single();
 
         if (error) throw error;
+        if(createdOpportunity && (commercialSelection.origin || commercialSelection.event)) {
+          try {
+            await commercialRpc('commercial_correct',{p_org:organization.id,p_type:'opportunity',p_id:createdOpportunity.id,
+              p_origin:commercialSelection.origin||null,p_campaign:commercialSelection.campaign||null,p_event:commercialSelection.event||null,
+              p_reason:'Origem informada na criação da oportunidade'});
+          } catch {
+            // Creation succeeded. Do not offer a retry that would create a duplicate opportunity.
+            toast.warning('Oportunidade criada. A origem comercial não foi salva; ajuste no detalhe da oportunidade.');
+          }
+        }
         toast.success(t('opportunities.created'));
       }
 
@@ -318,6 +333,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
               </>
             )}
           </div>
+          {!opportunity && <CommercialOriginSelection contactId={formData.contact_id} value={commercialSelection} onChange={setCommercialSelection} />}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}

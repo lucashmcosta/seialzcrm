@@ -1,3 +1,4 @@
+import { captureCommercialOrigin } from "../_shared/commercial-origin.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -312,6 +313,7 @@ serve(async (req) => {
       ownerId = (rrId as string) || null;
     }
 
+    let commercialFirstContact = false;
     let contactId: string;
     if (existingId) {
       contactId = existingId;
@@ -408,6 +410,7 @@ serve(async (req) => {
         }
       } else {
         contactId = ins!.id;
+        commercialFirstContact = true;
       }
     }
 
@@ -471,6 +474,7 @@ serve(async (req) => {
     const shouldCreateOpp = hasOppMappings || settings?.auto_create_opportunity === true;
 
     let opportunityId: string | null = null;
+    let commercialOpportunityId: string | null = null;
 
     if (shouldCreateOpp) {
       if (!settings?.default_pipeline_stage_id) {
@@ -521,6 +525,7 @@ serve(async (req) => {
             console.error("Failed to create opportunity:", oppErr);
           } else {
             opportunityId = opp.id;
+            commercialOpportunityId = opp.id;
           }
         }
 
@@ -712,6 +717,12 @@ serve(async (req) => {
         { onConflict: "contact_id" },
       );
     }
+
+    await captureCommercialOrigin(admin, {
+      organizationId: organization_id, key: `meta-lead:${lead.id}`, contactId,
+      opportunityId: commercialOpportunityId, channel: 'form', firstContactEntry: commercialFirstContact,
+      occurredAt: lead.created_time, evidence: { source_type: 'lead_form', ad_id: lead.ad_id },
+    });
 
     return json({
       success: true,

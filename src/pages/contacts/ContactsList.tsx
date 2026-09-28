@@ -1,3 +1,8 @@
+import { toast } from 'sonner';
+import { useCommercialOrigins } from '@/hooks/useCommercialOrigins';
+import { CommercialFilters } from '@/components/commercial/CommercialFilters';
+import { CommercialOriginBadge } from '@/components/commercial/CommercialOriginBadge';
+import { commercialDb, commercialRpc, emptyCommercialFilters, dayAfter, type CommercialOrigin } from '@/lib/commercialOrigins';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Link, useNavigate } from 'react-router-dom';
@@ -47,6 +52,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface Contact {
+  commercial_origin?: CommercialOrigin | null;
   id: string;
   full_name: string;
   email: string | null;
@@ -74,6 +80,8 @@ export default function ContactsList() {
   const { organization, userProfile, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { permissions } = usePermissions();
+  const commercial = useCommercialOrigins();
+  const [commercialFilters, setCommercialFilters] = usePersistedFilters('contacts.commercialFilters', emptyCommercialFilters);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [refetching, setRefetching] = useState(false);
@@ -137,6 +145,7 @@ export default function ContactsList() {
   const filtersHydrated = ownerHydrated && stageHydrated && fromHydrated && toHydrated;
 
   const activeFiltersCount = [
+    ...(commercial.enabled ? Object.values(commercialFilters) : []),
     ownerFilter !== 'all',
     stageFilter !== 'all',
     createdFromFilter,
@@ -144,6 +153,7 @@ export default function ContactsList() {
   ].filter(Boolean).length;
 
   const clearFilters = () => {
+    setCommercialFilters(emptyCommercialFilters);
     setOwnerFilter('all');
     setStageFilter('all');
     setCreatedFromFilter('');
@@ -188,10 +198,15 @@ export default function ContactsList() {
   );
   
   // Current filters and sort for SavedViews
-  const currentFilters = { owner: ownerFilter, stage: stageFilter, search: searchTerm };
-  const currentSort = { field: 'created_at', direction: 'desc' };
+  const currentFilters = { owner: ownerFilter, stage: stageFilter, search: searchTerm, commercial: commercialFilters, from: createdFromFilter, to: createdToFilter };
+  const currentSort = sortDescriptor;
   
   const handleApplyView = (filters: any, sort: any) => {
+    if(sort?.column) setSortDescriptor(sort);
+    if(sort?.field) setSortDescriptor({column:sort.field,direction:sort.direction==='desc'?'descending':'ascending'});
+    setCommercialFilters(filters.commercial || emptyCommercialFilters);
+    setCreatedFromFilter(filters.from || '');
+    setCreatedToFilter(filters.to || '');
     if (filters.owner) setOwnerFilter(filters.owner);
     if (filters.stage) setStageFilter(filters.stage);
     if (filters.search) setSearchTerm(filters.search);
@@ -203,7 +218,7 @@ export default function ContactsList() {
       setMobileContacts([]);
       setCurrentPage(1);
     }
-  }, [debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
+  }, [debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter, commercialFilters, commercial.enabled, sortDescriptor]);
 
   // Fetch users only when organization changes (not on every filter change)
   useEffect(() => {
@@ -220,7 +235,7 @@ export default function ContactsList() {
     if (!filtersHydrated || !itemsPerPageHydrated || !sortHydrated) return;
     fetchContacts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization, filtersHydrated, itemsPerPageHydrated, sortHydrated, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
+  }, [organization, filtersHydrated, itemsPerPageHydrated, sortHydrated, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter, commercialFilters, commercial.enabled, sortDescriptor]);
 
 
   const mobileHasMore = mobileContacts.length < totalCount;
@@ -258,11 +273,16 @@ export default function ContactsList() {
   // cause a double fetch (filter-change → fetch + setCurrentPage(1) → fetch).
   const lastFilterSigRef = useRef<string>('');
 
+  useEffect(()=>{abortRef.current?.abort();++fetchIdRef.current;setContacts([]);setMobileContacts([]);setSelectedIds([]);setTotalCount(0);},[organization?.id]);
+
+  const commercialQueryFilters = () => ({...commercialFilters,search:debouncedSearch,owner:ownerFilter==='all'?'':ownerFilter,
+    stage:stageFilter==='all'?'':stageFilter,from:createdFromFilter,to:dayAfter(createdToFilter),sort:String(sortDescriptor.column),sort_direction:sortDescriptor.direction});
+
   const fetchContacts = async () => {
     if (!organization) return;
 
     const filterSig = JSON.stringify([
-      debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter, itemsPerPage,
+      debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter, itemsPerPage, commercialFilters, commercial.enabled, sortDescriptor,
     ]);
     let effectivePage = currentPage;
     if (lastFilterSigRef.current && lastFilterSigRef.current !== filterSig && currentPage !== 1) {
@@ -301,6 +321,13 @@ export default function ContactsList() {
     let data: (Contact & { total_count: number })[] | null = null;
     let error: unknown = null;
     try {
+      if (commercial.enabled) {
+        const res = await commercialDb.rpc('commercial_records', {
+          p_org: organization.id, p_type: 'contact', p_filters: commercialQueryFilters(), p_limit: itemsPerPage, p_offset: from,
+        }).abortSignal(controller.signal);
+        error = res.error;
+        data = res.data?.items?.map((c: Contact) => ({...c, total_count: res.data.total})) || [];
+      } else {
       const res = await (supabase.rpc as any)('rpc_search_contacts', {
         p_organization_id: organization.id,
         p_search: debouncedSearch || null,
@@ -313,6 +340,7 @@ export default function ContactsList() {
       }).abortSignal(controller.signal);
       data = res.data as (Contact & { total_count: number })[] | null;
       error = res.error;
+      }
     } catch (e) {
       if (controller.signal.aborted) return;
       error = e;
@@ -322,6 +350,7 @@ export default function ContactsList() {
     if (myFetchId !== fetchIdRef.current) return;
     if (controller.signal.aborted) return;
 
+    if(error) {toast.error('Não foi possível carregar os contatos.');setContacts([]);setMobileContacts([]);setTotalCount(0);}
     if (!error && data) {
       const rows = data.map(({ total_count, ...c }) => c as Contact);
       setContacts(rows);
@@ -337,6 +366,7 @@ export default function ContactsList() {
 
   // Sort contacts client-side
   const sortedContacts = useMemo(() => {
+    if (commercial.enabled) return contacts;
     return [...contacts].sort((a, b) => {
       const column = sortDescriptor.column as keyof Contact;
       const aVal = a[column];
@@ -352,7 +382,7 @@ export default function ContactsList() {
 
       return sortDescriptor.direction === 'descending' ? -cmp : cmp;
     });
-  }, [contacts, sortDescriptor]);
+  }, [contacts, sortDescriptor, commercial.enabled]);
 
   const totalPages = Math.ceil(totalCount / itemsPerPage);
 
@@ -378,6 +408,17 @@ export default function ContactsList() {
   const handleSelectAllContacts = async () => {
     if (!organization) return;
     
+    if (commercial.enabled) {
+      const ids: string[] = [];
+      try {
+        for (let offset=0;;offset+=100) {
+          const res=await commercialRpc<{total:number;items:Contact[]}>('commercial_records',{p_org:organization.id,p_type:'contact',p_filters:commercialQueryFilters(),p_limit:100,p_offset:offset});
+          ids.push(...res.items.map(c=>c.id)); if(offset+100>=res.total) break;
+        }
+        setSelectedIds(ids);setSelectAllMode('all');
+      } catch (error) { console.error('Commercial selection failed',error);toast.error('Não foi possível selecionar os contatos filtrados.'); }
+      return;
+    }
     // Fetch all contact IDs matching current filters
     let query = supabase
       .from('contacts')
@@ -437,6 +478,9 @@ export default function ContactsList() {
   if (isMobile) {
     return (
       <MobileLayout>
+        <div className="flex h-full min-h-0 flex-col">
+        {commercial.enabled && <details className="max-h-[45vh] shrink-0 overflow-auto border-b px-4 py-2"><summary className="cursor-pointer text-sm">Filtrar por origem</summary><CommercialFilters value={commercialFilters} onChange={setCommercialFilters} /></details>}
+        <div className="min-h-0 flex-1">
         <MobileContactsList
           contacts={mobileContacts}
           loading={loading}
@@ -450,6 +494,7 @@ export default function ContactsList() {
           onStageFilterChange={setStageFilter}
           canCreate={permissions.canEditContacts}
         />
+        </div></div>
       </MobileLayout>
     );
   }
@@ -457,6 +502,7 @@ export default function ContactsList() {
   return (
     <Layout>
       <div className="p-8">
+        <CommercialFilters value={commercialFilters} onChange={setCommercialFilters} />
         {/* Breadcrumbs */}
         <Breadcrumbs 
           items={[{ label: t('contacts.title') }]} 
@@ -726,6 +772,7 @@ export default function ContactsList() {
                                   <Avatar fallbackText={contact.full_name} size="sm" />
                                   <div>
                                     <p className="font-medium text-foreground">{contact.full_name}</p>
+                                    <CommercialOriginBadge origin={commercial.enabled ? contact.commercial_origin ?? null : undefined} />
                                     {contact.email && (
                                       <p className="text-sm text-muted-foreground">{contact.email}</p>
                                     )}

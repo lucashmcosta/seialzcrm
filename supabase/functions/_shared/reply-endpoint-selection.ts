@@ -126,7 +126,7 @@ export const REPLY_ENDPOINT_PERSONAL_FORBIDDEN = "REPLY_ENDPOINT_PERSONAL_FORBID
 export const REPLY_ENDPOINT_NONE_ALLOWED = "REPLY_ENDPOINT_NONE_ALLOWED";
 
 // deno-lint-ignore no-explicit-any
-type RpcDb = { rpc: (fn: string, args: Record<string, unknown>) => Promise<any> };
+type RpcDb = { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<any> };
 
 export async function canUserUseReplyEndpoint(
   db: RpcDb,

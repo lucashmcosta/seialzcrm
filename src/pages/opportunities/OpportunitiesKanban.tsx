@@ -1,3 +1,8 @@
+import { SavedViewsDropdown } from '@/components/SavedViewsDropdown';
+import { useCommercialOrigins } from '@/hooks/useCommercialOrigins';
+import { CommercialFilters } from '@/components/commercial/CommercialFilters';
+import { CommercialOriginBadge } from '@/components/commercial/CommercialOriginBadge';
+import { commercialDb, commercialRpc, emptyCommercialFilters, dayAfter, type CommercialOrigin } from '@/lib/commercialOrigins';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { useNavigate } from 'react-router-dom';
@@ -64,6 +69,7 @@ interface PipelineStage {
 }
 
 interface Opportunity {
+  commercial_origin?: CommercialOrigin | null;
   id: string;
   title: string;
   amount: number;
@@ -112,6 +118,10 @@ export default function OpportunitiesKanban() {
   const { permissions } = usePermissions();
   const { themePreset } = useTheme();
   const isSeialz = themePreset === 'seialz';
+  const commercial = useCommercialOrigins();
+  const [commercialFilters,setCommercialFilters] = usePersistedFilters('opportunities.commercialFilters',emptyCommercialFilters);
+  const [commercialTotal,setCommercialTotal] = useState(0);
+  const commercialFetchRef = useRef(0);
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -195,12 +205,14 @@ export default function OpportunitiesKanban() {
     filterOwners, filterMinAmount, filterMaxAmount,
     filterDateFrom, filterDateTo, filterNoCloseDate,
     filterCreatedFrom, filterCreatedTo,
-    filterTags, filterStages,
+    filterTags, filterStages, commercialFilters, commercial.enabled,
+    commercial.enabled ? searchTerm : null, commercial.enabled ? viewMode : null, commercial.enabled ? currentPage : null,
+    commercial.enabled ? itemsPerPage : null, commercial.enabled ? sortDescriptor : null,
   ]);
 
   // Server-side search with debounce
   useEffect(() => {
-    if (!searchTerm || searchTerm.length < 2 || !organization?.id) {
+    if (commercial.enabled || !searchTerm || searchTerm.length < 2 || !organization?.id) {
       setSearchResults(null);
       return;
     }
@@ -251,11 +263,32 @@ export default function OpportunitiesKanban() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, organization?.id]);
+  }, [searchTerm, organization?.id, commercial.enabled]);
+
+  useEffect(()=>{++commercialFetchRef.current;setOpportunities([]);setOpportunitiesByStage({});setStageCounts({});setSearchResults(null);setCommercialTotal(0);setSelectedIds([]);},[organization?.id]);
+
+  const commercialQueryFilters = () => ({...commercialFilters,search:searchTerm,owners:filterOwners,
+    min_amount:filterMinAmount,max_amount:filterMaxAmount,close_from:filterNoCloseDate?'':filterDateFrom,close_to:filterNoCloseDate?'':filterDateTo,
+    no_close:filterNoCloseDate,from:filterCreatedFrom,to:dayAfter(filterCreatedTo),tags:filterTags,stages:filterStages,
+    sort:String(sortDescriptor.column),sort_direction:sortDescriptor.direction});
+
+  useEffect(() => { if(commercial.enabled) {setCurrentPage(1);setSelectedIds([]);} },
+    [commercialFilters,searchTerm,filterOwners,filterMinAmount,filterMaxAmount,filterDateFrom,filterDateTo,filterNoCloseDate,filterCreatedFrom,filterCreatedTo,filterTags,filterStages,viewMode,itemsPerPage,commercial.enabled]);
+
+  const commercialSavedViews = commercial.enabled ? <SavedViewsDropdown module="opportunities" currentFilters={commercialQueryFilters()}
+    currentSort={sortDescriptor} onApplyView={(f,sort)=>{
+      setCommercialFilters({origin:f.origin||'',campaign:f.campaign||'',method:f.method||'',channel:f.channel||'',pending:!!f.pending});
+      setSearchTerm(f.search||'');setFilterOwners(f.owners||[]);setFilterTags(f.tags||[]);setFilterStages(f.stages||[]);
+      setFilterMinAmount(f.min_amount||'');setFilterMaxAmount(f.max_amount||'');setFilterDateFrom(f.close_from||'');setFilterDateTo(f.close_to||'');
+      setFilterNoCloseDate(!!f.no_close);setFilterCreatedFrom(f.from||'');
+      setFilterCreatedTo(f.to?new Date(Date.parse(f.to)-86400000).toISOString().slice(0,10):'');
+      if(sort?.column)setSortDescriptor(sort);setCurrentPage(1);
+    }}/> : null;
 
   const fetchData = async () => {
     if (!organization?.id) return;
 
+    const fetchVersion=++commercialFetchRef.current;
     setLoading(true);
 
     // Translate UI filter state into RPC params so per-stage counts match
@@ -279,7 +312,15 @@ export default function OpportunitiesKanban() {
     };
 
     // Try new RPC first, fall back to direct queries if not available
-    const stageResult = await (supabase.rpc as any)('get_opportunities_by_stage', rpcParams);
+    const commercialResponse = commercial.enabled ? await commercialDb.rpc('commercial_records', {
+      p_org: organization.id,p_type:'opportunity',p_filters:commercialQueryFilters(),p_grouped:true,
+      p_limit:viewMode==='list'?itemsPerPage:CARDS_PER_STAGE,p_offset:viewMode==='list'?(currentPage-1)*itemsPerPage:0,
+    }) : null;
+    if (fetchVersion!==commercialFetchRef.current) return;
+    if (commercialResponse?.error) {toast.error('Não foi possível carregar as origens comerciais.');setOpportunities([]);setOpportunitiesByStage({});setStageCounts({});setCommercialTotal(0);setLoading(false);setInitialLoading(false);return;}
+    const stageResult = commercialResponse ? {data:commercialResponse.data.stages,error:null} : await (supabase.rpc as any)('get_opportunities_by_stage', rpcParams);
+    if(commercialResponse) setCommercialTotal(commercialResponse.data.total);
+
 
     const useRpc = !stageResult.error && stageResult.data;
 
@@ -302,6 +343,7 @@ export default function OpportunitiesKanban() {
         .eq('organization_id', organization.id),
     ]);
 
+    if (fetchVersion!==commercialFetchRef.current) return;
     if (useRpc) {
       // RPC path: single call returned stages + counts + opportunities
       const stagesFromRpc: PipelineStage[] = [];
@@ -317,7 +359,7 @@ export default function OpportunitiesKanban() {
           type: stage.stage_type,
         });
         countsMap[stage.stage_id] = {
-          count: Number(stage.total_count),
+          count: Number(stage.total_count ?? stage.opportunity_count),
           amount: Number(stage.total_amount),
         };
         oppsByStage[stage.stage_id] = stage.opportunities || [];
@@ -328,7 +370,7 @@ export default function OpportunitiesKanban() {
       setStageCounts(countsMap);
       setOpportunitiesByStage(oppsByStage);
       setHasMoreByStage(hasMore);
-      setOpportunities(Object.values(oppsByStage).flat());
+      setOpportunities(commercialResponse && viewMode==='list' ? commercialResponse.data.items : Object.values(oppsByStage).flat());
     } else {
       // Fallback: direct queries (until migration is applied)
       const { data: stagesData } = await supabase
@@ -377,7 +419,7 @@ export default function OpportunitiesKanban() {
 
         setOpportunitiesByStage(oppsByStage);
         setHasMoreByStage(hasMore);
-        setOpportunities(Object.values(oppsByStage).flat());
+        setOpportunities(commercialResponse && viewMode==='list' ? commercialResponse.data.items : Object.values(oppsByStage).flat());
       }
     }
 
@@ -416,6 +458,7 @@ export default function OpportunitiesKanban() {
   };
 
   const getOpportunitiesForStage = (stageId: string) => {
+    if(commercial.enabled) return opportunitiesByStage[stageId] || [];
     const stageOpps = searchResults !== null 
       ? searchResults.filter(opp => opp.pipeline_stage_id === stageId)
       : (opportunitiesByStage[stageId] || []);
@@ -461,6 +504,20 @@ export default function OpportunitiesKanban() {
     
     const currentOpps = opportunitiesByStage[stageId] || [];
     
+    if(commercial.enabled) {
+      const version=commercialFetchRef.current;
+      try {
+        const res=await commercialRpc<{stages:{stage_id:string;opportunities:Opportunity[]}[]}>('commercial_records',{
+          p_org:organization.id,p_type:'opportunity',p_filters:{...commercialQueryFilters(),stages:[stageId]},p_grouped:true,p_limit:CARDS_PER_STAGE,p_offset:currentOpps.length});
+        if(version!==commercialFetchRef.current)return;
+        const rows=res.stages.find(s=>s.stage_id===stageId)?.opportunities||[];
+        setOpportunitiesByStage(prev=>({...prev,[stageId]:[...(prev[stageId]||[]),...rows.filter(r=>!(prev[stageId]||[]).some(o=>o.id===r.id))]}));
+        setOpportunities(prev=>[...prev,...rows.filter(r=>!prev.some(o=>o.id===r.id))]);
+        setHasMoreByStage(prev=>({...prev,[stageId]:rows.length===CARDS_PER_STAGE}));
+      } catch {toast.error('Não foi possível carregar mais oportunidades.');}
+      finally {setLoadingMoreStage(null);loadingMoreRef.current=null;}
+      return;
+    }
     const { data } = await supabase
       .from('opportunities')
       .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, created_at, owner_user_id, contacts(full_name), users(full_name)')
@@ -493,7 +550,7 @@ export default function OpportunitiesKanban() {
     }
     setLoadingMoreStage(null);
     loadingMoreRef.current = null;
-  }, [organization?.id, opportunitiesByStage]);
+  }, [organization?.id, opportunitiesByStage, commercial.enabled, commercialFilters, searchTerm, filterOwners, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterNoCloseDate, filterCreatedFrom, filterCreatedTo, filterTags, filterStages]);
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
@@ -571,6 +628,7 @@ export default function OpportunitiesKanban() {
       fetchData();
     } else {
       toast.success('Oportunidade movida com sucesso');
+      if(commercial.enabled) await fetchData();
     }
   };
 
@@ -658,6 +716,7 @@ export default function OpportunitiesKanban() {
   };
 
   const clearFilters = () => {
+    setCommercialFilters(emptyCommercialFilters);
     setFilterOwners([]);
     setFilterMinAmount('');
     setFilterMaxAmount('');
@@ -671,6 +730,7 @@ export default function OpportunitiesKanban() {
   };
 
   const activeFiltersCount = [
+    ...(commercial.enabled ? Object.values(commercialFilters) : []),
     filterOwners.length > 0,
     filterMinAmount,
     filterMaxAmount,
@@ -685,6 +745,7 @@ export default function OpportunitiesKanban() {
 
   // Filtered opportunities for table view (applies all filters except stage)
   const filteredOpportunities = useMemo(() => {
+    if(commercial.enabled) return opportunities;
     const baseData = searchResults !== null ? searchResults : opportunities;
     return baseData.filter((opp) => {
       const matchesOwner =
@@ -708,10 +769,11 @@ export default function OpportunitiesKanban() {
 
       return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesCreatedFrom && matchesCreatedTo && matchesTag && matchesStage;
     });
-  }, [opportunities, searchResults, filterOwners, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterNoCloseDate, filterCreatedFrom, filterCreatedTo, filterTags, filterStages, tagsByOpportunity]);
+  }, [opportunities, searchResults, filterOwners, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterNoCloseDate, filterCreatedFrom, filterCreatedTo, filterTags, filterStages, tagsByOpportunity, commercial.enabled]);
 
   // Sorted opportunities for table view
   const sortedOpportunities = useMemo(() => {
+    if(commercial.enabled) return filteredOpportunities;
     const sorted = [...filteredOpportunities];
     if (sortDescriptor.column) {
       sorted.sort((a, b) => {
@@ -752,15 +814,16 @@ export default function OpportunitiesKanban() {
       });
     }
     return sorted;
-  }, [filteredOpportunities, sortDescriptor, stages]);
+  }, [filteredOpportunities, sortDescriptor, stages, commercial.enabled]);
 
   // Paginated opportunities
   const paginatedOpportunities = useMemo(() => {
+    if(commercial.enabled) return sortedOpportunities;
     const start = (currentPage - 1) * itemsPerPage;
     return sortedOpportunities.slice(start, start + itemsPerPage);
-  }, [sortedOpportunities, currentPage, itemsPerPage]);
+  }, [sortedOpportunities, currentPage, itemsPerPage, commercial.enabled]);
 
-  const totalPages = Math.ceil(sortedOpportunities.length / itemsPerPage);
+  const totalPages = Math.ceil((commercial.enabled?commercialTotal:sortedOpportunities.length) / itemsPerPage);
 
   // Selection handlers
   const isAllSelected = paginatedOpportunities.length > 0 && 
@@ -816,6 +879,9 @@ export default function OpportunitiesKanban() {
     }
     return (
       <MobileLayout>
+        <div className="flex h-full min-h-0 flex-col">
+        {commercial.enabled && <details className="max-h-[45vh] shrink-0 overflow-auto border-b px-4 py-2"><summary className="cursor-pointer text-sm">Filtrar por origem</summary><CommercialFilters value={commercialFilters} onChange={setCommercialFilters} />{commercialSavedViews}</details>}
+        <div className="min-h-0 flex-1">
         <MobileOpportunitiesKanban
           stages={stages}
           stageCounts={stageCounts}
@@ -834,6 +900,7 @@ export default function OpportunitiesKanban() {
           filterOwner={filterOwners.length === 1 ? filterOwners[0] : 'all'}
           filterTag={filterTags.length === 1 ? filterTags[0] : 'all'}
         />
+        </div></div>
       </MobileLayout>
     );
   }
@@ -1125,6 +1192,7 @@ export default function OpportunitiesKanban() {
                               <SeialzOpportunityCard
                                 id={opp.id}
                                 title={opp.title}
+                                commercialOrigin={commercial.enabled ? opp.commercial_origin ?? null : undefined}
                                 amount={Number(opp.amount)}
                                 currency={opp.currency}
                                 contactName={opp.contacts?.full_name}
@@ -1172,6 +1240,7 @@ export default function OpportunitiesKanban() {
     return (
       <Layout>
         <div className="flex flex-col h-full">
+          <div className="px-3"><CommercialFilters value={commercialFilters} onChange={setCommercialFilters} />{commercialSavedViews}</div>
           <SeialzTopbar
             title="Pipeline"
             count={`${totalDeals} deals · ${formatCurrency(totalPipelineAmount, organization?.default_currency || 'BRL')}`}
@@ -1229,7 +1298,7 @@ export default function OpportunitiesKanban() {
                   <PaginationWithPageSize
                     currentPage={currentPage}
                     totalPages={totalPages}
-                    totalItems={sortedOpportunities.length}
+                    totalItems={commercial.enabled?commercialTotal:sortedOpportunities.length}
                     itemsPerPage={itemsPerPage}
                     onPageChange={setCurrentPage}
                     onItemsPerPageChange={setItemsPerPage}
@@ -1271,7 +1340,7 @@ export default function OpportunitiesKanban() {
                     {(opp) => (
                       <TableRow key={opp.id} className="cursor-pointer" onAction={() => navigate(`/opportunities/${opp.id}`)}>
                         <TableCheckboxCell isSelected={selectedIds.includes(opp.id)} onChange={(checked) => handleSelectOne(opp.id, checked)} />
-                        {visibleColumns.includes('title') && <TableCell><span className="font-medium text-foreground">{opp.title}</span></TableCell>}
+                        {visibleColumns.includes('title') && <TableCell><span className="font-medium text-foreground">{opp.title}</span><div><CommercialOriginBadge origin={commercial.enabled ? opp.commercial_origin ?? null : undefined} /></div></TableCell>}
                         {visibleColumns.includes('amount') && <TableCell><span className="text-foreground">{formatCurrency(Number(opp.amount) || 0, opp.currency || organization?.default_currency || 'BRL')}</span></TableCell>}
                         {visibleColumns.includes('pipeline_stage') && <TableCell><BadgeWithDot color="brand">{getStageName(opp.pipeline_stage_id)}</BadgeWithDot></TableCell>}
                         {visibleColumns.includes('contact') && <TableCell><span className="text-muted-foreground">{opp.contacts?.full_name || '-'}</span></TableCell>}
@@ -1354,7 +1423,7 @@ export default function OpportunitiesKanban() {
     <Layout>
       <div className="p-8">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-foreground">{t('opportunities.title')}</h1>
+          <div><h1 className="text-3xl font-bold text-foreground">{t('opportunities.title')}</h1><div className="px-3"><CommercialFilters value={commercialFilters} onChange={setCommercialFilters} />{commercialSavedViews}</div></div>
           <div className="flex items-center gap-3">
             <ViewSwitcher
               view={viewMode}
@@ -1478,6 +1547,7 @@ export default function OpportunitiesKanban() {
                                       <OpportunityCard
                                         id={opp.id}
                                         title={opp.title}
+                                commercialOrigin={commercial.enabled ? opp.commercial_origin ?? null : undefined}
                                         amount={Number(opp.amount)}
                                         currency={opp.currency}
                                         contactName={opp.contacts?.full_name}
@@ -1523,7 +1593,7 @@ export default function OpportunitiesKanban() {
               <PaginationWithPageSize
                 currentPage={currentPage}
                 totalPages={totalPages}
-                totalItems={sortedOpportunities.length}
+                totalItems={commercial.enabled?commercialTotal:sortedOpportunities.length}
                 itemsPerPage={itemsPerPage}
                 onPageChange={setCurrentPage}
                 onItemsPerPageChange={setItemsPerPage}
@@ -1574,7 +1644,7 @@ export default function OpportunitiesKanban() {
                     />
                     {visibleColumns.includes('title') && (
                       <TableCell>
-                        <span className="font-medium text-foreground">{opp.title}</span>
+                        <span className="font-medium text-foreground">{opp.title}</span><div><CommercialOriginBadge origin={commercial.enabled ? opp.commercial_origin ?? null : undefined} /></div>
                       </TableCell>
                     )}
                     {visibleColumns.includes('amount') && (

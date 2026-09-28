@@ -671,6 +671,8 @@ serve(async (req) => {
       )
 
       // Find or create contact
+      let commercialFirstContact = false
+      let commercialOpportunityId: string | null = null
       let contactId: string | null = null
       let contactOwnerId: string | null = null
       
@@ -736,6 +738,7 @@ serve(async (req) => {
 
         if (newContact) {
           contactId = newContact.id
+          commercialFirstContact = true
           contactOwnerId = newContact.owner_user_id
           console.log('Created new contact:', contactId)
 
@@ -811,6 +814,7 @@ serve(async (req) => {
                     .single()
 
                   if (newOpp) {
+                    commercialOpportunityId = newOpp.id
                     console.log('Auto-created opportunity:', newOpp.id)
                   } else if (oppError) {
                     console.error('Error auto-creating opportunity:', oppError)
@@ -1080,7 +1084,7 @@ serve(async (req) => {
           sent_at: new Date().toISOString(),
           reply_to_message_id: replyToMessageId,
           endpoint_id: endpointId,
-          metadata: { twilio: twilioMetadata },
+          metadata: { twilio: { ...twilioMetadata, commercial_referral: { ctwa_clid: referralCtwaClid, source_type: referralSourceType, source_id: referralSourceId } }, commercial_entry: { first_contact_entry: commercialFirstContact, opportunity_id: commercialOpportunityId } },
         })
 
       if (messageError) {

@@ -1,3 +1,5 @@
+import { CommercialOriginBadge } from '@/components/commercial/CommercialOriginBadge';
+import type { CommercialOrigin } from '@/lib/commercialOrigins';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -14,6 +16,7 @@ interface TagInfo {
 
 interface OpportunityCardProps {
   id: string;
+  commercialOrigin?: CommercialOrigin | null;
   title: string;
   amount: number;
   currency: string;
@@ -34,6 +37,7 @@ interface OpportunityCardProps {
 
 export function OpportunityCard({
   title,
+  commercialOrigin,
   amount,
   currency,
   contactName,
@@ -79,6 +83,7 @@ export function OpportunityCard({
           )}
           <div className="flex-1 min-w-0">
             <h4 className="font-medium text-xs text-foreground line-clamp-2 break-words" title={title}>{title}</h4>
+            <CommercialOriginBadge origin={commercialOrigin} />
           </div>
           {!selectionMode && (
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

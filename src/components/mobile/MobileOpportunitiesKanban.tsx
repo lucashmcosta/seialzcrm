@@ -1,3 +1,4 @@
+import type { CommercialOrigin } from '@/lib/commercialOrigins';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { MobileSpinner } from '@/components/mobile/MobileSpinner';
 import { useNavigate } from 'react-router-dom';
@@ -24,6 +25,7 @@ interface PipelineStage {
 }
 
 interface Opportunity {
+  commercial_origin?: CommercialOrigin | null;
   id: string;
   title: string;
   amount: number;
@@ -231,6 +233,7 @@ export function MobileOpportunitiesKanban({
               key={opp.id}
               id={opp.id}
               title={opp.title}
+              commercialOrigin={opp.commercial_origin}
               amount={opp.amount}
               currency={opp.currency}
               contactName={opp.contacts?.full_name}
