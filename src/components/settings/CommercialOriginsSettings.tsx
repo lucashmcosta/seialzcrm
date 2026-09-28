@@ -192,7 +192,7 @@ function CommercialOriginsSettingsContent() {
             onChange={(e) => setSourceName(e.target.value)}
             required
           />
-          <Button type="submit" disabled={busy || !sourceName.trim()}>Adicionar</Button>
+          <Button disabled={busy || !sourceName.trim()}>Adicionar</Button>
         </form>
         <div className="flex flex-wrap gap-3">
           {origins.map((o) => (
