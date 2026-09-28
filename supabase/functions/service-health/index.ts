@@ -1,9 +1,8 @@
 // service-health — read-only operational health snapshot for Kairos Tech.
 //
 // Auth: header `x-health-token` must match SERVICE_HEALTH_TOKEN.
-// Strictly read-only: no writes, no new heartbeats, no schema changes.
-// A service is only reported with a real status/metrics when it has its OWN
-// telemetry source today. Everything else stays "unknown".
+// Strictly read-only: no writes. Only services with a real telemetry source
+// are listed; "unknown" means that source could not be read.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
