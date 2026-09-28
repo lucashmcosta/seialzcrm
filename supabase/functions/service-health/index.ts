@@ -1,9 +1,8 @@
 // service-health — read-only operational health snapshot for Kairos Tech.
 //
 // Auth: header `x-health-token` must match SERVICE_HEALTH_TOKEN.
-// Strictly read-only: no writes, no new heartbeats, no schema changes.
-// A service is only reported with a real status/metrics when it has its OWN
-// telemetry source today. Everything else stays "unknown".
+// Strictly read-only: no writes. Only services with a real telemetry source
+// are listed; "unknown" means that source could not be read.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -85,7 +84,7 @@ Deno.serve(async (req) => {
 
   const since24h = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
 
-  const [outboxRes, reaperRes, inboundRes, evoRes, dl24Res, failed24Res, lastDlRes] =
+  const [outboxRes, reaperRes, inboundRes, evoRes, dl24Res, failed24Res, lastDlRes, workerHbRes, schedRes] =
     await Promise.allSettled([
       supabase.rpc("fn_outbox_health_summary_internal"),
       supabase.from("outbox_system_heartbeats").select("component,last_run_at,last_detail").eq("component", "reaper").maybeSingle(),
@@ -109,6 +108,8 @@ Deno.serve(async (req) => {
         .order("last_error_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase.from("outbox_system_heartbeats").select("last_run_at,last_detail").eq("component", "integration-worker").maybeSingle(),
+      supabase.rpc("fn_scheduler_health_summary", { _window: "01:00:00" }),
     ]);
 
   const countOf = (res: PromiseSettledResult<any>): number => {
@@ -132,6 +133,14 @@ Deno.serve(async (req) => {
       lastDlRes.status === "fulfilled" && !lastDlRes.value?.error
         ? (lastDlRes.value?.data?.last_error_at ?? null)
         : null;
+    // Liveness: heartbeat row written by the integration-worker edge fn on every
+    // run (even when idle). Falls back to the last audit log when absent.
+    const hb: any =
+      workerHbRes.status === "fulfilled" && !workerHbRes.value?.error ? workerHbRes.value?.data : null;
+    const workerLastRun: string | null = hb?.last_run_at ?? outbox.worker_last_run_at ?? null;
+    const lastRunProcessed = hb?.last_detail?.processed;
+    const lastRunDurationMs = hb?.last_detail?.duration_ms;
+
 
     // Operational window only: the historical dead-letter backlog never drives status.
     const degraded: Status | null = stuck > 0 || deadLetter24h > 0
@@ -143,8 +152,8 @@ Deno.serve(async (req) => {
     services.push({
       slug: "outbox-worker",
       name: "Outbox Worker",
-      status: statusFromHeartbeat(outbox.worker_last_run_at, degraded),
-      lastHeartbeat: outbox.worker_last_run_at ?? null,
+      status: statusFromHeartbeat(workerLastRun, degraded),
+      lastHeartbeat: workerLastRun,
       uptimeSeconds: null,
       version: null,
       lastDeadLetterAt,
@@ -161,6 +170,8 @@ Deno.serve(async (req) => {
         deadLetter: deadLetter24h,
         deadLetter24h,
         deadLetterTotal: deadTotal,
+        ...(typeof lastRunProcessed === "number" ? { lastRunProcessed } : {}),
+        ...(typeof lastRunDurationMs === "number" ? { lastRunDurationMs } : {}),
       },
     });
   } else {
@@ -296,12 +307,36 @@ Deno.serve(async (req) => {
   }
 
 
-  // ---- Services without their own telemetry today
-  services.push(unknownService("integration-worker", "Integration Worker"));
-  services.push(unknownService("public-subscriber-worker", "Public Subscriber Worker"));
-  services.push(unknownService("redis", "Redis"));
-  services.push(unknownService("railway-backend", "Railway Backend"));
-  services.push(unknownService("scheduler", "Scheduler"));
+  // ---- Scheduler (pg_cron via fn_scheduler_health_summary, read-only)
+  const sched: any =
+    schedRes.status === "fulfilled" && !schedRes.value.error ? schedRes.value.data : null;
+  if (sched && Number(sched.jobs_total ?? 0) > 0) {
+    const age = ageMs(sched.last_run_at ?? null);
+    const stuck = Number(sched.running_stuck_15m ?? 0);
+    const failed = Number(sched.failed ?? 0);
+    const jobs: any[] = Array.isArray(sched.jobs) ? sched.jobs : [];
+    const lastFailed = jobs.some((j) => j.active && j.last_status === "failed");
+    let status: Status = "healthy";
+    if (age === null || age > 5 * 60_000 || stuck > 0) status = "critical";
+    else if (failed > 0 || age > 2 * 60_000 || lastFailed) status = "warning";
+    services.push({
+      slug: "scheduler",
+      name: "Scheduler",
+      status,
+      lastHeartbeat: sched.last_run_at ?? null,
+      uptimeSeconds: null,
+      version: null,
+      metrics: {
+        processed: Number(sched.succeeded ?? 0),
+        errors: failed,
+        jobsActive: Number(sched.jobs_active ?? 0),
+        jobsTotal: Number(sched.jobs_total ?? 0),
+        stuck15m: stuck,
+      },
+    });
+  } else {
+    services.push(unknownService("scheduler", "Scheduler"));
+  }
 
   const body = {
     generated_at: new Date().toISOString(),

@@ -103,13 +103,11 @@ curl -s https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-health \
 | `inbox-reaper` | `outbox_system_heartbeats` componente `reaper` | `processed` (`last_detail.reaped`) |
 | `inbox-dispatcher` | `fn_inbound_health_summary('1 hour')` | `processed`, `errors`, `deadLetter`, `latencyMs` (média ponderada) |
 | `evolution-api` | `evolution_instances` (`last_known_state`, `last_state_checked_at`), atualizado por webhook `CONNECTION_UPDATE` **e** pelo cron `evolution-health-check` (a cada 5 min) | `instancesOpen`, `instancesConnecting`, `instancesClose`, `instancesUnknown`, `instancesTotal`, `stateStale` (0/1), `stateAgeSeconds` (`-1` = nunca verificado) + campo `detail` legível |
-| `integration-worker` | **sem telemetria própria** | — (`unknown`) |
-| `public-subscriber-worker` | **sem telemetria própria** | — (`unknown`) |
-| `redis` | não observado pelo Seialz | — (`unknown`) |
-| `railway-backend` | não observado pelo Seialz | — (`unknown`) |
-| `scheduler` | sem heartbeat próprio | — (`unknown`) |
+| `scheduler` | `fn_scheduler_health_summary('1 hour')` (pg_cron: `cron.job` + últimas 5.000 execuções de `cron.job_run_details`, só leitura, só `service_role`, sem `command`) | `processed` (sucesso na janela), `errors` (falhas na janela), `jobsActive`, `jobsTotal`, `stuck15m` |
 
-Nenhuma fonte é reaproveitada entre serviços: um serviço só recebe status e métricas se tiver observabilidade própria. `integration-worker` permanece `unknown` justamente para não duplicar a telemetria do outbox e sugerir dois serviços independentes.
+**BREAKING (2026-09-28):** removidos `integration-worker` (mesmo processo do `outbox-worker`, unificado nele), `public-subscriber-worker`, `redis` e `railway-backend` (não existem na arquitetura atual). `outbox-worker` ganhou `lastRunProcessed` / `lastRunDurationMs` (do heartbeat `integration-worker`).
+
+Status do `scheduler`: `unknown` se a RPC falhar ou `jobs_total = 0`; `critical` se a última execução tiver mais de 5 min (ou nenhuma) ou `stuck15m > 0`; `warning` se `errors > 0` na janela, se a última execução tiver entre 2 e 5 min ou se algum job ativo tiver a última execução com falha; senão `healthy`.
 
 ---
 

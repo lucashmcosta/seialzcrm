@@ -126,11 +126,9 @@ curl -s ".../service-events?service=outbox-worker&level=critical&limit=100" \
 | `inbox-dispatcher` | `integration_inbound_events`, `integration_inbound_ingest_errors`, `integration_inbound_dead_letter_archive` | recebido, processado, falha, parse failure, retry, dead letter, arquivamento em DLQ |
 | `inbox-reaper` | `outbox_system_heartbeats` (componente `reaper`) | última execução: horário, `reaped`, erro quando houver |
 | `evolution-api` | `integration_inbound_events` (`evolution_api`), `evolution_instances`, `messages` (apenas `error_code`/`error_message`/`whatsapp_status` em endpoints Evolution) | `connection.update`, mudança de estado da instância, reconexão, falhas de envio, status HTTP upstream |
-| `integration-worker` | sem fonte própria | `{"events": [], "nextCursor": null}` |
-| `public-subscriber-worker` | sem fonte própria | `{"events": [], "nextCursor": null}` |
-| `redis` | não observado pelo Seialz | `{"events": [], "nextCursor": null}` |
-| `railway-backend` | não observado pelo Seialz | `{"events": [], "nextCursor": null}` |
-| `scheduler` | sem fonte própria | `{"events": [], "nextCursor": null}` |
+| `scheduler` | sem histórico de eventos ainda (saúde em `service-health`) | `{"events": [], "nextCursor": null}` |
+
+**BREAKING (2026-09-28):** `integration-worker`, `public-subscriber-worker`, `redis` e `railway-backend` saíram da allowlist e agora retornam `400 unknown_service`. Eventos do integration-worker estão em `outbox-worker`.
 
 Nenhum evento é reaproveitado entre serviços. Serviços sem observabilidade própria retornam lista vazia até ganharem telemetria.
 
