@@ -25,6 +25,28 @@ export async function handleSignatureWhatsApp(action: string, body: any, ctx: Co
   const fail = (message: string, status = 409, error = "signature_whatsapp_invalid") => json({ error, message }, status);
   const r = await ctx.loadRequest(body.request_id);
   if (!r) return fail("Solicitação não encontrada.", 404);
+  if (action === "get_whatsapp_summary") {
+    const participants: Record<string, { sent_count: number; last_sent_at: string | null; pending_count: number }> = {};
+    // Request was authorized through user RLS above. Read only this org/request;
+    // paginate so the API row limit can never silently undercount sends.
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await admin.from("signature_whatsapp_deliveries")
+        .select("id, participant_id, status, created_at")
+        .eq("organization_id", r.organization_id).eq("request_id", r.id)
+        .order("created_at", { ascending: true }).order("id", { ascending: true }).range(offset, offset + 499);
+      if (error) return fail("Não foi possível consultar os envios anteriores.", 503);
+      for (const delivery of data ?? []) {
+        const summary = participants[delivery.participant_id] ??= { sent_count: 0, last_sent_at: null, pending_count: 0 };
+        if (delivery.status === "sent") {
+          summary.sent_count++;
+          if (!summary.last_sent_at || delivery.created_at > summary.last_sent_at) summary.last_sent_at = delivery.created_at;
+        }
+        if (["pending", "unknown"].includes(delivery.status)) summary.pending_count++;
+      }
+      if (!data || data.length < 500) break;
+    }
+    return json({ participants });
+  }
   if (!uuid.test(body.participant_id ?? "")) return fail("Participante inválido.", 400);
   const { data: p, error: participantError } = await admin.from("signature_request_participants")
     .select("id, name, email, phone, status, signing_mode, provider_participant_id")

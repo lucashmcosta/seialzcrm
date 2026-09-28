@@ -79,7 +79,10 @@ export function SignatureWhatsAppDialog({ requestId, participantId, onClose }: {
       setSent(result);
       await qc.invalidateQueries({ queryKey: ['signature-capability'] });
     } catch (e) { setError((e as Error).message); await context.refetch(); }
-    finally { locked.current = false; setBusy(false); }
+    finally {
+      void qc.invalidateQueries({ queryKey: ['signature-whatsapp-summary', requestId] });
+      locked.current = false; setBusy(false);
+    }
   };
   const startEditing = () => {
     setTemplateId(setting?.template_id ?? (templates.length === 1 ? templates[0].id : ''));

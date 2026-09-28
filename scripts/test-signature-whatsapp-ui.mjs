@@ -24,6 +24,7 @@ try {
   browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH}:{})});
   const page = await browser.newPage({viewport:{width:1280,height:900}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  let summaryCount=0;
   let context = baseline(), sends=0, linkCalls=0, payload=null, saves=0;
   await page.route('https://suvsign.com/og-sign.jpg',async r=>r.fulfill({status:200,contentType:process.env.QA_HEADER_IMAGE?'image/jpeg':'image/png',body:process.env.QA_HEADER_IMAGE?await readFile(process.env.QA_HEADER_IMAGE):Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8ioAAAAASUVORK5CYII=','base64')}));
   await page.route('**/*.supabase.co/**', async route => {
@@ -34,14 +35,15 @@ try {
     switch(body.action){
       case 'get_capability':data={v2_enabled:true,requests:[{id:id(1),status:'sent',template_name:'Contrato trabalhista',provider_operation_id:id(20),sent_at:'2026-09-28T18:00:00Z',signature_request_participants:[{id:id(2),name:'Ana Silva',email:'ana@example.test',status:'invited',signing_mode:'manual',order_index:0},{id:id(3),name:'Assinante automático',email:'auto@example.test',status:'invited',signing_mode:'automatic',order_index:1}]}]};break;
       case 'get_whatsapp_context':data=context;break;
+      case 'get_whatsapp_summary':data={participants:{[id(2)]:{sent_count:summaryCount,last_sent_at:summaryCount?'2026-09-28T19:00:00Z':null,pending_count:0}}};break;
       case 'save_whatsapp_settings':saves++;assert.equal(body.template_id,id(7));assert.equal(body.header_image_url,'https://suvsign.com/og-sign.jpg');context.settings=[{organization_integration_id:id(5),template_id:id(7),header_image_url:body.header_image_url,updated_at:'v1'}];data={ok:true};break;
-      case 'send_whatsapp_link':sends++;payload=body;await new Promise(r=>setTimeout(r,150));data={ok:true,thread_id:id(13)};break;
+      case 'send_whatsapp_link':sends++;summaryCount++;payload=body;await new Promise(r=>setTimeout(r,150));data={ok:true,thread_id:id(13)};break;
       case 'get_signing_link':linkCalls++;throw Error('Preview must not request private link');
       default:throw Error('Unexpected action '+body.action);
     }
     await route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify(data)});
   });
-  async function open(){await page.goto('http://127.0.0.1:5182/.signature-whatsapp-qa.html');if(page.viewportSize().width<768)await page.getByRole('button',{name:/Contrato trabalhista/}).click();await page.getByRole('button',{name:'Enviar pelo WhatsApp',exact:true}).click();await page.getByRole('heading',{name:'Enviar assinatura pelo WhatsApp'}).waitFor();}
+  async function open(){await page.goto('http://127.0.0.1:5182/.signature-whatsapp-qa.html');if(page.viewportSize().width<768)await page.getByRole('button',{name:/Contrato trabalhista/}).click();await page.getByRole('button',{name:summaryCount?'Reenviar pelo WhatsApp':'Enviar pelo WhatsApp',exact:true}).click();await page.getByRole('heading',{name:'Enviar assinatura pelo WhatsApp'}).waitFor();}
   await open();
   assert.equal(await page.getByRole('button',{name:'Enviar pelo WhatsApp',exact:true,includeHidden:true}).count(),1);
   assert.equal(await page.getByRole('button',{name:'Enviar',exact:true}).isDisabled(),true);
@@ -53,6 +55,7 @@ try {
   await page.getByRole('button',{name:'Enviar',exact:true}).waitFor({state:'visible'});await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent?.trim()==='Enviar'&&!b.disabled));await page.screenshot({path:join(tmpdir(),'signature-whatsapp-desktop.png')});
   await page.getByRole('button',{name:'Enviar',exact:true}).dblclick();
   await page.getByText('Mensagem aceita pelo WhatsApp.',{exact:false}).waitFor();
+  await page.getByRole('button',{name:'Fechar',exact:true}).click();await page.getByText('WhatsApp: 1 envio',{exact:true}).waitFor();await page.getByRole('button',{name:'Reenviar pelo WhatsApp',exact:true}).waitFor();
   assert.equal(sends,1);assert.equal(saves,1);assert.equal(payload.contact_id,id(6));assert.equal(payload.endpoint_id,id(4));assert.equal(payload.settings_updated_at,'v1');assert.equal('signing_url' in payload,false);assert.equal(linkCalls,0);total++;
   context.last_sent={id:id(8),created_at:'2026-09-28T19:00:00Z'};
   context.last_delivery={...context.last_sent,status:'sent'};

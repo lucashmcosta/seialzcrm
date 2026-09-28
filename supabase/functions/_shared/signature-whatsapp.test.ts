@@ -19,18 +19,19 @@ function fixture() {
   const db = {
     rpc: () => Promise.resolve({ data: permitted, error: null }),
     from: (table: string) => {
-      let filters: ((r: any) => boolean)[] = [], operation = "read", value: any, maximum = Infinity;
+      let filters: ((r: any) => boolean)[] = [], operation = "read", value: any, maximum = Infinity, offset = 0;
       const q: any = {
         select: () => q,
         eq: (key: string, v: any) => { filters.push(r => key === "metadata->>signature_delivery_id" ? r.metadata?.signature_delivery_id === v : key === "message_threads.contact_id" ? r.message_threads?.contact_id === v : r[key] === v); return q; },
         ilike: (key: string, v: string) => { filters.push(r => String(r[key]).toLowerCase() === v.toLowerCase()); return q; },
+        range: (from: number, to: number) => { offset = from; maximum = to + 1; return q; },
         order: () => q, limit: (n: number) => { maximum = n; return q; },
         insert: (v: any) => { operation = "insert"; value = v; return q; },
         update: (v: any) => { operation = "update"; value = v; return q; },
         upsert: (v: any) => { operation = "upsert"; value = v; return q; },
         maybeSingle: async () => { const result = await q; return { ...result, data: result.data?.[0] ?? null }; },
         then: (resolve: any, reject: any) => Promise.resolve().then(() => {
-          const matches = (rows[table] ?? []).filter(r => filters.every(f => f(r))).slice(0, maximum);
+          const matches = (rows[table] ?? []).filter(r => filters.every(f => f(r))).slice(offset, maximum);
           if (operation === "insert") {
             if (rows[table].some(r => r.id === value.id || (r.participant_id === value.participant_id && ["pending", "unknown"].includes(r.status)))) return { data: null, error: { code: "23505" } };
             rows[table].push({ status: "pending", ...value });
@@ -164,4 +165,24 @@ Deno.test("timeout é reconciliado somente com mensagem terminal da mesma organi
   assertEquals(response.last_delivery.status, "sent");
   assertEquals(response.last_sent.id, id(8));
   assertEquals(f.calls(), 0);
+});
+
+Deno.test("resumo conta por participante sem misturar org, solicitação, falhas e pendências", async () => {
+  const f = fixture();
+  const base = { organization_id: id(3), request_id: id(1), participant_id: id(2), created_at: "2026-09-28T18:00:00Z", status: "sent" };
+  f.rows.signature_whatsapp_deliveries = [base, {...base,created_at:"2026-09-28T19:00:00Z"}, {...base,status:"failed"}, {...base,status:"unknown"}, {...base,participant_id:id(21)}, {...base,organization_id:id(90)}, {...base,request_id:id(90)}];
+  const response = await handleSignatureWhatsApp("get_whatsapp_summary", {request_id:id(1)}, f.ctx);
+  assertEquals(response.status,200);
+  assertEquals((await response.json()).participants, {
+    [id(2)]:{sent_count:2,last_sent_at:"2026-09-28T19:00:00Z",pending_count:1},
+    [id(21)]:{sent_count:1,last_sent_at:"2026-09-28T18:00:00Z",pending_count:0},
+  });
+  assertEquals(f.calls(),0);
+  assertEquals((await handleSignatureWhatsApp("get_whatsapp_summary", {request_id:id(90)}, f.ctx)).status,404);
+});
+Deno.test("resumo pagina o histórico e permanece disponível após assinatura", async () => {
+  const f = fixture(); f.request.status = "completed";
+  f.rows.signature_whatsapp_deliveries = Array.from({length:1201},(_,n)=>({id:id(100+n),organization_id:id(3),request_id:id(1),participant_id:id(2),status:"sent",created_at:"2026-09-28T18:00:00Z"}));
+  const response = await handleSignatureWhatsApp("get_whatsapp_summary", {request_id:id(1)}, f.ctx);
+  assertEquals((await response.json()).participants[id(2)].sent_count,1201);
 });

@@ -395,6 +395,7 @@ Deno.serve(async (req) => {
       case "get_signing_link":
         return await getSigningLink(body.request_id, body.participant_id);
       case "get_whatsapp_context":
+      case "get_whatsapp_summary":
       case "save_whatsapp_settings":
       case "send_whatsapp_link":
         return await handleSignatureWhatsApp(action, body, {

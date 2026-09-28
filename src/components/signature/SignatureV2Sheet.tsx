@@ -109,8 +109,17 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
     if (!selectedId || !requests.some((r) => r.id === selectedId)) setSelectedId(requests[0].id);
   }, [requests, selectedId]);
   const selected = requests.find((r) => r.id === selectedId) ?? null;
+  const whatsappSummary = useQuery({
+    queryKey: ['signature-whatsapp-summary', selected?.id],
+    queryFn: () => callSignatureRequests<{ participants: Record<string, { sent_count: number; last_sent_at: string | null; pending_count: number }> }>('get_whatsapp_summary', { request_id: selected!.id }),
+    enabled: open && !!selected?.provider_operation_id,
+    refetchInterval: open ? 30_000 : false,
+  });
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ['signature-capability', opportunityId] });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['signature-whatsapp-summary'] });
+    return qc.invalidateQueries({ queryKey: ['signature-capability', opportunityId] });
+  };
   const showErr = (e: unknown) => toast.error(e instanceof SignatureApiError ? e.message : 'Erro inesperado');
   const reset = () => { setStep('list'); setDraft(null); setPending(null); setUnresolved([]); setMobileDetail(false); };
 
@@ -251,6 +260,8 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
             {parts.length === 0 && <li className="py-3 text-sm text-muted-foreground">—</li>}
             {parts.map((p) => {
               const signed = p.status === 'signed';
+              const delivery = whatsappSummary.data?.participants[p.id];
+              const sendCount = delivery?.sent_count ?? 0;
               return (
                 <li key={p.id ?? p.email} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] items-center gap-x-4 gap-y-1 py-3">
                   <div className="min-w-0 flex gap-2">
@@ -269,10 +280,19 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                       <Button size="sm" variant="outline" className="h-8 px-3" disabled={linkBusy === p.id} onClick={() => copyLink(r.id, p.id)}>
                         <LinkSimple className="h-3.5 w-3.5 mr-1.5" />{linkBusy === p.id ? 'Copiando…' : 'Copiar link'}
                       </Button>
-                      <Button size="sm" variant="outline" className="h-8 px-3" onClick={() => setWhatsappTarget({ requestId: r.id, participantId: p.id })}>Enviar pelo WhatsApp</Button>
+                      <Button size="sm" variant="outline" className="h-8 px-3" onClick={() => setWhatsappTarget({ requestId: r.id, participantId: p.id })}>{delivery?.pending_count ? 'Verificar envio' : sendCount > 0 ? 'Reenviar pelo WhatsApp' : 'Enviar pelo WhatsApp'}</Button>
                       </div>
                     )}
                   </div>
+                  {p.signing_mode !== 'automatic' && r.provider_operation_id && <div className="sm:col-span-3 text-xs text-muted-foreground" aria-live="polite">
+                    {whatsappSummary.isError ? <button className="underline" onClick={() => whatsappSummary.refetch()}>Não foi possível consultar os envios. Tentar novamente</button>
+                      : !whatsappSummary.data ? 'Consultando envios pelo WhatsApp…'
+                      : <>
+                        <span title="Envios por este botão aceitos pelo WhatsApp; confira a entrega na conversa.">WhatsApp: {sendCount === 0 ? 'nenhum envio' : plural(sendCount, 'envio', 'envios')}</span>
+                        {delivery?.last_sent_at && <span> · Último em {fmt(delivery.last_sent_at)}</span>}
+                        {!!delivery?.pending_count && <span className="text-warning"> · Aguardando confirmação de envio</span>}
+                      </>}
+                  </div>}
                 </li>
               );
             })}
