@@ -1157,7 +1157,7 @@ serve(async (req) => {
         body: { error: "meta_send_failed", details: errDetails },
         errorCode: errDetails.code ? String(errDetails.code) : null,
         errorMessage: errDetails.message,
-        metadata: { meta_cloud: { ...baseMeta, error: errDetails } },
+        metadata: { meta_cloud: { ...baseMeta, error: errDetails }, ...replyChoiceMeta },
       });
 
     }
