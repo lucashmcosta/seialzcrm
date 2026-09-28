@@ -162,6 +162,16 @@ Deno.serve(async (req) => {
       }
 
       // ---------------- Modelos ----------------
+      // Lista de modelos para a tela de configuração (vínculo modelo → tipo de documento).
+      case "list_templates_admin": {
+        const orgId = await currentOrgFromBody();
+        if (!orgId || !(await canManage(orgId))) return fail("forbidden", "Sem permissão", 403);
+        const creds = await loadV2Credentials(admin, orgId);
+        if (!creds) return fail("not_configured", "Credencial V2 não configurada", 409);
+        const r = await suvsignFetch(creds, "api-handler", "/templates", { method: "GET" });
+        if (!r.ok) return fail("provider_error", "Não foi possível listar os modelos na SuvSign", 502, { provider_status: r.status });
+        return json({ templates: (r.body?.templates ?? []).map((t: Any) => ({ id: t.id, name: t.name })) });
+      }
       case "list_templates": {
         const opp = await loadOpp(body.opportunity_id);
         if (!opp) return fail("not_found", "Oportunidade não encontrada", 404);
