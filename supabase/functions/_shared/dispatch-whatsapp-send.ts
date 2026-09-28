@@ -45,6 +45,10 @@ export interface WhatsAppSendPayload {
   message?: string;
   templateId?: string;
   templateVariables?: Record<string, string | number>;
+  templateHeaderImageUrl?: string;
+  templateButtonUrls?: Record<string, string>;
+  sensitiveTemplate?: boolean;
+  signatureDeliveryId?: string;
   mediaUrl?: string;
   mediaUrls?: string[];
   mediaType?: string;

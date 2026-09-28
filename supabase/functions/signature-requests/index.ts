@@ -3,6 +3,7 @@
 // (oportunidade/solicitação) lido com o client do usuário (RLS herda owner/view_all).
 // O navegador nunca envia organization_id, credencial ou conta SuvSign.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { handleSignatureWhatsApp } from "../_shared/signature-whatsapp.ts";
 import { encryptSecret } from "../_shared/crypto.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
@@ -68,6 +69,36 @@ Deno.serve(async (req) => {
     const orgId = body?.organization_id;
     if (typeof orgId !== "string" || !UUID.test(orgId) || !(await isMember(orgId))) return null;
     return orgId;
+  }
+
+  async function getSigningLink(requestId: unknown, participantId: unknown) {
+    const r = await loadRequest(requestId);
+    if (!r) return fail("not_found", "Solicitação não encontrada", 404);
+    if (typeof participantId !== "string" || !UUID.test(participantId)) return fail("invalid_input", "Participante inválido", 400);
+    if (!r.provider_operation_id || !["sent", "in_progress"].includes(r.status)) return fail("invalid_state", "Esta solicitação não aceita mais novos links.", 409);
+    const { data: p } = await admin.from("signature_request_participants").select("id, status, provider_participant_id, signing_mode")
+      .eq("id", participantId).eq("request_id", r.id).maybeSingle();
+    if (p?.signing_mode === "automatic") return fail("automatic_participant_no_link", "Este participante assina automaticamente e não utiliza link.", 409);
+    if (!p?.provider_participant_id) return fail("not_found", "Participante não encontrado", 404);
+    if (p.status === "signed") return fail("participant_already_signed", "Este participante já assinou.", 409);
+    const creds = await loadV2Credentials(admin, r.organization_id);
+    if (!creds) return fail("not_configured", "Credencial V2 não configurada", 409);
+    const l = await suvsignFetch(creds, "api-v2",
+      `/signing-operations/${encodeURIComponent(r.provider_operation_id)}/participants/${encodeURIComponent(p.provider_participant_id)}/signing-link`,
+      { method: "POST", idempotencyKey: `seialz:signing-link:${r.id}:${p.id}:v1` });
+    if (!l.ok) {
+      const code = l.body?.error;
+      if (l.status === 409 && code === "participant_already_signed") {
+        await admin.from("signature_request_participants").update({ status: "signed" }).eq("id", p.id);
+        return fail("participant_already_signed", "Este participante já assinou.", 409);
+      }
+      if (l.status === 409) return fail("invalid_state", "Esta solicitação não aceita mais novos links.", 409);
+      if (l.status === 429) return fail("rate_limited", "Muitas tentativas. Aguarde um instante e tente novamente.", 429);
+      if (l.status === 503) return fail("provider_unavailable", "SuvSign temporariamente indisponível.", 503);
+      return fail("provider_error", "Não foi possível obter o link de assinatura.", 502, { provider_status: l.status });
+    }
+    if (!l.body?.signing_url) return fail("provider_error", "Não foi possível obter o link de assinatura.", 502);
+    return json({ signing_url: l.body.signing_url, expires_at: l.body.expires_at ?? null });
   }
 
   // Piloto: flag separada libera só novos envios V2, sem trocar o botão V1.
@@ -361,35 +392,14 @@ Deno.serve(async (req) => {
 
       // Copiar link: chave de idempotência FIXA por request+participante (mesmo link a cada clique).
       // Nunca persistir/logar signing_url.
-      case "get_signing_link": {
-        const r = await loadRequest(body.request_id);
-        if (!r) return fail("not_found", "Solicitação não encontrada", 404);
-        if (typeof body.participant_id !== "string" || !UUID.test(body.participant_id)) return fail("invalid_input", "Participante inválido", 400);
-        if (!r.provider_operation_id || !["sent", "in_progress"].includes(r.status)) return fail("invalid_state", "Esta solicitação não aceita mais novos links.", 409);
-        const { data: p } = await admin.from("signature_request_participants").select("id, status, provider_participant_id, signing_mode")
-          .eq("id", body.participant_id).eq("request_id", r.id).maybeSingle();
-        if (p?.signing_mode === "automatic") return fail("automatic_participant_no_link", "Este participante assina automaticamente e não utiliza link.", 409);
-        if (!p?.provider_participant_id) return fail("not_found", "Participante não encontrado", 404);
-        if (p.status === "signed") return fail("participant_already_signed", "Este participante já assinou.", 409);
-        const creds = await loadV2Credentials(admin, r.organization_id);
-        if (!creds) return fail("not_configured", "Credencial V2 não configurada", 409);
-        const l = await suvsignFetch(creds, "api-v2",
-          `/signing-operations/${encodeURIComponent(r.provider_operation_id)}/participants/${encodeURIComponent(p.provider_participant_id)}/signing-link`,
-          { method: "POST", idempotencyKey: `seialz:signing-link:${r.id}:${p.id}:v1` });
-        if (!l.ok) {
-          const code = l.body?.error;
-          if (l.status === 409 && code === "participant_already_signed") {
-            await admin.from("signature_request_participants").update({ status: "signed" }).eq("id", p.id);
-            return fail("participant_already_signed", "Este participante já assinou.", 409);
-          }
-          if (l.status === 409) return fail("invalid_state", "Esta solicitação não aceita mais novos links.", 409);
-          if (l.status === 429) return fail("rate_limited", "Muitas tentativas. Aguarde um instante e tente novamente.", 429);
-          if (l.status === 503) return fail("provider_unavailable", "SuvSign temporariamente indisponível.", 503);
-          return fail("provider_error", "Não foi possível obter o link de assinatura.", 502, { provider_status: l.status });
-        }
-        if (!l.body?.signing_url) return fail("provider_error", "Não foi possível obter o link de assinatura.", 502);
-        return json({ signing_url: l.body.signing_url, expires_at: l.body.expires_at ?? null });
-      }
+      case "get_signing_link":
+        return await getSigningLink(body.request_id, body.participant_id);
+      case "get_whatsapp_context":
+      case "save_whatsapp_settings":
+      case "send_whatsapp_link":
+        return await handleSignatureWhatsApp(action, body, {
+          admin, userDb, me, loadRequest, canManage, getLink: getSigningLink, json,
+        });
 
       default:
         return fail("unknown_action", "Ação desconhecida");

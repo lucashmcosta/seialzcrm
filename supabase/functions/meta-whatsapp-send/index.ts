@@ -15,7 +15,7 @@ import { ensureEndpointMigrationNote } from "../_shared/endpoint-migration-note.
 import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
 import { getServiceWindow, type ContactCtwaInputs } from "../_shared/service-window.ts";
 import { resolveManualReplyEndpoint, replyChoiceMetadata } from "../_shared/manual-reply-endpoint.ts";
-import { sanitizeTemplateParam } from "../_shared/template-param-text.ts";
+import { buildMetaTemplateComponents, redactTemplateComponents } from "../_shared/meta-template-components.ts";
 import {
   inspectMp4AudioCodec,
   isMp4AudioMime,
@@ -165,7 +165,7 @@ serve(async (req) => {
   try {
     const body = await req.json().catch(() => null);
     if (!body) return errorResponse(400, { error: "invalid_json" }, { branch: "invalid_json", reason: "Request body is not valid JSON" });
-    payloadForLog = body as Record<string, unknown>;
+    payloadForLog = { ...body, templateButtonUrls: body.templateButtonUrls ? "[redacted]" : undefined, components: body.components ? "[redacted]" : undefined };
 
     const {
       organizationId, contactId, threadId, message,
@@ -173,7 +173,7 @@ serve(async (req) => {
       userId, replyToMessageId, isAgentMessage, agentId, senderName,
       endpointId: explicitEndpointIdRaw,
       manualReplyEndpointId,
-      templateId, templateVariables,
+      templateId, templateVariables, templateHeaderImageUrl, templateButtonUrls, sensitiveTemplate,
       type: payloadType, templateName: directTemplateName,
       languageCode: directLanguageCode, components: directComponents,
       migrationContext,
@@ -194,7 +194,7 @@ serve(async (req) => {
       organization_id: organizationId ?? null,
       senderContext: senderContext ?? null,
       is_template_send: !!templateId || payloadType === "template",
-      requestPayload: body,
+      requestPayload: payloadForLog,
     });
 
     if (!organizationId) return errorResponse(400, { error: "missing_organization" }, { branch: "missing_organization", reason: "organizationId ausente no payload" });
@@ -288,6 +288,9 @@ serve(async (req) => {
       manualReply,
       (body as Record<string, any>).replyEndpointChoice === "route_default" ? "route_default" : "derived",
     );
+    if (sensitiveTemplate && typeof body.signatureDeliveryId === "string") {
+      Object.assign(replyChoiceMeta, { signature_delivery_id: body.signatureDeliveryId });
+    }
 
 
 
@@ -761,45 +764,27 @@ serve(async (req) => {
       templateBodyText = tpl.body || null;
     }
 
-    // Renderiza preview e components finais (apenas BODY com variáveis simples).
     let renderedPreview: string | null = null;
     let outboundTemplateComponents: any[] = [];
     if (isTemplateSend) {
-      // Se chamado em modo "direto", usa components vindos do caller sem alteração.
       if (!templateRow && Array.isArray(directComponents) && directComponents.length > 0) {
         outboundTemplateComponents = directComponents;
       } else {
-        const bodyComp = templateComponentsTemplate.find(
-          (c) => (c?.type || "").toUpperCase() === "BODY",
-        );
-        const bodyTextRaw = (bodyComp?.text as string | undefined) || templateBodyText || "";
-        const vars = Array.from(
-          new Set((bodyTextRaw.match(/\{\{(\d+)\}\}/g) || []).map((m) => m.replace(/[{}]/g, ""))),
-        ).sort((a, b) => parseInt(a) - parseInt(b));
-        const values: Record<string, string> = {};
-        const tv = (templateVariables ?? {}) as Record<string, unknown>;
-        for (const n of vars) {
-          const v = tv[n] ?? tv[`var${n}`] ?? "";
-          // Meta rejeita (132018) parâmetros com \n, \t ou espaços consecutivos.
-          values[n] = sanitizeTemplateParam(v);
-        }
-
-        // Render preview
-        let preview = bodyTextRaw;
-        for (const n of vars) {
-          preview = preview.split(`{{${n}}}`).join(values[n] || `{{${n}}}`);
-        }
-        renderedPreview = preview;
-        if (vars.length > 0) {
-          outboundTemplateComponents = [{
-            type: "body",
-            parameters: vars.map((n) => ({ type: "text", text: values[n] || "" })),
-          }];
-        } else {
-          outboundTemplateComponents = [];
+        try {
+          const built = buildMetaTemplateComponents(templateComponentsTemplate, {
+            body: templateVariables ?? {},
+            headerImageUrl: templateHeaderImageUrl,
+            buttonUrls: templateButtonUrls,
+          }, templateBodyText || "");
+          renderedPreview = built.preview;
+          outboundTemplateComponents = built.components;
+        } catch (e) {
+          return jsonResponse(400, { error: "template_parameters_invalid", message: (e as Error).message });
         }
       }
     }
+    const storedTemplateComponents = sensitiveTemplate
+      ? redactTemplateComponents(outboundTemplateComponents) : outboundTemplateComponents;
 
 
 
@@ -826,7 +811,7 @@ serve(async (req) => {
       baseMeta.template = {
         name: templateName,
         language: templateLanguage,
-        components: outboundTemplateComponents,
+        components: storedTemplateComponents,
         rendered_preview: renderedPreview,
         template_id: templateRow?.id ?? null,
       };
@@ -1077,7 +1062,7 @@ serve(async (req) => {
         finalMeta.template = {
           name: templateName,
           language: templateLanguage,
-          components: outboundTemplateComponents,
+          components: storedTemplateComponents,
           rendered_preview: renderedPreview,
           template_id: templateRow?.id ?? null,
         };
@@ -1165,8 +1150,8 @@ serve(async (req) => {
       });
     } catch (e) {
       const errDetails = e instanceof MetaWaGraphError
-        ? { code: e.error.code, error_subcode: e.error.error_subcode, message: e.error.message }
-        : { message: (e as Error).message };
+        ? { code: e.error.code, error_subcode: e.error.error_subcode, message: sensitiveTemplate ? "A Meta recusou o template de assinatura." : e.error.message }
+        : { message: sensitiveTemplate ? "Falha ao enviar o template de assinatura." : (e as Error).message };
       return await finishTerminal(supabase, insertedMsg.id, {
         status: 500,
         body: { error: "meta_send_failed", details: errDetails },

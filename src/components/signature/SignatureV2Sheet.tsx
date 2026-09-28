@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowClockwise, ArrowLeft, Check, DownloadSimple, FileText, LinkSimple, Plus, WarningCircle } from '@phosphor-icons/react';
 import { callSignatureRequests, SignatureApiError, SIGNATURE_STATUS_LABEL, PARTICIPANT_STATUS_LABEL } from '@/lib/signatureRequestsApi';
 import { FrozenDocumentPreview } from './FrozenDocumentPreview';
+import { SignatureWhatsAppDialog } from './SignatureWhatsAppDialog';
 
 interface Props { open: boolean; onOpenChange: (o: boolean) => void; opportunityId: string; canCreate: boolean }
 type Step = 'list' | 'template' | 'data' | 'preview';
@@ -149,6 +150,7 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
       refresh();
     } catch (e) { showErr(e); } finally { setBusy(false); }
   };
+  const [whatsappTarget, setWhatsappTarget] = useState<{ requestId: string; participantId: string } | null>(null);
   const [linkBusy, setLinkBusy] = useState<string | null>(null);
   // Link vem só do servidor; não é guardado nem registrado.
   const copyLink = async (requestId: string, participantId: string) => {
@@ -263,9 +265,12 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                   )}
                   <div className="sm:justify-self-end">
                     {!signed && p.signing_mode !== 'automatic' && p.id && r.provider_operation_id && ['sent', 'in_progress'].includes(r.status) && (
+                      <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" className="h-8 px-3" disabled={linkBusy === p.id} onClick={() => copyLink(r.id, p.id)}>
                         <LinkSimple className="h-3.5 w-3.5 mr-1.5" />{linkBusy === p.id ? 'Copiando…' : 'Copiar link'}
                       </Button>
+                      <Button size="sm" variant="outline" className="h-8 px-3" onClick={() => setWhatsappTarget({ requestId: r.id, participantId: p.id })}>Enviar pelo WhatsApp</Button>
+                      </div>
                     )}
                   </div>
                 </li>
@@ -325,7 +330,8 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
   const footer = 'shrink-0 border-t border-border px-6 py-3 flex flex-wrap items-center justify-between gap-3';
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset(); }}>
+    <>
+    <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) { reset(); setWhatsappTarget(null); } }}>
       <DialogContent className="w-[calc(100vw-16px)] max-w-[1100px] h-[90dvh] max-h-[860px] p-0 gap-0 flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0 border-b border-border pl-7 pr-14 py-4 min-h-[72px] flex flex-row items-center justify-between gap-4 space-y-0 text-left">
           <DialogTitle className="text-lg font-semibold">{step === 'list' ? 'Assinatura de contrato' : 'Novo envio'}</DialogTitle>
@@ -490,6 +496,8 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
         )}
       </DialogContent>
     </Dialog>
+    {open && whatsappTarget && <SignatureWhatsAppDialog key={`${whatsappTarget.requestId}:${whatsappTarget.participantId}`} {...whatsappTarget} onClose={() => setWhatsappTarget(null)} />}
+    </>
   );
 }
 
