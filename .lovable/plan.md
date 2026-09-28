@@ -1,42 +1,38 @@
-# Auditoria final (somente leitura): "Fora da janela 24h" em conversa Evolution
+# Evolution pedindo template: auditoria do envio real + correções 1 e 2
 
-## Caso real consultado
-Conversa Denise Barreto, Central Trabalhista (org `40ae935c…`), thread `ec86ff7b-eba7-406f-9e33-c34c6709e589`, `business_context = sales`, último inbound em 16/09 (fora das 24h).
+## Parte A — Auditoria somente leitura do envio (conversa Denise)
+Thread `ec86ff7b…`, Central, `business_context = sales`. Últimas mensagens válidas: todas pelo Evolution `3ed219e0…` (inbound 16/09, outbound 17/09). Flag `sales_manual_reply_endpoint_v1` ligada na Central. Os dois números, Evolution `3ed219e0` e Meta `bf04ce63`, estão vinculados à rota Comercial.
 
-| Item | Valor |
-|---|---|
-| `thread.primary_endpoint_id` | `3ed219e0-b919-4a1f-b2f6-6806cfafe6f7` (Evolution 7020) |
-| Endpoint da última mensagem | `3ed219e0…` (Evolution) |
-| Linha Comercial `messaging_lines.active_endpoint_id` | `bf04ce63-d310-4c16-a133-b373a40df340` (Meta 7067) |
+Caminho real: `useManualReplyEndpoint` gera `replyEndpointSelection`. Com a flag ligada, `dispatchWhatsAppSend` (cliente) chama direto a edge function `dispatch-whatsapp-send`. No servidor, `_shared/dispatch-whatsapp-send.ts` → `resolveProvider` escolhe a função `evolution-` ou `meta-whatsapp-send`. O `endpointId` enviado pela tela (`composerEndpointId`) é só uma dica e o servidor o sobrescreve nesses dois caminhos.
 
-Endpoint Evolution `3ed219e0…`: provider `evolution_api`, is_active `true`, purpose `commercial`, **requires_template_outside_window `true`**, criado em 14/08/2026, **não** é o `active_endpoint_id` de nenhuma linha.
+| Situação | Número mostrado ("Responder por") | Número avaliado pelo Composer (bloqueio) | Número mandado ao envio | Provedor chamado de fato |
+|---|---|---|---|---|
+| Sem seleção manual | Evolution 7020 (última mensagem) | Meta 7067 (linha ativa, via `useThreadSendEndpoint`) | `derived` + dica Meta 7067 | **Evolution** (o servidor consulta de novo a última mensagem válida, que é a 3ed219e0) |
+| Manual: Evolution 7020 | Evolution 7020 | Meta 7067 | `manual` 3ed219e0 | **Evolution** |
+| Manual: Meta 7067 | Meta 7067 | Meta 7067 | `manual` bf04ce63 | **Meta** |
 
-Endpoint ativo da linha `bf04ce63…`: provider `meta_cloud_api`, is_active `true`, purpose `commercial`, requires_template_outside_window `true` (correto para Meta).
+O bloqueio de template nunca muda com o "Responder por": ele sempre olha a linha ativa (Meta). Nos casos 1 e 2 o campo bloqueia, mas a mensagem sairia pelo Evolution. Isso confirma que a tela avalia um número diferente do que o envio usa. Mesmo que o bloqueio olhasse o número certo, hoje ele também pediria template, porque o Evolution está com `true` (itens 1 e 2).
 
-**O que `useThreadSendEndpoint` escolhe:** primary tem purpose `commercial` → linha `commercial` → `active_endpoint_id = bf04ce63` (Meta, ativo) → retorna Meta, `isRotated = true`, `requiresTemplateOutsideWindow = true`. O primary Evolution só seria usado se a linha não tivesse endpoint ativo.
+### Prioridade usada hoje (sem alterar)
+- **Envio** (servidor, flag ligada): (1) seleção manual em "Responder por", revalidada; (2) número da última mensagem válida, se estiver vinculado à rota e for elegível; (3) número padrão da rota; (4) se nada disso resolver, `REPLY_ROUTE_UNRESOLVED` e o envio é bloqueado. `messaging_lines.active_endpoint_id` e `thread.primary_endpoint_id` não entram nesse caminho.
+- **Bloqueio do Composer**: `useThreadSendEndpoint` usa (1) `messaging_lines.active_endpoint_id`, se estiver ativo, e (2) `thread.primary_endpoint_id`, se estiver ativo. Ignora a seleção manual e a última mensagem.
+- **Envio legado** (flag desligada, fora da Central): o `endpointId` da tela, depois a linha ativa, depois o primary.
 
-## Conclusão
-Duas causas ao mesmo tempo:
+## Parte B — Implementar agora (aprovado)
+1. **Criação de números:** `provision_line_endpoint_core` e `provision_sales_endpoint` passam a gravar a capacidade no INSERT, a partir do provedor já resolvido: `evolution_api` recebe `false`; `meta_cloud_api`, `meta_cloud_api_coexistence` e `twilio` recebem `true`; qualquer outro provedor recebe `true` (continua bloqueado). A lógica das funções fica igual e o padrão da coluna não muda.
+2. **Dados:** mudar para `false` somente `3ed219e0…` (Central) e `43cca41d…` (org `689f30e5`), mostrando o antes e o depois.
+3. Registrar no `roadmap.md` e fechar o [TODO] em `docs/integrations/evolution-api/ENDPOINT_PURPOSE_RULE.md`.
 
-1. **O app escolhe outro endpoint (causa principal).** O cabeçalho e o "Responder por" mostram Evolution 7020, porque é o número da última mensagem. Mas o bloqueio do campo usa o número ativo da linha Comercial, que é o Meta 7067. Enquanto o bloqueio olhar para o Meta, ele vai continuar, mesmo com a flag certa no Evolution.
-2. **O endpoint Evolution está com `true`, não `null`.** A coluna é NOT NULL com padrão `true`. O preenchimento de julho corrigiu só os endpoints Evolution que já existiam. Os dois criados depois ficaram com `true`: `3ed219e0…` (Central) e `43cca41d…` (org `689f30e5…`, 22/09). Só o piloto `11111111-e701…` está com `false`.
+## Parte C — Proposta do item 3 (não implementar ainda)
+O Composer passa a avaliar o mesmo número que aparece no "Responder por". Esse número já segue a regra do servidor: primeiro a escolha manual, depois a última mensagem válida, depois o padrão da rota. A regra vem de `deriveSelectedEndpoint` em `src/lib/replyEndpointSelection.ts`, que espelha o `_shared/reply-endpoint-selection.ts`, então não surge uma segunda regra.
+- Criar uma função única em `src/lib/composerEndpoint.ts`, `resolveComposerCapability({ manualReply, sendEp, endpointById })`, que devolve `{ endpointId, requiresTemplateOutsideWindow }`:
+  - com o "Responder por" ativo: usa `manualReply.selectedEndpointId` e lê `requires_template_outside_window` desse número (já vem em `useOrgWhatsAppEndpoints`);
+  - com o "Responder por" desligado: mantém `useThreadSendEndpoint` (caminho legado igual a hoje);
+  - se o seletor ainda está carregando, se o número não foi resolvido ou se a flag não foi lida: `true` (continua bloqueado).
+- `composerAllowsFreeformOutsideWindow` passa a vir só dessa função. Não há checagem de provedor no Composer.
+- Ao trocar o "Responder por", a decisão muda na hora, porque é calculada a partir do estado do seletor.
+- [INCERTO] Deixar o `composerEndpointId` (a dica do envio e o escopo dos templates) apontando para o mesmo número. Isso muda os templates listados e fica como decisão separada.
 
-A hipótese 4 (a flag se perde entre o banco, o hook e o Composer) foi descartada, porque o hook lê a coluna direto e só a afrouxa quando o valor é exatamente `false`.
-
-## Origem do problema no cadastro
-Três rotinas do banco criam endpoints, e nenhuma grava `requires_template_outside_window` (confirmado em produção):
-- `provision_line_endpoint_core`: é por onde a Evolution é provisionada (o INSERT lista as colunas sem a flag, então vale o padrão `true`).
-- `provision_sales_endpoint`
-- `populate_communication_endpoints_from_v2_senders` (Twilio, onde `true` já é o valor certo)
-
-As funções de backend da Evolution não criam endpoints.
-
-## Correção proposta
-1. **Cadastro:** a capacidade passa a ser gravada pela própria rotina de criação, com base no provedor já escolhido (`v_canonical`), em `provision_line_endpoint_core` e `provision_sales_endpoint`: `evolution_api` fica `false` e os outros ficam `true`. A decisão fica num único lugar do banco, que espelha o `CAPABILITIES` de `_shared/whatsapp-provider/capabilities.ts`. O padrão `true` da coluna continua valendo, então tudo que for desconhecido segue bloqueado.
-2. **Dados:** corrigir só `3ed219e0…` e `43cca41d…` para `false`, com o antes e depois registrado.
-3. **Endpoint que o app avalia:** fazer o `useThreadSendEndpoint` usar a mesma regra do envio de verdade ("Responder por": o número escolhido ou o da última mensagem válida, conforme `replyEndpointSelection` / `dispatchWhatsAppSend`), em vez de ir sempre ao número ativo da linha. Antes de mudar, confirmo qual número o envio realmente usa nesta conversa. Se o envio também sai pelo Meta, o bloqueio está certo e o que está errado é o cabeçalho. Nenhum `provider === 'evolution_api'` no app. Sem número resolvido, o campo continua bloqueado.
-4. **Documentação:** fechar o [TODO] em `docs/integrations/evolution-api/ENDPOINT_PURPOSE_RULE.md` e registrar no plano de linhas.
-
-## Verificação
-- Refazer a consulta: os dois endpoints com `false`; um endpoint Evolution novo, provisionado em teste, nasce com `false`, e um Meta nasce com `true`.
-- Na conversa da Denise, o campo fica liberado só se o envio sair de fato pelo Evolution. Numa conversa Meta fora das 24h, o campo continua pedindo template.
+## Verificação (depois de B)
+- Consulta: os dois números Evolution com `false`, o Meta 7067 continua `true`, o piloto não muda.
+- Conferir a definição das duas funções no banco: elas gravam a flag de forma explícita.
