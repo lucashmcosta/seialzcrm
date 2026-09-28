@@ -64,6 +64,7 @@ import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 import { useThreadBusinessContext, type ThreadBusinessContext } from '@/hooks/useThreadBusinessContext';
 import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
 import { useThreadSendEndpoint } from '@/hooks/useThreadSendEndpoint';
+import { resolveComposerCapability } from '@/lib/composerCapability';
 import { useEndpointNumbers } from '@/hooks/useEndpointNumbers';
 import { pickPreferredEndpoint } from '@/lib/composerEndpoint';
 import { isSalesPurpose } from '@/lib/endpointPurpose';
@@ -865,8 +866,15 @@ function DesktopMessagesList() {
   // ativa via `useThreadSendEndpoint`); apenas informa se aquele endpoint
   // exige template.
   const composerEndpoint = composerEndpointId ? endpointById[composerEndpointId] : null;
+  // Com "Responder por" ligado: avalia o endpoint final do seletor
+  // (deriveSelectedEndpoint). Feature OFF: capacidade legada intacta.
+  const composerCapability = resolveComposerCapability({
+    manualReply,
+    legacyRequiresTemplateOutsideWindow: sendEp.requiresTemplateOutsideWindow,
+    endpointById,
+  });
   const composerAllowsFreeformOutsideWindow =
-    sendEp.requiresTemplateOutsideWindow === false;
+    composerCapability.requiresTemplateOutsideWindow === false;
   const selectedEndpointFallback = selectedEndpointDetails?.threadId === selectedThreadId
     ? selectedEndpointDetails.endpoint
     : null;
