@@ -11330,6 +11330,174 @@ export type Database = {
           },
         ]
       }
+      signature_whatsapp_deliveries: {
+        Row: {
+          contact_id: string
+          created_at: string
+          created_by: string
+          endpoint_id: string
+          id: string
+          message_id: string | null
+          organization_id: string
+          participant_id: string
+          request_id: string
+          status: string
+          template_id: string
+          thread_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          created_by: string
+          endpoint_id: string
+          id: string
+          message_id?: string | null
+          organization_id: string
+          participant_id: string
+          request_id: string
+          status?: string
+          template_id: string
+          thread_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          created_by?: string
+          endpoint_id?: string
+          id?: string
+          message_id?: string | null
+          organization_id?: string
+          participant_id?: string
+          request_id?: string
+          status?: string
+          template_id?: string
+          thread_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_whatsapp_deliveries_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_whatsapp_deliveries_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_whatsapp_deliveries_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_whatsapp_deliveries_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_whatsapp_deliveries_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_whatsapp_deliveries_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "signature_request_participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_whatsapp_deliveries_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "signature_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_whatsapp_deliveries_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_whatsapp_deliveries_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signature_whatsapp_settings: {
+        Row: {
+          header_image_url: string | null
+          organization_id: string
+          organization_integration_id: string
+          template_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          header_image_url?: string | null
+          organization_id: string
+          organization_integration_id: string
+          template_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          header_image_url?: string | null
+          organization_id?: string
+          organization_integration_id?: string
+          template_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_whatsapp_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_whatsapp_settings_organization_integration_id_fkey"
+            columns: ["organization_integration_id"]
+            isOneToOne: true
+            referencedRelation: "organization_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_whatsapp_settings_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_whatsapp_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       social_conversations: {
         Row: {
           avatar_url: string | null
