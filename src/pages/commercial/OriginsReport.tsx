@@ -77,11 +77,6 @@ function OriginsReportContent() {
         p_filters: period,
       }),
   });
-  useEffect(() => {
-    if (historyJob.data) void report.refetch();
-    // Refresh totals as background recovery advances or finishes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyJob.data?.updated, historyJob.data?.status]);
   const records = useQuery({
     queryKey: ["commercial", orgId, "drill", period, drill, page],
     enabled: !!orgId && enabled && !!drill,
@@ -104,6 +99,13 @@ function OriginsReportContent() {
         p_offset: page * 25,
       }),
   });
+  useEffect(() => {
+    if (!enabled || !permissions.canViewOpportunities || !historyJob.data) return;
+    void report.refetch();
+    if (drill) void records.refetch();
+    // Refresh totals and the open drilldown as recovery advances or finishes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyJob.data?.updated, historyJob.data?.status]);
   const money = (v: number, c: string | null) =>
     new Intl.NumberFormat(
       "pt-BR",

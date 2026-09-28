@@ -74,7 +74,7 @@ export function CommercialAttributionPanel(
     queryFn: async () => {
       const { data, error } = await commercialDb.from(
         "commercial_origin_events",
-      ).select("id,occurred_at,channel,text_content,result,entry_verified").eq(
+      ).select("id,occurred_at,channel,text_content,result,entry_verified,evidence").eq(
         "organization_id",
         orgId!,
       ).eq("contact_id", entityType === "contact" ? entityId : contactId!)
@@ -225,7 +225,9 @@ export function CommercialAttributionPanel(
               <p>
                 {new Date(ev.occurred_at).toLocaleString()} · {ev.channel} ·
                 {" "}
-                {ev.entry_verified
+                {ev.evidence?.historical_initial
+                  ? "Entrada inicial reconstruída"
+                  : ev.entry_verified
                   ? "Entrada vinculada"
                   : "Vínculo não comprovado"}
               </p>
