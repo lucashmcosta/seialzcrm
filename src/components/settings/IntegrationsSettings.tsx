@@ -12,7 +12,6 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useTranslation } from '@/lib/i18n';
 import { useOrganization } from '@/hooks/useOrganization';
-import { SuvSignV2CredentialsCard } from './SuvSignV2CredentialsCard';
 import { 
   ChatCircle, Phone, EnvelopeSimple, Plugs, Warning, Plus, Robot, Sparkle,
   UploadSimple, ArrowsClockwise, PenNib, CheckCircle, XCircle, Clock, Users, Briefcase, SlidersHorizontal,
@@ -427,7 +426,6 @@ export function IntegrationsSettings() {
           </TabsList>
         </Tabs>
 
-        {canManageAI && organization?.id && <SuvSignV2CredentialsCard organizationId={organization.id} />}
 
         {selectedCategory === 'telephony' && (
           <section id="telephony-control-center" className="scroll-mt-6 space-y-4">
@@ -658,6 +656,7 @@ export function IntegrationsSettings() {
           onDisconnect={() => handleDisconnectClick(selectedOrgIntegration.id)}
           onReconfigure={handleReconfigure}
           onConfigUpdated={() => queryClient.invalidateQueries({ queryKey: ['organization-integrations', organization?.id] })}
+          canManageSuvSignV2={!!canManageAI}
           onOpenMigration={selectedIntegration?.slug === 'kommo' ? () => {
             setDetailDialogOpen(false);
             setKommoMigrationOpen(true);
