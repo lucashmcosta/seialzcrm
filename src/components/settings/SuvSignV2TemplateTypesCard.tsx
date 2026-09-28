@@ -2,12 +2,51 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useState } from 'react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Button } from '@/components/ui/button';
 import { callSignatureRequests } from '@/lib/signatureRequestsApi';
 import { useDocumentCatalog } from '@/hooks/documents/useDocumentCatalog';
 import { useOrganization } from '@/hooks/useOrganization';
 
 const NONE = '__none__';
+
+type T = { id: string; name: string };
+const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+function TypePicker({ value, contactTypes, oppTypes, onChange }: {
+  value: string; contactTypes: T[]; oppTypes: T[]; onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = value === NONE ? 'Sem tipo' : [...contactTypes, ...oppTypes].find((t) => t.id === value)?.name ?? 'Sem tipo';
+  const pick = (v: string) => { setOpen(false); if (v !== value) onChange(v); };
+  const item = (t: T) => (
+    <CommandItem key={t.id} value={`${t.name} ${t.id}`} onSelect={() => pick(t.id)}>{t.name}</CommandItem>
+  );
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="w-72 justify-between font-normal">
+          <span className="truncate">{label}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-0" align="end">
+        <Command filter={(v, search) => (norm(v).includes(norm(search)) ? 1 : 0)}>
+          <CommandInput placeholder="Buscar tipo..." />
+          <CommandList>
+            <CommandEmpty>Nenhum tipo encontrado</CommandEmpty>
+            <CommandGroup>
+              <CommandItem value="Sem tipo" onSelect={() => pick(NONE)}>Sem tipo</CommandItem>
+            </CommandGroup>
+            {contactTypes.length > 0 && <CommandGroup heading="Do contato">{contactTypes.map(item)}</CommandGroup>}
+            {oppTypes.length > 0 && <CommandGroup heading="Da oportunidade">{oppTypes.map(item)}</CommandGroup>}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // Vínculo modelo SuvSign → Tipo de documento: o PDF assinado entra no CRM já com esse tipo.
 export function SuvSignV2TemplateTypesCard({ organizationId }: { organizationId: string }) {
@@ -63,22 +102,12 @@ export function SuvSignV2TemplateTypesCard({ organizationId }: { organizationId:
         {templates.data?.templates.map((tpl) => (
           <div key={tpl.id} className="flex items-center justify-between gap-4 border-b border-border py-2 last:border-0">
             <span className="text-sm">{tpl.name}</span>
-            <Select value={mappings.data?.get(tpl.id) ?? NONE} onValueChange={(v) => change(tpl, v)}>
-              <SelectTrigger className="w-72"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>Sem tipo</SelectItem>
-                {contactTypes.length > 0 && (
-                  <SelectGroup><SelectLabel>Do contato</SelectLabel>
-                    {contactTypes.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                  </SelectGroup>
-                )}
-                {oppTypes.length > 0 && (
-                  <SelectGroup><SelectLabel>Da oportunidade</SelectLabel>
-                    {oppTypes.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                  </SelectGroup>
-                )}
-              </SelectContent>
-            </Select>
+            <TypePicker
+              value={mappings.data?.get(tpl.id) ?? NONE}
+              contactTypes={contactTypes}
+              oppTypes={oppTypes}
+              onChange={(v) => change(tpl, v)}
+            />
           </div>
         ))}
       </CardContent>
