@@ -4,7 +4,7 @@ Camada adicional ao marketing. Nenhuma rotina nova escreve em `contacts.source`,
 
 ## Entrega e ativação
 
-1. Aplicar `20260925120000_commercial_attribution.sql` e `20260925121000_commercial_queries.sql` pelo processo de migrações do ambiente.
+1. Aplicar `20260925120000_commercial_attribution.sql`  , `20260925121000_commercial_queries.sql` e `20260928130000_commercial_query_access_once.sql` pelo processo de migrações do ambiente.
 2. Publicar os webhooks `meta-whatsapp-webhook`, `twilio-whatsapp-webhook`, `meta-lead-ads-process-lead` e `lead-webhook`, junto com `_shared/commercial-origin.ts`. Publicar o frontend.
 3. Acessar **Configurações → Origens comerciais** na organização desejada e ativar. A migração não ativa tenants nem inventa regras.
 4. Na Central Trabalhista, inspecionar somente em leitura os sinais reais da campanha Google e o texto atual do botão. Cadastrar o texto efetivamente usado como regra, escolher Google Ads e, se comprovada, a campanha correspondente. Usar o simulador antes de ativar a regra. Repetir os testes em uma segunda organização.
@@ -44,6 +44,8 @@ npx tsc --noEmit -p tsconfig.app.json
 env -u SENTRY_AUTH_TOKEN npm run build
 ```
 
-O fixture cria somente o contrato mínimo das tabelas legadas; não substitui homologação com o schema completo. A suíte cobre isolamento, permissões por responsável, precedência, conflitos, normalização, ausência de alterações legadas, paginação, moeda, captura por trigger, mídia, reprocessamento e proteção de correções. Validar o envio legado de conversões e relatórios completos em homologação antes de ativar a organização em produção.
+O fixture cria somente o contrato mínimo das tabelas legadas; não substitui homologação com o schema completo. A suíte cobre isolamento, permissões por responsável, precedência, conflitos, normalização, ausência de alterações legadas, paginação, moeda, captura por trigger, mídia, reprocessamento e proteção de correções. A validação publicada e seus limites estão em [Publicação e validação](commercial-origins-published-validation.md). O envio de conversões às plataformas permanece fora do escopo da suíte comercial.
 
 Monitorar, por organização: eventos com `process_error`, entradas sem vínculo, conflitos, percentual sem origem, e latência dos webhooks. O painel comercial não mede custos, ROAS ou conciliação das plataformas.
+
+A suíte `supabase/tests/commercial_published_transaction.sql` complementa o fixture mínimo: exige o schema completo e duas identidades existentes, cria somente dados sintéticos em transação e termina com `ROLLBACK`. Não executar o fixture mínimo junto dela. Revisar triggers e integrações do ambiente antes de executá-la; a versão publicada foi validada com esse cuidado.
