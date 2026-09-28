@@ -1967,6 +1967,384 @@ export type Database = {
           },
         ]
       }
+      commercial_attribution_history: {
+        Row: {
+          actor_id: string | null
+          after_data: Json
+          before_data: Json | null
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          organization_id: string
+          reason: string
+        }
+        Insert: {
+          actor_id?: string | null
+          after_data: Json
+          before_data?: Json | null
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          organization_id: string
+          reason: string
+        }
+        Update: {
+          actor_id?: string | null
+          after_data?: Json
+          before_data?: Json | null
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          organization_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_attribution_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commercial_attributions: {
+        Row: {
+          campaign_id: string | null
+          channel: string | null
+          details: Json
+          entity_id: string
+          entity_type: string
+          event_id: string | null
+          id: string
+          method: string
+          organization_id: string
+          origin_id: string | null
+          pending: boolean
+          revision: number
+          updated_at: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          channel?: string | null
+          details?: Json
+          entity_id: string
+          entity_type: string
+          event_id?: string | null
+          id?: string
+          method: string
+          organization_id: string
+          origin_id?: string | null
+          pending?: boolean
+          revision?: number
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string | null
+          channel?: string | null
+          details?: Json
+          entity_id?: string
+          entity_type?: string
+          event_id?: string | null
+          id?: string
+          method?: string
+          organization_id?: string
+          origin_id?: string | null
+          pending?: boolean
+          revision?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_attributions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_attributions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_ad_performance"
+            referencedColumns: ["marketing_campaign_id"]
+          },
+          {
+            foreignKeyName: "commercial_attributions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_funnel"
+            referencedColumns: ["marketing_campaign_id"]
+          },
+          {
+            foreignKeyName: "commercial_attributions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_origin_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_attributions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_attributions_organization_id_origin_id_fkey"
+            columns: ["organization_id", "origin_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_origins"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
+      commercial_message_rules: {
+        Row: {
+          active: boolean
+          campaign_id: string | null
+          endpoint_id: string | null
+          id: string
+          name: string
+          operator: string
+          organization_id: string
+          origin_id: string
+          pattern: string
+          priority: number
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          active?: boolean
+          campaign_id?: string | null
+          endpoint_id?: string | null
+          id?: string
+          name: string
+          operator: string
+          organization_id: string
+          origin_id: string
+          pattern: string
+          priority?: number
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          active?: boolean
+          campaign_id?: string | null
+          endpoint_id?: string | null
+          id?: string
+          name?: string
+          operator?: string
+          organization_id?: string
+          origin_id?: string
+          pattern?: string
+          priority?: number
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_message_rules_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_message_rules_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_ad_performance"
+            referencedColumns: ["marketing_campaign_id"]
+          },
+          {
+            foreignKeyName: "commercial_message_rules_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_funnel"
+            referencedColumns: ["marketing_campaign_id"]
+          },
+          {
+            foreignKeyName: "commercial_message_rules_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_message_rules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_message_rules_organization_id_origin_id_fkey"
+            columns: ["organization_id", "origin_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_origins"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
+      commercial_origin_events: {
+        Row: {
+          channel: string
+          contact_id: string
+          endpoint_id: string | null
+          entry_verified: boolean
+          evidence: Json
+          external_key: string
+          first_contact_entry: boolean
+          id: string
+          message_id: string | null
+          occurred_at: string
+          opportunity_id: string | null
+          organization_id: string
+          process_error: string | null
+          processed_at: string | null
+          result: Json
+          text_content: string | null
+        }
+        Insert: {
+          channel: string
+          contact_id: string
+          endpoint_id?: string | null
+          entry_verified?: boolean
+          evidence?: Json
+          external_key: string
+          first_contact_entry?: boolean
+          id?: string
+          message_id?: string | null
+          occurred_at: string
+          opportunity_id?: string | null
+          organization_id: string
+          process_error?: string | null
+          processed_at?: string | null
+          result?: Json
+          text_content?: string | null
+        }
+        Update: {
+          channel?: string
+          contact_id?: string
+          endpoint_id?: string | null
+          entry_verified?: boolean
+          evidence?: Json
+          external_key?: string
+          first_contact_entry?: boolean
+          id?: string
+          message_id?: string | null
+          occurred_at?: string
+          opportunity_id?: string | null
+          organization_id?: string
+          process_error?: string | null
+          processed_at?: string | null
+          result?: Json
+          text_content?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_origin_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_origin_events_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_origin_events_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_origin_events_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_origin_events_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
+            foreignKeyName: "commercial_origin_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commercial_origin_settings: {
+        Row: {
+          enabled: boolean
+          organization_id: string
+        }
+        Insert: {
+          enabled?: boolean
+          organization_id: string
+        }
+        Update: {
+          enabled?: boolean
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_origin_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commercial_origins: {
+        Row: {
+          active: boolean
+          code: string
+          id: string
+          name: string
+          organization_id: string
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          id?: string
+          name: string
+          organization_id: string
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          id?: string
+          name?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_origins_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       communication_endpoints: {
         Row: {
           assigned_user_id: string | null
@@ -13498,6 +13876,130 @@ export type Database = {
       clear_thread_reply_endpoint_pref: {
         Args: { _thread_id: string }
         Returns: undefined
+      }
+      commercial_apply_preview: {
+        Args: { p_items: Json; p_org: string }
+        Returns: Json
+      }
+      commercial_backfill: {
+        Args: {
+          p_from: string
+          p_limit?: number
+          p_offset?: number
+          p_org: string
+          p_to: string
+        }
+        Returns: Json
+      }
+      commercial_can_read: {
+        Args: { p_id: string; p_org: string; p_type: string }
+        Returns: boolean
+      }
+      commercial_capture: {
+        Args: {
+          p_at: string
+          p_channel: string
+          p_contact: string
+          p_endpoint?: string
+          p_evidence?: Json
+          p_first: boolean
+          p_key: string
+          p_message?: string
+          p_opportunity: string
+          p_org: string
+          p_text?: string
+          p_verified: boolean
+        }
+        Returns: string
+      }
+      commercial_configure: {
+        Args: { p_action: string; p_data?: Json; p_org: string }
+        Returns: Json
+      }
+      commercial_correct: {
+        Args: {
+          p_campaign: string
+          p_event?: string
+          p_id: string
+          p_org: string
+          p_origin: string
+          p_reason: string
+          p_type: string
+        }
+        Returns: boolean
+      }
+      commercial_entity_origin: {
+        Args: { p_id: string; p_org: string; p_type: string }
+        Returns: Json
+      }
+      commercial_filtered_records: {
+        Args: { p_filters?: Json; p_org: string; p_type: string }
+        Returns: {
+          amount: number
+          campaign_id: string
+          campaign_name: string
+          created_at: string
+          currency: string
+          entity_id: string
+          origin_id: string
+          origin_name: string
+          record: Json
+          stage_id: string
+          status: string
+        }[]
+      }
+      commercial_has_permission: {
+        Args: { p_org: string; p_permission: string }
+        Returns: boolean
+      }
+      commercial_import_history: {
+        Args: {
+          p_from: string
+          p_limit?: number
+          p_offset?: number
+          p_org: string
+          p_to: string
+        }
+        Returns: number
+      }
+      commercial_match_message: {
+        Args: { p_endpoint?: string; p_org: string; p_text: string }
+        Returns: Json
+      }
+      commercial_normalize: { Args: { p_text: string }; Returns: string }
+      commercial_process_event: {
+        Args: { p_enrich?: boolean; p_event: string }
+        Returns: Json
+      }
+      commercial_records: {
+        Args: {
+          p_filters?: Json
+          p_grouped?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_org: string
+          p_type: string
+        }
+        Returns: Json
+      }
+      commercial_report: {
+        Args: { p_filters?: Json; p_org: string }
+        Returns: Json
+      }
+      commercial_resolve_event: { Args: { p_event: string }; Returns: Json }
+      commercial_write_attribution: {
+        Args: {
+          p_channel: string
+          p_enrich?: boolean
+          p_event: string
+          p_id: string
+          p_manual?: boolean
+          p_org: string
+          p_reason: string
+          p_result: Json
+          p_type: string
+        }
+        Returns: boolean
       }
       count_custom_fields_for_org: {
         Args: { p_module?: string; p_organization_id: string }
