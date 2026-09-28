@@ -871,7 +871,6 @@ function DesktopMessagesList() {
   const composerCapability = resolveComposerCapability({
     manualReply,
     legacyRequiresTemplateOutsideWindow: sendEp.requiresTemplateOutsideWindow,
-    endpointById,
   });
   const composerAllowsFreeformOutsideWindow =
     composerCapability.requiresTemplateOutsideWindow === false;
