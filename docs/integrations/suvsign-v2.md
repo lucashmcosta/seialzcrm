@@ -64,3 +64,11 @@ get_capability, get_credentials_status*, save_credentials*, test_connection*, li
 - Acesso: `loadRequest` (RLS do usuário, herda visibilidade da oportunidade) + vínculo ativo com a organização. Falha → 404.
 - Atomicidade: um único DELETE condicional (id, organization_id, draft, sem operação, sem envio); 0 linhas → 409 `not_discardable`, registro preservado.
 - Participantes removidos por ON DELETE CASCADE. Não chama SuvSign, não cria activity, não altera documents. Não é `cancel_signature`.
+
+## Assinatura automática por template
+
+Web e Mobile compartilham `signature-requests`. A preparação preserva revisão, vínculo do usuário SuvSign e modo automático; combina a ordem dos templates no snapshot. Conflitos de precedência ou de modo manual/automático impedem criar o rascunho. Sem sequência, os manuais precedem os automáticos.
+
+Requer a publicação prévia do contrato de assinatura automática no SuvSign, a migração `20260928160000_automatic_signing_participants.sql` e o deploy de `signature-requests`. A listagem e o acompanhamento incluem `signing_mode` e `auto_error`. Não há "Copiar link" para automáticos. Snapshots já preparados continuam com seu comportamento original. Cadastro e revogação são feitos nas configurações do SuvSign.
+
+Validação: testes Deno de resolução de identidade, composição multidocumento, conflito de ordem e snapshot; typecheck e build Web; Mobile valida os mesmos dados e não armazena credenciais do provedor.

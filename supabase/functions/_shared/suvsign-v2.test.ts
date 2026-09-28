@@ -1,3 +1,4 @@
+import { buildMultiDocument } from "./suvsign-v2.ts";
 import { assertEquals, assertNotEquals } from "jsr:@std/assert@1";
 import { applyVariables, canonicalJson, fillFrozenContent, hmacHex, sha256Hex, timingSafeEqualHex, mapOperationStatus } from "./suvsign-v2.ts";
 
@@ -180,4 +181,25 @@ Deno.test("discard I: enviado entre a leitura e o DELETE → preservado", async 
   const a = mockAdmin([{ ...dBase, status: "sent", provider_operation_id: "op", sent_at: "2026-09-26T00:00:00Z" }]);
   assertEquals(await discardDraftAtomic(a, stale), "not_discardable");
   assertEquals(a.rows.length, 1);
+});
+
+Deno.test("automatic template provenance and order survive multi-document snapshot", () => {
+  const signatories = [
+    { template_ref: "k", identity: "suvsign-user:uid", person: {name:"Kaik",email:"kaik@example.test",phone:null,cpf:null}, template_role:null, signing_mode:"automatic" as const,auto_user_id:"uid",order_index:0 },
+    { template_ref: "c", identity:"contact:c", person:{name:"Client",email:"c@example.test",phone:null,cpf:null},template_role:null,signing_mode:"manual" as const,order_index:1 },
+  ];
+  const built = buildMultiDocument([{template_id:"t",template_revision:"rev",signing_order:"sequential",title:"Contrato",frozen_content:{},signatories,fields:[]}]);
+  assertEquals(built.signing_order,"sequential");
+  assertEquals(built.participants[0].auto_user_id,"uid");
+  assertEquals(built.participants[0].template_bindings,[{template_id:"t",template_revision:"rev",signatory_ref:"k"}]);
+  assertEquals(built.documents[0].signatory_map,{k:"p1",c:"p2"});
+});
+Deno.test("conflicting template orders and manual/automatic identity reject before snapshot", () => {
+ const k={template_ref:"k",identity:"manual:k@example.test",person:{name:"K",email:"k@example.test",phone:null,cpf:null},template_role:null,order_index:1};
+ const c={template_ref:"c",identity:"contact:c",person:{name:"C",email:"c@example.test",phone:null,cpf:null},template_role:null,order_index:0};
+ const d={template_id:"t",title:"T",frozen_content:{},fields:[],signing_order:"sequential"};
+ let error="";try{ buildMultiDocument([{...d,signatories:[c,k]},{...d,signatories:[{...k,order_index:0},{...c,order_index:1}]}]);}catch(e){error=(e as Error).message;}
+ assertEquals(error,"signing_order_conflict");
+ error="";try{buildMultiDocument([{...d,signatories:[k]},{...d,signatories:[{...k,identity:"suvsign-user:uid",signing_mode:"automatic",auto_user_id:"uid"}]}]);}catch(e){error=(e as Error).message;}
+ assertEquals(error,"participant_signing_mode_conflict");
 });
