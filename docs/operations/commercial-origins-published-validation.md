@@ -79,3 +79,31 @@ Não tratar simulação SQL como envio real Meta/Twilio/Google. Não disparar me
 A regra existente **Msg Google** foi preservada: igualdade com **Gostaria de falar com um Advogado Trabalhista**, origem **Google Ads**, número **Central Trabalhista - Comercial**, sem campanha comercial vinculada. O simulador confirmou a correspondência nesse número e a ausência dela sem o número. O usuário confirmou que o texto Google será diferente do Meta. A auditoria também encontrou atribuições reais por essa regra.
 
 O E2E cobre UI publicada, banco real e chamada HTTP controlada. Não equivale a um clique pago realizado pelo teste nem a um envio controlado de cada provedor Meta/Twilio. Não houve teste de entrega de conversões CAPI/Google; essas rotinas não foram modificadas. Observar uma classificação pela frase não comprova, por si só, que a pessoa clicou no anúncio. Mensagens editadas pelo visitante podem deixar de corresponder à regra exata.
+
+## Correção após conferência do histórico (28/09/2026)
+
+A primeira validação cobriu novas entradas e não comprovou cobertura histórica. O relato do usuário revelou que o importador exigia `commercial_entry`, inexistente nas mensagens anteriores à publicação. O cadastro de regra também não reavaliava as entradas antigas. A aprovação inicial, portanto, não era suficiente para afirmar que o histórico estava coberto.
+
+Auditoria: 12.278 contatos com CTWA, 9.636 primeiras mensagens com referral Meta e 178 primeiras mensagens com a frase Google. A regra original cobria apenas 7067 (20 primeiras mensagens). O usuário confirmou exclusividade Google também no 7020 (158), autorizando uma segunda regra restrita a esse endpoint.
+
+Correção `59bac82c`, migration `20260928150000`: recuperação com evidência inicial, preservação de atribuições conhecidas/manuais, vínculos históricos explícitos conforme os critérios documentados no guia, decoder de referral antigo Meta/Twilio e fila persistente ao ativar organização/salvar regra. A UI mostra andamento e atualiza o relatório; percentual sem origem usa uma casa decimal.
+
+Validação: build, TypeScript, lint e suíte `supabase/tests/commercial_history_recovery.sql` aprovados. A suíte no schema real, com rollback integral, cobre dados anteriores ao marcador, número correto/incorreto, mensagem posterior, mídia, snapshot tardio, várias oportunidades, correção manual, idempotência, preservação integral dos campos legados e isolamento de RPC. Simulação com 100 contatos reais recuperou 162 atribuições e foi revertida antes da aplicação.
+
+Resultado final: fila concluída em 28/09/2026 às 14:27 UTC, com **17.840 contatos examinados e 28.684 atribuições preenchidas**. Um lote operacional de 2.000 contatos ultrapassou 55 s e foi integralmente revertido; a execução foi retomada com 1.000 por chamada, sem perda do cursor já confirmado. O worker periódico usa 200 por lote.
+
+Conferência agregada após recuperação (os totais crescem com novas entradas):
+
+| Recorte | Meta Ads | Google Ads | Não identificada |
+| --- | ---: | ---: | ---: |
+| Contatos, todo o histórico | 14.078 | 249 | 3.512 |
+| Oportunidades, todo o histórico | 14.150 | 225 | 3.684 |
+| Oportunidades, 01–28/09/2026 | 2.849 | 64 | 612 (17,4%) |
+
+Há também 4 contatos e 4 oportunidades de acesso direto no histórico. As 178 primeiras mensagens exatas auditadas passaram a Google: 158 do 7020 e 20 do 7067. O total Google é maior porque existem outras evidências, como marcadores de entrada.
+
+Restam 384 contatos com CTWA armazenado, mas sem aquisição inicial reconstruída: 381 têm referral capturado após a janela inicial; 3 têm referral anterior à criação/importação do contato. Apenas 7 desses 384 contatos foram criados no período de setembro. A simples presença do referral mais recente não prova a primeira aquisição. O sistema não copiou essa origem para todas as oportunidades. Os 612 casos sem origem de setembro incluem outros registros sem evidência suficiente; não são todos CTWA.
+
+UI publicada conferida: status de conclusão nas configurações, Google 7020 no simulador, relatório com percentual decimal, detalhamento reconciliado em 64 oportunidades Google no período e oportunidade antiga de 26/09 com mensagem original e motivo auditado. A entrada histórica aparece como **Entrada inicial reconstruída** (`0d6993cb`). Tipos, lint e publicação Vercel aprovados. Zero `process_error` e zero organizações sintéticas remanescentes.
+
+A correção altera apenas a camada comercial; a suíte compara as linhas legadas integralmente. A auditoria anterior à recuperação tinha 26 atribuições comerciais; duas entradas antes desconhecidas foram preenchidas. As 18 atribuições já conhecidas/protegidas permaneceram inalteradas (0 alterações).

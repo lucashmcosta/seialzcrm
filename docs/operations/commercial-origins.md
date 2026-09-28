@@ -4,9 +4,9 @@ Camada adicional ao marketing. Nenhuma rotina nova escreve em `contacts.source`,
 
 ## Entrega e ativação
 
-1. Aplicar `20260925120000_commercial_attribution.sql`  , `20260925121000_commercial_queries.sql` e `20260928130000_commercial_query_access_once.sql` pelo processo de migrações do ambiente.
+1. Aplicar `20260925120000_commercial_attribution.sql`  , `20260925121000_commercial_queries.sql` e `20260928130000_commercial_query_access_once.sql` e `20260928150000_commercial_history_recovery.sql` pelo processo de migrações do ambiente.
 2. Publicar os webhooks `meta-whatsapp-webhook`, `twilio-whatsapp-webhook`, `meta-lead-ads-process-lead` e `lead-webhook`, junto com `_shared/commercial-origin.ts`. Publicar o frontend.
-3. Acessar **Configurações → Origens comerciais** na organização desejada e ativar. A migração não ativa tenants nem inventa regras.
+3. Acessar **Configurações → Origens comerciais** na organização desejada e ativar. A migração não ativa tenants nem inventa regras. Ativar uma organização ou salvar uma regra agenda a recuperação do histórico; o processamento continua em segundo plano e seu andamento aparece nas configurações.
 4. Na Central Trabalhista, inspecionar somente em leitura os sinais reais da campanha Google e o texto atual do botão. Cadastrar o texto efetivamente usado como regra, escolher Google Ads e, se comprovada, a campanha correspondente. Usar o simulador antes de ativar a regra. Repetir os testes em uma segunda organização.
 5. Para históricos, escolher um período, **Preparar histórico**, **Ver prévia** e **Aplicar esta página**. A preparação copia evidências para tabelas comerciais; não atribui origens. A prévia é somente leitura. A aplicação limita-se a destinos desconhecidos e revalida regras e revisões.
 
@@ -24,7 +24,11 @@ As novas rotas são `/settings/commercial-origins` e `/commercial/origins`. List
 
 ## Histórico e limites
 
-O importador lê mensagens persistidas e evidências armazenadas na própria oportunidade. Nunca copia a campanha atual do contato para suas oportunidades antigas. Mensagens antigas sem `commercial_entry` podem sugerir regras, mas não comprovam a entrada de uma oportunidade. O operador pode revisar o evento e fazer correção auditada no detalhe. A origem inicial de contatos antigos não é reconstruída por suposição.
+O importador lê mensagens persistidas e evidências armazenadas na própria oportunidade. Nunca copia a campanha atual do contato para suas oportunidades antigas. A recuperação automática também examina registros anteriores ao marcador `commercial_entry`. A primeira mensagem recebida só é usada como aquisição se estiver na sessão de criação do contato (de 1 minuto antes até 10 minutos depois). Referral mutável do contato só pode completar a evidência se tiver sido capturado junto à criação (±1 minuto); referral de visita posterior não é copiado. Para formulário, usa-se a evidência própria de uma oportunidade inicial.
+
+O vínculo histórico com uma oportunidade é uma reconstrução explícita: exige exatamente uma oportunidade criada na mesma sessão inicial (−1 a +10 minutos da criação do contato). Vários candidatos ficam sem vínculo; oportunidades posteriores não herdam a origem. Evidência própria da oportunidade prevalece. Essa heurística é registrada em `evidence.link_basis=unique_initial_creation_session`, com método `migrated` para evidência direta histórica e `historical_initial` nas decisões de regra. Ela não equivale a um identificador de entrada fornecido pelo provedor. O operador pode revisar e corrigir a atribuição no detalhe.
+
+A fila `commercial_history_jobs` é isolada por organização, processada por `commercial-history-recovery` a cada minuto e reiniciada ao salvar regras. Lotes com erro são revertidos e ficam visíveis como interrompidos. O botão **Atualizar histórico** permite reiniciar. Registros sem evidência suficiente continuam não identificados; atribuições conhecidas e correções manuais são preservadas.
 
 Eventos com falha de classificação mantêm `process_error` e podem ser reavaliados pela prévia. Falhas na captura de mensagem não bloqueiam o webhook; a mensagem persistida permite recuperação pelo importador. Falhas de transporte do RPC de formulários são registradas no log `[commercial-origin]`; quando não existe evidência persistida suficiente, a correção/reexecução da origem precisa ser feita pelo operador, sem inventar um vínculo.
 
