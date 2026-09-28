@@ -17,4 +17,4 @@
 ## Evolution — template fora de 24h (2026-09-28)
 - [x] Parte B1: provisionamento grava requires_template_outside_window por provider
 - [x] Parte B2: corrigir 3ed219e0 e 43cca41d para false (antes/depois)
-- [x] Parte C: Composer avalia o endpoint efetivo do "Responder por" (`src/lib/composerCapability.ts`) — falta publicar
+- [x] Parte C: Composer avalia o endpoint efetivo do "Responder por" (`src/lib/composerCapability.ts`), capability lida da opção do "Responder por" — publicado
