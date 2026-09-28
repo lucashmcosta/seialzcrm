@@ -11851,6 +11851,71 @@ export type Database = {
           },
         ]
       }
+      suvsign_v2_template_document_types: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          document_type_id: string
+          id: string
+          organization_id: string
+          template_id: string
+          template_name: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          document_type_id: string
+          id?: string
+          organization_id: string
+          template_id: string
+          template_name?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          document_type_id?: string
+          id?: string
+          organization_id?: string
+          template_id?: string
+          template_name?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suvsign_v2_template_document_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suvsign_v2_template_document_types_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suvsign_v2_template_document_types_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suvsign_v2_template_document_types_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tag_assignments: {
         Row: {
           created_at: string | null
