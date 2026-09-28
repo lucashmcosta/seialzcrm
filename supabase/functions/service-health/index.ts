@@ -134,6 +134,14 @@ Deno.serve(async (req) => {
       lastDlRes.status === "fulfilled" && !lastDlRes.value?.error
         ? (lastDlRes.value?.data?.last_error_at ?? null)
         : null;
+    // Liveness: heartbeat row written by the integration-worker edge fn on every
+    // run (even when idle). Falls back to the last audit log when absent.
+    const hb: any =
+      workerHbRes.status === "fulfilled" && !workerHbRes.value?.error ? workerHbRes.value?.data : null;
+    const workerLastRun: string | null = hb?.last_run_at ?? outbox.worker_last_run_at ?? null;
+    const lastRunProcessed = hb?.last_detail?.processed;
+    const lastRunDurationMs = hb?.last_detail?.duration_ms;
+
 
     // Operational window only: the historical dead-letter backlog never drives status.
     const degraded: Status | null = stuck > 0 || deadLetter24h > 0
@@ -163,6 +171,8 @@ Deno.serve(async (req) => {
         deadLetter: deadLetter24h,
         deadLetter24h,
         deadLetterTotal: deadTotal,
+        ...(typeof lastRunProcessed === "number" ? { lastRunProcessed } : {}),
+        ...(typeof lastRunDurationMs === "number" ? { lastRunDurationMs } : {}),
       },
     });
   } else {
