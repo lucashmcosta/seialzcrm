@@ -2919,14 +2919,16 @@ function DesktopMessagesList() {
                         const outOfWindow =
                           !serviceWindow.isOpen && messages.length > 0 && !composerBypassesWindow;
                         const outOfWindowCopy = serviceWindow.reason || (locale === 'pt-BR' ? 'Fora da janela — selecione um template' : 'Outside window — select a template');
-                        const showNoInboundHint =
-                          !outOfWindow && composerBypassesWindow && !serviceWindow.isOpen && messages.length > 0;
+                        const windowClosed = !serviceWindow.isOpen && messages.length > 0;
+                        const showTemplateOnlyHint = windowClosed && composerAllowsFreeformOutsideWindow === false;
+                        const showNoInboundHint = windowClosed && composerAllowsFreeformOutsideWindow === true;
                         return (
                           <>
                           {/* Fase 2.5.1 — avisos orientados ao operador (sem termos técnicos) */}
                           <SalesComposerStatus
                             noRoute={salesRouteEndpointState === 'unresolved'}
                             noRecentInbound={showNoInboundHint}
+                            templateOnly={showTemplateOnlyHint}
                           />
 
                           {/* Switch "Responder por" — só existe com a feature ON */}
