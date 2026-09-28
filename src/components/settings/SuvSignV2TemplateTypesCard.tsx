@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { callSignatureRequests, SignatureApiError } from '@/lib/signatureRequestsApi';
+import { callSignatureRequests } from '@/lib/signatureRequestsApi';
 import { useDocumentCatalog } from '@/hooks/documents/useDocumentCatalog';
 import { useOrganization } from '@/hooks/useOrganization';
 
@@ -31,10 +31,6 @@ export function SuvSignV2TemplateTypesCard({ organizationId }: { organizationId:
     },
   });
 
-  if (templates.error) {
-    const code = templates.error instanceof SignatureApiError ? templates.error.code : '';
-    if (code === 'forbidden') return null;
-  }
 
   const change = async (tpl: { id: string; name: string }, value: string) => {
     const table = supabase.from('suvsign_v2_template_document_types' as any);
