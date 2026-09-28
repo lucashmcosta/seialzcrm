@@ -2921,13 +2921,11 @@ function DesktopMessagesList() {
                         const outOfWindowCopy = serviceWindow.reason || (locale === 'pt-BR' ? 'Fora da janela — selecione um template' : 'Outside window — select a template');
                         const windowClosed = !serviceWindow.isOpen && messages.length > 0;
                         const showTemplateOnlyHint = windowClosed && composerAllowsFreeformOutsideWindow === false;
-                        const showNoInboundHint = windowClosed && composerAllowsFreeformOutsideWindow === true;
                         return (
                           <>
                           {/* Fase 2.5.1 — avisos orientados ao operador (sem termos técnicos) */}
                           <SalesComposerStatus
                             noRoute={salesRouteEndpointState === 'unresolved'}
-                            noRecentInbound={showNoInboundHint}
                             templateOnly={showTemplateOnlyHint}
                           />
 
