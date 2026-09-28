@@ -78,8 +78,6 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
     drawerItems.push({ label: 'Atendimento', href: '/inbox', icon: Headset });
   }
 
-  if (permissions.canViewOpportunities) drawerItems.push({ label: 'Origens comerciais', href: '/commercial/origins', icon: ChartLineUp });
-
   const systemItems: { label: string; href: string; icon: typeof House }[] = [];
   if (permissions.canManageSettings) {
     systemItems.push({ label: 'Dashboards', href: '/dashboards', icon: ChartLineUp });

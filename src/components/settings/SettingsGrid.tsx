@@ -59,7 +59,7 @@ const settingsGroups: SettingsGroup[] = [
       { icon: GearSix, label: 'Geral', description: 'Nome da empresa, fuso horário e idioma', to: 'general' },
       { icon: Palette, label: 'Tema e Cores', description: 'Personalize a aparência do seu CRM', to: 'theme', permission: 'canManageSettings' },
       { icon: SquaresFour, label: 'Campos Personalizados', description: 'Crie campos extras para contatos e oportunidades', to: 'custom-fields', permission: 'canManageSettings' },
-      { icon: GitBranch, label: 'Origens comerciais', description: 'Origens, regras de mensagem e histórico de atribuição', to: 'commercial-origins', permission: 'canManageSettings' },
+      { icon: GitBranch, label: 'Origens comerciais', description: 'Regras de atribuição e resultados por origem', to: 'commercial-origins', permission: 'canManageSettings' },
       { icon: Tag, label: 'Etiquetas', description: 'Organize contatos e oportunidades com tags', to: 'tags', permission: 'canManageSettings' },
       { icon: GitBranch, label: 'Pipeline', description: 'Configure estágios do funil de vendas', to: 'pipeline', permission: 'canManageSettings' },
       { icon: CheckSquare, label: 'Configurações de oportunidade', description: 'Regras de fechamento + documentos exigidos para ganhar', to: 'opportunity-close', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },

@@ -59,7 +59,6 @@ export function Layout({ children }: LayoutProps) {
       principalItems.push({ label: t('nav.reports'), href: '/dashboards', icon: ChartLineUp });
       principalItems.push({ label: 'Marketing', href: '/marketing', icon: ChartBar });
     }
-    if (permissions.canViewOpportunities) principalItems.push({ label: 'Origens comerciais', href: '/commercial/origins', icon: ChartLineUp });
     principalItems.push(
       { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
       { label: t('nav.contacts'), href: '/contacts', icon: UsersThree },
@@ -141,7 +140,6 @@ export function Layout({ children }: LayoutProps) {
     navItems.push({ label: t('nav.reports'), href: '/dashboards', icon: ChartLineUp });
     navItems.push({ label: 'Marketing', href: '/marketing', icon: ChartBar });
   }
-  if (permissions.canViewOpportunities) navItems.push({ label: 'Origens comerciais', href: '/commercial/origins', icon: ChartLineUp });
   navItems.push(
     { label: t('nav.contacts'), href: '/contacts', icon: UsersThree },
     { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
