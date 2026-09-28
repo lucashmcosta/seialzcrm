@@ -13,6 +13,8 @@ interface Props {
   noRoute?: boolean;
   /** Não há inbound recente (janela de conversa fechada). */
   noRecentInbound?: boolean;
+  /** Fora da janela E o número efetivo exige template (campo bloqueado). */
+  templateOnly?: boolean;
 }
 
 function Notice({ title, subtitle, tooltip }: { title: string; subtitle: string; tooltip?: string }) {
@@ -29,7 +31,7 @@ function Notice({ title, subtitle, tooltip }: { title: string; subtitle: string;
   );
 }
 
-export function SalesComposerStatus({ noRoute, noRecentInbound }: Props) {
+export function SalesComposerStatus({ noRoute, noRecentInbound, templateOnly }: Props) {
   if (noRoute) {
     return (
       <Notice
@@ -40,10 +42,14 @@ export function SalesComposerStatus({ noRoute, noRecentInbound }: Props) {
     );
   }
 
-  if (noRecentInbound) {
+  if (templateOnly) {
     return (
       <Notice title="Sem inbound recente" subtitle="Somente mensagens de template estão disponíveis." />
     );
+  }
+
+  if (noRecentInbound) {
+    return <Notice title="Sem inbound recente" subtitle="O cliente não enviou mensagem recentemente." />;
   }
 
   return null;
