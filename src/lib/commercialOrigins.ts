@@ -72,7 +72,7 @@ export async function commercialRpc<T>(
   return data as T;
 }
 export const campaignLabel = (c: CampaignOption) =>
-  c.display_name || c.campaign_name || c.id;
+  [...new Set([c.campaign_name, c.display_name].filter(Boolean))].join(" · ") || c.id;
 
 export interface CommercialSelection {
   origin: string;

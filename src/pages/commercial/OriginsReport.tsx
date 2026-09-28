@@ -4,11 +4,12 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useCommercialHistoryJob, useCommercialOrigins } from "@/hooks/useCommercialOrigins";
+import { useCommercialCampaigns, useCommercialHistoryJob, useCommercialOrigins } from "@/hooks/useCommercialOrigins";
 import { usePersistedFilters } from "@/hooks/usePersistedFilters";
 import { CommercialFilters } from "@/components/commercial/CommercialFilters";
 import {
   commercialRpc,
+  campaignLabel,
   dayAfter,
   emptyCommercialFilters,
 } from "@/lib/commercialOrigins";
@@ -47,6 +48,8 @@ export default function OriginsReport() {
 }
 function OriginsReportContent() {
   const { orgId, enabled, loading } = useCommercialOrigins();
+  const { data: campaigns = [] } = useCommercialCampaigns(enabled ? orgId : undefined);
+  const campaignNames = new Map(campaigns.map(c => [c.id, campaignLabel(c)]));
   const { permissions } = usePermissions();
   const historyJob = useCommercialHistoryJob(permissions.canManageSettings ? orgId : undefined);
   const [filters, setFilters, , hydrated] = usePersistedFilters(
@@ -271,7 +274,7 @@ function OriginsReportContent() {
                                 </button>
                               </td>
                               <td className="border-b p-3">
-                                {g.campaign_name}
+                                {campaignNames.get(g.campaign_id || "") || g.campaign_name}
                               </td>
                               <td className="border-b p-3">
                                 {g.currency || "Não informada"}
@@ -318,7 +321,7 @@ function OriginsReportContent() {
                                   g.campaign_id,
                                 )}
                             >
-                              {g.origin_name} · {g.campaign_name}: {g.contacts}
+                              {g.origin_name} · {campaignNames.get(g.campaign_id || "") || g.campaign_name}: {g.contacts}
                             </button>
                           </li>
                         ))}
