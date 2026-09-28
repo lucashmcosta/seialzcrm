@@ -14254,6 +14254,7 @@ export type Database = {
         Args: { p_error: string; p_job_id: string }
         Returns: undefined
       }
+      fn_scheduler_health_summary: { Args: { _window?: string }; Returns: Json }
       fn_sync_nammux_subscription: {
         Args: { p_org_id: string }
         Returns: undefined
