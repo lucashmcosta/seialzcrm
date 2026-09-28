@@ -48,6 +48,8 @@ export interface ManualReplyOption {
   ownerName: string | null;
   /** permissão do usuário atual (server-side: `fn_can_user_use_reply_endpoint`) */
   allowedForUser: boolean;
+  /** `communication_endpoints.requires_template_outside_window` (null = desconhecido) */
+  requiresTemplateOutsideWindow: boolean | null;
 }
 
 export type ManualReplyUiState =
@@ -143,7 +145,7 @@ export function useManualReplyEndpoint(params: Params): ManualReplyState {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('communication_endpoints')
-        .select('id, external_address, display_name, provider, is_active, channel, purpose, assigned_user_id')
+        .select('id, external_address, display_name, provider, is_active, channel, purpose, assigned_user_id, requires_template_outside_window')
         .eq('organization_id', organizationId!)
         .eq('channel', 'whatsapp')
         .eq('is_active', true);

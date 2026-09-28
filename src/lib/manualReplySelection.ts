@@ -12,6 +12,7 @@ export interface ManualReplyEndpointRow {
   channel: string | null;
   purpose?: string | null;
   assigned_user_id?: string | null;
+  requires_template_outside_window?: boolean | null;
 }
 
 export interface ManualReplyOptionShape {
@@ -27,6 +28,8 @@ export interface ManualReplyOptionShape {
   ownerName: string | null;
   /** permissão do usuário atual sobre este endpoint (validada server-side) */
   allowedForUser: boolean;
+  /** capacidade declarada; null/ausente ⇒ fail-closed no Composer */
+  requiresTemplateOutsideWindow: boolean | null;
 }
 
 /** Somente canal whatsapp — a autorização por usuário já veio da query com RLS. */
@@ -58,6 +61,9 @@ export function toManualReplyOptions(
         ownerName: assignedUserId ? (options?.ownerNames?.[assignedUserId] ?? null) : null,
         // Fail-closed: sem resposta explícita do servidor, o endpoint não é usável.
         allowedForUser: options?.allowed ? options.allowed[i] === true : true,
+        requiresTemplateOutsideWindow: typeof ep.requires_template_outside_window === 'boolean'
+          ? ep.requires_template_outside_window
+          : null,
       };
     });
 }
