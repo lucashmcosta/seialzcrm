@@ -9,7 +9,7 @@ const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
 import {
   canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, findUnresolvedPlaceholders, friendlyTemplateError, loadV2Credentials,
   mapOperationStatus, sha256Hex, buildMultiDocument, resolveTemplateSignatories, buildDealCustom, SIGNING_V2_FLAG, suvsignFetch,
-  isDiscardableDraft, discardDraftAtomic,
+  isDiscardableDraft, discardDraftAtomic, automaticSigningError,
 } from "../_shared/suvsign-v2.ts";
 
 const cors = {
@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
         const enabled = await featureFlagEnabled(admin, SIGNING_V2_FLAG, opp.organization_id);
         const { data: cred } = await admin.from("suvsign_v2_credentials").select("organization_id").eq("organization_id", opp.organization_id).maybeSingle();
         const { data: requests } = await userDb.from("signature_requests")
-          .select("id, status, template_name, provider_operation_id, sent_at, completed_at, cancelled_at, created_at, last_error, provider_documents, signature_request_participants(id, ref, name, email, role, status, opened_at, signed_at, order_index)")
+          .select("id, status, template_name, provider_operation_id, sent_at, completed_at, cancelled_at, created_at, last_error, provider_documents, signature_request_participants(id, ref, name, email, role, status, opened_at, signed_at, order_index, signing_mode, auto_error)")
           .eq("opportunity_id", opp.id).order("created_at", { ascending: false });
         const pilot = await featureFlagEnabled(admin, SIGNING_V2_PILOT_FLAG, opp.organization_id);
         return json({ v2_enabled: enabled, pilot_enabled: pilot, has_credentials: !!cred, requests: requests ?? [] });
@@ -212,7 +212,7 @@ Deno.serve(async (req) => {
           const ctx = { roles: roleData, contact: client, deal: {}, custom, templateName: name ?? "", now };
           const frozen = fillFrozenContent(def.frozen_content, ctx);
           for (const x of findUnresolvedPlaceholders(frozen, Object.keys(roleData))) unresolvedVars.push(`${name ?? id}: ${x}`);
-          docInputs.push({ template_id: id, title: name ?? opp.title ?? "Contrato", frozen_content: frozen, signatories: resolved, fields: def.fields ?? [],
+          docInputs.push({ template_id: id, template_revision: def.template_revision, signing_order: def.signing_order, title: name ?? opp.title ?? "Contrato", frozen_content: frozen, signatories: resolved, fields: def.fields ?? [],
             meta: { id, name, layout_mode: def.layout_mode, coordinate_system: def.coordinate_system } });
         }
         const badFixed = unresolved.filter((u) => u.reason === "invalid_template_identity");
@@ -221,11 +221,11 @@ Deno.serve(async (req) => {
         if (unresolvedVars.length) return fail("unresolved_template_variables", `Variáveis do modelo sem valor: ${unresolvedVars.join(", ")}`, 422, { unresolved_variables: unresolvedVars });
         let built: Any;
         try { built = buildMultiDocument(docInputs); }
-        catch { return fail("participant_conflict", "O mesmo signatário aparece com e-mails diferentes entre os documentos", 422); }
+        catch(e) { const code = e instanceof Error ? e.message : "participant_conflict"; return fail(code, automaticSigningError(code) || "O mesmo signatário aparece com e-mails diferentes entre os documentos", 422); }
         const participants: Any[] = built.participants;
         const templateNames = defs.map((d) => d.name ?? "Contrato").join(" + ");
         const snapshot = {
-          version: 2, templates: docInputs.map((d) => d.meta),
+          version: 2, signing_order: built.signing_order, templates: docInputs.map((d) => d.meta),
           participants: participants.map(({ template_role: _r, identity: _i, ...p }) => p),
           documents: built.documents,
           variables: { client, custom }, prepared_at: now.toISOString(), prepared_by: me.id,
@@ -239,7 +239,7 @@ Deno.serve(async (req) => {
         if (error) throw error;
         const { error: pErr } = await admin.from("signature_request_participants").insert(participants.map((p) => ({
           request_id: created.id, organization_id: opp.organization_id, ref: p.ref, name: p.name, email: p.email, phone: p.phone,
-          cpf: p.cpf, role: p.role, template_role: p.template_role, order_index: p.order_index, status: "pending",
+          cpf: p.cpf, role: p.role, template_role: p.template_role, order_index: p.order_index, status: "pending", signing_mode: p.signing_mode,
         })));
         if (pErr) throw pErr;
         return json({ request_id: created.id, snapshot_sha256: snapshotSha, snapshot });
@@ -266,13 +266,13 @@ Deno.serve(async (req) => {
           const s = r.snapshot;
           const c = await suvsignFetch(creds, "api-v2", "/signing-operations", {
             method: "POST", idempotencyKey: r.idempotency_key,
-            body: JSON.stringify({ source: "seialz", external_id: r.id, metadata: { custom: { seialz_request_id: r.id, seialz_opportunity_id: r.opportunity_id } },
+            body: JSON.stringify({ source: "seialz", external_id: r.id, metadata: { ...(s.signing_order ? { signing_order: s.signing_order } : {}), custom: { seialz_request_id: r.id, seialz_opportunity_id: r.opportunity_id } },
               participants: s.participants, documents: s.documents }),
           });
           if (c.status === 409 && c.body?.error === "signing_engine_v2_not_enabled") return fail("signing_engine_v2_not_enabled", "V2 não habilitado na SuvSign para esta conta.", 409);
           if (!c.ok) {
             await admin.from("signature_requests").update({ last_error: `create:${c.status}:${c.body?.error ?? ""}` }).eq("id", r.id);
-            return fail(c.body?.error ?? "provider_error", "A SuvSign recusou a criação do envio.", 502, { provider_status: c.status, detail: c.body?.detail ?? null });
+            return fail(c.body?.error ?? "provider_error", automaticSigningError(c.body?.error) || "A SuvSign recusou a criação do envio.", c.status === 422 ? 422 : 502, { provider_status: c.status, detail: c.body?.detail ?? null });
           }
           opId = String(c.body?.id ?? c.body?.operation?.id ?? "");
           if (!opId) return fail("provider_error", "Resposta da SuvSign sem id da operação", 502);
@@ -287,7 +287,7 @@ Deno.serve(async (req) => {
           } else {
             await admin.from("signature_requests").update({ last_error: `send:${snd.status}:${snd.body?.error ?? ""}` }).eq("id", r.id);
             if (snd.body?.error === "signing_engine_v2_not_enabled") return fail("signing_engine_v2_not_enabled", "V2 não habilitado na SuvSign para esta conta.", 409);
-            return fail(snd.body?.error ?? "provider_error", "A SuvSign recusou o envio.", 502, { provider_status: snd.status });
+            return fail(snd.body?.error ?? "provider_error", automaticSigningError(snd.body?.error) || "A SuvSign recusou o envio.", snd.status === 422 ? 422 : 502, { provider_status: snd.status });
           }
         }
         await syncFromOperation(admin, r, op);
@@ -296,7 +296,7 @@ Deno.serve(async (req) => {
           title: "Contrato enviado para assinatura", body: `${(r.snapshot?.documents?.length ?? 1)} documento(s) enviado(s) pela SuvSign: ${r.template_name ?? "Contrato"}.`,
           created_by_user_id: me.id, source_external_id: `suvsign_v2:${opId}:sent`,
         });
-        return json({ request_id: r.id, status: "sent", provider_operation_id: opId });
+        return json({ request_id: r.id, status: op?.status || "sent", provider_operation_id: opId });
       }
 
       case "get_signature_status": {
@@ -309,7 +309,7 @@ Deno.serve(async (req) => {
             if (g.ok) await syncFromOperation(admin, r, g.body);
           }
         }
-        const { data } = await userDb.from("signature_requests").select("id, status, sent_at, completed_at, cancelled_at, provider_documents, signature_request_participants(ref, name, email, status, opened_at, signed_at, order_index)").eq("id", r.id).maybeSingle();
+        const { data } = await userDb.from("signature_requests").select("id, status, sent_at, completed_at, cancelled_at, provider_documents, signature_request_participants(ref, name, email, status, opened_at, signed_at, order_index, signing_mode, auto_error)").eq("id", r.id).maybeSingle();
         return json(data);
       }
 
@@ -366,8 +366,9 @@ Deno.serve(async (req) => {
         if (!r) return fail("not_found", "Solicitação não encontrada", 404);
         if (typeof body.participant_id !== "string" || !UUID.test(body.participant_id)) return fail("invalid_input", "Participante inválido", 400);
         if (!r.provider_operation_id || !["sent", "in_progress"].includes(r.status)) return fail("invalid_state", "Esta solicitação não aceita mais novos links.", 409);
-        const { data: p } = await admin.from("signature_request_participants").select("id, status, provider_participant_id")
+        const { data: p } = await admin.from("signature_request_participants").select("id, status, provider_participant_id, signing_mode")
           .eq("id", body.participant_id).eq("request_id", r.id).maybeSingle();
+        if (p?.signing_mode === "automatic") return fail("automatic_participant_no_link", "Este participante assina automaticamente e não utiliza link.", 409);
         if (!p?.provider_participant_id) return fail("not_found", "Participante não encontrado", 404);
         if (p.status === "signed") return fail("participant_already_signed", "Este participante já assinou.", 409);
         const creds = await loadV2Credentials(admin, r.organization_id);
@@ -419,6 +420,7 @@ async function syncFromOperation(admin: Any, r: Any, op: Any) {
     if (!p?.ref) continue;
     await admin.from("signature_request_participants").update({
       provider_participant_id: p.id ?? null, status: p.status ?? "invited",
+      signing_mode: p.signing_mode ?? "manual", auto_error: p.auto_error ?? null, order_index: p.order_index,
       opened_at: p.opened_at ?? null, signed_at: p.signed_at ?? null,
     }).eq("request_id", r.id).eq("ref", p.ref);
   }

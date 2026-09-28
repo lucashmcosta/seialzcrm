@@ -1,3 +1,4 @@
+import { resolveSigningOrder } from "./signing-order.ts";
 // SuvSign Signing Engine V2 — helpers compartilhados (Seialz Web).
 // Contrato: SuvSign docs/reference/api/signing-engine-v2.md.
 // O Seialz NÃO converte coordenadas e NÃO detecta table/image: consome o contrato.
@@ -159,25 +160,32 @@ export interface ResolvedSignatory {
   template_ref: string; identity: string;
   person: { name: string; email: string; phone: string | null; cpf: string | null };
   template_role: string | null;
+  signing_mode?: "manual" | "automatic"; auto_user_id?: string | null; order_index?: number;
 }
 export interface TemplateDocInput {
-  template_id: string; title: string; frozen_content: Any; signatories: ResolvedSignatory[]; fields: Any[];
+  template_id: string; template_revision?: string; signing_order?: string; title: string; frozen_content: Any; signatories: ResolvedSignatory[]; fields: Any[];
 }
 export function buildMultiDocument(docs: TemplateDocInput[]) {
   const byIdentity = new Map<string, Any>();
   const participants: Any[] = [];
+  const orders: { signing_order?: string; participant_refs: string[] }[] = [];
   const documents = docs.map((d, di) => {
     const refMap = new Map<string, string>();
-    for (const s of d.signatories) {
+    for (const s of [...d.signatories].sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0))) {
       let p = byIdentity.get(s.identity);
       if (!p) {
         p = { ref: `p${participants.length + 1}`, identity: s.identity, name: s.person.name || s.person.email,
           email: s.person.email, phone: s.person.phone, cpf: s.person.cpf, role: "signer",
-          template_role: s.template_role, order_index: participants.length };
+          template_role: s.template_role, order_index: participants.length, signing_mode: s.signing_mode ?? "manual", auto_user_id: s.auto_user_id ?? null, template_bindings: [] };
         byIdentity.set(s.identity, p); participants.push(p);
       } else if (p.email.toLowerCase() !== s.person.email.toLowerCase()) {
         throw new Error(`participant_email_mismatch:${s.identity}`);
       }
+      if (p.signing_mode !== (s.signing_mode ?? "manual") || p.auto_user_id !== (s.auto_user_id ?? null) ||
+          participants.some(other => other.ref !== p.ref && other.email.toLowerCase() === p.email.toLowerCase() && other.signing_mode !== p.signing_mode)) {
+        throw new Error("participant_signing_mode_conflict");
+      }
+      if (d.template_revision) p.template_bindings.push({ template_id: d.template_id, template_revision: d.template_revision, signatory_ref: s.template_ref });
       refMap.set(s.template_ref, p.ref);
     }
     const fields = (d.fields ?? []).filter((f: Any) => refMap.has(f.template_signatory_ref)).map((f: Any) => ({
@@ -185,9 +193,15 @@ export function buildMultiDocument(docs: TemplateDocInput[]) {
       page_number: f.page_number, position_x: f.position_x, position_y: f.position_y, width: f.width, height: f.height,
       is_required: f.is_required !== false, metadata: f.metadata ?? {},
     }));
-    return { ref: `d${di + 1}`, title: d.title, template_id: d.template_id, frozen_content: d.frozen_content, fields };
+    orders.push({ signing_order: d.signing_order, participant_refs: [...refMap.values()] });
+    return { ref: `d${di + 1}`, title: d.title, template_id: d.template_id,
+      ...(d.template_revision ? { template_revision: d.template_revision, signatory_map: Object.fromEntries(refMap) } : {}),
+      frozen_content: d.frozen_content, fields };
   });
-  return { participants, documents };
+  const order = resolveSigningOrder(participants, orders);
+  participants.forEach(p => { p.order_index = order.refs.indexOf(p.ref); });
+  participants.sort((a,b) => a.order_index-b.order_index);
+  return { participants, documents, signing_order: order.signing_order };
 }
 
 // ---------- Signatários do template → pessoas reais ----------
@@ -218,7 +232,7 @@ export function resolveTemplateSignatories(def: Any, o: {
       }
       const p = nm.split(/\s+/);
       person = { first_name: p[0], last_name: p.slice(1).join(" "), name: nm, email, phone: "" };
-      identity = `manual:${email}`;
+      identity = s.signing_mode === "automatic" && s.auto_user_id ? `suvsign-user:${s.auto_user_id}` : `manual:${email}`;
     } else if (s.is_creator) {
       const n = str(o.me.full_name); const p = n.split(/\s+/);
       person = { first_name: p[0] ?? "", last_name: p.slice(1).join(" "), name: n, email: str(o.me.email), phone: "" };
@@ -236,7 +250,7 @@ export function resolveTemplateSignatories(def: Any, o: {
     }
     if (!person || !person.email) { unresolved.push({ ref: s.ref, display_name: s.display_name }); continue; }
     roleData[s.ref] = person;
-    resolved.push({ template_ref: s.ref, identity, person: { name: person.name, email: person.email, phone: person.phone || null, cpf }, template_role: s.role ?? s.display_name ?? null });
+    resolved.push({ template_ref: s.ref, identity, person: { name: person.name, email: person.email, phone: person.phone || null, cpf }, template_role: s.role ?? s.display_name ?? null, signing_mode: s.signing_mode ?? "manual", auto_user_id: s.auto_user_id ?? null, order_index: s.order_index });
   }
   return { resolved, roleData, unresolved };
 }
@@ -267,4 +281,17 @@ export async function discardDraftAtomic(admin: any, r: { id: string; organizati
     .is("provider_operation_id", null).is("sent_at", null).select("id");
   if (error) return "error";
   return Array.isArray(data) && data.length === 1 ? "discarded" : "not_discardable";
+}
+
+export function automaticSigningError(code: string): string | null {
+  const messages: Record<string,string> = {
+    signing_order_conflict: "Os modelos exigem ordens de assinatura contraditórias. Ajuste os modelos ou envie separadamente.",
+    participant_signing_mode_conflict: "O mesmo usuário está configurado como manual e automático. Ajuste os modelos ou envie separadamente.",
+    automatic_signature_unavailable: "Um signatário automático está sem assinatura habilitada. Confira as configurações na SuvSign.",
+    template_revision_changed: "Um modelo foi alterado. Prepare os documentos novamente.",
+    automatic_binding_invalid: "O vínculo da assinatura automática não é válido. Revise o modelo na SuvSign.",
+    automatic_fields_unsupported: "Signatários automáticos podem ter somente campos de assinatura e rubrica.",
+    automatic_participant_no_link: "Este participante assina automaticamente e não utiliza link.",
+  };
+  return messages[code] ?? null;
 }

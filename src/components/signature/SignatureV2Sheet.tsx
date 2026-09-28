@@ -253,16 +253,16 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                 <li key={p.id ?? p.email} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] items-center gap-x-4 gap-y-1 py-3">
                   <div className="min-w-0 flex gap-2">
                     {done && signed && <Check className="h-4 w-4 text-success mt-0.5 shrink-0" weight="bold" />}
-                    <div className="min-w-0"><p className="text-sm font-medium truncate">{p.name}</p><p className="text-xs text-muted-foreground truncate">{p.email}</p></div>
+                    <div className="min-w-0"><p className="text-sm font-medium truncate">{p.order_index != null ? `${p.order_index + 1}. ` : ""}{p.name}{p.signing_mode === "automatic" ? " · automática" : ""}</p><p className="text-xs text-muted-foreground truncate">{p.email}</p></div>
                   </div>
                   {!draftRow && (
                     <p className={`text-xs flex items-center gap-1.5 ${signed ? 'text-success' : 'text-warning'}`}>
                       {signed && !done && <Check className="h-3.5 w-3.5" weight="bold" />}
-                      {signed ? `Assinou${p.signed_at ? ` em ${fmt(p.signed_at)}` : ''}` : ['sent', 'in_progress'].includes(r.status) ? 'Aguardando assinatura' : PARTICIPANT_STATUS_LABEL[p.status] ?? p.status}
+                      {signed ? `Assinou${p.signing_mode === 'automatic' ? ' automaticamente' : ''}${p.signed_at ? ` em ${fmt(p.signed_at)}` : ''}` : ['sent', 'in_progress'].includes(r.status) ? p.auto_error ? 'Assinatura automática bloqueada — confira a SuvSign' : p.signing_mode === 'automatic' ? 'Aguardando a vez da assinatura automática' : 'Aguardando assinatura' : PARTICIPANT_STATUS_LABEL[p.status] ?? p.status}
                     </p>
                   )}
                   <div className="sm:justify-self-end">
-                    {!signed && p.id && r.provider_operation_id && ['sent', 'in_progress'].includes(r.status) && (
+                    {!signed && p.signing_mode !== 'automatic' && p.id && r.provider_operation_id && ['sent', 'in_progress'].includes(r.status) && (
                       <Button size="sm" variant="outline" className="h-8 px-3" disabled={linkBusy === p.id} onClick={() => copyLink(r.id, p.id)}>
                         <LinkSimple className="h-3.5 w-3.5 mr-1.5" />{linkBusy === p.id ? 'Copiando…' : 'Copiar link'}
                       </Button>
@@ -435,7 +435,7 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                 <ul className="divide-y divide-border border-b border-border">
                   {draftParts.map((p) => (
                     <li key={p.ref} className="py-4">
-                      <p className="text-sm font-medium truncate">{p.name}</p>
+                      <p className="text-sm font-medium truncate">{p.order_index != null ? `${p.order_index + 1}. ` : ""}{p.name}{p.signing_mode === "automatic" ? " · automática" : ""}</p>
                       <p className="text-xs text-muted-foreground truncate">{p.email}</p>
                       <p className="text-xs text-muted-foreground mt-2">Assina {plural(docsForParticipant(p.ref), 'documento', 'documentos')}</p>
                     </li>
@@ -476,7 +476,7 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                 <div className="hidden md:block mt-auto pt-4 border-t border-border px-2 space-y-3">
                   {draftParts.map((p) => (
                     <div key={p.ref}><p className="text-xs text-muted-foreground">Signatário</p>
-                      <p className="text-sm font-medium truncate">{p.name}</p><p className="text-xs text-muted-foreground truncate">{p.email}</p></div>
+                      <p className="text-sm font-medium truncate">{p.order_index != null ? `${p.order_index + 1}. ` : ""}{p.name}{p.signing_mode === "automatic" ? " · automática" : ""}</p><p className="text-xs text-muted-foreground truncate">{p.email}</p></div>
                   ))}
                 </div>
               </aside>

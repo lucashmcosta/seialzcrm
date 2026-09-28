@@ -11159,6 +11159,8 @@ export type Database = {
           ref: string
           request_id: string
           role: string
+          signing_mode: string
+          auto_error: string | null
           signed_at: string | null
           status: string
           template_role: string | null
@@ -11178,6 +11180,8 @@ export type Database = {
           ref: string
           request_id: string
           role?: string
+          signing_mode?: string
+          auto_error?: string | null
           signed_at?: string | null
           status?: string
           template_role?: string | null
@@ -11197,6 +11201,8 @@ export type Database = {
           ref?: string
           request_id?: string
           role?: string
+          signing_mode?: string
+          auto_error?: string | null
           signed_at?: string | null
           status?: string
           template_role?: string | null
