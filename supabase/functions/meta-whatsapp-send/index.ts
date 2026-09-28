@@ -16,6 +16,7 @@ import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared
 import { getServiceWindow, type ContactCtwaInputs } from "../_shared/service-window.ts";
 import { resolveManualReplyEndpoint, replyChoiceMetadata } from "../_shared/manual-reply-endpoint.ts";
 import { buildMetaTemplateComponents, redactTemplateComponents } from "../_shared/meta-template-components.ts";
+import { templateDisplay } from "../_shared/template-display.ts";
 import {
   inspectMp4AudioCodec,
   isMp4AudioMime,
@@ -814,6 +815,7 @@ serve(async (req) => {
         components: storedTemplateComponents,
         rendered_preview: renderedPreview,
         template_id: templateRow?.id ?? null,
+        display: templateRow ? templateDisplay(templateComponentsTemplate) : undefined,
       };
     }
 
@@ -1065,6 +1067,7 @@ serve(async (req) => {
           components: storedTemplateComponents,
           rendered_preview: renderedPreview,
           template_id: templateRow?.id ?? null,
+          display: templateRow ? templateDisplay(templateComponentsTemplate) : undefined,
         };
       }
 

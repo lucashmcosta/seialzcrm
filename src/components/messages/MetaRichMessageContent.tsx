@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { normalizePhoneBR } from '@/lib/normalizePhoneBR';
 import { NameInput } from '@/components/NameInput';
 import { canonicalContactName, type OperatingCountryCode } from '@/lib/regional';
+import { TemplateMessageCard, type StoredTemplate } from './TemplateMessageCard';
 
 type MetaRaw = {
   type?: string;
@@ -76,6 +77,8 @@ export function MetaRichMessageContent({
   className,
   fallback,
 }: Props) {
+  const template = (metadata as { meta_cloud?: { template?: StoredTemplate } } | null)?.meta_cloud?.template;
+  if (isOutbound && template) return <TemplateMessageCard template={template} content={content} />;
   const raw = readRaw(metadata);
   const type = raw?.type;
 
