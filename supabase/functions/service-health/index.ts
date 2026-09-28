@@ -109,6 +109,8 @@ Deno.serve(async (req) => {
         .order("last_error_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase.from("outbox_system_heartbeats").select("last_run_at,last_detail").eq("component", "integration-worker").maybeSingle(),
+      supabase.rpc("fn_scheduler_health_summary", { _window: "01:00:00" }),
     ]);
 
   const countOf = (res: PromiseSettledResult<any>): number => {
@@ -143,8 +145,8 @@ Deno.serve(async (req) => {
     services.push({
       slug: "outbox-worker",
       name: "Outbox Worker",
-      status: statusFromHeartbeat(outbox.worker_last_run_at, degraded),
-      lastHeartbeat: outbox.worker_last_run_at ?? null,
+      status: statusFromHeartbeat(workerLastRun, degraded),
+      lastHeartbeat: workerLastRun,
       uptimeSeconds: null,
       version: null,
       lastDeadLetterAt,
