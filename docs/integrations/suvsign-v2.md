@@ -72,3 +72,8 @@ Web e Mobile compartilham `signature-requests`. A preparação preserva revisão
 Requer a publicação prévia do contrato de assinatura automática no SuvSign, a migração `20260928160000_automatic_signing_participants.sql` e o deploy de `signature-requests`. A listagem e o acompanhamento incluem `signing_mode` e `auto_error`. Não há "Copiar link" para automáticos. Snapshots já preparados continuam com seu comportamento original. Cadastro e revogação são feitos nas configurações do SuvSign.
 
 Validação: testes Deno de resolução de identidade, composição multidocumento, conflito de ordem e snapshot; typecheck e build Web; Mobile valida os mesmos dados e não armazena credenciais do provedor.
+
+## Tipo de documento por modelo (2026-09-28)
+- Tabela `suvsign_v2_template_document_types` (org, `template_id` → `document_type_id`), editada em Configurações → Integrações → SuvSign → aba V2 (só `can_manage_integrations_in_org`).
+- Lista de modelos: ação `list_templates_admin({organization_id})` em `signature-requests`.
+- Webhook `storePdf`: `document_id` → `provider_documents[].ref` → `snapshot.documents[].template_id` → vínculo; grava `document_type_id` e usa oportunidade quando `owner_type='opportunity'`. Sem vínculo: contato, sem tipo (comportamento anterior). Envios antigos não são reprocessados.

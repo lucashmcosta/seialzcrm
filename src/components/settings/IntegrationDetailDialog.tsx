@@ -20,6 +20,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SuvSignV2CredentialsCard } from './SuvSignV2CredentialsCard';
+import { SuvSignV2TemplateTypesCard } from './SuvSignV2TemplateTypesCard';
 
 interface IntegrationDetailDialogProps {
   open: boolean;
@@ -721,6 +722,7 @@ export function IntegrationDetailDialog({
         {showSuvSignTabs && organization?.id && (
           <div className={suvsignTab === 'v2' ? 'py-4' : 'hidden'}>
             <SuvSignV2CredentialsCard organizationId={organization.id} />
+            <SuvSignV2TemplateTypesCard organizationId={organization.id} />
           </div>
         )}
 

@@ -117,8 +117,22 @@ async function storePdf(admin: Any, r: Any, payload: Any): Promise<{ ok: boolean
   const path = `${r.contact_id}/suvsign_v2_${docId}.pdf`;
   const up = await admin.storage.from("attachments").upload(path, buf, { contentType: "application/pdf", upsert: true });
   if (up.error) return { ok: false, error: "upload_failed" };
+  // Tipo de documento vinculado ao modelo (Configurações → SuvSign V2). Sem vínculo → como antes.
+  let entityType = "contact", entityId = r.contact_id, documentTypeId: string | null = null;
+  const pd = (Array.isArray(r.provider_documents) ? r.provider_documents : []).find((d: Any) => String(d?.document_id) === docId);
+  const snapDocs = Array.isArray(r.snapshot?.documents) ? r.snapshot.documents : [];
+  const templateId = snapDocs.find((d: Any) => pd?.ref && d?.ref === pd.ref)?.template_id ?? (snapDocs.length === 1 ? snapDocs[0]?.template_id : null);
+  if (templateId) {
+    const { data: m } = await admin.from("suvsign_v2_template_document_types")
+      .select("document_type_id, document_types(owner_type)").eq("organization_id", r.organization_id)
+      .eq("template_id", String(templateId)).maybeSingle();
+    if (m?.document_type_id) {
+      documentTypeId = m.document_type_id;
+      if (m.document_types?.owner_type === "opportunity" && r.opportunity_id) { entityType = "opportunity"; entityId = r.opportunity_id; }
+    }
+  }
   const { error } = await admin.from("documents").insert({
-    organization_id: r.organization_id, entity_type: "contact", entity_id: r.contact_id,
+    organization_id: r.organization_id, entity_type: entityType, entity_id: entityId, document_type_id: documentTypeId,
     file_name: `${title} - Assinado.pdf`, storage_path: path, bucket: "attachments", mime_type: "application/pdf",
     size_bytes: buf.byteLength, external_source: "suvsign_v2", external_ref: docId,
   });
