@@ -1048,7 +1048,7 @@ serve(async (req) => {
           recipient_type: "individual",
           to,
           type: "text",
-          text: { body: trimmedMessage, preview_url: false },
+          text: { body: trimmedMessage, preview_url: true },
           ...(context ? { context } : {}),
         };
       }
