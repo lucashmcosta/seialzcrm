@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowClockwise, ArrowLeft, Check, DownloadSimple, FileText, LinkSimple, Plus, WarningCircle } from '@phosphor-icons/react';
+import { ArrowClockwise, ArrowLeft, Check, DownloadSimple, FileText, LinkSimple, Plus, WarningCircle, WhatsappLogo, Clock } from '@phosphor-icons/react';
 import { callSignatureRequests, SignatureApiError, SIGNATURE_STATUS_LABEL, PARTICIPANT_STATUS_LABEL } from '@/lib/signatureRequestsApi';
 import { FrozenDocumentPreview } from './FrozenDocumentPreview';
 import { SignatureWhatsAppDialog } from './SignatureWhatsAppDialog';
@@ -274,7 +274,19 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                       {signed ? `Assinou${p.signing_mode === 'automatic' ? ' automaticamente' : ''}${p.signed_at ? ` em ${fmt(p.signed_at)}` : ''}` : ['sent', 'in_progress'].includes(r.status) ? p.auto_error ? 'Assinatura automática bloqueada — confira a SuvSign' : p.signing_mode === 'automatic' ? 'Aguardando a vez da assinatura automática' : 'Aguardando assinatura' : PARTICIPANT_STATUS_LABEL[p.status] ?? p.status}
                     </p>
                   )}
-                  <div className="sm:justify-self-end">
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-self-end">
+                    {p.signing_mode !== 'automatic' && r.provider_operation_id && (
+                      whatsappSummary.isError ? <button aria-label="Consultar envios pelo WhatsApp novamente" title="Não foi possível consultar os envios. Tentar novamente" onClick={() => whatsappSummary.refetch()}><WarningCircle className="h-4 w-4 text-warning" /></button>
+                        : <span
+                            className="inline-flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap"
+                            title={`${sendCount} envio(s) pelo WhatsApp${delivery?.last_sent_at ? ` · Último em ${fmt(delivery.last_sent_at)}` : ''}${delivery?.pending_count ? ' · Aguardando confirmação de envio' : ''}`}
+                            aria-label={!whatsappSummary.data ? 'Consultando envios pelo WhatsApp' : `${sendCount} envio(s) pelo WhatsApp${delivery?.pending_count ? ', aguardando confirmação de envio' : ''}`}
+                          >
+                            <WhatsappLogo className="h-4 w-4" aria-hidden="true" />
+                            <span>{whatsappSummary.data ? `${sendCount}x` : '…'}</span>
+                            {!!delivery?.pending_count && <Clock className="h-3.5 w-3.5 text-warning" aria-hidden="true" />}
+                          </span>
+                    )}
                     {!signed && p.signing_mode !== 'automatic' && p.id && r.provider_operation_id && ['sent', 'in_progress'].includes(r.status) && (
                       <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" className="h-8 px-3" disabled={linkBusy === p.id} onClick={() => copyLink(r.id, p.id)}>
@@ -284,15 +296,6 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                       </div>
                     )}
                   </div>
-                  {p.signing_mode !== 'automatic' && r.provider_operation_id && <div className="sm:col-span-3 text-xs text-muted-foreground" aria-live="polite">
-                    {whatsappSummary.isError ? <button className="underline" onClick={() => whatsappSummary.refetch()}>Não foi possível consultar os envios. Tentar novamente</button>
-                      : !whatsappSummary.data ? 'Consultando envios pelo WhatsApp…'
-                      : <>
-                        <span title="Envios por este botão aceitos pelo WhatsApp; confira a entrega na conversa.">WhatsApp: {sendCount === 0 ? 'nenhum envio' : plural(sendCount, 'envio', 'envios')}</span>
-                        {delivery?.last_sent_at && <span> · Último em {fmt(delivery.last_sent_at)}</span>}
-                        {!!delivery?.pending_count && <span className="text-warning"> · Aguardando confirmação de envio</span>}
-                      </>}
-                  </div>}
                 </li>
               );
             })}

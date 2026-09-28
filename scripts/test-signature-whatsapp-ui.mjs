@@ -55,7 +55,7 @@ try {
   await page.getByRole('button',{name:'Enviar',exact:true}).waitFor({state:'visible'});await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent?.trim()==='Enviar'&&!b.disabled));await page.screenshot({path:join(tmpdir(),'signature-whatsapp-desktop.png')});
   await page.getByRole('button',{name:'Enviar',exact:true}).dblclick();
   await page.getByText('Mensagem aceita pelo WhatsApp.',{exact:false}).waitFor();
-  await page.getByRole('button',{name:'Fechar',exact:true}).click();await page.getByText('WhatsApp: 1 envio',{exact:true}).waitFor();await page.getByRole('button',{name:'Reenviar pelo WhatsApp',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Fechar',exact:true}).click();await page.getByText('1x',{exact:true}).waitFor();await page.getByRole('button',{name:'Reenviar pelo WhatsApp',exact:true}).waitFor();
   assert.equal(sends,1);assert.equal(saves,1);assert.equal(payload.contact_id,id(6));assert.equal(payload.endpoint_id,id(4));assert.equal(payload.settings_updated_at,'v1');assert.equal('signing_url' in payload,false);assert.equal(linkCalls,0);total++;
   context.last_sent={id:id(8),created_at:'2026-09-28T19:00:00Z'};
   context.last_delivery={...context.last_sent,status:'sent'};
