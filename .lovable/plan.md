@@ -1,38 +1,43 @@
-# Evolution pedindo template: auditoria do envio real + correções 1 e 2
+# Diagnóstico — campo bloqueado com "Responder por" = Evolution 7020 (Denise)
 
-## Parte A — Auditoria somente leitura do envio (conversa Denise)
-Thread `ec86ff7b…`, Central, `business_context = sales`. Últimas mensagens válidas: todas pelo Evolution `3ed219e0…` (inbound 16/09, outbound 17/09). Flag `sales_manual_reply_endpoint_v1` ligada na Central. Os dois números, Evolution `3ed219e0` e Meta `bf04ce63`, estão vinculados à rota Comercial.
+## Causa confirmada
+O número Evolution 7020 não está na lista de números que o Composer consulta para ler a regra de template. Por isso a Parte C não encontra `requires_template_outside_window` e bloqueia o campo (fail-closed).
 
-Caminho real: `useManualReplyEndpoint` gera `replyEndpointSelection`. Com a flag ligada, `dispatchWhatsAppSend` (cliente) chama direto a edge function `dispatch-whatsapp-send`. No servidor, `_shared/dispatch-whatsapp-send.ts` → `resolveProvider` escolhe a função `evolution-` ou `meta-whatsapp-send`. O `endpointId` enviado pela tela (`composerEndpointId`) é só uma dica e o servidor o sobrescreve nesses dois caminhos.
+Os dois números no banco:
 
-| Situação | Número mostrado ("Responder por") | Número avaliado pelo Composer (bloqueio) | Número mandado ao envio | Provedor chamado de fato |
+| Endpoint | provider | status | sender_sid | requires_template_outside_window |
 |---|---|---|---|---|
-| Sem seleção manual | Evolution 7020 (última mensagem) | Meta 7067 (linha ativa, via `useThreadSendEndpoint`) | `derived` + dica Meta 7067 | **Evolution** (o servidor consulta de novo a última mensagem válida, que é a 3ed219e0) |
-| Manual: Evolution 7020 | Evolution 7020 | Meta 7067 | `manual` 3ed219e0 | **Evolution** |
-| Manual: Meta 7067 | Meta 7067 | Meta 7067 | `manual` bf04ce63 | **Meta** |
+| `3ed219e0…` (7020) | evolution_api | unknown | **NULL** | **false** |
+| `bf04ce63…` (7067) | meta_cloud_api | online | preenchido | true |
 
-O bloqueio de template nunca muda com o "Responder por": ele sempre olha a linha ativa (Meta). Nos casos 1 e 2 o campo bloqueia, mas a mensagem sairia pelo Evolution. Isso confirma que a tela avalia um número diferente do que o envio usa. Mesmo que o bloqueio olhasse o número certo, hoje ele também pediria template, porque o Evolution está com `true` (itens 1 e 2).
+## Valor de cada item pedido na conversa da Denise
+- `manualReply.selectedEndpointId` = `3ed219e0…` (Evolution 7020). O seletor usa uma consulta própria, sem o filtro `sender_sid`, e por isso mostra o 7020.
+- Estado do `manualReply`: `ready`. Se estivesse carregando ou com erro, o seletor não mostraria o número.
+- Endpoint em `useOrgWhatsAppEndpoints`: **ausente**. O hook filtra `.not('sender_sid','is',null)` e `.neq('status','offline')`, e o 7020 tem `sender_sid` NULL (número Evolution não tem SID da Twilio). Então `endpointById['3ed219e0…']` = undefined.
+- Valor de `requires_template_outside_window` lido pelo Composer: `undefined`. No banco é `false`.
+- `resolveComposerCapability` → `{ endpointId: '3ed219e0…', requiresTemplateOutsideWindow: true }`, porque o valor ausente é tratado como fail-closed.
+- `composerAllowsFreeformOutsideWindow` = `false`.
+- Condição que bloqueia: `outOfWindow = !serviceWindow.isOpen && messages.length > 0 && !composerBypassesWindow` = verdadeira. O texto "Fora da janela 24h" vem de `serviceWindow.reason`.
 
-### Prioridade usada hoje (sem alterar)
-- **Envio** (servidor, flag ligada): (1) seleção manual em "Responder por", revalidada; (2) número da última mensagem válida, se estiver vinculado à rota e for elegível; (3) número padrão da rota; (4) se nada disso resolver, `REPLY_ROUTE_UNRESOLVED` e o envio é bloqueado. `messaging_lines.active_endpoint_id` e `thread.primary_endpoint_id` não entram nesse caminho.
-- **Bloqueio do Composer**: `useThreadSendEndpoint` usa (1) `messaging_lines.active_endpoint_id`, se estiver ativo, e (2) `thread.primary_endpoint_id`, se estiver ativo. Ignora a seleção manual e a última mensagem.
-- **Envio legado** (flag desligada, fora da Central): o `endpointId` da tela, depois a linha ativa, depois o primary.
+Hipótese descartada: não é problema de carregamento nem de o seletor escolher outro número. A decisão está certa; faltava o dado.
 
-## Parte B — Implementar agora (aprovado)
-1. **Criação de números:** `provision_line_endpoint_core` e `provision_sales_endpoint` passam a gravar a capacidade no INSERT, a partir do provedor já resolvido: `evolution_api` recebe `false`; `meta_cloud_api`, `meta_cloud_api_coexistence` e `twilio` recebem `true`; qualquer outro provedor recebe `true` (continua bloqueado). A lógica das funções fica igual e o padrão da coluna não muda.
-2. **Dados:** mudar para `false` somente `3ed219e0…` (Central) e `43cca41d…` (org `689f30e5`), mostrando o antes e o depois.
-3. Registrar no `roadmap.md` e fechar o [TODO] em `docs/integrations/evolution-api/ENDPOINT_PURPOSE_RULE.md`.
+Observações:
+- Não consegui abrir o Preview logado: este projeto usa um banco próprio, sem sessão de teste. Os valores acima vêm do banco e da leitura do código; bate com o que você viu na tela.
+- No site publicado a Parte C ainda nem existe, porque o app não foi publicado.
 
-## Parte C — Proposta do item 3 (não implementar ainda)
-O Composer passa a avaliar o mesmo número que aparece no "Responder por". Esse número já segue a regra do servidor: primeiro a escolha manual, depois a última mensagem válida, depois o padrão da rota. A regra vem de `deriveSelectedEndpoint` em `src/lib/replyEndpointSelection.ts`, que espelha o `_shared/reply-endpoint-selection.ts`, então não surge uma segunda regra.
-- Criar uma função única em `src/lib/composerEndpoint.ts`, `resolveComposerCapability({ manualReply, sendEp, endpointById })`, que devolve `{ endpointId, requiresTemplateOutsideWindow }`:
-  - com o "Responder por" ativo: usa `manualReply.selectedEndpointId` e lê `requires_template_outside_window` desse número (já vem em `useOrgWhatsAppEndpoints`);
-  - com o "Responder por" desligado: mantém `useThreadSendEndpoint` (caminho legado igual a hoje);
-  - se o seletor ainda está carregando, se o número não foi resolvido ou se a flag não foi lida: `true` (continua bloqueado).
-- `composerAllowsFreeformOutsideWindow` passa a vir só dessa função. Não há checagem de provedor no Composer.
-- Ao trocar o "Responder por", a decisão muda na hora, porque é calculada a partir do estado do seletor.
-- [INCERTO] Deixar o `composerEndpointId` (a dica do envio e o escopo dos templates) apontando para o mesmo número. Isso muda os templates listados e fica como decisão separada.
+## Correção proposta (aguarda aprovação)
+Ler a regra de template da mesma lista que alimenta o "Responder por", sem mexer no filtro de `useOrgWhatsAppEndpoints` (esse filtro é usado em outras partes: badges, templates, números oficiais).
 
-## Verificação (depois de B)
-- Consulta: os dois números Evolution com `false`, o Meta 7067 continua `true`, o piloto não muda.
-- Conferir a definição das duas funções no banco: elas gravam a flag de forma explícita.
+1. Em `useManualReplyEndpoint`, incluir `requires_template_outside_window` na consulta de números e no objeto de cada opção (`ManualReplyOption.requiresTemplateOutsideWindow: boolean | null`).
+2. Expor `selectedOption` (já existe) com esse campo.
+3. Em `resolveComposerCapability`, com a feature ligada, ler a regra de `manualReply.selectedOption` (o mesmo número que o seletor mostra), não de `endpointById`. Continua tudo fail-closed: seletor não pronto, sem opção, ou valor diferente de `false` → exige template.
+4. O caminho legado com a feature desligada fica igual. Também não mudam `composerEndpointId`, o envio (dispatch), os templates nem o filtro de `useOrgWhatsAppEndpoints`.
+
+## Validação depois da correção
+Pure test e, se possível, conferência visual sua na conversa da Denise:
+- sem seleção manual → 7020 → campo liberado;
+- manual 7020 → liberado;
+- manual 7067 → exige template;
+- conversa Meta fora de 24h → bloqueada;
+- seletor carregando ou número sem a regra → bloqueado.
+Depois publicar o app.
