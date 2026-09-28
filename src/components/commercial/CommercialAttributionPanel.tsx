@@ -15,6 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 const selectClass = "h-10 w-full rounded border bg-background px-2 text-sm";
+const evidenceLabels: Record<string, string> = {
+  utm_source: "UTM origem", utm_medium: "UTM meio", utm_campaign: "UTM campanha",
+  utm_content: "UTM conteúdo", utm_term: "UTM termo", utm_id: "UTM ID",
+  meta_campaign_id: "ID da campanha Meta", meta_adset_id: "ID do conjunto Meta",
+  ad_id: "ID do anúncio", landing_url: "Página de entrada",
+};
 export function CommercialAttributionPanel(
   { entityType, entityId, contactId }: {
     entityType: "contact" | "opportunity";
@@ -211,6 +217,19 @@ export function CommercialAttributionPanel(
           </label>
           <Button type="submit" disabled={busy}>Salvar correção</Button>
         </form>
+      )}
+      {a?.details?.evidence && (
+        <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+          {Object.entries(evidenceLabels).map(([key, label]) => {
+            const value = a.details.evidence[key];
+            return typeof value === "string" && value ? (
+              <div key={key} className="contents">
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="break-all">{value}</dd>
+              </div>
+            ) : null;
+          })}
+        </dl>
       )}
       <details>
         <summary className="cursor-pointer text-sm">

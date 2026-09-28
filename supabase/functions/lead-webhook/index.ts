@@ -1,4 +1,5 @@
 import { captureCommercialOrigin } from "../_shared/commercial-origin.ts";
+import { normalizeLeadAttribution, leadCommercialEvidence } from "../_shared/lead-attribution.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -271,6 +272,7 @@ serve(async (req) => {
         fbclid: (mapped.fbclid as string) || rawPayload.fbclid,
         gclid: (mapped.gclid as string) || rawPayload.gclid,
         all_params: rawPayload.all_params,
+        utms: rawPayload.utms,
         notes: (mapped.notes as string) || rawPayload.notes,
         create_opportunity: rawPayload.create_opportunity,
         opportunity_title: rawPayload.opportunity_title,
@@ -302,6 +304,11 @@ serve(async (req) => {
       // No mapping configured — use raw payload as-is (backward compatible)
       payload = rawPayload;
     }
+
+    // The LP sends `utms` and `all_params`; preserve the same request's evidence
+    // even when deduplication reuses an existing contact.
+    const attribution = normalizeLeadAttribution({ ...rawPayload, ...payload });
+    payload = { ...payload, ...attribution };
 
     // Duplicate check
     const { data: orgSettings } = await supabase
@@ -381,40 +388,12 @@ serve(async (req) => {
       contactId = existingContactId;
       duplicateReused = true;
     } else {
-      // Parse all_params (can be JSON string or object) to extract Meta hierarchy
-      let allParams: Record<string, unknown> = {};
-      if (payload.all_params) {
-        if (typeof payload.all_params === 'string') {
-          try { allParams = JSON.parse(payload.all_params); } catch { allParams = {}; }
-        } else if (typeof payload.all_params === 'object') {
-          allParams = payload.all_params as Record<string, unknown>;
-        }
-      }
-
-      const metaAdsetId =
-        (rawPayload.meta_adset_id as string) ||
-        (payload.meta_adset_id as string) ||
-        (payload.utm_term as string) ||
-        (payload.utm_id as string) ||
-        (allParams.adset_id as string) ||
-        (allParams.meta_adset_id as string) ||
-        null;
-      const metaCampaignId =
-        (rawPayload.meta_campaign_id as string) ||
-        (payload.meta_campaign_id as string) ||
-        (allParams.campaign_id as string) ||
-        (allParams.meta_campaign_id as string) ||
-        null;
-      const metaAdId =
-        (rawPayload.meta_ad_id as string) ||
-        (payload.meta_ad_id as string) ||
-        (payload.utm_content as string) ||
-        (payload.utm_term as string) ||
-        (allParams.ad_id as string) ||
-        (allParams.meta_ad_id as string) ||
-        null;
-      const fbclid = (payload.fbclid as string) || (allParams.fbclid as string) || null;
-      const gclid = (payload.gclid as string) || (allParams.gclid as string) || null;
+      // Keep existing legacy UTM fallbacks, after preferring explicit provider IDs.
+      const metaAdsetId = attribution.meta_adset_id || attribution.utm_term || attribution.utm_id || null;
+      const metaCampaignId = attribution.meta_campaign_id || null;
+      const metaAdId = attribution.meta_ad_id || attribution.utm_content || attribution.utm_term || null;
+      const fbclid = attribution.fbclid || null;
+      const gclid = attribution.gclid || null;
 
       const { data: contact, error: contactError } = await supabase
         .from('contacts')
@@ -439,6 +418,8 @@ serve(async (req) => {
           meta_adset_id: metaAdsetId,
           meta_campaign_id: metaCampaignId,
           meta_ad_id: metaAdId,
+          landing_url: attribution.landing_url || null,
+          referrer_url: attribution.referrer_url || null,
           lifecycle_stage: 'lead',
         })
         .select('id')
@@ -526,13 +507,10 @@ serve(async (req) => {
       if (!activityError) activityId = activity?.id || null;
     }
 
-    let commercialParams: Record<string, unknown> = {};
-    try { commercialParams = typeof payload.all_params === 'string' ? JSON.parse(payload.all_params) : payload.all_params || {}; } catch { /* malformed optional evidence is ignored */ }
     await captureCommercialOrigin(supabase, {
       organizationId, key: `lead-webhook:${apiKeyData.id}:${typeof rawPayload.commercial_event_id === 'string' ? rawPayload.commercial_event_id.slice(0,200) : crypto.randomUUID()}`,
       contactId, opportunityId, channel: 'form', firstContactEntry: !existingContactId,
-      evidence: { source: payload.source, gclid: payload.gclid || commercialParams.gclid,
-        utm_source: payload.utm_source, utm_medium: payload.utm_medium, utm_campaign: payload.utm_campaign },
+      evidence: leadCommercialEvidence(attribution),
     });
 
     console.log(`Lead processed: contact_id=${contactId}, opportunity_id=${opportunityId}, mapping=${contactMappings && contactMappings.length > 0 ? 'yes' : 'no'}`);

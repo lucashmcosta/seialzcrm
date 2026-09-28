@@ -53,3 +53,13 @@ O fixture cria somente o contrato mínimo das tabelas legadas; não substitui ho
 Monitorar, por organização: eventos com `process_error`, entradas sem vínculo, conflitos, percentual sem origem, e latência dos webhooks. O painel comercial não mede custos, ROAS ou conciliação das plataformas.
 
 A suíte `supabase/tests/commercial_published_transaction.sql` complementa o fixture mínimo: exige o schema completo e duas identidades existentes, cria somente dados sintéticos em transação e termina com `ROLLBACK`. Não executar o fixture mínimo junto dela. Revisar triggers e integrações do ambiente antes de executá-la; a versão publicada foi validada com esse cuidado.
+
+### LPs com UTMs aninhadas
+
+`lead-webhook` aceita atribuição no nível principal, em `utms`, em `all_params` (objeto ou JSON), em `all_params.utms` e em `all_params.raw`, nessa ordem. Campos mapeados têm prioridade. Somente campos de atribuição são copiados para a evidência comercial; respostas do formulário não são copiadas. Templates não substituídos, como `{{ad.id}}`, são ignorados.
+
+Os IDs explícitos `ad_id`/`adset_id`/`campaign_id` da URL são normalizados como IDs Meta. A resolução comercial dá prioridade ao anúncio exato sobre conjunto/campanha, sempre no catálogo da organização. Correspondências múltiplas ficam pendentes. `meta` em entrada de formulário verificada é compatível com o contrato legado da LP, salvo meio explicitamente orgânico/social/referral; `fbclid` isolado não comprova mídia paga. UTMs de Meta com meio pago também aceitam `fb`/`ig`. `gads` é aceito como alias de Google Ads.
+
+Contatos novos recebem as UTMs normalizadas. Em contatos reutilizados, a evidência da nova submissão acompanha sua própria oportunidade comercial, sem substituir a aquisição inicial do contato. O painel comercial mostra as UTMs e os IDs recebidos. A lógica de atribuição de marketing permanece independente.
+
+Para recuperar uma LP que preserva `crm_sync`, exportar somente IDs da sessão/contato/oportunidade, status HTTP, data do envio e campos de atribuição. Cruzar os IDs de resposta com a organização, o vínculo contato–oportunidade, o título esperado e a data de criação. Reutilizar o evento de formulário correspondente ou criar uma chave estável `lp-sync:<sessão>`. Só marcar aquisição inicial quando houve HTTP 201 e a criação do contato coincide com o envio. Aplicar via `commercial_capture`, comparando as linhas legadas e atribuições já conhecidas antes/depois em uma transação. Não reenviar os leads ao webhook: isso criaria oportunidades/atividades adicionais. Dados históricos permanecem na evidência comercial; nenhuma campanha ou UTM legada deve ser sobrescrita.
