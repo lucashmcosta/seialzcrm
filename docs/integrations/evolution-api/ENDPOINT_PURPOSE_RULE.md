@@ -65,7 +65,8 @@ do provider no frontend:
 - **Nunca** procurar um endpoint qualquer onde `requires_template_outside_window = false`.
   A capacidade vem do endpoint que a linha já designou.
 
-**[TODO]** Os inserts de novos endpoints feitos pelas edge functions Evolution
-(hoje só `evolution-instance-manager` e correlatas, quando/se assumirem
-provisionamento) devem gravar `requires_template_outside_window = false`
-explicitamente no INSERT. Hoje isso depende do backfill inicial.
+**Resolvido (2026-09-28):** as rotinas de criação `provision_line_endpoint_core`
+e `provision_sales_endpoint` gravam `requires_template_outside_window`
+explicitamente no INSERT: `evolution_api` → `false`; demais providers da
+whitelist (meta/twilio) → `true`. Os endpoints `3ed219e0…` (Central) e
+`43cca41d…`, criados depois do backfill com `true`, foram corrigidos para `false`.

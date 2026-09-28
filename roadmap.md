@@ -15,6 +15,6 @@
 - [x] V2: alias Custom.DataFechamento = deal_close_date (2026-09-26). [TODO] validar Contrato Unificado 2 na tela (usuário); inventário de placeholders dos templates reais da Central não disponível (só snapshots QA).
 
 ## Evolution — template fora de 24h (2026-09-28)
-- [ ] Parte B1: provisionamento grava requires_template_outside_window por provider
-- [ ] Parte B2: corrigir 3ed219e0 e 43cca41d para false (antes/depois)
+- [x] Parte B1: provisionamento grava requires_template_outside_window por provider
+- [x] Parte B2: corrigir 3ed219e0 e 43cca41d para false (antes/depois)
 - [ ] Parte C: Composer avalia o endpoint efetivo do "Responder por" — aguarda aprovação após Parte B
