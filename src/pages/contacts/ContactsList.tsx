@@ -218,7 +218,7 @@ export default function ContactsList() {
       setMobileContacts([]);
       setCurrentPage(1);
     }
-  }, [debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter, commercialFilters, commercial.enabled, sortDescriptor]);
+  }, [debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter, commercialFilters, commercial.enabled, sortDescriptor, isMobile]);
 
   // Fetch users only when organization changes (not on every filter change)
   useEffect(() => {
@@ -235,7 +235,7 @@ export default function ContactsList() {
     if (!filtersHydrated || !itemsPerPageHydrated || !sortHydrated) return;
     fetchContacts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization, filtersHydrated, itemsPerPageHydrated, sortHydrated, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter, commercialFilters, commercial.enabled, sortDescriptor]);
+  }, [organization, filtersHydrated, itemsPerPageHydrated, sortHydrated, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter, commercialFilters, commercial.enabled, sortDescriptor, isMobile]);
 
 
   const mobileHasMore = mobileContacts.length < totalCount;
@@ -282,7 +282,7 @@ export default function ContactsList() {
     if (!organization) return;
 
     const filterSig = JSON.stringify([
-      debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter, itemsPerPage, commercialFilters, commercial.enabled, sortDescriptor,
+      debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter, itemsPerPage, commercialFilters, commercial.enabled, sortDescriptor, isMobile,
     ]);
     let effectivePage = currentPage;
     if (lastFilterSigRef.current && lastFilterSigRef.current !== filterSig && currentPage !== 1) {
