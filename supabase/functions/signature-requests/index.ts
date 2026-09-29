@@ -6,6 +6,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { handleSignatureWhatsApp } from "../_shared/signature-whatsapp.ts";
 import { encryptSecret } from "../_shared/crypto.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
+import { resolveRequestedBy } from "./requested-by.ts";
 const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
 import {
   canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, findUnresolvedPlaceholders, friendlyTemplateError, loadV2Credentials,
@@ -305,10 +306,16 @@ Deno.serve(async (req) => {
         let opId: string | null = r.provider_operation_id;
         if (!opId) {
           const s = r.snapshot;
+          const requested_by = await resolveRequestedBy(r, {
+            getUser: async (id) => (await admin.from("users").select("id, full_name, email").eq("id", id).maybeSingle()).data ?? null,
+            isActiveMember: async (uid, org) => !!(await admin.from("user_organizations").select("id").eq("user_id", uid)
+              .eq("organization_id", org).eq("is_active", true).maybeSingle()).data,
+          });
+          if (!requested_by) return fail("invalid_request_author", "Não foi possível confirmar o autor desta solicitação na organização. O envio não foi feito.", 422);
           const c = await suvsignFetch(creds, "api-v2", "/signing-operations", {
             method: "POST", idempotencyKey: r.idempotency_key,
             body: JSON.stringify({ source: "seialz", external_id: r.id, metadata: { ...(s.signing_order ? { signing_order: s.signing_order } : {}), custom: { seialz_request_id: r.id, seialz_opportunity_id: r.opportunity_id } },
-              participants: s.participants, documents: s.documents }),
+              participants: s.participants, documents: s.documents, requested_by }),
           });
           if (c.status === 409 && c.body?.error === "signing_engine_v2_not_enabled") return fail("signing_engine_v2_not_enabled", "V2 não habilitado na SuvSign para esta conta.", 409);
           if (!c.ok) {
