@@ -77,3 +77,8 @@ Validação: testes Deno de resolução de identidade, composição multidocumen
 - Tabela `suvsign_v2_template_document_types` (org, `template_id` → `document_type_id`), editada em Configurações → Integrações → SuvSign → aba V2 (só `can_manage_integrations_in_org`).
 - Lista de modelos: ação `list_templates_admin({organization_id})` em `signature-requests`.
 - Webhook `storePdf`: `document_id` → `provider_documents[].ref` → `snapshot.documents[].template_id` → vínculo; grava `document_type_id` e usa oportunidade quando `owner_type='opportunity'`. Sem vínculo: contato, sem tipo (comportamento anterior). Envios antigos não são reprocessados.
+
+## Autoria `requested_by` (2026-09-29)
+- `send_for_signature` inclui `requested_by {external_user_id, name, email}` no `POST /signing-operations`, resolvido server-side a partir de `signature_requests.created_by` → `users` (full_name, email) com vínculo ativo em `user_organizations` da org da solicitação. Body do browser é ignorado.
+- Autor inválido (inexistente, fora da org, e-mail inválido) → 422 `invalid_request_author`, SuvSign não é chamada, sem fallback.
+- Retry usa sempre o autor original. Se `full_name`/`email` mudarem entre tentativas, a SuvSign devolve 409 `idempotency_conflict` (aceito; sem contorno).
