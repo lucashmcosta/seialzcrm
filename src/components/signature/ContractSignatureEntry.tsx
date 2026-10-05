@@ -77,7 +77,7 @@ export function useSignatureV2Pilot(opportunityId: string) {
     staleTime: 30_000,
     retry: false,
   });
-  const available = !!data?.pilot_enabled && !data?.v2_enabled;
+  const available = !HIDE_V1_BUTTON && !!data?.pilot_enabled && !data?.v2_enabled;
   const sheet = available ? <SignatureV2Sheet open={open} onOpenChange={setOpen} opportunityId={opportunityId} canCreate /> : null;
   return { available, openSheet: () => setOpen(true), sheet };
 }
