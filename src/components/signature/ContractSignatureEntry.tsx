@@ -8,6 +8,9 @@ import { callSignatureRequests } from '@/lib/signatureRequestsApi';
 
 interface Props { contactId: string; opportunityId: string; size?: 'default' | 'sm' | 'lg' | 'icon'; hidePilot?: boolean }
 
+// Troque para false para o botão V1 voltar exatamente como antes.
+const HIDE_V1_BUTTON = true;
+
 // Decide entre V1 (inalterada) e V2. A capability só decide NOVOS envios;
 // solicitações V2 existentes continuam visíveis mesmo com a flag OFF.
 export function ContractSignatureEntry({ contactId, opportunityId, size = 'icon', hidePilot = false }: Props) {
@@ -33,6 +36,19 @@ export function ContractSignatureEntry({ contactId, opportunityId, size = 'icon'
       <SignatureV2Sheet open={pilotOpen} onOpenChange={setPilotOpen} opportunityId={opportunityId} canCreate />
     </>
   ) : null;
+
+  // V1 oculto onde o piloto V2 está ligado: o mesmo ícone abre o V2.
+  if (HIDE_V1_BUTTON && pilot && !v2) {
+    return (
+      <>
+        <Button variant="outline" size={size} onClick={() => setPilotOpen(true)} aria-label="Enviar contrato">
+          <PenNib className={size === 'icon' ? 'h-4 w-4' : 'h-4 w-4 mr-2'} />
+          {size !== 'icon' && 'Enviar contrato'}
+        </Button>
+        <SignatureV2Sheet open={pilotOpen} onOpenChange={setPilotOpen} opportunityId={opportunityId} canCreate />
+      </>
+    );
+  }
 
   if (!v2 && !hasV2Requests) {
     return <><SendToSignatureButton contactId={contactId} opportunityId={opportunityId} size={size} />{pilotButton}</>;
