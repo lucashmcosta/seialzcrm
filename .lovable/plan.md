@@ -1,32 +1,20 @@
 # Fase 0 controlada — Edição de mensagem via Evolution (Vultr)
 
-Objetivo: obter evidência real para a edição de mensagens. Nesta fase não haverá migration, edge function nova nem UI. A única escrita é o envio e a edição de mensagens de teste.
+Sem migration, sem edge function, sem UI. As chamadas são feitas direto na Vultr via curl, a partir do meu ambiente, com as credenciais existentes (`EVOLUTION_BASE_URL`/`EVOLUTION_GLOBAL_API_KEY`). A chave nunca é impressa e as saídas passam por redação.
 
-## Pré-requisitos (preciso de você)
-- Número de destino de teste (um celular seu), que vai receber e mostrar a edição.
-- Instância a usar: proponho a Evolution 7020 da Central (`3ed219e0…`), que já está conectada. Você também pode indicar outra.
-- O teste é feito por uma função temporária só de diagnóstico, porque as chaves da Vultr ficam no servidor e não no meu ambiente. Ela fica restrita a admin, só faz GET de versão/webhook, sendText e updateMessage, e é removida no fim. Se preferir não publicar nada, a alternativa é você rodar os comandos curl que eu entregar no servidor da Vultr.
+Instância: Evolution 7020 da Central. Destino: o número de teste que você informar.
 
 ## Passos
-1. **Versão:** `GET /` na Vultr para registrar `version`, `clientName` e a versão do WhatsApp Web.
-2. **Webhook:** `GET /webhook/find/{instance}` para conferir se `MESSAGES_EDITED` está na lista `events`. Não altero a configuração. Se não estiver, reporto e peço autorização antes de incluir.
-3. **Envio A:** enviar a mensagem de texto "Teste edição A" pelo fluxo normal `evolution-whatsapp-send`, numa conversa do número de teste. Registrar `key.id`, `remoteJid`, `messages.whatsapp_message_sid` e `metadata.evolution` bruto.
-4. **Edição A (imediata):** `POST /chat/updateMessage/{instance}` com `{number, key:{remoteJid, fromMe:true, id}, text}`. Capturar o request e a response exatos e verificar se o ID original se mantém.
-5. **Webhook:** consultar `integration_inbound_events` e os logs do `evolution-webhook` na janela do teste. Classificar o que chegou: `messages.edited`, `messages.upsert` (`protocolMessage`/`editedMessage`) e/ou `messages.update`, com o payload bruto.
-6. **Comportamento no WhatsApp:** você confirma o que aparece no celular (texto novo, selo "Editada").
-7. **Limite de tempo:** a partir do Envio A, nova tentativa de edição em intervalos de 10, 14, 16, 20 e 30 min, e depois uma mensagem mais antiga (horas). Registro o primeiro intervalo recusado e como a recusa aparece: erro na response ou sucesso silencioso sem efeito no celular.
-8. **Localização da original:** mostrar o campo do evento que aponta para o ID original e confirmar que ele bate com `whatsapp_message_sid` (filtrado também por `organization_id` e `endpoint_id`).
-9. **Triggers:** listar via `pg_trigger` as triggers de UPDATE em `messages` que reagem a `content` (sanitize, inteligência, `last_message_*`, notificações, outbox), só lendo.
-10. **Limpeza:** remover a função temporária, se usada. As mensagens de teste ficam no histórico como evidência, a menos que você peça outra coisa.
+1. `GET /` para ver a versão da Evolution e a versão do WhatsApp Web.
+2. `GET /webhook/find/{instance}` para ver a configuração atual. **Se `MESSAGES_EDITED` não estiver em `events`, eu paro aqui e te informo.**
+3. Envio pelo fluxo normal `evolution-whatsapp-send`, para que a mensagem fique em `messages` com `whatsapp_message_sid` e `metadata.evolution`.
+   - Em T0 saem 5 mensagens de teste independentes: A (editada logo), B (~10 min), C (~15 min), D (~20 min) e E (~30 min).
+   - Para o caso "antiga", uso uma mensagem de texto outbound já existente nesta conversa, com mais de 1h. Se não houver, envio uma F e edito horas depois.
+4. Para cada mensagem, uma única chamada `POST /chat/updateMessage/{instance}`, na idade definida. Registro o request (sem a chave) e a response exatos.
+5. Depois de cada edição, consulto `integration_inbound_events` e os logs do `evolution-webhook` para pegar o payload bruto e o tipo do evento (`messages.edited`, `upsert` com `protocolMessage`/`editedMessage`, `update`).
+6. Vínculo: confiro qual campo do evento aponta para o ID original e se ele bate com `messages.whatsapp_message_sid` da mesma organização e do mesmo endpoint.
+7. Você confirma no celular o que apareceu: o texto novo, o selo "Editada" ou nada.
+8. Leitura de `pg_trigger` em `messages` para listar as triggers que reagem a UPDATE de `content`.
 
 ## Entrega
-- Versão confirmada.
-- Endpoint e payload comprovados.
-- Limite de tempo observado.
-- Payload real do webhook.
-- Se `MESSAGES_EDITED` está habilitado.
-- Como localizar a original sem ambiguidade.
-- Triggers que disparam no UPDATE de `content`.
-
-## Fora do escopo
-Meta e Twilio, migrations, UI e suporte genérico.
+Versão, webhook atual, request e response reais, payload do webhook, vínculo com o ID original, comportamento no WhatsApp, janela comprovada e triggers.
