@@ -376,7 +376,7 @@ export function MobileMessagesList() {
         setInlineNotes([]);
       }
 
-      const lastInboundTime = getLastInboundTime(thread, (data as Message[]) || []);
+      const lastInboundTime = getLastInboundTime(thread, ((data as unknown) as Message[]) || []);
       setIsIn24hWindow(lastInboundTime ? (Date.now() - lastInboundTime.getTime()) / 3600000 < 24 : false);
 
       await markThreadReadRemote(threadId, userProfile?.id, 'web');
