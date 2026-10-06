@@ -2,7 +2,7 @@
 
 Sem migration, sem edge function, sem UI. As chamadas são feitas direto na Vultr via curl, a partir do meu ambiente, com as credenciais existentes (`EVOLUTION_BASE_URL`/`EVOLUTION_GLOBAL_API_KEY`). A chave nunca é impressa e as saídas passam por redação.
 
-Instância: Evolution 7020 da Central. Destino: o número de teste que você informar.
+Instância: Evolution 7020 da Central. Destino: 5511964298621.
 
 ## Passos
 1. `GET /` para ver a versão da Evolution e a versão do WhatsApp Web.
