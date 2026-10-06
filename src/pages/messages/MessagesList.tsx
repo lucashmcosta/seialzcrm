@@ -122,6 +122,8 @@ import { AttachMediaDialog, type AttachMedia } from '@/components/documents/Atta
 import { isAttachableMedia } from '@/lib/mediaToFile';
 import { computeMessageGroups, computeContextBlocks, type GroupingItem } from '@/lib/messageGrouping';
 import { TimelineBlock } from '@/components/messages/timeline/TimelineBlock';
+import { MessageEditControl } from '@/components/messages/MessageEditControl';
+import { useMessageEditFlag } from '@/hooks/messages/useMessageEditFlag';
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
@@ -193,6 +195,8 @@ interface Message {
   sender_user_id?: string | null;
   metadata?: Record<string, any> | null;
   endpoint_id?: string | null;
+  edited_at?: string | null;
+  edit_count?: number | null;
 }
 
 interface InlineNote {
@@ -364,6 +368,7 @@ const getLastInboundTime = (
 
 function DesktopMessagesList() {
   const { organization, locale, userProfile } = useOrganization();
+  const messageEditOn = useMessageEditFlag(organization?.id);
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { permissions } = usePermissions();
   const { toast } = useToast();
@@ -1219,7 +1224,7 @@ function DesktopMessagesList() {
         .from('messages')
         .select(`
           id, content, direction, sent_at, whatsapp_status, whatsapp_message_sid, media_urls, media_type, error_message, error_code, reply_to_message_id,
-          sender_type, sender_name, sender_agent_id, sender_user_id, metadata, endpoint_id,
+          sender_type, sender_name, sender_agent_id, sender_user_id, metadata, endpoint_id, edited_at, edit_count,
           reply_to_message:reply_to_message_id (content, direction)
         `)
         .eq('thread_id', threadId)
@@ -2764,6 +2769,7 @@ function DesktopMessagesList() {
                                         <div className="mt-1 flex items-center justify-end gap-1 min-w-0">
                                           <span className="text-[11px] leading-[14px] text-muted-foreground/70 truncate">
                                             {humanSenderName ? `${humanSenderName} · ` : ''}
+                                            {message.edited_at ? 'Editada · ' : ''}
                                             {new Date(message.sent_at).toLocaleTimeString(locale, {
                                               hour: '2-digit',
                                               minute: '2-digit',
@@ -2778,6 +2784,15 @@ function DesktopMessagesList() {
 
                                   </div>
                                   
+                                  {isOutbound && (
+                                    <MessageEditControl
+                                      message={message}
+                                      userId={userProfile?.id}
+                                      flagOn={messageEditOn}
+                                      onEdited={(p) => setMessages((prev) => prev.map((m) => m.id === p.id ? { ...m, content: p.content, edited_at: p.edited_at, edit_count: p.edit_count } : m))}
+                                      className="h-7 w-7 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                    />
+                                  )}
                                   {/* Reply button - right side for outbound */}
                                   {isOutbound && (
                                     <Button
