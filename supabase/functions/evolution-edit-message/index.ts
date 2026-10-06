@@ -10,10 +10,20 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { acceptedEdit, checkEditable, MAX_TEXT, type MsgRow, PROVIDER, resolveEditKey } from "./logic.ts";
 
 const FLAG = "evolution_message_edit_v1";
+
+// Mesma fonte e regra do frontend (useMessageEditFlag): public.feature_flags,
+// flag ligada + org no escopo (lista vazia = global). Fail-closed em erro.
+// deno-lint-ignore no-explicit-any
+async function featureFlagEnabled(db: any, name: string, orgId: string): Promise<boolean> {
+  const { data, error } = await db.from("feature_flags")
+    .select("is_enabled, organization_ids").eq("name", name).maybeSingle();
+  if (error || !data || data.is_enabled !== true) return false;
+  const orgs = (data.organization_ids ?? []) as string[];
+  return orgs.length === 0 || orgs.includes(orgId);
+}
 
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
