@@ -89,6 +89,8 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
 
 export function InboxConversationTimeline({ threadId, organizationId, contactId, contactName, currentEndpoint, onReply }: Props) {
   const { messages, loading, error } = useInboxThreadMessages(threadId);
+  const { userProfile } = useOrganization();
+  const messageEditOn = useMessageEditFlag(organizationId);
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
   const scrollRef = useRef<HTMLDivElement>(null);
 
