@@ -1,87 +1,116 @@
-# Edição de mensagens Evolution — resultado da Fase 0 e plano definitivo
+# Edição de mensagem Evolution — V1 piloto (Central Trabalhista)
 
-## Resultado da Fase 0.2
+## Evidência que embasa o plano (Fase 0, concluída)
+- A Evolution 2.3.7 (`POST /chat/updateMessage/{instance}`) edita usando `key.id = messages.whatsapp_message_sid`. Comprovado de ponta a ponta a partir do Seialz.
+- Janela real entre 16m01 (editou) e 20m01 (não editou).
+- A Evolution responde **200/PENDING mesmo quando o WhatsApp descarta a edição**. Por isso a janela de 15 min no servidor é a única proteção.
+- Não chega nenhum webhook das nossas edições, com ou sem `MESSAGES_EDITED`. O Seialz grava a edição a partir da própria chamada.
 
-### Parte 1 — envio pelo Seialz e edição (SEIALZ-E2E)
-- `messages.id` 0874b89a-2189-403b-bd31-f7587fea7404, `endpoint_id` 3ed219e0… (Evolution 7020).
-- O `whatsapp_message_sid` (3EB0A08785800FFB12F5BA) é igual a `metadata.evolution.response.key.id` e foi aceito pelo `updateMessage`.
-- A edição respondeu HTTP 200 e mudou o texto no celular, com o rótulo "Editada".
-- A linha em `messages` ficou idêntica, campo a campo; nenhum webhook chegou. Isso confirma a lacuna: o WhatsApp mostra a mensagem editada e o Seialz continua com o texto antigo.
+## Decisões aprovadas
+- Edita apenas o autor (`sender_user_id` = usuário autenticado). Admin não edita mensagem de outro usuário.
+- Janela de 15 min a partir de `sent_at`, validada na Edge Function. A regra no frontend serve só para a interface.
+- Código genérico para Evolution, liberado só para a Central pela flag `evolution_message_edit_v1`.
+- Histórico só no servidor: sem leitura pelo frontend.
+- Meta e Twilio ficam intocados.
+- Edições feitas no celular ficam como [TODO].
 
-### Parte 2 — janela de edição (uma tentativa por mensagem)
+## 1. Migration
+- **`messages`:** novas colunas `edited_at timestamptz null`, `edited_by_user_id uuid null` (FK `users.id`) e `edit_count int not null default 0`. Nada muda em policies, triggers ou na RPC de listagem.
+- **Nova tabela `message_edit_history`.** Colunas:
+  - `id`, `message_id` (FK `messages` on delete cascade), `organization_id`, `thread_id`
+  - `previous_content text`, `new_content text`, `edited_by_user_id`
+  - `provider`, `provider_edit_key_id text` (key.id da edição), `provider_response jsonb`
+  - `created_at`
+- **Acesso ao histórico:**
+  - `GRANT ALL ... TO service_role` apenas; `REVOKE ALL ... FROM anon, authenticated`.
+  - RLS ligada **sem nenhuma policy**: nenhuma leitura ou escrita pelo frontend.
+  - Índice em `(message_id, created_at)`.
+- **RPC `rpc_apply_message_edit_v1(p_message_id, p_expected_content, p_new_content, p_user_id, p_edit_key_id, p_response)`:**
+  - `security definer`, `search_path=public`, `EXECUTE` revogado de `public`/`anon`/`authenticated` e concedido só ao `service_role`.
+  - Numa única transação: `SELECT ... FOR UPDATE` na mensagem, confere que o conteúdo ainda é o esperado (senão `concurrent_edit`), insere o histórico e faz `UPDATE messages SET content, edited_at=now(), edited_by_user_id, edit_count+1`.
+  - O `whatsapp_message_sid` não é alterado.
+- **Triggers afetados pelo UPDATE:**
+  - `trg_update_thread_last_message` atualiza a prévia da conversa, como desejado.
+  - `trigger_sanitize_agent_message_update` só roda para mensagens de agente, então não se aplica.
+  - Os demais são só de INSERT. Não há nova activity, notificação, push, IA nem evento de integração.
+- **Flag:** registro `evolution_message_edit_v1` em `feature_flags` com `organization_ids = [40ae935c…]`, inserido por gravação de dados, não por migration.
 
-| Msg | Idade exata | HTTP | Resposta Evolution | Celular |
-|---|---|---|---|---|
-| J1* | 601 s (10m01) | 200 | protocolMessage MESSAGE_EDIT, PENDING | editou |
-| J2 | 841 s (14m01) | 200 | idem | editou |
-| J3 | 961 s (16m01) | 200 | idem | editou |
-| J4 | 1201 s (20m01) | 200 | idem | **não editou** |
-| J5 | 1801 s (30m01) | 200 | idem | **não editou** |
-| J6 | 3601 s (60m01) | 200 | idem | **não editou** |
+## 2. Edge Function `evolution-edit-message` (nova)
+- Configuração `verify_jwt = false` explícito em `config.toml`, com JWT validado no código. Import `jsr:@supabase/supabase-js@2`.
+- **Entrada (Zod):** `{ message_id: uuid, new_text: string 1..4096 }`; a função remove espaços nas pontas do texto.
+- **Ordem das verificações** (fail-closed). A primeira que falhar retorna o erro indicado:
 
-*J1 recebeu duas chamadas por acidente; vale só como prova de que 10 min é aceito.
+| Passo | Verificação | Erro |
+|---|---|---|
+| 1 | JWT válido; `users.id` via `auth_user_id` | 401 |
+| 2 | Carrega a mensagem com service_role | 404 `not_found` |
+| 3 | Usuário é membro ativo da `organization_id` da mensagem | 403 `forbidden` |
+| 4 | Flag `evolution_message_edit_v1` ligada para a organização (`_shared/feature-flags.ts`) | 403 `feature_disabled` |
+| 5 | `sender_user_id = me.id` e `sender_type='user'` | 403 `not_author` |
+| 6 | `direction='outbound'`, sem `deleted_at`, não é nota interna, sem template, sem mídia, sem `error_code` e com `whatsapp_message_sid` | 409 `not_editable` |
+| 7 | Endpoint (`endpoint_id`) com provider canônico `evolution_api` | 409 `provider_not_supported` |
+| 8 | `now() - sent_at <= 15 min` | 409 `edit_window_expired` |
+| 9 | Texto novo diferente do atual | 409 `content_unchanged` |
 
-### Conclusões
-1. A janela real fica entre 16m01 e 20m01.
-2. **A Evolution sempre responde 200/PENDING, mesmo quando o WhatsApp descarta a edição.** A resposta não confirma sucesso e não dá para usar 200 como prova.
-3. A Evolution não envia nenhum webhook das edições feitas por nós, com ou sem `MESSAGES_EDITED`.
-4. Consequência: o Seialz precisa impor a janela por conta própria e gravar a edição a partir da própria chamada.
+- **Validação do `remoteJid`:**
+  - Precisa existir em `metadata.evolution.response.key.remoteJid`, terminar em `@s.whatsapp.net` e ter os dígitos iguais a `metadata.evolution.to`.
+  - `key.id` salvo deve ser igual a `whatsapp_message_sid` e `fromMe` deve ser `true`.
+  - Se qualquer item falhar: 409 `remote_jid_invalid`.
+- **Instância:** a função usa o mesmo caminho do `evolution-whatsapp-send` (`evolution_instances.instance_name` pelo endpoint) e confere que bate com o `metadata.evolution.instance_name`. Se não bater, retorna 409 `instance_mismatch`.
+- **Chamada à Evolution:** `POST /chat/updateMessage/{instance}` com `{number, key:{remoteJid, fromMe:true, id}, text}`, timeout de 15 s. As credenciais ficam só no servidor (`EVOLUTION_BASE_URL`/`EVOLUTION_GLOBAL_API_KEY`) e não aparecem em log nem em resposta.
+- **Resposta aceita:**
+  - Precisa ser 2xx com `message.protocolMessage.type == 'MESSAGE_EDIT'` e `protocolMessage.key.id == whatsapp_message_sid`.
+  - Caso contrário, retorna 502 `provider_rejected` com o status e o corpo da Evolution. O banco não é tocado.
+- **Gravação:** chama a RPC acima e devolve `{ message_id, content, edited_at, edit_count }`. Se a gravação falhar depois que a Evolution aceitou, a função registra um log de erro e retorna 500 `persist_failed`. Esse cenário fica documentado.
+- **Sem dependência de módulo:** a função não conhece Messages nem Inbox. Vale para qualquer thread, porque a autorização vem da autoria, da organização e do provider.
 
-## Plano definitivo
+## 3. Frontend (Web)
+- **`src/lib/messageEdit.ts`:** função pura `canEditMessage(msg, me, provider, flagOn, now)` com as mesmas regras, usada só para mostrar o botão. Também concentra o mapeamento dos códigos de erro para textos em PT-BR.
+- **`src/hooks/messages/useMessageEdit.ts`:** chama `supabase.functions.invoke('evolution-edit-message')`, lê o erro via `FunctionsHttpError` e atualiza o cache da mensagem quando dá certo.
+- **Leitura da flag:** acrescentar `evolution_message_edit_v1` à query única de flags já existente (`useSalesFeatureFlags` / equivalente no Inbox), sem query nova.
+- **Bolha da mensagem** (`WhatsAppChat.tsx` e a bolha usada em Messages):
+  - Item "Editar" no menu, só quando `canEditMessage` permite. Ele some quando os 15 min passam, com um timer local.
+  - Edição inline com Salvar/Cancelar (Enter salva, Esc cancela).
+  - Selo "Editada" (11px) junto ao horário quando `edited_at` não for nulo.
+  - Na edição, aviso discreto: "O WhatsApp pode não confirmar a edição para o contato."
+- **Mensagens de erro:**
+  - Prazo vencido: "O prazo de 15 minutos para editar terminou."
+  - Recusa do provedor: "O WhatsApp recusou a edição."
+- **Mobile web (`MobileMessagesList.tsx`):** apenas o selo "Editada". O botão fica para depois.
 
-### Regras de negócio (precisam da sua confirmação)
-- Pode editar apenas mensagem com todas estas condições: outbound, só texto, Evolution, não apagada, não nota interna, com `whatsapp_message_sid`, sem status de falha.
-- Quem pode editar: [INCERTO] só o próprio autor (`sender_user_id`) ou também admin da organização. Proposta: só o autor.
-- Limite no servidor: **15 min** a partir de `sent_at`, abaixo do mínimo comprovado de 16 min, como margem de segurança.
-- Meta/Twilio ficam fora do escopo; o botão não aparece nesses canais.
+## 4. Documentação
+- `docs/integrations/evolution-api/`: nova seção "Edição de mensagens", com evidência da Fase 0, contrato da função, códigos de erro, 200/PENDING não confiável e o [TODO] de sincronizar edições feitas no celular.
+- `docs/modules/messages/` e `docs/modules/inbox/`: selo "Editada" e as regras.
+- Contrato para o app nativo: chamar a mesma função e ler `edited_at`.
 
-### 1. Banco (migration)
-- Novas colunas em `messages`: `edited_at timestamptz null`, `edited_by_user_id uuid null` e `edit_count int not null default 0`.
-- Nova tabela `message_edit_history`: `message_id`, `organization_id`, `previous_content`, `new_content`, `edited_by_user_id`, `provider_response jsonb`, `created_at`. Terá RLS por `organization_id = ANY(current_user_org_ids())`, só leitura para membros, escrita só pelo service_role, e GRANTs.
-- Triggers afetados pelo UPDATE de `content`: só `trg_update_thread_last_message`, que atualiza a prévia da conversa (efeito desejado), e `trigger_sanitize_agent_message_update`, que só roda para `sender_type='agent'` e não se aplica. Os demais triggers são de INSERT: não haverá nova activity, notificação, push nem análise de IA.
+## 5. Testes antes de liberar
+- **Testes Deno da função**, com a Evolution simulada. Cada caso abaixo é um teste:
+  - não autor
+  - outra organização
+  - flag desligada
+  - Meta/Twilio
+  - mensagem de mídia/template/nota
+  - 15m01
+  - texto igual
+  - `remoteJid` ausente ou divergente
+  - instância divergente
+  - Evolution não-2xx
+  - Evolution 2xx sem `MESSAGE_EDIT`
+  - sucesso, com uma linha nova no histórico e a mensagem atualizada
+  - conflito de edição simultânea
+- **Teste real na 7020:** enviar uma mensagem pelo Seialz para João Teste, editar pela interface, conferir no celular e confirmar no Seialz o selo "Editada", a prévia da conversa e a linha de histórico.
+- **Publicação:** só depois disso, publicação explícita da função e do frontend.
 
-### 2. Edge Function `evolution-edit-message` (nova, publicada explicitamente)
-- Entrada: `{ message_id, new_text }`, validada com Zod (texto não vazio, até 4096 caracteres).
-- Validação do JWT e uso de `users.id` via `auth_user_id`. Checa que o usuário é membro ativo da organização da mensagem e tem acesso à thread.
-- Carrega a mensagem e aplica as regras. Em caso de erro, devolve uma destas respostas:
-  - 403 `not_author`
-  - 409 `not_editable`
-  - 409 `edit_window_expired`
-  - 409 `content_unchanged`
-- Resolve a instância pelo `endpoint_id` e chama `POST /chat/updateMessage/{instance}` com `key {remoteJid, fromMe:true, id: whatsapp_message_sid}`. O `remoteJid` vem de `metadata.evolution.response.key`.
-- Se a resposta não for 2xx ou não trouxer `protocolMessage.type = MESSAGE_EDIT`, devolve erro com status e corpo da Evolution, sem alterar o banco.
-- Se der certo, faz numa única transação/RPC: grava o histórico e atualiza `content`, `edited_at`, `edited_by_user_id` e `edit_count + 1`.
-- Mantém o `whatsapp_message_sid` original; o key.id novo da edição fica só no histórico.
-- Credenciais da Evolution ficam apenas no servidor.
-
-### 3. Webhook (opcional, fase 2)
-- Edições feitas no celular ou no WhatsApp Web também não chegam pelos eventos atuais.
-- Fica como [TODO] separado: investigar se `MESSAGES_UPSERT` traz `protocolMessage` MESSAGE_EDIT nesses casos. Sem mudar o webhook agora.
-
-### 4. UI Web (Messages e Inbox, sem fundir os módulos)
-- O item "Editar" só aparece no menu da bolha da mensagem elegível, enquanto `sent_at` tiver menos de 15 min. Depois disso, ele some.
-- Edição inline na bolha, com Salvar/Cancelar.
-- Selo "Editada" (11px, junto ao horário) quando `edited_at` não for nulo.
-- Erro de janela vencida: "O prazo para editar esta mensagem terminou".
-- A tela atualiza em realtime pelo UPDATE em `messages`, que já é tratado no lugar.
-- Aviso fixo: "A edição pode não aparecer para o contato se o WhatsApp recusar", porque não existe confirmação de entrega.
-
-### 5. Mobile
-Mesma função e o mesmo selo; o contrato fica documentado para o app nativo. O botão no app fica para depois.
-
-### 6. Documentação e testes
-- Atualizar `docs/modules/messages`, `docs/integrations/evolution` e `docs/integrations/edit-message`, incluindo a evidência da Fase 0.
-- Testes Deno da edge function:
-  - não autor;
-  - outra organização;
-  - provedor Meta;
-  - mensagem com mais de 15 min;
-  - texto igual;
-  - Evolution respondendo não-2xx sem mudar o banco;
-  - sucesso gravando o histórico.
-- Fazer um teste real na 7020 antes de liberar.
-
-## Perguntas para aprovar
-1. Editar só pelo autor, ou também pelo admin da organização?
-2. Limite de 15 min no servidor, ou exatamente 16?
-3. Liberar só para a Central (piloto) ou para todas as organizações com Evolution?
+## Arquivos afetados
+- Novos:
+  - `supabase/functions/evolution-edit-message/index.ts`
+  - `supabase/functions/evolution-edit-message/index.test.ts`
+  - `src/lib/messageEdit.ts`
+  - `src/hooks/messages/useMessageEdit.ts`
+- Alterados:
+  - `supabase/config.toml` (entrada da função)
+  - `useSalesFeatureFlags.ts` (flag)
+  - componentes de bolha (menu, editor inline e selo)
+  - `MobileMessagesList.tsx` (selo)
+  - documentação
+- Intocados: `evolution-whatsapp-send`, `evolution-webhook`, configuração do webhook na Vultr, `dispatch-whatsapp-send`, Meta, Twilio e a RPC de listagem de threads.
