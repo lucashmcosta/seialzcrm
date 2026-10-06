@@ -17,6 +17,11 @@ export interface InboxMessageRow {
   sender_name: string | null;
   sender_agent_id: string | null;
   is_internal_note: boolean | null;
+  sender_user_id?: string | null;
+  whatsapp_message_sid?: string | null;
+  template_id?: string | null;
+  edited_at?: string | null;
+  edit_count?: number | null;
   metadata: Record<string, unknown> | null;
   reply_to_message?: { content: string | null; direction: string | null } | null;
 }
@@ -27,6 +32,7 @@ const SELECT = `
   error_code, error_message,
   reply_to_message_id, sender_type, sender_name, sender_agent_id,
   is_internal_note, metadata,
+  sender_user_id, whatsapp_message_sid, template_id, edited_at, edit_count,
   reply_to_message:reply_to_message_id ( content, direction )
 `;
 

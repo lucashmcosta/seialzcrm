@@ -13,6 +13,9 @@ import { MessageStatusIndicator, MessageFailureInline } from '@/components/whats
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { DateSeparator } from '@/components/messages/DateSeparator';
 import { shouldShowDateSeparator } from '@/lib/dateSeparator';
+import { MessageEditControl } from '@/components/messages/MessageEditControl';
+import { useMessageEditFlag } from '@/hooks/messages/useMessageEditFlag';
+import { useOrganization } from '@/hooks/useOrganization';
 import { formatEndpointMigrationAuditLine, type EndpointDisplayInfo } from '@/lib/whatsappEndpointDisplay';
 
 interface Props {
@@ -86,6 +89,8 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
 
 export function InboxConversationTimeline({ threadId, organizationId, contactId, contactName, currentEndpoint, onReply }: Props) {
   const { messages, loading, error } = useInboxThreadMessages(threadId);
+  const { userProfile } = useOrganization();
+  const messageEditOn = useMessageEditFlag(organizationId);
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -274,6 +279,7 @@ export function InboxConversationTimeline({ threadId, organizationId, contactId,
 
                     {!isAudioOnly && (
                       <div className={`flex items-center justify-end gap-1 mt-1 text-[11px] ${isOutbound ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                        {m.edited_at && <span>Editada ·</span>}
                         <span>{timeStr}</span>
                         {isOutbound && <StatusIcon msg={m} />}
                       </div>
@@ -282,6 +288,14 @@ export function InboxConversationTimeline({ threadId, organizationId, contactId,
                       <MessageFailureInline errorCode={m.error_code} className={isOutbound ? 'text-destructive/90' : ''} />
                     )}
                   </div>
+                  {isOutbound && (
+                    <MessageEditControl
+                      message={m}
+                      userId={userProfile?.id}
+                      flagOn={messageEditOn}
+                      className="p-1.5 md:p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
+                    />
+                  )}
                   {onReply && (
                     <button
                       type="button"

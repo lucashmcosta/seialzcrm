@@ -154,3 +154,8 @@ verify_jwt = false
 # SuvSign V2 webhook — público por necessidade (provedor externo); autenticidade por HMAC do secret V2 da org
 [functions.suvsign-v2-webhook]
 verify_jwt = false
+
+# Edição de mensagem Evolution (V1 piloto, flag evolution_message_edit_v1).
+# JWT validado em código (getUser + user_organizations) para erros claros.
+[functions.evolution-edit-message]
+verify_jwt = false
