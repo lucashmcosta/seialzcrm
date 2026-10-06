@@ -354,7 +354,7 @@ export function MobileMessagesList() {
         .is('deleted_at', null)
         .order('sent_at', { ascending: true });
       if (error) throw error;
-      setMessages((data as Message[]) || []);
+      setMessages(((data as unknown) as Message[]) || []);
 
       const thread = threads?.find(t => t.id === threadId);
       if (thread?.contact_id && organization?.id) {
