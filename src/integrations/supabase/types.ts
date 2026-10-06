@@ -6352,6 +6352,62 @@ export type Database = {
         }
         Relationships: []
       }
+      message_edit_history: {
+        Row: {
+          created_at: string
+          edit_count_after: number
+          edited_by_user_id: string
+          id: string
+          message_id: string
+          new_content: string
+          organization_id: string
+          previous_content: string | null
+          provider: string
+          provider_edit_key_id: string | null
+          provider_response: Json | null
+          provider_status: string
+          thread_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          edit_count_after: number
+          edited_by_user_id: string
+          id?: string
+          message_id: string
+          new_content: string
+          organization_id: string
+          previous_content?: string | null
+          provider: string
+          provider_edit_key_id?: string | null
+          provider_response?: Json | null
+          provider_status?: string
+          thread_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          edit_count_after?: number
+          edited_by_user_id?: string
+          id?: string
+          message_id?: string
+          new_content?: string
+          organization_id?: string
+          previous_content?: string | null
+          provider?: string
+          provider_edit_key_id?: string | null
+          provider_response?: Json | null
+          provider_status?: string
+          thread_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_edit_history_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_response_times: {
         Row: {
           contact_id: string | null
@@ -6941,6 +6997,9 @@ export type Database = {
           created_at: string | null
           deleted_at: string | null
           direction: string | null
+          edit_count: number
+          edited_at: string | null
+          edited_by_user_id: string | null
           endpoint_id: string | null
           error_code: string | null
           error_message: string | null
@@ -6975,6 +7034,9 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           direction?: string | null
+          edit_count?: number
+          edited_at?: string | null
+          edited_by_user_id?: string | null
           endpoint_id?: string | null
           error_code?: string | null
           error_message?: string | null
@@ -7009,6 +7071,9 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           direction?: string | null
+          edit_count?: number
+          edited_at?: string | null
+          edited_by_user_id?: string | null
           endpoint_id?: string | null
           error_code?: string | null
           error_message?: string | null
@@ -7036,6 +7101,13 @@ export type Database = {
           whatsapp_status?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_edited_by_user_id_fkey"
+            columns: ["edited_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_endpoint_id_fkey"
             columns: ["endpoint_id"]
@@ -15078,6 +15150,19 @@ export type Database = {
       }
       rotate_messaging_line_endpoint: {
         Args: { p_endpoint_id: string; p_line_id: string; p_reason?: string }
+        Returns: Json
+      }
+      rpc_apply_message_edit_v1: {
+        Args: {
+          p_edit_key_id: string
+          p_expected_content: string
+          p_expected_edit_count: number
+          p_message_id: string
+          p_new_content: string
+          p_provider: string
+          p_response: Json
+          p_user_id: string
+        }
         Returns: Json
       }
       rpc_claim_inbound_events: {
