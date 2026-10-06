@@ -349,7 +349,7 @@ export function MobileMessagesList() {
     try {
       const { data, error } = await supabase
         .from('messages')
-        .select(`id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, reply_to_message_id, sender_type, sender_name, sender_agent_id, metadata, reply_to_message:reply_to_message_id (content, direction)`)
+        .select(`id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, reply_to_message_id, sender_type, sender_name, sender_agent_id, metadata, edited_at, reply_to_message:reply_to_message_id (content, direction)`)
         .eq('thread_id', threadId)
         .is('deleted_at', null)
         .order('sent_at', { ascending: true });
@@ -1052,6 +1052,7 @@ export function MobileMessagesList() {
                               {!(message.media_type === 'audio') && (
                               <div className="mt-0.5 flex items-center justify-end gap-1">
                                 <span className={cn('text-[11px] leading-[14px]', isOutbound ? 'text-white/60' : 'text-muted-foreground/70')}>
+                                  {(message as { edited_at?: string | null }).edited_at ? 'Editada · ' : ''}
                                   {new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}
                                 </span>
                                 {isOutbound && renderStatusIcon(message)}
