@@ -15165,6 +15165,10 @@ export type Database = {
         }
         Returns: Json
       }
+      rpc_byok_cost_since: {
+        Args: { p_from: string; p_organization_id: string; p_provider: string }
+        Returns: number
+      }
       rpc_claim_inbound_events: {
         Args: {
           _batch_size?: number
