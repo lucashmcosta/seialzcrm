@@ -10,26 +10,13 @@ Escopo: banco/RLS, registry em código, Configurações → Widgets, WidgetsTrig
 - Usuário fixa/desafixa apenas widgets efetivamente habilitados na tela.
 - Pins de widgets desligados ou keys desconhecidas são ignorados no frontend, nunca apagados.
 
-## Migration (para revisão — não aplicada)
+## Permissão confirmada
+`can_manage_settings` é o critério atual de Configurações: o menu de Configurações em `Layout.tsx` é liberado por `canManageSettings`, e as policies recentes (origens comerciais, regras de fechamento, identidade regional) usam `public.user_has_org_permission(organization_id, 'can_manage_settings')`. A migration reutiliza essa função existente em vez de criar helper novo ou usar `is_org_admin`.
+
+## Migration final (para revisão — não aplicada)
 
 ```sql
--- 1) Helper de permissão: admin de configurações da org
-CREATE OR REPLACE FUNCTION public.can_manage_org_widgets(_org_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.user_organizations uo
-    JOIN public.permission_profiles pp ON pp.id = uo.permission_profile_id
-    WHERE uo.user_id = public.current_user_id()
-      AND uo.organization_id = _org_id
-      AND uo.is_active = true
-      AND COALESCE((pp.permissions->>'can_manage_settings')::boolean, false)
-  );
-$$;
-REVOKE ALL ON FUNCTION public.can_manage_org_widgets(uuid) FROM public, anon;
-GRANT EXECUTE ON FUNCTION public.can_manage_org_widgets(uuid) TO authenticated, service_role;
-
--- 2) organization_widgets
+-- 1) organization_widgets
 CREATE TABLE public.organization_widgets (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -38,39 +25,73 @@ CREATE TABLE public.organization_widgets (
   updated_by_user_id uuid REFERENCES public.users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (organization_id, widget_key)
+  CONSTRAINT organization_widgets_org_key_uniq UNIQUE (organization_id, widget_key)
 );
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.organization_widgets TO authenticated;
 GRANT ALL ON public.organization_widgets TO service_role;
 ALTER TABLE public.organization_widgets ENABLE ROW LEVEL SECURITY;
 CREATE POLICY ow_select ON public.organization_widgets FOR SELECT TO authenticated
   USING (organization_id = ANY (public.current_user_org_ids()));
-CREATE POLICY ow_write ON public.organization_widgets FOR ALL TO authenticated
-  USING (public.can_manage_org_widgets(organization_id))
-  WITH CHECK (public.can_manage_org_widgets(organization_id));
+CREATE POLICY ow_insert ON public.organization_widgets FOR INSERT TO authenticated
+  WITH CHECK (public.user_has_org_permission(organization_id, 'can_manage_settings'));
+CREATE POLICY ow_update ON public.organization_widgets FOR UPDATE TO authenticated
+  USING (public.user_has_org_permission(organization_id, 'can_manage_settings'))
+  WITH CHECK (public.user_has_org_permission(organization_id, 'can_manage_settings'));
+CREATE POLICY ow_delete ON public.organization_widgets FOR DELETE TO authenticated
+  USING (public.user_has_org_permission(organization_id, 'can_manage_settings'));
 
--- 3) organization_widget_screens
+-- updated_by_user_id forçado pelo banco (ignora valor enviado pelo cliente)
+CREATE OR REPLACE FUNCTION public.fn_organization_widgets_stamp()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL THEN
+    NEW.updated_by_user_id := public.current_user_id();
+  ELSIF TG_OP = 'UPDATE' THEN
+    NEW.updated_by_user_id := OLD.updated_by_user_id; -- service_role não falsifica autoria
+  ELSE
+    NEW.updated_by_user_id := NULL;
+  END IF;
+  NEW.updated_at := now();
+  IF TG_OP = 'UPDATE' THEN NEW.created_at := OLD.created_at; END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER trg_organization_widgets_stamp
+  BEFORE INSERT OR UPDATE ON public.organization_widgets
+  FOR EACH ROW EXECUTE FUNCTION public.fn_organization_widgets_stamp();
+
+-- 2) organization_widget_screens (FK composta com CASCADE)
 CREATE TABLE public.organization_widget_screens (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  organization_id uuid NOT NULL,
   widget_key text NOT NULL,
   screen text NOT NULL CHECK (screen IN ('commercial','inbox','opportunities','contacts')),
   is_enabled boolean NOT NULL DEFAULT false,
   open_mode text NOT NULL DEFAULT 'drawer' CHECK (open_mode IN ('modal','drawer')),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (organization_id, widget_key, screen)
+  CONSTRAINT organization_widget_screens_uniq UNIQUE (organization_id, widget_key, screen),
+  CONSTRAINT organization_widget_screens_widget_fk
+    FOREIGN KEY (organization_id, widget_key)
+    REFERENCES public.organization_widgets (organization_id, widget_key)
+    ON DELETE CASCADE
 );
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.organization_widget_screens TO authenticated;
 GRANT ALL ON public.organization_widget_screens TO service_role;
 ALTER TABLE public.organization_widget_screens ENABLE ROW LEVEL SECURITY;
 CREATE POLICY ows_select ON public.organization_widget_screens FOR SELECT TO authenticated
   USING (organization_id = ANY (public.current_user_org_ids()));
-CREATE POLICY ows_write ON public.organization_widget_screens FOR ALL TO authenticated
-  USING (public.can_manage_org_widgets(organization_id))
-  WITH CHECK (public.can_manage_org_widgets(organization_id));
+CREATE POLICY ows_insert ON public.organization_widget_screens FOR INSERT TO authenticated
+  WITH CHECK (public.user_has_org_permission(organization_id, 'can_manage_settings'));
+CREATE POLICY ows_update ON public.organization_widget_screens FOR UPDATE TO authenticated
+  USING (public.user_has_org_permission(organization_id, 'can_manage_settings'))
+  WITH CHECK (public.user_has_org_permission(organization_id, 'can_manage_settings'));
+CREATE POLICY ows_delete ON public.organization_widget_screens FOR DELETE TO authenticated
+  USING (public.user_has_org_permission(organization_id, 'can_manage_settings'));
+CREATE TRIGGER trg_organization_widget_screens_updated_at
+  BEFORE UPDATE ON public.organization_widget_screens
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
--- 4) user_widget_preferences
+-- 3) user_widget_preferences (somente o próprio usuário)
 CREATE TABLE public.user_widget_preferences (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -80,7 +101,7 @@ CREATE TABLE public.user_widget_preferences (
     CHECK (cardinality(pinned_widget_keys) <= 20),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (organization_id, user_id, screen)
+  CONSTRAINT user_widget_preferences_uniq UNIQUE (organization_id, user_id, screen)
 );
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_widget_preferences TO authenticated;
 GRANT ALL ON public.user_widget_preferences TO service_role;
@@ -90,24 +111,19 @@ CREATE POLICY uwp_own ON public.user_widget_preferences FOR ALL TO authenticated
          AND organization_id = ANY (public.current_user_org_ids()))
   WITH CHECK (user_id = public.current_user_id()
               AND organization_id = ANY (public.current_user_org_ids()));
-
--- 5) updated_at (reutiliza função existente do projeto)
-CREATE TRIGGER trg_ow_updated_at BEFORE UPDATE ON public.organization_widgets
-  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-CREATE TRIGGER trg_ows_updated_at BEFORE UPDATE ON public.organization_widget_screens
-  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-CREATE TRIGGER trg_uwp_updated_at BEFORE UPDATE ON public.user_widget_preferences
+CREATE TRIGGER trg_user_widget_preferences_updated_at
+  BEFORE UPDATE ON public.user_widget_preferences
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
--- 6) Realtime apenas da configuração da org (RLS filtra por tenant)
-ALTER PUBLICATION supabase_realtime ADD TABLE public.organization_widgets, public.organization_widget_screens;
+-- 4) Realtime só da configuração da org (RLS filtra por tenant)
+ALTER PUBLICATION supabase_realtime
+  ADD TABLE public.organization_widgets, public.organization_widget_screens;
 ```
 
 Notas da modelagem:
-- `widget_key` não tem FK (catálogo vive em código); keys stale ficam inertes.
-- Pin de widget desligado é permitido no banco mas ignorado na leitura — não validamos pin no servidor porque o efeito de um pin inválido é nulo (só controla atalho visual; não dá acesso a dados). [INCERTO] se preferir validação server-side, adiciono trigger simples.
-- `updated_by_user_id` é preenchido pelo frontend com `users.id`; posso trocar por trigger que força `current_user_id()` se preferir garantir server-side.
-- Antes de aplicar, confirmo que `update_updated_at_column()` existe e que `can_manage_settings` é a permissão correta para "admin da organização" (alternativa: reutilizar `is_org_admin`, que usa `can_manage_users`).
+- `widget_key` em `organization_widgets` não tem FK (catálogo vive em código); keys stale ficam inertes.
+- Tela só existe se o widget existir na org; apagar o widget apaga suas telas (CASCADE).
+- Pin de widget desligado é aceito no banco e ignorado na leitura (não concede acesso a dados).
 
 ## Frontend
 
@@ -119,7 +135,7 @@ src/widgets/
   useWidgetPins.ts     React Query (user+org+tela), upsert otimista
   WidgetsTrigger.tsx   botão na barra da conversa: fixados como atalhos + menu "Widgets" com fixar/desafixar
   WidgetHost.tsx       abre em Modal (Dialog) ou Drawer (Sheet) conforme open_mode da tela
-  widgets/test-widget/ widget de teste "Contexto da conversa": mostra tela, org e conversa atual (somente leitura)
+  widgets/overtime-calculator/ primeiro widget real (ver abaixo)
 src/pages/settings/WidgetsSettings.tsx
 ```
 
@@ -135,4 +151,16 @@ src/pages/settings/WidgetsSettings.tsx
 ## Validação
 - Testes de RLS: membro comum lê config mas não escreve; admin escreve; usuário não lê/escreve pin de outro; outra org não vê nada.
 - Teste do resolver efetivo (keys stale, widget desligado com pin antigo, tela não suportada).
-- Verificação visual no Comercial e no Atendimento com o widget de teste em Modal e em Drawer.
+- Verificação visual no Comercial e no Atendimento com a calculadora em Modal e em Drawer.
+
+## Primeiro widget real — Calculadora de Horas Extras
+- Key `overtime_calculator`; telas suportadas: Comercial e Atendimento; modos: Modal e Drawer.
+- Calculadora local, sem gravar nada e sem enviar mensagem; nenhum dado sai do navegador.
+- Sem widget dummy no registry (nada de teste chega à produção).
+
+Regras de cálculo — [INCERTO], preciso que você defina antes de implementar:
+1. Entradas: salário mensal, divisor de horas (ex.: 220), quantidade de horas extras por faixa?
+2. Adicionais: 50% (dias úteis) e 100% (domingos/feriados)? Outros percentuais configuráveis?
+3. Reflexos: incluir DSR, 13º, férias + 1/3 e FGTS, ou só o valor bruto das horas?
+4. Período: por mês único, ou somar vários meses (ex.: até 5 anos retroativos)?
+5. Saída: só valor total, ou memória de cálculo detalhada e botão copiar?

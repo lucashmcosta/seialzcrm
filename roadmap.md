@@ -18,3 +18,8 @@
 - [x] Parte B1: provisionamento grava requires_template_outside_window por provider
 - [x] Parte B2: corrigir 3ed219e0 e 43cca41d para false (antes/depois)
 - [x] Parte C: Composer avalia o endpoint efetivo do "Responder por" (`src/lib/composerCapability.ts`), capability lida da opção do "Responder por" — publicado
+
+## Widgets V1 (2026-10-08)
+- [ ] Migration ajustada (FK composta, updated_by forçado no banco, critério can_manage_settings) — aguarda aprovação
+- [ ] Registry + Configurações → Widgets + trigger Comercial/Atendimento + pins + hosts
+- [ ] Primeiro widget real: Calculadora de Horas Extras — aguarda regras de cálculo do usuário
