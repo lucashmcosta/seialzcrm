@@ -66,6 +66,12 @@ export function NewConversationDialog({
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(id);
+  }, [search]);
+  const hasSearch = debouncedSearch.length >= 2;
   const [selecting, setSelecting] = useState<string | null>(null);
   const { endpoints, officialNumbers, loading: endpointsLoading } =
     useOrgWhatsAppEndpoints(organization?.id);

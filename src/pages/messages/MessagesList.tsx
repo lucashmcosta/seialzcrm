@@ -1981,7 +1981,7 @@ function DesktopMessagesList() {
                     onClick={() => setShowNewConversation(true)}
                     title={locale === 'pt-BR' ? 'Nova Conversa' : 'New Conversation'}
                   >
-                    <ChatCircleDots className="w-4 h-4" />
+                    <Plus className="w-4 h-4" weight="light" />
                   </Button>
                   {hasSalesEndpointFilter && (
                     <Button
