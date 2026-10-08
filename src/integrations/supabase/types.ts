@@ -9968,6 +9968,92 @@ export type Database = {
           },
         ]
       }
+      organization_widget_screens: {
+        Row: {
+          created_at: string
+          id: string
+          is_enabled: boolean
+          open_mode: string
+          organization_id: string
+          screen: string
+          updated_at: string
+          widget_key: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          open_mode?: string
+          organization_id: string
+          screen: string
+          updated_at?: string
+          widget_key: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          open_mode?: string
+          organization_id?: string
+          screen?: string
+          updated_at?: string
+          widget_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_widget_screens_widget_fk"
+            columns: ["organization_id", "widget_key"]
+            isOneToOne: false
+            referencedRelation: "organization_widgets"
+            referencedColumns: ["organization_id", "widget_key"]
+          },
+        ]
+      }
+      organization_widgets: {
+        Row: {
+          created_at: string
+          id: string
+          is_enabled: boolean
+          organization_id: string
+          updated_at: string
+          updated_by_user_id: string | null
+          widget_key: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          organization_id: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+          widget_key: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          organization_id?: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+          widget_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_widgets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_widgets_updated_by_user_id_fkey"
+            columns: ["updated_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string | null
@@ -12944,6 +13030,51 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "user_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_widget_preferences: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          pinned_widget_keys: string[]
+          screen: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          pinned_widget_keys?: string[]
+          screen: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          pinned_widget_keys?: string[]
+          screen?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_widget_preferences_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_widget_preferences_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
