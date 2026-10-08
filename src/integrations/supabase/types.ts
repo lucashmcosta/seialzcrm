@@ -15468,6 +15468,7 @@ export type Database = {
       rpc_list_message_threads: {
         Args: {
           p_assigned_user_id?: string
+          p_assigned_user_ids?: string[]
           p_channels?: string[]
           p_cursor_id?: string
           p_cursor_updated_at?: string

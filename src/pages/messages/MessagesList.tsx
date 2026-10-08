@@ -401,7 +401,8 @@ function DesktopMessagesList() {
     return () => clearTimeout(t);
   }, [searchQuery]);
   const [filter, setFilter, , filterHydrated] = usePersistedFilters<ThreadFilter | null>('messages.filter', null);
-  const effectiveFilter: ThreadFilter = filter ?? 'all_open';
+  // Fichas de status removidas: lista sempre mostra conversas abertas.
+  const effectiveFilter = 'all_open' as ThreadFilter;
   const appliedSmartDefaultRef = useRef(false);
   
   // Media preview state
@@ -441,7 +442,8 @@ function DesktopMessagesList() {
   const [endpointFilter, setEndpointFilter] = useState<string>('all');
   const [endpointFilterOpen, setEndpointFilterOpen] = useState(false);
   // Filtro por responsável: 'all' | 'unassigned' | userId
-  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
+  // Filtro por responsável (multi): ids de usuário + token 'unassigned'. Vazio = todos.
+  const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
   const [assigneeFilterOpen, setAssigneeFilterOpen] = useState(false);
 
   const [selectedEndpointDetails, setSelectedEndpointDetails] = useState<{ threadId: string; endpoint: any | null } | null>(null);
@@ -751,11 +753,9 @@ function DesktopMessagesList() {
   // responsável antes do LIMIT/cursor, igual ao filtro por número.
   const assigneeFilterUsers = useOrgUserFilterOptions(organization?.id);
   useEffect(() => {
-    if (assigneeFilter === 'all' || assigneeFilter === 'unassigned') return;
     if (assigneeFilterUsers.length === 0) return;
-    if (!assigneeFilterUsers.some((u) => u.id === assigneeFilter)) {
-      setAssigneeFilter('all');
-    }
+    const valid = assigneeFilter.filter((v) => v === 'unassigned' || assigneeFilterUsers.some((u) => u.id === v));
+    if (valid.length !== assigneeFilter.length) setAssigneeFilter(valid);
   }, [assigneeFilter, assigneeFilterUsers]);
 
   // A RPC aplica o número antes do LIMIT/cursor. Assim, a primeira página do
@@ -764,8 +764,8 @@ function DesktopMessagesList() {
     channels: ['whatsapp'],
     search: debouncedSearch,
     endpointIds: activeEndpointFilterIdList,
-    assignedUserId: assigneeFilter !== 'all' && assigneeFilter !== 'unassigned' ? assigneeFilter : null,
-    unassignedOnly: assigneeFilter === 'unassigned',
+    assignedUserIds: assigneeFilter.filter((v) => v !== 'unassigned'),
+    unassignedOnly: assigneeFilter.includes('unassigned'),
   });
 
 
@@ -994,15 +994,6 @@ function DesktopMessagesList() {
   // Set default filter based on assigned threads — only on first load
   // when there's no persisted choice yet. Once the user picks a filter,
   // the persisted value wins and this effect no-ops.
-  useEffect(() => {
-    if (!filterHydrated) return;
-    if (filter !== null) return;
-    if (appliedSmartDefaultRef.current) return;
-    if (!threads || threads.length === 0 || !userProfile?.id) return;
-    const hasMine = threads.some(t => t.assigned_user_id === userProfile.id && ['open', 'awaiting_client', 'in_progress'].includes(t.status));
-    setFilter(hasMine ? 'mine' : 'unassigned');
-    appliedSmartDefaultRef.current = true;
-  }, [filterHydrated, filter, threads, userProfile?.id, setFilter]);
 
   // Fetch messages when thread selected
   useEffect(() => {
@@ -1854,12 +1845,11 @@ function DesktopMessagesList() {
   // Fase Final — vazio contextual da lista: distingue "sem conversas" de
   // "busca/filtro sem resultado". Não altera nenhuma query.
   const hasActiveListFilters =
-    searchQuery.trim().length > 0 || endpointFilter !== 'all' || assigneeFilter !== 'all' || (filter !== null && filter !== 'all_open');
+    searchQuery.trim().length > 0 || endpointFilter !== 'all' || assigneeFilter.length > 0;
   const clearListFilters = () => {
     setSearchQuery('');
     setEndpointFilter('all');
-    setAssigneeFilter('all');
-    setFilter('all_open');
+    setAssigneeFilter([]);
   };
 
 
@@ -1936,20 +1926,6 @@ function DesktopMessagesList() {
     });
   };
 
-  const allFilterOptions: { key: ThreadFilter; label: string; requiresViewAll?: boolean }[] = [
-    { key: 'mine', label: locale === 'pt-BR' ? 'Minhas' : 'Mine' },
-    { key: 'unassigned', label: locale === 'pt-BR' ? 'Não atribuídas' : 'Unassigned' },
-    { key: 'all_open', label: locale === 'pt-BR' ? 'Todas abertas' : 'All Open', requiresViewAll: true },
-    { key: 'resolved', label: locale === 'pt-BR' ? 'Resolvidas' : 'Resolved', requiresViewAll: true },
-  ];
-  const filterOptions = allFilterOptions.filter(o => !o.requiresViewAll || permissions.viewAllThreads);
-
-  // Force "mine"/"unassigned" for users without view-all
-  useEffect(() => {
-    if (!permissions.viewAllThreads && effectiveFilter !== 'mine' && effectiveFilter !== 'unassigned') {
-      setFilter('mine');
-    }
-  }, [permissions.viewAllThreads, effectiveFilter]);
 
 
   return (
@@ -2005,7 +1981,7 @@ function DesktopMessagesList() {
                     title={locale === 'pt-BR' ? 'Filtrar por responsável' : 'Filter by assignee'}
                   >
                     <UserCircle className="w-4 h-4" />
-                    {assigneeFilter !== 'all' && (
+                    {assigneeFilter.length > 0 && (
                       <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500" />
                     )}
                   </Button>
@@ -2024,23 +2000,6 @@ function DesktopMessagesList() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9"
                 />
-              </div>
-              {/* Filter chips */}
-              <div className="flex gap-1.5 flex-wrap">
-                {filterOptions.map((opt) => (
-                  <button
-                    key={opt.key}
-                    onClick={() => setFilter(opt.key)}
-                    className={cn(
-                      'px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
-                      effectiveFilter === opt.key
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-transparent text-muted-foreground border-border hover:bg-accent'
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
               </div>
             </div>
 
@@ -3317,6 +3276,8 @@ function DesktopMessagesList() {
         users={assigneeFilterUsers}
         value={assigneeFilter}
         onChange={setAssigneeFilter}
+        currentUserId={userProfile?.id}
+        canSelectOthers={permissions.viewAllThreads}
       />
 
 
