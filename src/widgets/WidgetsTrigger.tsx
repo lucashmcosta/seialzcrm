@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useEffectiveWidgets, type EffectiveWidget } from './useOrgWidgets';
 import { useWidgetPins } from './useWidgetPins';
 import { WidgetHost } from './WidgetHost';
+import { usePinnedWidget } from './PinnedWidgetContext';
 import type { WidgetContext, WidgetScreen } from './types';
 
 interface Props {
@@ -18,6 +19,7 @@ export function WidgetsTrigger({ screen, context, size = 'sm' }: Props) {
   const { pins, togglePin } = useWidgetPins(screen);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const panel = usePinnedWidget();
 
   const active: EffectiveWidget | null = widgets.find((w) => w.def.key === openKey) ?? null;
 
@@ -25,6 +27,12 @@ export function WidgetsTrigger({ screen, context, size = 'sm' }: Props) {
   useEffect(() => {
     if (openKey && !active) setOpenKey(null);
   }, [openKey, active]);
+
+  // Mantém o painel fixado com o contexto da conversa atual.
+  const setPanelContext = panel?.setContext;
+  useEffect(() => {
+    setPanelContext?.(context);
+  }, [setPanelContext, context]);
 
   if (widgets.length === 0) return null;
 
@@ -36,9 +44,11 @@ export function WidgetsTrigger({ screen, context, size = 'sm' }: Props) {
     <>
       {pinned.map(({ def }) => {
         const Icon = def.icon;
+        const isOpen = panel?.openKey === def.key;
         return (
-          <Button key={def.key} variant="ghost" size="sm" className={btn} title={def.name} aria-label={def.name}
-            onClick={() => setOpenKey(def.key)}>
+          <Button key={def.key} variant={isOpen ? 'secondary' : 'ghost'} size="sm" className={btn} title={def.name} aria-label={def.name}
+            aria-pressed={isOpen}
+            onClick={() => (panel ? panel.toggle(def.key) : setOpenKey(def.key))}>
             <Icon size={16} weight="bold" />
           </Button>
         );
