@@ -33,7 +33,10 @@ export function PinnedWidgetPanel() {
 
   return (
     <aside
-      className="w-[360px] flex-shrink-0 h-full border-l border-border bg-card flex flex-col overflow-hidden"
+      // < 1536px: cartão flutuante sem backdrop, abaixo do header e acima do composer
+      // (não esmaga a conversa). >= 1536px: coluna lateral no layout.
+      className="fixed right-4 top-[128px] z-30 w-[340px] max-h-[calc(100dvh-248px)] rounded-[6px] border border-border bg-card shadow-lg flex flex-col overflow-hidden
+        2xl:static 2xl:z-auto 2xl:w-[360px] 2xl:max-h-none 2xl:h-full 2xl:flex-shrink-0 2xl:rounded-none 2xl:border-0 2xl:border-l 2xl:shadow-none"
       data-widget-host="pinned-panel"
       aria-label={active.def.name}
     >
