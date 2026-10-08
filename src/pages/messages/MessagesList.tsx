@@ -402,7 +402,7 @@ function DesktopMessagesList() {
   }, [searchQuery]);
   const [filter, setFilter, , filterHydrated] = usePersistedFilters<ThreadFilter | null>('messages.filter', null);
   // Fichas de status removidas: lista sempre mostra conversas abertas.
-  const effectiveFilter: ThreadFilter = 'all_open';
+  const effectiveFilter = 'all_open' as ThreadFilter;
   const appliedSmartDefaultRef = useRef(false);
   
   // Media preview state
