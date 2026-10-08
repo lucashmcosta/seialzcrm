@@ -152,7 +152,7 @@ export function NewConversationDialog({
 
   const { data: contacts, isLoading } = useQuery({
     queryKey: ['contacts-with-phone', organization?.id, debouncedSearch, initialContactId ?? null],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!organization?.id) return [];
 
       let query = supabase
@@ -170,7 +170,7 @@ export function NewConversationDialog({
         query = query.or(`full_name.ilike.%${debouncedSearch}%,phone.ilike.%${debouncedSearch}%`);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query.abortSignal(signal);
       if (error) throw error;
       return (data || []) as Contact[];
     },
