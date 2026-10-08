@@ -151,7 +151,7 @@ export function NewConversationDialog({
   }, [open, preferredEndpointId]);
 
   const { data: contacts, isLoading } = useQuery({
-    queryKey: ['contacts-with-phone', organization?.id, search, initialContactId ?? null],
+    queryKey: ['contacts-with-phone', organization?.id, debouncedSearch, initialContactId ?? null],
     queryFn: async () => {
       if (!organization?.id) return [];
 
@@ -166,15 +166,15 @@ export function NewConversationDialog({
 
       if (initialContactId) {
         query = query.eq('id', initialContactId);
-      } else if (search.trim()) {
-        query = query.or(`full_name.ilike.%${search}%,phone.ilike.%${search}%`);
+      } else {
+        query = query.or(`full_name.ilike.%${debouncedSearch}%,phone.ilike.%${debouncedSearch}%`);
       }
 
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as Contact[];
     },
-    enabled: open && !!organization?.id,
+    enabled: open && !!organization?.id && (!!initialContactId || hasSearch),
   });
 
   const handleSelect = async (contact: Contact) => {
@@ -343,7 +343,14 @@ export function NewConversationDialog({
 
           {/* Contact list */}
           <ScrollArea className="h-[300px]">
-            {isLoading ? (
+            {!initialContactId && !hasSearch ? (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <MagnifyingGlass className="w-8 h-8 mb-2 opacity-50" />
+                <p className="text-sm">
+                  {locale === 'pt-BR' ? 'Digite um nome ou número para buscar' : 'Type a name or number to search'}
+                </p>
+              </div>
+            ) : isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <SpinnerGap className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
