@@ -20,7 +20,7 @@
 - [x] Parte C: Composer avalia o endpoint efetivo do "Responder por" (`src/lib/composerCapability.ts`), capability lida da opção do "Responder por" — publicado
 
 ## Widgets V1 (2026-10-08)
-- [ ] Migration ajustada (FK composta, updated_by forçado no banco, critério can_manage_settings) — aguarda aprovação
-- [ ] Registry + Configurações → Widgets + trigger Comercial/Atendimento + pins + hosts
-- [ ] Calculadora de Horas Extras V1 (salário, divisor 220, horas, adicional 50/100/custom, memória, copiar)
-- [ ] Validação visual Comercial/Atendimento (toggle, modal/drawer, pins por usuário, realtime)
+- [x] Migration ajustada aplicada
+- [x] Registry + Configurações → Widgets + trigger Comercial/Atendimento + pins + hosts
+- [x] Calculadora de Horas Extras V1
+- [ ] Validação visual Comercial/Atendimento — aguarda teste com login real (não consigo entrar na prévia deste projeto)
