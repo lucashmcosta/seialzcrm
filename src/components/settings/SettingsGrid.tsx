@@ -32,6 +32,7 @@ import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
 import { useAIIntegration } from '@/hooks/useAIIntegration';
 import { Input } from '@/components/ui/input';
 import { SettingsCard } from './SettingsCard';
+import { PuzzlePiece } from '@phosphor-icons/react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 
 interface SettingsItem {
@@ -60,6 +61,7 @@ const settingsGroups: SettingsGroup[] = [
       { icon: Palette, label: 'Tema e Cores', description: 'Personalize a aparência do seu CRM', to: 'theme', permission: 'canManageSettings' },
       { icon: SquaresFour, label: 'Campos Personalizados', description: 'Crie campos extras para contatos e oportunidades', to: 'custom-fields', permission: 'canManageSettings' },
       { icon: GitBranch, label: 'Origens comerciais', description: 'Regras de atribuição e resultados por origem', to: 'commercial-origins', permission: 'canManageSettings' },
+      { icon: PuzzlePiece, label: 'Widgets', description: 'Ferramentas abertas dentro das conversas', to: 'widgets', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },
       { icon: Tag, label: 'Etiquetas', description: 'Organize contatos e oportunidades com tags', to: 'tags', permission: 'canManageSettings' },
       { icon: GitBranch, label: 'Pipeline', description: 'Configure estágios do funil de vendas', to: 'pipeline', permission: 'canManageSettings' },
       { icon: CheckSquare, label: 'Configurações de oportunidade', description: 'Regras de fechamento + documentos exigidos para ganhar', to: 'opportunity-close', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },

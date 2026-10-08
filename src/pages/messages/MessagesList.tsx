@@ -43,6 +43,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 // Fase 2.5 — UI Comercial (Route/número/provider). Somente leitura.
 import { RouteBadge, type EndpointState } from '@/components/messages/route/RouteIndicators';
 import { SalesRouteDetailsDialog } from '@/components/messages/route/SalesRouteDetailsDialog';
+import { WidgetsTrigger } from '@/widgets/WidgetsTrigger';
 import { SalesConversationHeader } from '@/components/messages/route/SalesConversationHeader';
 import { SalesComposerStatus } from '@/components/messages/route/SalesComposerStatus';
 import { ManualReplySelector } from '@/components/messages/route/ManualReplySelector';
@@ -2135,6 +2136,9 @@ function DesktopMessagesList() {
                   }
                   actions={
                     <>
+                      {organization?.id && (
+                        <WidgetsTrigger screen="commercial" context={{ screen: 'commercial', organizationId: organization.id, threadId: selectedThread.id, contactId: selectedThread.contact_id ?? null }} />
+                      )}
 
 
                       <DropdownMenu>

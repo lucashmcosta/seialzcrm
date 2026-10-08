@@ -11,6 +11,7 @@ import { WhatsAppWindowChip } from './WhatsAppWindowChip';
 import { LowQualityEndpointBanner } from './LowQualityEndpointBanner';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { Button } from '@/components/ui/button';
+import { WidgetsTrigger } from '@/widgets/WidgetsTrigger';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Check, ArrowCounterClockwise, SidebarSimple } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
@@ -263,6 +264,9 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                 <Check size={14} weight="bold" />
                 Resolver
               </Button>
+            )}
+            {organization?.id && (
+              <WidgetsTrigger size="xs" screen="inbox" context={{ screen: 'inbox', organizationId: organization.id, threadId: thread.id, contactId: thread.contact_id ?? null }} />
             )}
             <Button
               variant="ghost"

@@ -223,6 +223,7 @@ const CommercialOriginsReport = lazyWithRetry("CommercialOriginsReport", () => i
 
 // Settings layout + grid (replaces old Settings page)
 const SettingsLayout = lazyWithRetry("SettingsLayout", () => import("./components/settings/SettingsLayout"), "SettingsLayout");
+const WidgetsSettings = lazyWithRetry("WidgetsSettings", () => import("./pages/settings/WidgetsSettings"));
 const SettingsGrid = lazyWithRetry("SettingsGrid", () => import("./components/settings/SettingsGrid"), "SettingsGrid");
 const GeneralSettings = lazyWithRetry("GeneralSettings", () => import("./components/settings/GeneralSettings"), "GeneralSettings");
 const ThemeSettings = lazyWithRetry("ThemeSettings", () => import("./components/settings/ThemeSettings"), "ThemeSettings");
@@ -708,6 +709,7 @@ const App = () => (
             <Route path="duplicates" element={<DuplicatePreventionSettings />} />
             <Route path="custom-fields" element={<CustomFieldsSettings />} />
             <Route path="tags" element={<TagsSettings />} />
+            <Route path="widgets" element={<WidgetsSettings />} />
             <Route path="documents" element={<DocumentsSettings />} />
             <Route path="integrations" element={<IntegrationsSettings />} />
             <Route path="whatsapp-comercial" element={<SalesWhatsAppPage />} />
