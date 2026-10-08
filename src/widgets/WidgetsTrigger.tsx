@@ -42,13 +42,14 @@ export function WidgetsTrigger({ screen, context, size = 'sm' }: Props) {
 
   return (
     <>
-      {pinned.map(({ def }) => {
+      {/* Atalho fixado depende exclusivamente do PinnedWidgetPanel: nunca abre WidgetHost. */}
+      {panel && pinned.map(({ def }) => {
         const Icon = def.icon;
-        const isOpen = panel?.openKey === def.key;
+        const isOpen = panel.openKey === def.key;
         return (
           <Button key={def.key} variant={isOpen ? 'secondary' : 'ghost'} size="sm" className={btn} title={def.name} aria-label={def.name}
-            aria-pressed={isOpen}
-            onClick={() => (panel ? panel.toggle(def.key) : setOpenKey(def.key))}>
+            aria-pressed={isOpen} data-widget-shortcut="pinned"
+            onClick={() => panel.toggle(def.key)}>
             <Icon size={16} weight="bold" />
           </Button>
         );
