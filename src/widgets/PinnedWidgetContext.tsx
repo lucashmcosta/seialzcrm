@@ -19,9 +19,7 @@ export function PinnedWidgetProvider({ screen, children }: { screen: WidgetScree
   const toggle = useCallback((key: string) => setOpenKey((k) => (k === key ? null : key)), []);
   const close = useCallback(() => setOpenKey(null), []);
   const setContext = useCallback((c: WidgetContext) => {
-    setCtx((prev) =>
-      prev && prev.threadId === c.threadId && prev.contactId === c.contactId && prev.organizationId === c.organizationId ? prev : c,
-    );
+    setCtx((prev) => (prev && JSON.stringify(prev) === JSON.stringify(c) ? prev : c));
   }, []);
   const value = useMemo(() => ({ screen, openKey, context, toggle, close, setContext }), [screen, openKey, context, toggle, close, setContext]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
