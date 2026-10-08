@@ -41,7 +41,8 @@ export function useOrgWidgetConfig() {
     const invalidate = () => qc.invalidateQueries({ queryKey: orgWidgetsKey(orgId) });
     const filter = `organization_id=eq.${orgId}`;
     const channel = supabase
-      .channel(`org-widgets-${orgId}`)
+      // Nome único por instância: vários componentes usam este hook ao mesmo tempo.
+      .channel(`org-widgets-${orgId}-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'organization_widgets', filter }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'organization_widget_screens', filter }, invalidate)
       .subscribe();
