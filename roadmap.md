@@ -22,4 +22,5 @@
 ## Widgets V1 (2026-10-08)
 - [ ] Migration ajustada (FK composta, updated_by forçado no banco, critério can_manage_settings) — aguarda aprovação
 - [ ] Registry + Configurações → Widgets + trigger Comercial/Atendimento + pins + hosts
-- [ ] Primeiro widget real: Calculadora de Horas Extras — aguarda regras de cálculo do usuário
+- [ ] Calculadora de Horas Extras V1 (salário, divisor 220, horas, adicional 50/100/custom, memória, copiar)
+- [ ] Validação visual Comercial/Atendimento (toggle, modal/drawer, pins por usuário, realtime)
