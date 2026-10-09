@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions, canV2 } from '@/hooks/usePermissions';
+import { useIsOrgSystemAdmin } from '@/hooks/useIsOrgSystemAdmin';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CsRoundRobinTab } from './CsRoundRobinTab';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -31,6 +34,23 @@ interface QueueMember {
 }
 
 export function RoundRobinSettings() {
+  const { permissions } = usePermissions();
+  const isSysAdmin = useIsOrgSystemAdmin();
+  const canCs = isSysAdmin || permissions.canManageCustomerService || canV2(permissions, 'administracao.distribuicao', false);
+  if (!canCs) return <CommercialRoundRobinTab />;
+  return (
+    <Tabs defaultValue="commercial" className="space-y-6">
+      <TabsList>
+        <TabsTrigger value="commercial">Comercial</TabsTrigger>
+        <TabsTrigger value="cs">Atendimento</TabsTrigger>
+      </TabsList>
+      <TabsContent value="commercial"><CommercialRoundRobinTab /></TabsContent>
+      <TabsContent value="cs"><CsRoundRobinTab /></TabsContent>
+    </Tabs>
+  );
+}
+
+function CommercialRoundRobinTab() {
   const { organization } = useOrganization();
   const { permissions, loading: permLoading } = usePermissions();
   const { toast } = useToast();
