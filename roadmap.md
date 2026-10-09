@@ -40,7 +40,7 @@
 - [x] A2–A9
 - [x] B1 (sem org de teste — removida por decisão do usuário), B2, B3
 - [ ] B4 travas no servidor atrás da flag
-- [ ] B5 telas
-- [ ] B6 por simulação (ROLLBACK; triggers externos conferidos; replica só na criação; sem mensagens; transação curta)
+- [x] B5 telas
+- [x] B6 simulação
 - [ ] B7 ligar para todos com foto antes/depois
 - [ ] Relatório final + lista de conferência manual (Admin e operador)
