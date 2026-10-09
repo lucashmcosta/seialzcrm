@@ -209,7 +209,7 @@ export function blankPerms(): PermissionsV2 {
   const z = TEMPLATES[5].perms;
   const none = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'boolean' ? false : 'nenhum']));
   return {
-    dados: Object.fromEntries(Object.entries(z.dados).map(([k, v]) => [k, none(v as Record<string, unknown>)])) as unknown as PermissionsV2['dados'],
+    dados: Object.fromEntries(Object.entries(z.dados).map(([k, v]) => [k, none(v as unknown as Record<string, unknown>)])) as unknown as PermissionsV2['dados'],
     ferramentas: Object.fromEntries(TOOLS.map((t) => [t.key, false])) as PermissionsV2['ferramentas'],
     administracao: admin([]),
   };
