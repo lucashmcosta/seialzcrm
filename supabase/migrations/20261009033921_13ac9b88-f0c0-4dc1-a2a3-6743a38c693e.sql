@@ -1,0 +1,1 @@
+ALTER FUNCTION public.rbac_thread_obj(text) SET search_path = public;
