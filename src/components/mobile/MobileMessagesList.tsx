@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
+import { useThreadPerms, DENY_CLOSE, DENY_ASSIGN } from '@/hooks/useThreadPerms';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { MobileLayout } from './MobileLayout';
@@ -852,13 +853,13 @@ export function MobileMessagesList() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {selectedThread && (!selectedThread.assigned_user_id || selectedThread.assigned_user_id !== userProfile?.id) && selectedThread.status !== 'resolved' && (
-                  <DropdownMenuItem onClick={() => handleTakeOver(selectedThread.id)}>
+                  <DropdownMenuItem disabled={!threadPerms.canAssign} title={threadPerms.canAssign ? undefined : DENY_ASSIGN} onClick={() => handleTakeOver(selectedThread.id)}>
                     <UserCheck className="w-4 h-4 mr-2" />
                     {locale === 'pt-BR' ? 'Assumir' : 'Take Over'}
                   </DropdownMenuItem>
                 )}
                 {selectedThread && ['open', 'awaiting_client', 'in_progress'].includes(selectedThread.status) && (
-                  <DropdownMenuItem onClick={() => handleResolve(selectedThread.id)}>
+                  <DropdownMenuItem disabled={!threadPerms.canClose} title={threadPerms.canClose ? undefined : DENY_CLOSE} onClick={() => handleResolve(selectedThread.id)}>
                     <CheckCircle className="w-4 h-4 mr-2" />
                     {locale === 'pt-BR' ? 'Resolver' : 'Resolve'}
                   </DropdownMenuItem>

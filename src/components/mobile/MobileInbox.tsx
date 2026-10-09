@@ -40,6 +40,7 @@ import { InboxAssignmentHistory } from '@/components/inbox/InboxAssignmentHistor
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { Plus } from '@phosphor-icons/react';
+import { useThreadPerms, DENY_CLOSE, DENY_ASSIGN } from '@/hooks/useThreadPerms';
 
 // ─── Helpers ─────────────────────────────────────────────────────
 function relTime(iso: string | null): string {
@@ -368,6 +369,7 @@ function ChatView({
   const [replyTo, setReplyTo] = useState<InboxMessageRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
+  const { canClose, canAssign } = useThreadPerms(thread as any);
 
   async function handleResolve() {
     if (!thread) return;
@@ -482,7 +484,7 @@ function ChatView({
             <ArrowCounterClockwise size={18} weight="bold" />
           </Button>
         ) : (
-          <Button variant="ghost" size="sm" onClick={handleResolve} disabled={busy} className="h-9 w-9 p-0" title="Resolver">
+          <Button variant="ghost" size="sm" onClick={() => canClose ? handleResolve() : toast({ description: DENY_CLOSE })} disabled={busy} className={`h-9 w-9 p-0 ${canClose ? '' : 'opacity-40'}`} title={canClose ? 'Resolver' : DENY_CLOSE} aria-disabled={!canClose}>
             <Check size={18} weight="bold" />
           </Button>
         )}
@@ -493,7 +495,7 @@ function ChatView({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onSelect={() => setShowAssign(true)}>
+            <DropdownMenuItem onSelect={() => canAssign ? setShowAssign(true) : toast({ description: DENY_ASSIGN })} className={canAssign ? '' : 'opacity-50'}>
               <UserCirclePlus size={16} className="mr-2" /> Reatribuir
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setShowDetails(true)}>
