@@ -1,6 +1,7 @@
 /** Traduz os códigos rbac_* devolvidos pelo servidor para textos em português. */
 export const RBAC_MESSAGES: Record<string, string> = {
   rbac_close_denied: 'Você não tem permissão para resolver esta conversa.',
+  cs_rr_empty_list: 'Ative pelo menos uma pessoa na lista antes de ligar.',
   rbac_assign_denied: 'Você não tem permissão para reatribuir esta conversa.',
   rbac_create_denied: 'Você não tem permissão para criar este registro.',
   rbac_delete_denied: 'Você não tem permissão para excluir este registro.',

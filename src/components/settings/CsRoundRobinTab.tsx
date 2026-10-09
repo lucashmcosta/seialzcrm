@@ -10,6 +10,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toErrorMessageString } from '@/lib/errorMessage';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -94,11 +96,13 @@ export function CsRoundRobinTab() {
 
   const eligible = people.filter((p) => p.has_access);
   const blocked = people.filter((p) => !p.has_access);
+  const activeCount = eligible.filter((p) => p.member_active).length;
+  const cannotEnable = !enabled && activeCount === 0;
 
   return (
     <div className="space-y-6">
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5 pr-4">
               <Label htmlFor="cs-rr" className="text-base">Atribuição automática do Atendimento</Label>
@@ -107,13 +111,29 @@ export function CsRoundRobinTab() {
                 falar, a conversa volta para quem já o atendia, se essa pessoa estiver na lista e ativa.
               </p>
             </div>
-            <Switch
-              id="cs-rr"
-              checked={enabled}
-              disabled={busy}
-              onCheckedChange={(v) => (v ? askEnable() : doDisable())}
-            />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={cannotEnable ? 0 : -1}>
+                    <Switch
+                      id="cs-rr"
+                      checked={enabled}
+                      disabled={busy || cannotEnable}
+                      onCheckedChange={(v) => (v ? askEnable() : doDisable())}
+                    />
+                  </span>
+                </TooltipTrigger>
+                {cannotEnable && <TooltipContent>Ative pelo menos uma pessoa na lista antes de ligar</TooltipContent>}
+              </Tooltip>
+            </TooltipProvider>
           </div>
+          {enabled && activeCount === 0 && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                Ninguém está ativo na lista: conversas novas de Atendimento ficarão sem responsável.
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
