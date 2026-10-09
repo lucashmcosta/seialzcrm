@@ -31,3 +31,22 @@ Plano aprovado em 2026-10-09. Rollbacks em `rollback/<item>.sql`; snapshot em `s
 - Rollback: `rollback/A2.sql`.
 
 ## Próximos: A3 → A9, B1 → B7
+
+## A6 — Exportar conversas só para Admin (aplicado)
+- export-conversations: exige has_org_role(users.id, org, 'admin'); demais recebem 403. Publicada.
+- Comercial: botão de exportar só aparece para Admin (hook useIsOrgSystemAdmin).
+- Verificado: sem token → 401. [INCERTO] chamada com token real de Admin/não-Admin não testada (sessão externa indisponível).
+- Rollback: reverter o trecho de checagem para membership ativa (git).
+
+## A7 — Lixeira por permissão (aplicado)
+- Trigger fn_guard_soft_delete (contacts/opportunities): mudar deleted_at exige can_delete_* ou Admin; funções internas liberadas (todas as que alteram deleted_at são SECURITY DEFINER).
+- DELETE físico: só Admin. Ver lixeira: só quem pode excluir ou Admin.
+- Impacto: hoje só perfis Admin (34 vínculos) têm can_delete_*.
+- Teste simulado (ROLLBACK): sem chave não move nem vê lixeira; com chave move/restaura, não apaga de vez; Admin move e vê 22 itens.
+- Rollback: rollback/A7.sql
+
+## A8 — security_invoker nas 10 views (aplicado)
+- Antes/depois para Admin da Central: ad_performance 48/48, funnel 48/48, media 106/106. Demais 7 views não são usadas pelo app.
+- Rollback: rollback/A8.sql
+
+## A9 — pendente (próximo passo)
