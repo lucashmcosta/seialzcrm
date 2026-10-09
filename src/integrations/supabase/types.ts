@@ -14761,7 +14761,7 @@ export type Database = {
         }[]
       }
       fn_permissions_from_legacy: {
-        Args: { l: Json; privacy_on: boolean }
+        Args: { l: Json; privacy_on: boolean; telephony_v2_on: boolean }
         Returns: Json
       }
       fn_permissions_to_legacy: { Args: { p: Json }; Returns: Json }

@@ -48,4 +48,11 @@ describe('conversão de permissões', () => {
     expect(p.dados.atendimentos.excluir).toBe('nenhum');
     expect(p.dados.atendimentos.atribuir).toBe('nenhum');
   });
+
+  it('chamadas: sem telefonia v2 vê todas; com ela só com can_view_all_calls', () => {
+    expect(fromLegacy({}, true, false).dados.chamadas.ver).toBe('todos');
+    expect(fromLegacy({}, true, true).dados.chamadas.ver).toBe('meus');
+    expect(fromLegacy({ can_view_all_calls: true }, true, true).dados.chamadas.ver).toBe('todos');
+    expect(fromLegacy({ can_view_all_calls: true }, false, false).dados.chamadas.ver).toBe('todos');
+  });
 });
