@@ -50,3 +50,26 @@ Plano aprovado em 2026-10-09. Rollbacks em `rollback/<item>.sql`; snapshot em `s
 - Rollback: rollback/A8.sql
 
 ## A9 — pendente (próximo passo)
+
+## A9 — Lista de conversas igual à regra de abrir conversa (aplicado)
+- rpc_list_message_threads: sem responsável só aparece para quem vê todas ou tem can_manage_cs_queue (igual à policy de message_threads). Assinatura única mantida (sem overload).
+- A0 (f): conversas sem responsável abertas em 3 orgs (1, 47 e 141). Usuários que perderiam acesso: 0 (todos têm view_all ou fila). Aplicado.
+- Nulos: a regra atual já trata business_context nulo como comercial (exceto contato cliente / endpoint de atendimento). Dados não alterados.
+- Rollback: rollback/A9.sql
+
+## B1 — Interruptor (parcial)
+- Flag rbac_v2 criada desligada, organization_ids vazio. rbac_v2_enabled(org) e rbac_v2_set_global(on) (só platform admin/service_role).
+- [BLOQUEADO] Org de teste "Seialz Teste Permissões" + 4 usuários: criar login exige a chave de serviço (não guardada no projeto) ou sessão de admin da plataforma no /admin. Nenhuma org foi adicionada à flag.
+
+## B2 — Tabelas (aplicado)
+- teams, team_members (FK composta org), permission_profiles.permissions_v2. RLS: leitura para membros; escrita can_manage_teams (Admin ou administracao.usuarios).
+- Rollback: rollback/B1-B2.sql
+
+## B3 — Conversão (aplicado)
+- src/lib/permissions/{types,convert}.ts + convert.test.ts (7 testes, bun test: OK).
+- SQL: fn_permissions_from_legacy, fn_permissions_to_legacy, trigger trg_permissions_v2_to_legacy (pula durante rbac_v2_backfill), rbac_v2_backfill.
+- Paridade código × SQL: 32/32 casos idênticos (26 chaves isoladas, tudo-true, tudo-false, com/sem privacidade, perfil comercial amplo → atendimentos.encerrar/atribuir = nenhum).
+- Backfill ainda NÃO executado.
+- Rollback: rollback/B3.sql
+
+## Próximo: B4 (resolver e travas, atrás da flag), B5 (telas), B6 (depende da org de teste), B7.
