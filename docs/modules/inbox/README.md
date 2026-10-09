@@ -21,3 +21,6 @@ Superfície de conversas da **equipe de atendimento / customer success**: suport
 ## Leitura da conversa (mudança 2026-09-22)
 - O Atendimento no web **passa a gravar leitura** em `message_thread_reads` via `rpc_mark_thread_read` (`InboxPage.tsx` e `MobileInbox.tsx`, efeito ao selecionar a thread). Antes só o app e o Comercial gravavam.
 - Efeito visível: conversa lida no computador aparece como lida no celular, e o servidor enfileira o push silencioso `read_sync` para apagar a notificação nos outros aparelhos do mesmo usuário (só nos que declaram `supports_read_sync`). Contrato completo em [`modules/messages/README.md`](../messages/README.md).
+
+## Rodízio do Atendimento
+Separado do rodízio comercial: `organizations.cs_round_robin_enabled`, `cs_round_robin_members`, `assign_cs_round_robin`, `can_receive_cs`. Só quem tem Atendimentos Ver e Responder ≠ "nenhum" (e, com rodízio ligado, está ativo na lista) recebe conversa de Atendimento. Regras e verificação: `docs/platform/security/rbac-v2/etapa1-log.md` (seção "Rodízio do Atendimento"); ADR-0011.

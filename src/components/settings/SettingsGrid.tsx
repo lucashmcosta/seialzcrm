@@ -76,7 +76,7 @@ const settingsGroups: SettingsGroup[] = [
       { icon: UsersThree, label: 'Usuários & Permissões', description: 'Adicione membros e gerencie acessos', to: 'users', permission: 'canManageUsers' },
       { icon: UsersThree, label: 'Equipes', description: 'Agrupe pessoas para permissões de equipe', to: 'teams', permission: 'canManageTeams', v2Only: true },
       { icon: Shield, label: 'Perfis de Permissão', description: 'Defina níveis de acesso personalizados', to: 'permissions', permission: 'canManageSettings' },
-      { icon: ShuffleAngular, label: 'Atribuição automática', description: 'Round-robin de leads e privacidade de registros', to: 'round-robin', permission: 'manageAssignments' },
+      { icon: ShuffleAngular, label: 'Atribuição automática', description: 'Distribuição automática do Comercial e do Atendimento', to: 'round-robin', permission: 'manageAssignments' },
       { icon: Copy, label: 'Duplicatas', description: 'Regras para detecção de contatos duplicados', to: 'duplicates', permission: 'canManageSettings' },
     ],
   },
