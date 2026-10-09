@@ -10184,6 +10184,7 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          is_system: boolean
           name: string
           organization_id: string
           permissions: Json | null
@@ -10192,6 +10193,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: string
+          is_system?: boolean
           name: string
           organization_id: string
           permissions?: Json | null
@@ -10200,6 +10202,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
+          is_system?: boolean
           name?: string
           organization_id?: string
           permissions?: Json | null
@@ -14994,6 +14997,7 @@ export type Database = {
       }
       is_admin_user: { Args: never; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
+      is_org_system_admin: { Args: { _org: string }; Returns: boolean }
       is_valid_cnpj: { Args: { _value: string }; Returns: boolean }
       is_valid_cpf: { Args: { _value: string }; Returns: boolean }
       kairos_db_stats: { Args: never; Returns: Json }
