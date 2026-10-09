@@ -24,3 +24,16 @@
 - [x] Registry + Configurações → Widgets + trigger Comercial/Atendimento + pins + hosts
 - [x] Calculadora de Horas Extras V1
 - [ ] Validação visual Comercial/Atendimento — aguarda teste com login real (não consigo entrar na prévia deste projeto)
+
+## Segurança + RBAC v2 com Equipes (2026-10-09) — log em docs/platform/security/rbac-v2/etapa1-log.md
+- [x] A0 diagnóstico + snapshot
+- [x] A1 backups fechados
+- [x] A2 perfil de sistema
+- [ ] A3 users.is_platform_admin protegido + link /admin
+- [ ] A4 user_organizations + revogação de sessão (edge function para Admin da org)
+- [ ] A5 organizations
+- [ ] A6 export-conversations
+- [ ] A7 lixeira
+- [ ] A8 views security_invoker
+- [ ] A9 rpc_list_message_threads
+- [ ] B1–B7 RBAC v2 (flag, equipes, catálogo, resolver, telas, teste, ligar global)
