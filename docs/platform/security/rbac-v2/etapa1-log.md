@@ -78,3 +78,7 @@ Plano aprovado em 2026-10-09. Rollbacks em `rollback/<item>.sql`; snapshot em `s
 ## B5 — banco: rbac_v2_delete_profile. Telas: PermissionProfilesV2 (modelos/cópia/branco, abas Dados/Ferramentas/Administração, resumo, exclusão com destino), TeamsSettings (/settings/teams), coluna Equipes em Usuários, RequirePerm nas rotas, menu filtrado, privacidade oculta. Tudo só ativa com rbac_v2 ligado.
 ## B6 — simulação na Central com ROLLBACK: todos os testes OK (T2 explicado: Líder vê 6 oportunidades na lixeira sem responsável). Conferido depois: flag desligada, 0 equipes, 0 perfis temporários, 0 permissions_v2.
 ## B7 — NÃO executado. Simulação completa (35 não-Admin, 4 orgs, com ROLLBACK) excedeu o tempo do servidor; nada gravado (flag false, organization_ids vazio, 0 perfis convertidos). Interruptor não foi ligado.
+
+## B7 por organização — 2026-10-09 ~04:00 UTC
+- blueviza (1 não-Admin, perfil "Sales Rep"): DIVERGIU. Antes 4357 contatos / 2593 oportunidades / 243 conversas / 4 chamadas / 0 tarefas; depois 4357 / 2593 / 243 / 0 / 0. Menus iguais. Transação desfeita (ROLLBACK).
+- PARADA conforme a regra: Viagi, Campoar e Central não foram simuladas; nada ligado; rbac_v2 segue desligado.
