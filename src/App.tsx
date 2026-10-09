@@ -1,3 +1,4 @@
+import { RequirePerm } from "./components/RequirePerm";
 import { Suspense, lazy, useEffect, useState, type ComponentType, type LazyExoticComponent } from "react";
 import * as Sentry from "@sentry/react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -604,7 +605,7 @@ const App = () => (
             path="/contacts"
             element={
               <ProtectedRoute>
-                <ContactsList />
+                <RequirePerm path="dados.contatos.ver"><ContactsList /></RequirePerm>
               </ProtectedRoute>
             }
           />
@@ -612,7 +613,7 @@ const App = () => (
             path="/contacts/new"
             element={
               <ProtectedRoute>
-                <ContactForm />
+                <RequirePerm path="dados.contatos.criar"><ContactForm /></RequirePerm>
               </ProtectedRoute>
             }
           />
@@ -620,7 +621,7 @@ const App = () => (
             path="/contacts/:id"
             element={
               <ProtectedRoute>
-                <ContactDetail />
+                <RequirePerm path="dados.contatos.ver"><ContactDetail /></RequirePerm>
               </ProtectedRoute>
             }
           />
@@ -628,7 +629,7 @@ const App = () => (
             path="/contacts/:id/edit"
             element={
               <ProtectedRoute>
-                <ContactForm />
+                <RequirePerm path="dados.contatos.ver"><ContactForm /></RequirePerm>
               </ProtectedRoute>
             }
           />
@@ -636,7 +637,7 @@ const App = () => (
             path="/opportunities"
             element={
               <ProtectedRoute>
-                <OpportunitiesKanban />
+                <RequirePerm path="dados.oportunidades.ver"><OpportunitiesKanban /></RequirePerm>
               </ProtectedRoute>
             }
           />
@@ -644,7 +645,7 @@ const App = () => (
             path="/opportunities/:id"
             element={
               <ProtectedRoute>
-                <OpportunityDetail />
+                <RequirePerm path="dados.oportunidades.ver"><OpportunityDetail /></RequirePerm>
               </ProtectedRoute>
             }
           />
@@ -652,7 +653,7 @@ const App = () => (
             path="/tasks"
             element={
               <ProtectedRoute>
-                <TasksList />
+                <RequirePerm path="dados.tarefas.ver"><TasksList /></RequirePerm>
               </ProtectedRoute>
             }
           />
@@ -660,7 +661,7 @@ const App = () => (
             path="/commercial"
             element={
               <ProtectedRoute>
-                <MessagesList />
+                <RequirePerm path="dados.conversas_comerciais.ver"><MessagesList /></RequirePerm>
               </ProtectedRoute>
             }
           />
@@ -672,7 +673,7 @@ const App = () => (
             path="/inbox"
             element={
               <ProtectedRoute>
-                <InboxPage />
+                <RequirePerm path="dados.atendimentos.ver"><InboxPage /></RequirePerm>
               </ProtectedRoute>
             }
           />
@@ -680,21 +681,21 @@ const App = () => (
             path="/dashboards"
             element={
               <ProtectedRoute>
-                <ReportsPage />
+                <RequirePerm path="ferramentas.relatorios"><ReportsPage /></RequirePerm>
               </ProtectedRoute>
             }
           />
           <Route path="/reports" element={<Navigate to="/dashboards" replace />} />
-          <Route path="/marketing" element={<ProtectedRoute><MarketingOverview /></ProtectedRoute>} />
-          <Route path="/marketing/ads" element={<ProtectedRoute><MarketingAds /></ProtectedRoute>} />
-          <Route path="/marketing/ads/:id" element={<ProtectedRoute><MarketingAdDetail /></ProtectedRoute>} />
-          <Route path="/marketing/organic" element={<ProtectedRoute><MarketingOrganic /></ProtectedRoute>} />
-          <Route path="/marketing/funnel" element={<ProtectedRoute><MarketingFunnel /></ProtectedRoute>} />
-          <Route path="/marketing/timeline" element={<ProtectedRoute><MarketingTimeline /></ProtectedRoute>} />
-          <Route path="/marketing/posts" element={<ProtectedRoute><MarketingPosts /></ProtectedRoute>} />
-          <Route path="/marketing/comments" element={<ProtectedRoute><MarketingComments /></ProtectedRoute>} />
-          <Route path="/marketing/webhooks" element={<ProtectedRoute><MarketingWebhooks /></ProtectedRoute>} />
-          <Route path="/marketing/campaigns" element={<ProtectedRoute><MarketingCampaigns /></ProtectedRoute>} />
+          <Route path="/marketing" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingOverview /></RequirePerm></ProtectedRoute>} />
+          <Route path="/marketing/ads" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingAds /></RequirePerm></ProtectedRoute>} />
+          <Route path="/marketing/ads/:id" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingAdDetail /></RequirePerm></ProtectedRoute>} />
+          <Route path="/marketing/organic" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingOrganic /></RequirePerm></ProtectedRoute>} />
+          <Route path="/marketing/funnel" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingFunnel /></RequirePerm></ProtectedRoute>} />
+          <Route path="/marketing/timeline" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingTimeline /></RequirePerm></ProtectedRoute>} />
+          <Route path="/marketing/posts" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingPosts /></RequirePerm></ProtectedRoute>} />
+          <Route path="/marketing/comments" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingComments /></RequirePerm></ProtectedRoute>} />
+          <Route path="/marketing/webhooks" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingWebhooks /></RequirePerm></ProtectedRoute>} />
+          <Route path="/marketing/campaigns" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingCampaigns /></RequirePerm></ProtectedRoute>} />
           <Route path="/social" element={<ProtectedRoute><SocialInboxPage /></ProtectedRoute>} />
           <Route path="/commercial/origins" element={<ProtectedRoute><CommercialOriginsReport /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
