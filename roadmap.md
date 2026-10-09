@@ -48,5 +48,7 @@
 ## Permissões — ajustes pós-ligação (2026-10-09)
 - [x] Perfis não salvos pela tela: Encerrar/Atribuir = Ver (15 perfis, log)
 - [x] Consultor: causa investigada (salvo pela tela 04:44, autor [INCERTO]) — aguarda decisão do usuário
-- [ ] Textos em português para rbac_*
-- [ ] Botões desabilitados com dica
+- [x] Textos em português para rbac_* (avisos traduzidos automaticamente)
+- [x] Botões de conversa (Resolver, Assumir, Atribuir) desabilitados com dica — web e celular
+- [ ] Excluir/Novo em Contatos, Oportunidades e Tarefas desabilitados com dica — próxima rodada
+- [ ] Consultor: Atendimentos Ver = nenhum — aguarda decisão do usuário
