@@ -15229,6 +15229,10 @@ export type Database = {
         Args: { _org?: string; _recompute?: boolean }
         Returns: number
       }
+      rbac_v2_delete_profile: {
+        Args: { _profile: string; _target: string }
+        Returns: number
+      }
       rbac_v2_enabled: { Args: { _org: string }; Returns: boolean }
       rbac_v2_global_on: { Args: never; Returns: boolean }
       rbac_v2_on: { Args: { _org: string }; Returns: boolean }
