@@ -10188,6 +10188,7 @@ export type Database = {
           name: string
           organization_id: string
           permissions: Json | null
+          permissions_v2: Json | null
           updated_at: string | null
         }
         Insert: {
@@ -10197,6 +10198,7 @@ export type Database = {
           name: string
           organization_id: string
           permissions?: Json | null
+          permissions_v2?: Json | null
           updated_at?: string | null
         }
         Update: {
@@ -10206,6 +10208,7 @@ export type Database = {
           name?: string
           organization_id?: string
           permissions?: Json | null
+          permissions_v2?: Json | null
           updated_at?: string | null
         }
         Relationships: [
@@ -12289,6 +12292,42 @@ export type Database = {
           },
         ]
       }
+      team_members: {
+        Row: {
+          created_at: string
+          organization_id: string
+          team_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          organization_id: string
+          team_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          organization_id?: string
+          team_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_team_id_organization_id_fkey"
+            columns: ["team_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "team_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_memberships: {
         Row: {
           active: boolean
@@ -12358,6 +12397,38 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -14210,6 +14281,7 @@ export type Database = {
         Args: { _organization_id: string }
         Returns: boolean
       }
+      can_manage_teams: { Args: { _org: string }; Returns: boolean }
       can_review_contact_documents: {
         Args: { _contact_id: string }
         Returns: boolean
@@ -15100,6 +15172,8 @@ export type Database = {
         Returns: Json
       }
       prune_intelligence_worker_runs: { Args: never; Returns: undefined }
+      rbac_v2_enabled: { Args: { _org: string }; Returns: boolean }
+      rbac_v2_set_global: { Args: { _on: boolean }; Returns: undefined }
       reassign_thread: {
         Args: { _reason?: string; _thread_id: string; _to_user_id: string }
         Returns: Json
