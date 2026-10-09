@@ -14677,6 +14677,10 @@ export type Database = {
         Args: { p_module?: string; p_organization_id: string }
         Returns: number
       }
+      cs_round_robin_disable: { Args: { _org: string }; Returns: undefined }
+      cs_round_robin_enable: { Args: { _org: string }; Returns: Json }
+      cs_round_robin_overview: { Args: { _org: string }; Returns: Json }
+      cs_round_robin_preview: { Args: { _org: string }; Returns: number }
       current_user_id: { Args: never; Returns: string }
       current_user_managed_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
