@@ -14731,6 +14731,10 @@ export type Database = {
           sample_integration_slug: string
         }[]
       }
+      fn_permissions_from_legacy: {
+        Args: { l: Json; privacy_on: boolean }
+        Returns: Json
+      }
       fn_push_unread_thread_count: {
         Args: { p_user_id: string }
         Returns: number
