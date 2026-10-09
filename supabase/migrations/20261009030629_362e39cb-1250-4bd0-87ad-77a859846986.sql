@@ -1,0 +1,10 @@
+ALTER VIEW public.v_entity_sync_status SET (security_invoker = true);
+ALTER VIEW public.vw_marketing_ad_performance SET (security_invoker = true);
+ALTER VIEW public.vw_marketing_campaign_summary SET (security_invoker = true);
+ALTER VIEW public.vw_marketing_funnel SET (security_invoker = true);
+ALTER VIEW public.intelligence_stale_claims_metrics SET (security_invoker = true);
+ALTER VIEW public.vw_intel_won_vs_lost_30d SET (security_invoker = true);
+ALTER VIEW public.vw_meta_media_performance SET (security_invoker = true);
+ALTER VIEW public.vw_intel_sellers_30d SET (security_invoker = true);
+ALTER VIEW public.best_time_per_contact SET (security_invoker = true);
+ALTER VIEW public.vw_journey_timeline SET (security_invoker = true);
