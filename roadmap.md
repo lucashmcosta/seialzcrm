@@ -53,3 +53,4 @@
 - [ ] Excluir/Novo em Contatos, Oportunidades e Tarefas desabilitados com dica — próxima rodada
 - [ ] Consultor: Atendimentos Ver = nenhum — aguarda decisão do usuário
 - [x] Atribuição em lote Viagi/blueviza + arquivo de desfazer (2026-10-09)
+- [ ] Rodízio Atendimento: reabertura ignora entradas "sem responsável" no histórico (pega a última pessoa)
