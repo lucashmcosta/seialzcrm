@@ -2,11 +2,15 @@
 
 Execução na ordem do documento: Parte A (A0–A9), depois Parte B (B1–B7). Uma migration por item, rollback salvo antes, verificação depois, registro no log. Parada apenas nas condições escritas ou em verificação que falhe (com reversão do item antes de reportar).
 
-## Ajustes necessários ao documento (preciso da sua confirmação)
+## Ajustes confirmados
 
-1. **Pasta dos registros.** A regra do projeto proíbe criar documentação fora da estrutura atual. Proposta: usar `docs/platform/security/rbac-v2/` (log `etapa1-log.md`, `snapshot-antes.sql`, `rollback/<item>.sql`) em vez de `docs/security/`. Os arquivos de rollback são apenas referência; migrations continuam pelo fluxo oficial.
-2. **Ações que precisam do Supabase Auth com privilégio total** (revogar sessões no A4, criar os 4 usuários de teste no B1): o Lovable não tem a service role key deste projeto. Elas serão feitas por Edge Functions (que têm a chave no servidor), restritas a admin de plataforma. A revogação em massa "uma vez, agora" passa por uma função administrativa de uso único, registrada no log.
-3. **B7 liga para todos os clientes sem pausa.** Mantenho a checagem automática (foto antes/depois e desliga sozinho se algo mudar). Peço confirmação explícita de que posso ligar em produção sem parar para você revisar o B6.
+1. **Pasta:** `docs/platform/security/rbac-v2/` (`etapa1-log.md`, `snapshot-antes.sql`, `rollback/<item>.sql`).
+2. **Edge Functions com privilégio:**
+   - Revogação ao desativar: chamável pelo Admin da organização (`is_org_system_admin`); o servidor valida que quem chama é Admin daquela org e que o alvo pertence a ela. Também aceita admin de plataforma.
+   - Revogação em massa (uso único) e criação dos 4 usuários de teste: só admin de plataforma; depois de usadas, removidas e registradas no log.
+   - Se exigir login no /admin, informo exatamente o que clicar e sigo com o restante enquanto isso.
+3. **B7:** liga para todos sem pausa somente se toda a Parte A e o B6 passarem e a comparação antes/depois bater 100%; caso contrário `rbac_v2_set_global(false)` e paro.
+4. **Triggers de proteção (A3, A4, A5, A7 e Parte B):** liberam `service_role` e também execução dentro de funções `SECURITY DEFINER` do sistema (`current_user NOT IN ('authenticated','anon')`). Antes de cada trigger, o log lista as funções internas que alteram aquelas colunas (mesclar contatos, round-robin, reatribuições etc.) e confirma que continuam funcionando.
 
 ## Parte A — Segurança (vale já para todas as orgs)
 
