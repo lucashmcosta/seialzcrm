@@ -14586,6 +14586,10 @@ export type Database = {
         Returns: Json
       }
       f_unaccent: { Args: { "": string }; Returns: string }
+      fn__rec_from_legacy: {
+        Args: { kind: string; l: Json; privacy_on: boolean }
+        Returns: Json
+      }
       fn_build_nammux_contact_payload: {
         Args: { _contact_id: string }
         Returns: Json
@@ -14735,6 +14739,7 @@ export type Database = {
         Args: { l: Json; privacy_on: boolean }
         Returns: Json
       }
+      fn_permissions_to_legacy: { Args: { p: Json }; Returns: Json }
       fn_push_unread_thread_count: {
         Args: { p_user_id: string }
         Returns: number
@@ -15176,6 +15181,10 @@ export type Database = {
         Returns: Json
       }
       prune_intelligence_worker_runs: { Args: never; Returns: undefined }
+      rbac_v2_backfill: {
+        Args: { _org?: string; _recompute?: boolean }
+        Returns: number
+      }
       rbac_v2_enabled: { Args: { _org: string }; Returns: boolean }
       rbac_v2_set_global: { Args: { _on: boolean }; Returns: undefined }
       reassign_thread: {
