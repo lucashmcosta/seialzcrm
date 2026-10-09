@@ -82,3 +82,25 @@ Plano aprovado em 2026-10-09. Rollbacks em `rollback/<item>.sql`; snapshot em `s
 ## B7 por organização — 2026-10-09 ~04:00 UTC
 - blueviza (1 não-Admin, perfil "Sales Rep"): DIVERGIU. Antes 4357 contatos / 2593 oportunidades / 243 conversas / 4 chamadas / 0 tarefas; depois 4357 / 2593 / 243 / 0 / 0. Menus iguais. Transação desfeita (ROLLBACK).
 - PARADA conforme a regra: Viagi, Campoar e Central não foram simuladas; nada ligado; rbac_v2 segue desligado.
+
+## Causa da divergência da blueviza (só leitura) — confirmada
+Regra antiga de calls: sem telefonia v2 na org (`NOT telephony_v2_enabled_for_org`), qualquer membro vê todas as chamadas. A conversão dava "meus".
+Correção (código e SQL, mesma regra): chamadas.ver = 'todos' se can_view_all_calls OU telefonia v2 inativa na org; senão 'meus'.
+fn_permissions_from_legacy(l, privacy_on, telephony_v2_on) — versão de 2 argumentos removida (sem overload); rbac_ctx e rbac_v2_backfill usam o estado atual da org. Teste novo em convert.test.ts; paridade SQL × código: 8/8 combinações iguais.
+
+## Revisão das regras que dependem da organização (não só do perfil)
+- Privacidade (`private_records_enabled` via user_can_view_all) em contatos, oportunidades, conversas — já tratada.
+- Telefonia v2 (`telephony_v2_enabled_for_org`) em chamadas — corrigida acima.
+- Nenhum outro caso: messages/tasks/documents/activities eram por organização inteira; contact_identity_profiles e fila de atendimento dependem só do perfil; is_admin_user é admin da plataforma.
+- Ressalva: mensagens, atividades e documentos não entram na contagem (consultas muito pesadas). No modelo novo, eles seguem a visibilidade do registro principal.
+
+## B7 por organização, refeito (cada transação desfeita no final)
+- blueviza: 1 pessoa, 0 divergências
+- Viagi: 6 pessoas, 0 divergências
+- Campoar: 12 pessoas, 0 divergências
+- Central Trabalhista: 16 pessoas (4 blocos de 4), 0 divergências
+
+## LIGADO PARA TODOS: 2026-10-09 04:16:06 UTC
+rbac_v2_backfill(NULL) converteu 34 perfis; rbac_v2_set_global(true). Nenhum perfil comum ficou sem modelo novo.
+Conferência pós-ligação, 7 pessoas (2 por org; a blueviza tem só 1): agora × modelo antigo, 0 divergências.
+Emergência: SELECT rbac_v2_set_global(false);
