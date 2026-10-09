@@ -207,7 +207,7 @@ export function RoundRobinSettings() {
             />
           </div>
 
-          <div className="flex items-center justify-between pt-4 border-t">
+          {!permissions.rbacV2 && (<div className="flex items-center justify-between pt-4 border-t">
             <div className="space-y-0.5 pr-4">
               <Label htmlFor="priv-enabled" className="text-base">Privacidade de registros</Label>
               <p className="text-sm text-muted-foreground">
@@ -220,7 +220,7 @@ export function RoundRobinSettings() {
               onCheckedChange={(v) => updateFlag('private_records_enabled', v)}
               disabled={saving}
             />
-          </div>
+          </div>)}
         </CardContent>
       </Card>
 

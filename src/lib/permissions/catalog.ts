@@ -231,7 +231,7 @@ export function sentence(obj: ObjectDef, p: PermissionsV2): string {
     if (a.hidden || a.key === 'ver') continue;
     const v = o[a.key];
     const verb = a.label.toLowerCase();
-    if (a.kind === 'bool') parts.push(v ? verb.replace(/r$/, '') + (verb.endsWith('r') ? '' : '') : `não ${verb}`);
+    if (a.kind === 'bool') parts.push(v ? verb : `não ${verb}`);
     else parts.push(v === 'nenhum' ? `não ${verb}` : `${verb} ${PHRASE[v as Scope]}`);
   }
   return `${obj.label}: ${parts.join(', ')}`;

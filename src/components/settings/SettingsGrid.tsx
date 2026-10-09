@@ -42,8 +42,9 @@ interface SettingsItem {
   to: string;
   badge?: string;
   badgeVariant?: 'default' | 'info' | 'warning';
-  permission?: keyof ReturnType<typeof usePermissions>['permissions'];
+  permission?: 'canManageSettings' | 'canManageUsers' | 'canManageBilling' | 'canManageIntegrations' | 'manageAssignments' | 'canManageTeams' | 'canManageCustomerService';
   flag?: 'hasWhatsApp' | 'showAIFeatures';
+  v2Only?: boolean;
 }
 
 interface SettingsGroup {
@@ -73,6 +74,7 @@ const settingsGroups: SettingsGroup[] = [
     description: 'Gerencie usuários e controle de acesso',
     items: [
       { icon: UsersThree, label: 'Usuários & Permissões', description: 'Adicione membros e gerencie acessos', to: 'users', permission: 'canManageUsers' },
+      { icon: UsersThree, label: 'Equipes', description: 'Agrupe pessoas para permissões de equipe', to: 'teams', permission: 'canManageTeams', v2Only: true },
       { icon: Shield, label: 'Perfis de Permissão', description: 'Defina níveis de acesso personalizados', to: 'permissions', permission: 'canManageSettings' },
       { icon: ShuffleAngular, label: 'Atribuição automática', description: 'Round-robin de leads e privacidade de registros', to: 'round-robin', permission: 'manageAssignments' },
       { icon: Copy, label: 'Duplicatas', description: 'Regras para detecção de contatos duplicados', to: 'duplicates', permission: 'canManageSettings' },
@@ -90,7 +92,7 @@ const settingsGroups: SettingsGroup[] = [
       { icon: Sparkle, label: 'Seialz Intelligence', description: 'Configure captura, transcrição e detecções comportamentais', to: 'intelligence', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },
       { icon: Sparkle, label: 'Provedores de IA (BYOK)', description: 'Use suas próprias chaves OpenAI, Anthropic, Gemini ou ElevenLabs', to: 'ai-providers', permission: 'canManageIntegrations' },
       { icon: Code, label: 'API & Webhooks', description: 'Acesse a API e configure webhooks', to: 'api-webhooks', permission: 'canManageIntegrations' },
-      { icon: Headset, label: 'Atendimento', description: 'Regras de escopo da Inbox de Atendimento (CS)', to: 'customer-service', permission: 'canManageSettings' },
+      { icon: Headset, label: 'Atendimento', description: 'Regras de escopo da Inbox de Atendimento (CS)', to: 'customer-service', permission: 'canManageCustomerService' },
       { icon: ChatCircleDots, label: 'Webchat', description: 'Chat de captação para landing pages — leads caem direto no pipeline', to: 'webchat', badge: 'Novo', badgeVariant: 'info', permission: 'canManageIntegrations' },
     ],
   },
@@ -144,6 +146,7 @@ export function SettingsGrid() {
         items: group.items.filter((item) => {
           // Permission check
           if (item.permission && !permissions[item.permission]) return false;
+          if (item.v2Only && !permissions.rbacV2) return false;
           // Flag check
           if (item.flag && !flags[item.flag]) return false;
           // Search check
