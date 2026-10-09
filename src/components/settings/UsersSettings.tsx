@@ -58,6 +58,7 @@ interface UserMembership {
 interface PermissionProfile {
   id: string;
   name: string;
+  is_system?: boolean;
 }
 
 interface Invitation {
@@ -76,6 +77,10 @@ export function UsersSettings() {
   const { toast } = useToast();
   const [memberships, setMemberships] = useState<UserMembership[]>([]);
   const [permissionProfiles, setPermissionProfiles] = useState<PermissionProfile[]>([]);
+  const [amSystemAdmin, setAmSystemAdmin] = useState(false);
+  const assignableProfiles = amSystemAdmin
+    ? permissionProfiles
+    : permissionProfiles.filter((p: any) => !p.is_system);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -137,11 +142,13 @@ export function UsersSettings() {
     try {
       const { data, error } = await supabase
         .from('permission_profiles')
-        .select('id, name')
+        .select('id, name, is_system')
         .eq('organization_id', organization.id)
         .order('name');
 
       if (error) throw error;
+      const { data: isSysAdmin } = await supabase.rpc('is_org_system_admin' as never, { _org: organization.id } as never);
+      setAmSystemAdmin(isSysAdmin === true);
       setPermissionProfiles(data || []);
       
       // Set default to Sales Rep or first profile
@@ -552,7 +559,8 @@ export function UsersSettings() {
                           <TableCell className="font-medium">{membership.users?.full_name}</TableCell>
                           <TableCell>{membership.users?.email}</TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
-                            {membership.user_id === userProfile?.id ? (
+                            {membership.user_id === userProfile?.id ||
+                              (!amSystemAdmin && permissionProfiles.find((p: any) => p.id === membership.permission_profile_id)?.is_system) ? (
                               <Badge variant="outline">
                                 {membership.permission_profiles?.name || 'Sem perfil'}
                               </Badge>
@@ -566,7 +574,7 @@ export function UsersSettings() {
                                   <SelectValue placeholder="Sem perfil" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {permissionProfiles.map((profile) => (
+                                  {assignableProfiles.map((profile) => (
                                     <SelectItem key={profile.id} value={profile.id}>
                                       {profile.name}
                                     </SelectItem>
@@ -629,7 +637,7 @@ export function UsersSettings() {
                     <SelectValue placeholder="Selecione um perfil" />
                   </SelectTrigger>
                   <SelectContent>
-                    {permissionProfiles.map((profile) => (
+                    {assignableProfiles.map((profile) => (
                       <SelectItem key={profile.id} value={profile.id}>
                         {profile.name}
                       </SelectItem>
@@ -732,7 +740,7 @@ export function UsersSettings() {
                     <SelectValue placeholder="Selecione um perfil" />
                   </SelectTrigger>
                   <SelectContent>
-                    {permissionProfiles.map((profile) => (
+                    {assignableProfiles.map((profile) => (
                       <SelectItem key={profile.id} value={profile.id}>
                         {profile.name}
                       </SelectItem>
@@ -759,7 +767,7 @@ export function UsersSettings() {
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         user={editingUser}
-        permissionProfiles={permissionProfiles}
+        permissionProfiles={assignableProfiles}
         onSaved={fetchMemberships}
       />
     </Card>

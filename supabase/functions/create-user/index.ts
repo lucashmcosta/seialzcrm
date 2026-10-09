@@ -100,6 +100,32 @@ serve(async (req) => {
       );
     }
 
+    // A4: only the org system admin may create users with the system (Admin) profile
+    const { data: targetProfile } = await supabaseAdmin
+      .from('permission_profiles')
+      .select('id, is_system, organization_id')
+      .eq('id', permission_profile_id)
+      .maybeSingle();
+    if (!targetProfile || targetProfile.organization_id !== organization_id) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid permission profile' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (targetProfile.is_system) {
+      const { data: requesterProfile } = await supabaseAdmin
+        .from('permission_profiles')
+        .select('is_system')
+        .eq('id', membership.permission_profile_id)
+        .maybeSingle();
+      if (!requesterProfile?.is_system) {
+        return new Response(
+          JSON.stringify({ error: 'Only the organization Admin can assign the Admin profile' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     // Check subscription seat limit
     const { data: subscription, error: subError } = await supabaseAdmin
       .from('subscriptions')
