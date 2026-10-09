@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
+import { useThreadPerms, DENY_CLOSE, DENY_ASSIGN } from '@/hooks/useThreadPerms';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { toErrorMessageString } from "@/lib/errorMessage";
 
@@ -801,6 +803,7 @@ function DesktopMessagesList() {
   const hookedThreadBusinessContext = useThreadBusinessContext(selectedThreadId);
   const selectedThreadBusinessContext: ThreadBusinessContext =
     hookedThreadBusinessContext ?? 'sales';
+  const threadPerms = useThreadPerms(selectedThread ? { assigned_user_id: selectedThread.assigned_user_id ?? null, business_context: selectedThreadBusinessContext } : null);
 
   // ---------------------------------------------------------------------------
   // Fase 2.5 — Route Comercial da thread selecionada (SOMENTE LEITURA).
@@ -2158,18 +2161,20 @@ function DesktopMessagesList() {
                             {locale === 'pt-BR' ? 'Atribuição' : 'Assignment'}
                           </DropdownMenuLabel>
                           {(!selectedThread.assigned_user_id || selectedThread.assigned_user_id !== userProfile?.id) && selectedThread.status !== 'resolved' && (
-                            <DropdownMenuItem onClick={() => handleTakeOver(selectedThread.id)}>
+                            <DropdownMenuItem disabled={!threadPerms.canAssign} title={threadPerms.canAssign ? undefined : DENY_ASSIGN} onClick={() => handleTakeOver(selectedThread.id)}>
                               <UserCheck className="w-4 h-4 mr-2" />
                               {locale === 'pt-BR' ? 'Assumir conversa' : 'Take over'}
                             </DropdownMenuItem>
                           )}
                           <div className="px-2 py-1.5">
+                            <PermissionGate allowed={threadPerms.canAssign} reason={DENY_ASSIGN} className="w-full">
                             <OwnerSelector
                               value={selectedThread.assigned_user_id}
                               onChange={(userId) => handleAssign(selectedThread.id, userId)}
                               size="sm"
                               placeholder={locale === 'pt-BR' ? 'Atribuir a...' : 'Assign to...'}
                             />
+                            </PermissionGate>
                           </div>
 
                           <DropdownMenuSeparator />
@@ -2179,7 +2184,7 @@ function DesktopMessagesList() {
                             {locale === 'pt-BR' ? 'Conversa' : 'Conversation'}
                           </DropdownMenuLabel>
                           {['open', 'awaiting_client', 'in_progress'].includes(selectedThread.status) && (
-                            <DropdownMenuItem onClick={() => handleResolve(selectedThread.id)}>
+                            <DropdownMenuItem disabled={!threadPerms.canClose} title={threadPerms.canClose ? undefined : DENY_CLOSE} onClick={() => handleResolve(selectedThread.id)}>
                               <CheckCircle className="w-4 h-4 mr-2" />
                               {locale === 'pt-BR' ? 'Resolver conversa' : 'Resolve'}
                             </DropdownMenuItem>

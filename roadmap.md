@@ -44,3 +44,11 @@
 - [x] B6 simulação
 - [ ] B7 ligar para todos com foto antes/depois
 - [ ] Relatório final + lista de conferência manual (Admin e operador)
+
+## Permissões — ajustes pós-ligação (2026-10-09)
+- [x] Perfis não salvos pela tela: Encerrar/Atribuir = Ver (15 perfis, log)
+- [x] Consultor: causa investigada (salvo pela tela 04:44, autor [INCERTO]) — aguarda decisão do usuário
+- [x] Textos em português para rbac_* (avisos traduzidos automaticamente)
+- [x] Botões de conversa (Resolver, Assumir, Atribuir) desabilitados com dica — web e celular
+- [ ] Excluir/Novo em Contatos, Oportunidades e Tarefas desabilitados com dica — próxima rodada
+- [ ] Consultor: Atendimentos Ver = nenhum — aguarda decisão do usuário

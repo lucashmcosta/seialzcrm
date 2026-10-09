@@ -104,3 +104,30 @@ fn_permissions_from_legacy(l, privacy_on, telephony_v2_on) — versão de 2 argu
 rbac_v2_backfill(NULL) converteu 34 perfis; rbac_v2_set_global(true). Nenhum perfil comum ficou sem modelo novo.
 Conferência pós-ligação, 7 pessoas (2 por org; a blueviza tem só 1): agora × modelo antigo, 0 divergências.
 Emergência: SELECT rbac_v2_set_global(false);
+
+## 2026-10-09 13:51 UTC — Encerrar/Atribuir = Ver (pedido do usuário)
+Critério: perfis comuns que veem Atendimentos ou Conversas comerciais, com Encerrar ou Atribuir em "nenhum", e que NÃO foram salvos pela tela nova depois da ligação (updated_at = horário do backfill, 04:16:06). Gravado em permissions_v2; as chaves antigas foram atualizadas pelo trigger trg_permissions_v2_to_legacy, que também sincroniza a tela.
+Antes → depois (AT = Atendimentos, CC = Conversas comerciais; ver/encerrar/atribuir):
+| Org | Perfil | id | Pessoas | AT antes | CC antes | AT depois | CC depois |
+|---|---|---|---|---|---|---|---|
+| blueviza | Sales Rep | ebcc223d | 1 | todos/nenhum/nenhum | todos/todos/nenhum | todos/todos/todos | todos/todos/todos |
+| Blueviza | Sales Rep | 14850bec | 0 | todos/nenhum/nenhum | todos/todos/nenhum | todos/todos/todos | todos/todos/todos |
+| Campoar | Sales Rep | abe1bb98 | 12 | todos/nenhum/nenhum | todos/todos/nenhum | todos/todos/todos | todos/todos/todos |
+| Central Trabalhista | Juridico | a97b2f0c | 6 | todos/nenhum/nenhum | todos/todos/nenhum | todos/todos/todos | todos/todos/todos |
+| Minha Empresa | Sales Rep | 829a2afe | 0 | idem | idem | todos/todos/todos | todos/todos/todos |
+| Minha Empresa | Sales Rep | 0ddc9671 | 0 | idem | idem | todos/todos/todos | todos/todos/todos |
+| Minha Empresa | Sales Rep | 2a617e32 | 0 | idem | idem | todos/todos/todos | todos/todos/todos |
+| Minha Empresa | Sales Rep | 3965a937 | 0 | idem | idem | todos/todos/todos | todos/todos/todos |
+| MSM Soluções Metlálicas | Sales Rep | 24a34e5f | 0 | meus/nenhum/nenhum | meus/meus/nenhum | meus/meus/meus | meus/meus/meus |
+| Plamev | Sales Rep | 279a19c4 | 0 | idem | idem | todos/todos/todos | todos/todos/todos |
+| Squadra | Sales Rep | edf4d343 | 0 | idem | idem | todos/todos/todos | todos/todos/todos |
+| Squadra | Sales Rep | 4b1093f4 | 0 | idem | idem | todos/todos/todos | todos/todos/todos |
+| Viagi | Sales Rep | bba3f059 | 0 | idem | idem | todos/todos/todos | todos/todos/todos |
+| Viagi | Sales Rep | c479976b | 6 | idem | idem | todos/todos/todos | todos/todos/todos |
+| VIAGI | Sales Rep | 32350760 | 0 | idem | idem | todos/todos/todos | todos/todos/todos |
+Chaves antigas depois: can_close_threads=true, can_takeover_thread=true; manage_assignments segue false.
+Fora (salvos pela tela depois de 04:16): Consultor (Central, 04:44:42) e Customer Service (Viagi, 13:35:26).
+
+## Consultor (Central Trabalhista) — Atendimentos Ver = "nenhum"
+A conversão não gera "nenhum" para Ver (mínimo "meus"). O perfil foi salvo depois da ligação, às 04:44:42 UTC, pela tela nova, que é o único caminho que grava esse valor. Autor: [INCERTO]. permission_profiles não tem coluna nem auditoria de quem alterou, e os logs do servidor desse horário não estão mais disponíveis. Não alterado.
+Antes da ligação (modelo antigo, privacidade ligada, view_all_threads=false): Atendimentos = só as conversas atribuídas ao próprio consultor (5.790 das 6.927 de atendimento da org estão com algum dos 7 consultores), sem encerrar (can_close_threads=false) e sem reatribuir (takeover/escalate=false).

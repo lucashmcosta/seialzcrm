@@ -1,3 +1,4 @@
+import { rbacErrorMessage } from "@/lib/permissions/errors";
 import * as React from "react";
 
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
@@ -134,7 +135,15 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">;
 
-function toast({ ...props }: Toast) {
+function translateRbac<T extends { title?: unknown; description?: unknown }>(p: T): T {
+  const d = rbacErrorMessage(p.description);
+  const t = rbacErrorMessage(p.title);
+  if (!d && !t) return p;
+  return { ...p, ...(d ? { description: d } : {}), ...(t ? { title: t } : {}) };
+}
+
+function toast({ ...rawProps }: Toast) {
+  const props = translateRbac(rawProps);
   const id = genId();
 
   const update = (props: ToasterToast) =>
