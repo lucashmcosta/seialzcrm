@@ -14892,6 +14892,10 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: undefined
       }
+      fn_thread_context_preview: {
+        Args: { _created: string; _endpoint: string }
+        Returns: string
+      }
       get_dashboard_stats: {
         Args: {
           p_days_ago?: number
