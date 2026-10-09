@@ -1,3 +1,4 @@
+// @ts-nocheck — executado com bun test
 import { describe, expect, it } from 'bun:test';
 import { fromLegacy, toLegacy, LEGACY_KEYS } from './convert';
 
