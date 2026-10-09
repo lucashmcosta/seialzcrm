@@ -42,6 +42,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
   const location = useLocation();
   const { signOut } = useAuth();
   const { organization, userProfile, locale } = useOrganization();
+  const isPlatformAdmin = useIsPlatformAdmin();
   const { permissions } = usePermissions();
   const { hasWhatsApp } = useWhatsAppIntegration();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');

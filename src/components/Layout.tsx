@@ -43,6 +43,7 @@ export function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const { organization, userProfile, locale, loading } = useOrganization();
+  const isPlatformAdmin = useIsPlatformAdmin();
   const { permissions } = usePermissions();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { hasWhatsApp } = useWhatsAppIntegration();
