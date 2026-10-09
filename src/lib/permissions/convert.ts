@@ -18,7 +18,8 @@ function recordFromLegacy(l: LegacyPermissions, viewAll: boolean, edit: boolean,
   };
 }
 
-export function fromLegacy(l: LegacyPermissions, privacyOn: boolean): PermissionsV2 {
+/** telephonyV2On: telefonia nova ativa na org. Sem ela, hoje todo membro vê todas as chamadas. */
+export function fromLegacy(l: LegacyPermissions, privacyOn: boolean, telephonyV2On = true): PermissionsV2 {
   const threadsVer: Scope = b(l.view_all_threads) || !privacyOn ? 'todos' : 'meus';
   const csq = b(l.can_manage_cs_queue);
   const flag = threadsVer === 'todos' || csq;
@@ -48,7 +49,7 @@ export function fromLegacy(l: LegacyPermissions, privacyOn: boolean): Permission
         atribuir: b(l.can_takeover_thread) || b(l.can_escalate_thread) ? threadsVer : 'nenhum',
         sem_responsavel: flag,
       },
-      chamadas: { ver: b(l.can_view_all_calls) ? 'todos' : 'meus', exportar: 'nenhum' },
+      chamadas: { ver: b(l.can_view_all_calls) || !telephonyV2On ? 'todos' : 'meus', exportar: 'nenhum' },
       tarefas: { ver: 'todos', criar: true, editar: 'todos', excluir: 'todos', atribuir: 'todos' },
     },
     ferramentas,
