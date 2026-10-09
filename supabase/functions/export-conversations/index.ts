@@ -43,34 +43,20 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Verify user belongs to org
-    const { data: userOrg } = await supabase
-      .from('user_organizations')
+    // A6: caller must have an active membership with the org system (Admin) profile
+    let hasAccess = false
+    const { data: userRecord } = await supabase
+      .from('users')
       .select('id')
-      .eq('user_id', user.id)
-      .eq('organization_id', organization_id)
-      .eq('is_active', true)
+      .eq('auth_user_id', user.id)
       .maybeSingle()
-
-    // Also check via users table (auth_user_id mapping)
-    let hasAccess = !!userOrg
-    if (!hasAccess) {
-      const { data: userRecord } = await supabase
-        .from('users')
-        .select('id')
-        .eq('auth_user_id', user.id)
-        .maybeSingle()
-
-      if (userRecord) {
-        const { data: orgCheck } = await supabase
-          .from('user_organizations')
-          .select('id')
-          .eq('user_id', userRecord.id)
-          .eq('organization_id', organization_id)
-          .eq('is_active', true)
-          .maybeSingle()
-        hasAccess = !!orgCheck
-      }
+    if (userRecord) {
+      const { data: isAdmin } = await supabase.rpc('has_org_role', {
+        _user_id: userRecord.id,
+        _org_id: organization_id,
+        _role: 'admin',
+      })
+      hasAccess = isAdmin === true
     }
 
     if (!hasAccess) {
