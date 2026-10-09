@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { fromLegacy, toLegacy, LEGACY_KEYS } from './convert';
 
 const allTrue = Object.fromEntries(LEGACY_KEYS.map((k) => [k, true]));
@@ -29,7 +29,7 @@ describe('conversão de permissões', () => {
       const back = toLegacy(fromLegacy({ [k]: true }, true));
       if (['can_view_contacts', 'can_view_opportunities'].includes(k)) continue;
       if (k === 'can_delete_contacts' || k === 'can_delete_opportunities') { expect(back[k]).toBe(false); continue; }
-      expect(back[k], k).toBe(true);
+      expect(back[k]).toBe(true);
     }
   });
 
