@@ -3377,6 +3377,75 @@ export type Database = {
           },
         ]
       }
+      cs_round_robin_members: {
+        Row: {
+          active: boolean
+          created_at: string
+          last_assigned_at: string | null
+          organization_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          last_assigned_at?: string | null
+          organization_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          last_assigned_at?: string | null
+          organization_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cs_round_robin_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cs_round_robin_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cs_routing_errors: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          organization_id: string | null
+          stage: string
+          thread_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          organization_id?: string | null
+          stage: string
+          thread_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          organization_id?: string | null
+          stage?: string
+          thread_id?: string | null
+        }
+        Relationships: []
+      }
       custom_field_definitions: {
         Row: {
           created_at: string | null
@@ -10079,6 +10148,7 @@ export type Database = {
         Row: {
           created_at: string | null
           cs_inbox_includes_service_endpoints: boolean
+          cs_round_robin_enabled: boolean
           default_currency: string | null
           default_locale: string | null
           duplicate_check_mode:
@@ -10110,6 +10180,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           cs_inbox_includes_service_endpoints?: boolean
+          cs_round_robin_enabled?: boolean
           default_currency?: string | null
           default_locale?: string | null
           duplicate_check_mode?:
@@ -10143,6 +10214,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           cs_inbox_includes_service_endpoints?: boolean
+          cs_round_robin_enabled?: boolean
           default_currency?: string | null
           default_locale?: string | null
           duplicate_check_mode?:
@@ -14294,6 +14366,7 @@ export type Database = {
       assign_round_robin:
         | { Args: { _org_id: string }; Returns: string }
         | { Args: { _org_id: string; _queue: string }; Returns: string }
+      can_manage_cs_round_robin: { Args: { _org: string }; Returns: boolean }
       can_manage_integrations_in_org: {
         Args: { _org_id: string }
         Returns: boolean
@@ -14305,6 +14378,10 @@ export type Database = {
       can_manage_teams: { Args: { _org: string }; Returns: boolean }
       can_on_record: {
         Args: { _acao: string; _obj: string; _org: string; _resp: string[] }
+        Returns: boolean
+      }
+      can_receive_cs: {
+        Args: { _org: string; _user: string }
         Returns: boolean
       }
       can_review_contact_documents: {
@@ -15141,6 +15218,10 @@ export type Database = {
       }
       normalize_identity_digits: { Args: { _value: string }; Returns: string }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
+      perms_v2_for_user: {
+        Args: { _org: string; _user: string }
+        Returns: Json
+      }
       populate_communication_endpoints_from_v2_senders: {
         Args: never
         Returns: {
