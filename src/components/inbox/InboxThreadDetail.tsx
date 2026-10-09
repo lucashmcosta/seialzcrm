@@ -18,6 +18,8 @@ import { Link } from 'react-router-dom';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 import { endpointPurposeLabel, formatEndpointIdentity } from '@/lib/whatsappEndpointDisplay';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
+import { useThreadPerms, DENY_CLOSE, DENY_ASSIGN } from '@/hooks/useThreadPerms';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
 
 interface Props {
   threadId: string | null;
@@ -52,6 +54,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
   const { thread, history, latestWonOpportunity, loading, refresh } = useInboxThread(threadId);
   const { organization } = useOrganizationContext();
   const { toast } = useToast();
+  const { canClose, canAssign } = useThreadPerms(thread as any);
   const [replyTo, setReplyTo] = useState<InboxMessageRow | null>(null);
   const [reassigning, setReassigning] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -254,6 +257,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                 Reabrir
               </Button>
             ) : (
+<PermissionGate allowed={canClose} reason={DENY_CLOSE}>
               <Button
                 variant="outline"
                 size="sm"
@@ -264,6 +268,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                 <Check size={14} weight="bold" />
                 Resolver
               </Button>
+              </PermissionGate>
             )}
             {organization?.id && (
               <WidgetsTrigger size="xs" screen="inbox" context={{ screen: 'inbox', organizationId: organization.id, threadId: thread.id, contactId: thread.contact_id ?? null }} />
@@ -333,12 +338,14 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
 
             <div className="mb-4">
               <div className="text-[11px] text-muted-foreground mb-1.5">Atribuída a</div>
+<PermissionGate allowed={canAssign} reason={DENY_ASSIGN} className="w-full">
               <OwnerSelector
                 value={thread.assigned_user_id || null}
                 onChange={handleAssign}
                 size="sm"
                 placeholder={reassigning ? 'Atribuindo…' : 'Sem responsável'}
               />
+              </PermissionGate>
             </div>
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
