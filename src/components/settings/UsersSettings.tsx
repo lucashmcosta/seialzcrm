@@ -767,7 +767,7 @@ export function UsersSettings() {
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         user={editingUser}
-        permissionProfiles={permissionProfiles}
+        permissionProfiles={assignableProfiles}
         onSaved={fetchMemberships}
       />
     </Card>
