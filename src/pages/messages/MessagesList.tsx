@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { useThreadPerms, DENY_CLOSE, DENY_ASSIGN } from '@/hooks/useThreadPerms';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { toErrorMessageString } from "@/lib/errorMessage";
 
@@ -2166,12 +2167,14 @@ function DesktopMessagesList() {
                             </DropdownMenuItem>
                           )}
                           <div className="px-2 py-1.5">
+                            <PermissionGate allowed={threadPerms.canAssign} reason={DENY_ASSIGN} className="w-full">
                             <OwnerSelector
                               value={selectedThread.assigned_user_id}
                               onChange={(userId) => handleAssign(selectedThread.id, userId)}
                               size="sm"
                               placeholder={locale === 'pt-BR' ? 'Atribuir a...' : 'Assign to...'}
                             />
+                            </PermissionGate>
                           </div>
 
                           <DropdownMenuSeparator />
