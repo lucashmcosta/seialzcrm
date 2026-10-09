@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+// @ts-nocheck — executado com bun test
+import { describe, it, expect } from 'bun:test';
 import { rbacErrorMessage, RBAC_FALLBACK } from './errors';
 describe('rbacErrorMessage', () => {
   it('traduz códigos conhecidos', () => {
