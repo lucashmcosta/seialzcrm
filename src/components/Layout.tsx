@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Buildings,
@@ -42,6 +43,7 @@ export function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const { organization, userProfile, locale, loading } = useOrganization();
+  const isPlatformAdmin = useIsPlatformAdmin();
   const { permissions } = usePermissions();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { hasWhatsApp } = useWhatsAppIntegration();
@@ -102,7 +104,7 @@ export function Layout({ children }: LayoutProps) {
     if (permissions.canManageSettings) {
       sysItems.push({ label: t('nav.settings'), href: '/settings', icon: GearSix });
     }
-    if (userProfile?.is_platform_admin) {
+    if (isPlatformAdmin) {
       sysItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: ShieldCheck });
     }
     sysItems.push({ label: 'Central de Ajuda', href: '/docs', icon: Question });
@@ -184,7 +186,7 @@ export function Layout({ children }: LayoutProps) {
     footerItems.push({ label: t('nav.settings'), href: '/settings', icon: GearSix });
   }
 
-  if (userProfile?.is_platform_admin) {
+  if (isPlatformAdmin) {
     footerItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: ShieldCheck });
   }
 

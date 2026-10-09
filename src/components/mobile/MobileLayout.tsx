@@ -1,4 +1,5 @@
 import { ReactNode, useState } from 'react';
+import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { SeialzLogo } from '@/components/SeialzLogo';
@@ -41,6 +42,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
   const location = useLocation();
   const { signOut } = useAuth();
   const { organization, userProfile, locale } = useOrganization();
+  const isPlatformAdmin = useIsPlatformAdmin();
   const { permissions } = usePermissions();
   const { hasWhatsApp } = useWhatsAppIntegration();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
@@ -85,7 +87,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
   if (permissions.canManageSettings) {
     systemItems.push({ label: t('nav.settings'), href: '/settings', icon: GearSix });
   }
-  if (userProfile?.is_platform_admin) {
+  if (isPlatformAdmin) {
     systemItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: ShieldCheck });
   }
   systemItems.push({ label: 'Central de Ajuda', href: '/docs', icon: Question });
