@@ -233,6 +233,7 @@ const OpportunityCloseSettings = lazyWithRetry("OpportunityCloseSettings", () =>
 const DuplicatePreventionSettings = lazyWithRetry("DuplicatePreventionSettings", () => import("./components/settings/DuplicatePreventionSettings"), "DuplicatePreventionSettings");
 const CustomFieldsSettings = lazyWithRetry("CustomFieldsSettings", () => import("./components/settings/CustomFieldsSettings"), "CustomFieldsSettings");
 const TagsSettings = lazyWithRetry("TagsSettings", () => import("./components/settings/TagsSettings"), "TagsSettings");
+const TeamsSettings = lazyWithRetry("TeamsSettings", () => import("./components/settings/TeamsSettings"), "TeamsSettings");
 const PermissionProfilesSettings = lazyWithRetry("PermissionProfilesSettings", () => import("./components/settings/PermissionProfilesSettings"), "PermissionProfilesSettings");
 const BillingSettings = lazyWithRetry("BillingSettings", () => import("./components/settings/BillingSettings"), "BillingSettings");
 const IntegrationsSettings = lazyWithRetry("IntegrationsSettings", () => import("./components/settings/IntegrationsSettings"), "IntegrationsSettings");
@@ -703,6 +704,7 @@ const App = () => (
             <Route path="theme" element={<ThemeSettings />} />
             <Route path="users" element={<UsersSettings />} />
             <Route path="permissions" element={<PermissionProfilesSettings />} />
+            <Route path="teams" element={<TeamsSettings />} />
             <Route path="billing" element={<BillingSettings />} />
             <Route path="pipeline" element={<PipelineSettings />} />
             <Route path="opportunity-close" element={<OpportunityCloseSettings />} />
