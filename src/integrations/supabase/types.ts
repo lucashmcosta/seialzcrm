@@ -14695,6 +14695,10 @@ export type Database = {
           match_kind: string
         }[]
       }
+      fn_revoke_auth_sessions: {
+        Args: { _auth_user_id: string }
+        Returns: undefined
+      }
       fn_schedule_retry: {
         Args: { p_error: string; p_job_id: string }
         Returns: undefined
