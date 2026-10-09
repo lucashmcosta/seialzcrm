@@ -107,6 +107,27 @@ export type Database = {
         }
         Relationships: []
       }
+      _rbac_v2_policy_backup: {
+        Row: {
+          policyname: string
+          qual: string | null
+          tablename: string
+          with_check: string | null
+        }
+        Insert: {
+          policyname: string
+          qual?: string | null
+          tablename: string
+          with_check?: string | null
+        }
+        Update: {
+          policyname?: string
+          qual?: string | null
+          tablename?: string
+          with_check?: string | null
+        }
+        Relationships: []
+      }
       activities: {
         Row: {
           activity_type: Database["public"]["Enums"]["activity_type"]
@@ -14282,6 +14303,10 @@ export type Database = {
         Returns: boolean
       }
       can_manage_teams: { Args: { _org: string }; Returns: boolean }
+      can_on_record: {
+        Args: { _acao: string; _obj: string; _org: string; _resp: string[] }
+        Returns: boolean
+      }
       can_review_contact_documents: {
         Args: { _contact_id: string }
         Returns: boolean
@@ -15104,6 +15129,8 @@ export type Database = {
         Args: { p_batch: string; p_loser: string; p_winner: string }
         Returns: undefined
       }
+      my_perms_v2: { Args: { _org: string }; Returns: Json }
+      my_team_user_ids: { Args: { _org: string }; Returns: string[] }
       nammux_contact_contract_audit_v1: {
         Args: { _organization_id: string }
         Returns: Json
@@ -15181,11 +15208,31 @@ export type Database = {
         Returns: Json
       }
       prune_intelligence_worker_runs: { Args: never; Returns: undefined }
+      rbac_check: {
+        Args: {
+          _acao: string
+          _obj: string
+          _org: string
+          _resp: string[]
+          ctx: Json
+        }
+        Returns: boolean
+      }
+      rbac_ctx: { Args: never; Returns: Json }
+      rbac_flag: {
+        Args: { _org: string; _path: string[]; ctx: Json }
+        Returns: boolean
+      }
+      rbac_full_perms: { Args: never; Returns: Json }
+      rbac_thread_obj: { Args: { _bc: string }; Returns: string }
       rbac_v2_backfill: {
         Args: { _org?: string; _recompute?: boolean }
         Returns: number
       }
       rbac_v2_enabled: { Args: { _org: string }; Returns: boolean }
+      rbac_v2_global_on: { Args: never; Returns: boolean }
+      rbac_v2_on: { Args: { _org: string }; Returns: boolean }
+      rbac_v2_org_ids: { Args: never; Returns: string[] }
       rbac_v2_set_global: { Args: { _on: boolean }; Returns: undefined }
       reassign_thread: {
         Args: { _reason?: string; _thread_id: string; _to_user_id: string }
