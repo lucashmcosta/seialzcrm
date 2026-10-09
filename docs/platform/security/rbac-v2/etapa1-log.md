@@ -152,3 +152,10 @@ Rollbacks salvos antes de cada item: `rollback/cs-rr-{1-estrutura,2-escolha,3-re
 Verificação (transação desfeita, Central): off dono sem acesso → sem responsável ✔; off dono com acesso → dono ✔; rodízio comercial não chamado ✔; histórico na criação ✔; reabre → quem atendia ✔; reabre pausado → rodízio ✔; ligado nova → elegível com menos abertas (sem acesso ignorado) ✔; ninguém disponível → sem responsável ✔; reabre com responsável desativado → rodízio ✔; acerto simulado: 9 conversas fora ✔; comercial herda dono como hoje ✔; erro forçado → gravada sem responsável + erro registrado ✔.
 Estado final: rodízio do Atendimento desligado em todas (0 orgs), 0 membros.
 Efeito imediato (proteção com rodízio desligado): hoje 1 conversa de Atendimento aberta e 5.787 encerradas estão com pessoas sem acesso ao Atendimento (Consultores da Central); se esses clientes voltarem a falar, a conversa reabre sem responsável.
+
+## 2026-10-09 18:30–18:36 UTC — Central: acerto com lista vazia e reacerto
+- Acerto de 18:30:15 UTC (lista vazia): 6 conversas → "Sem responsável" (antes: Bruna 2, Luyza 2, Tamires 1, Eduarda 1).
+- Reabertura conferida: a busca do último responsável NÃO ignorava entradas "sem responsável" (pegava NULL). Ajustada: `to_user_id IS NOT NULL` → pega a última PESSOA. f71089fc (resolvida) voltará para a Luyza se reabrir.
+- Reacerto (5 abertas, lista Luyza/Mariane/Bruna): Bruna 4 (30803202, 62aff697, 55d791ba, 910f6512), Luyza 1 (c54fa9e9); todas "Devolvida para quem atendia"; 0 rodízio; 0 sem responsável. Sem notificações nem envios. Desfazer: `rollback/cs-rr-5-reacerto-e-trava.sql`.
+- Trava: `cs_round_robin_enable` recusa com `cs_rr_empty_list` sem ninguém ativo na lista; tela desabilita o interruptor com dica e avisa se a lista esvaziar com o rodízio ligado.
+- Números conferidos (Abertas / Hoje / Último): Bruna 4/4/18:35 UTC; Luyza 1/1/18:35 UTC; Mariane 0/0/nunca.
