@@ -222,6 +222,7 @@ export function MobileMessagesList() {
   const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'] });
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId);
+  const threadPerms = useThreadPerms(selectedThread ? { assigned_user_id: (selectedThread as any).assigned_user_id ?? null, business_context: selectedThreadBusinessContext ?? 'sales' } : null);
 
   // Set default filter
   useEffect(() => {

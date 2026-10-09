@@ -802,6 +802,7 @@ function DesktopMessagesList() {
   const hookedThreadBusinessContext = useThreadBusinessContext(selectedThreadId);
   const selectedThreadBusinessContext: ThreadBusinessContext =
     hookedThreadBusinessContext ?? 'sales';
+  const threadPerms = useThreadPerms(selectedThread ? { assigned_user_id: selectedThread.assigned_user_id ?? null, business_context: selectedThreadBusinessContext } : null);
 
   // ---------------------------------------------------------------------------
   // Fase 2.5 — Route Comercial da thread selecionada (SOMENTE LEITURA).
