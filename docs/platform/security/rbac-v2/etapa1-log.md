@@ -140,3 +140,15 @@ Antes da ligação (modelo antigo, privacidade ligada, view_all_threads=false): 
 - Notificações: 2 (uma resumo por pessoa). Dono do contato não alterado; nenhuma mensagem enviada.
 - Conferência: 0 conversas de outras organizações, 0 de outro tipo; restam 0 nesse critério.
 - Desfazer: rollback/bulk-assign-2026-10-09.sql
+
+## Rodízio do Atendimento (2026-10-09 ~18:30 UTC)
+Rollbacks salvos antes de cada item: `rollback/cs-rr-{1-estrutura,2-escolha,3-regras,4-acerto}.sql`.
+1. Estrutura — `organizations.cs_round_robin_enabled` (false), `cs_round_robin_members`, `cs_routing_errors` (só service_role), `perms_v2_for_user`, `can_receive_cs`, `can_manage_cs_round_robin`. OK.
+2. Escolha — `assign_cs_round_robin` (menos abertas → last_assigned_at → id; SKIP LOCKED; só cs_round_robin_members). OK.
+3. Regras — `trg_threads_round_robin` sai cedo quando o contexto (business_context ou derivado do endpoint) é customer_service; resto idêntico. Novo `trg_zy_cs_assignment` (BEFORE INSERT, após autofill) + `trg_cs_assignment_log` (AFTER INSERT, histórico). `trg_messages_smart_reopen` ganhou ramo customer_service (último responsável pelo histórico → rodízio do Atendimento → sem responsável); ramo comercial idêntico. Erros → sem responsável + linha em cs_routing_errors.
+4. Acerto — `cs_round_robin_overview/preview/enable/disable`. Não executado.
+5. Tela — abas Comercial (intacta) / Atendimento; card de Configurações atualizado.
+
+Verificação (transação desfeita, Central): off dono sem acesso → sem responsável ✔; off dono com acesso → dono ✔; rodízio comercial não chamado ✔; histórico na criação ✔; reabre → quem atendia ✔; reabre pausado → rodízio ✔; ligado nova → elegível com menos abertas (sem acesso ignorado) ✔; ninguém disponível → sem responsável ✔; reabre com responsável desativado → rodízio ✔; acerto simulado: 9 conversas fora ✔; comercial herda dono como hoje ✔; erro forçado → gravada sem responsável + erro registrado ✔.
+Estado final: rodízio do Atendimento desligado em todas (0 orgs), 0 membros.
+Efeito imediato (proteção com rodízio desligado): hoje 1 conversa de Atendimento aberta e 5.787 encerradas estão com pessoas sem acesso ao Atendimento (Consultores da Central); se esses clientes voltarem a falar, a conversa reabre sem responsável.
