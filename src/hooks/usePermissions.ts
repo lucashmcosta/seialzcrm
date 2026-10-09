@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOrganization } from './useOrganization';
+import { toLegacy } from '@/lib/permissions/convert';
+import type { PermissionsV2, Scope } from '@/lib/permissions/types';
 
 export interface Permissions {
   canViewContacts: boolean;
@@ -25,6 +27,11 @@ export interface Permissions {
   canViewAllCalls: boolean;
   canManageTelephony: boolean;
   canTransferCalls: boolean;
+  // RBAC v2 (só preenchidos quando o interruptor está ligado para a org)
+  rbacV2: boolean;
+  v2: PermissionsV2 | null;
+  canManageTeams: boolean;
+  canManageCustomerService: boolean;
 }
 
 const defaultPermissions: Permissions = {
@@ -48,7 +55,23 @@ const defaultPermissions: Permissions = {
   canViewAllCalls: false,
   canManageTelephony: false,
   canTransferCalls: false,
+  rbacV2: false,
+  v2: null,
+  canManageTeams: false,
+  canManageCustomerService: false,
 };
+
+/** Lê um caminho do modelo novo, ex.: 'dados.contatos.ver' ou 'ferramentas.importar'. */
+export function permAt(v2: PermissionsV2 | null, path: string): Scope | boolean | undefined {
+  if (!v2) return undefined;
+  return path.split('.').reduce<any>((o, k) => (o == null ? o : o[k]), v2);
+}
+/** true se o caminho concede algo (bool true ou escopo diferente de 'nenhum'). Sem v2 → fallback. */
+export function canV2(p: Permissions, path: string, fallback = true): boolean {
+  if (!p.rbacV2) return fallback;
+  const v = permAt(p.v2, path);
+  return v === true || (typeof v === 'string' && v !== 'nenhum');
+}
 
 export function usePermissions() {
   const { user } = useAuth();
@@ -69,6 +92,42 @@ export function usePermissions() {
         .single();
 
       if (!membership) return defaultPermissions;
+
+      // RBAC v2: com o interruptor ligado, o banco devolve as permissões efetivas
+      // (perfil de sistema = tudo). As chaves antigas passam a ser derivadas delas.
+      const { data: v2On } = await supabase.rpc('rbac_v2_enabled', { _org: organization!.id });
+      if (v2On) {
+        const { data: eff } = await supabase.rpc('my_perms_v2', { _org: organization!.id });
+        if (!eff) return defaultPermissions;
+        const v2 = eff as unknown as PermissionsV2;
+        const l = toLegacy(v2);
+        return {
+          canViewContacts: !!l.can_view_contacts,
+          canEditContacts: !!l.can_edit_contacts,
+          canDeleteContacts: !!l.can_delete_contacts,
+          canViewOpportunities: !!l.can_view_opportunities,
+          canEditOpportunities: !!l.can_edit_opportunities,
+          canDeleteOpportunities: !!l.can_delete_opportunities,
+          canManageSettings: !!l.can_manage_settings,
+          canManageUsers: !!l.can_manage_users,
+          canManageBilling: !!l.can_manage_billing,
+          canManageIntegrations: !!l.can_manage_integrations,
+          viewAllContacts: !!l.view_all_contacts,
+          viewAllOpportunities: !!l.view_all_opportunities,
+          viewAllThreads: !!l.view_all_threads,
+          manageAssignments: !!l.manage_assignments,
+          roundRobinRecipient: !!l.round_robin_recipient,
+          canMakeCalls: !!l.can_make_calls,
+          canReceiveCalls: !!l.can_receive_calls,
+          canViewAllCalls: !!l.can_view_all_calls,
+          canManageTelephony: !!l.can_manage_telephony,
+          canTransferCalls: !!l.can_transfer_calls,
+          rbacV2: true,
+          v2,
+          canManageTeams: !!v2.administracao?.usuarios,
+          canManageCustomerService: !!v2.administracao?.config_atendimento,
+        };
+      }
 
       const { data: profile } = await supabase
         .from('permission_profiles')
@@ -100,6 +159,10 @@ export function usePermissions() {
         canViewAllCalls: perms.can_view_all_calls || false,
         canManageTelephony: perms.can_manage_telephony || false,
         canTransferCalls: perms.can_transfer_calls || false,
+        rbacV2: false,
+        v2: null,
+        canManageTeams: false,
+        canManageCustomerService: perms.can_manage_settings || false,
       };
     },
   });

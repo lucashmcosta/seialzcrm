@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { PermissionProfilesV2 } from './PermissionProfilesV2';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,7 +115,7 @@ const ALL_PERMISSION_KEYS = PERMISSION_GROUPS.flatMap((g) => g.permissions.map((
 const buildDefaultPermissions = (): Record<string, boolean> =>
   Object.fromEntries(ALL_PERMISSION_KEYS.map((k) => [k, false]));
 
-export function PermissionProfilesSettings() {
+function LegacyPermissionProfilesSettings() {
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
   const [profiles, setProfiles] = useState<PermissionProfile[]>([]);
@@ -374,3 +376,11 @@ export function PermissionProfilesSettings() {
     </>
   );
 }
+
+export function PermissionProfilesSettings() {
+  const { permissions, loading } = usePermissions();
+  if (loading) return null;
+  return permissions.rbacV2 ? <PermissionProfilesV2 /> : <LegacyPermissionProfilesSettings />;
+}
+
+export default PermissionProfilesSettings;

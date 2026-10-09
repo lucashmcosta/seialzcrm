@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useState, useEffect } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
@@ -106,6 +108,23 @@ export function UsersSettings() {
   // Edit user dialog state
   const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  // RBAC v2: coluna Equipes (somente leitura; gerenciadas em Configurações → Equipes)
+  const { permissions: v2perms } = usePermissions();
+  const { data: teamsByUser = {} } = useQuery({
+    queryKey: ['users-teams', organization?.id],
+    enabled: !!organization?.id && v2perms.rbacV2,
+    queryFn: async () => {
+      const [{ data: teams }, { data: tm }] = await Promise.all([
+        supabase.from('teams').select('id, name').eq('organization_id', organization!.id),
+        supabase.from('team_members').select('team_id, user_id').eq('organization_id', organization!.id),
+      ]);
+      const names = Object.fromEntries((teams ?? []).map((t) => [t.id, t.name]));
+      const map: Record<string, string[]> = {};
+      (tm ?? []).forEach((m) => { (map[m.user_id] ??= []).push(names[m.team_id] ?? '—'); });
+      return map;
+    },
+  });
 
   // Status filter
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -521,6 +540,7 @@ export function UsersSettings() {
                       <TableHead>Nome</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Perfil</TableHead>
+                      {v2perms.rbacV2 && <TableHead>Equipes</TableHead>}
                       <TableHead>{t('settings.status')}</TableHead>
                       <TableHead className="text-right">{t('common.actions')}</TableHead>
                     </TableRow>
@@ -583,6 +603,11 @@ export function UsersSettings() {
                               </Select>
                             )}
                           </TableCell>
+                          {v2perms.rbacV2 && (
+                            <TableCell className="text-xs text-muted-foreground">
+                              {(teamsByUser[membership.user_id] ?? []).join(', ') || '—'}
+                            </TableCell>
+                          )}
                           <TableCell>
                             <Badge variant={membership.is_active ? 'default' : 'secondary'}>
                               {membership.is_active ? t('settings.active') : t('settings.inactive')}

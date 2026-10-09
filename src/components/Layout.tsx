@@ -24,6 +24,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
 import { usePermissions } from '@/hooks/usePermissions';
+import { areaAllowed } from '@/components/RequirePerm';
 import { useTranslation } from '@/lib/i18n';
 import { Notifications } from '@/components/Notifications';
 import { ImpersonationBanner } from '@/components/admin/ImpersonationBanner';
@@ -109,6 +110,9 @@ export function Layout({ children }: LayoutProps) {
     }
     sysItems.push({ label: 'Central de Ajuda', href: '/docs', icon: Question });
     groups.push({ label: 'SISTEMA', items: sysItems });
+    // RBAC v2: some do menu o que o perfil não permite (sem efeito com o interruptor desligado)
+    for (const g of groups) g.items = g.items.filter((i) => areaAllowed(permissions, i.href));
+    groups.splice(0, groups.length, ...groups.filter((g) => g.items.length > 0));
 
     return (
       <div className="flex flex-col h-screen bg-background overflow-hidden">
@@ -178,6 +182,8 @@ export function Layout({ children }: LayoutProps) {
     href: '/inbox',
     icon: Headset,
   });
+
+  navItems.splice(0, navItems.length, ...navItems.filter((i) => areaAllowed(permissions, i.href)));
 
   // Build footer items
   const footerItems: NavItemType[] = [];
