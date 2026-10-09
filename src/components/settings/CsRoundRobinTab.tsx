@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toErrorMessageString } from '@/lib/errorMessage';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { RoundRobinPeopleList } from './RoundRobinPeopleList';
 
 interface Person {
   user_id: string;
@@ -37,14 +38,27 @@ export function CsRoundRobinTab() {
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<number | null>(null);
 
+  const [extra, setExtra] = useState<Record<string, { email: string; profile: string }>>({});
+
   const load = useCallback(async () => {
     if (!orgId) return;
     setLoading(true);
-    const { data, error } = await supabase.rpc('cs_round_robin_overview' as never, { _org: orgId } as never);
+    const [{ data, error }, uo] = await Promise.all([
+      supabase.rpc('cs_round_robin_overview' as never, { _org: orgId } as never),
+      supabase
+        .from('user_organizations')
+        .select('user_id, users:user_id ( email ), permission_profiles:permission_profile_id ( name )')
+        .eq('organization_id', orgId),
+    ]);
     if (error) toast.error(toErrorMessageString(error));
     const d = (data ?? {}) as { enabled?: boolean; people?: Person[] };
     setEnabled(!!d.enabled);
     setPeople(d.people ?? []);
+    const map: Record<string, { email: string; profile: string }> = {};
+    for (const r of ((uo.data ?? []) as any[])) {
+      if (r.user_id) map[r.user_id] = { email: r.users?.email ?? '', profile: r.permission_profiles?.name ?? 'Sem perfil' };
+    }
+    setExtra(map);
     setLoading(false);
   }, [orgId]);
 
@@ -142,33 +156,30 @@ export function CsRoundRobinTab() {
           <CardTitle className="text-lg">Equipe do Atendimento</CardTitle>
           <CardDescription>Desative para pausar, ex.: férias.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2">
-          {eligible.length === 0 && (
-            <p className="text-sm text-muted-foreground py-8 text-center">Ninguém com acesso ao Atendimento.</p>
-          )}
-          {eligible.map((p) => (
-            <div key={p.user_id} className="flex items-center justify-between gap-4 p-3 rounded-md border bg-card">
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{p.full_name}</p>
-                <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                  <span>Abertas agora: <strong className="text-foreground">{p.open_now}</strong></span>
-                  <span>Recebidas hoje: <strong className="text-foreground">{p.today}</strong></span>
-                  <span>7 dias: <strong className="text-foreground">{p.week}</strong></span>
-                  <span>Último: {p.last_at ? formatDistanceToNow(new Date(p.last_at), { addSuffix: true, locale: ptBR }) : 'nunca'}</span>
+        <CardContent>
+          <RoundRobinPeopleList
+            items={eligible.map((p) => ({ ...p, id: p.user_id, name: p.full_name, email: extra[p.user_id]?.email ?? '', profileName: extra[p.user_id]?.profile ?? 'Sem perfil', active: p.member_active }))}
+            blocked={blocked.map((p) => ({ ...p, id: p.user_id, name: p.full_name, email: extra[p.user_id]?.email ?? '', profileName: extra[p.user_id]?.profile ?? 'Sem perfil', active: false }))}
+            emptyText="Ninguém com acesso ao Atendimento."
+            renderBlocked={(p) => (
+              <p className="text-sm text-muted-foreground">{p.full_name} — perfil sem acesso ao Atendimento</p>
+            )}
+            renderRow={(p) => (
+              <div className="flex items-center justify-between gap-4 p-3 rounded-md border bg-card">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{p.full_name}</p>
+                  {p.email && <p className="text-xs text-muted-foreground truncate mt-0.5">{p.email}</p>}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+                    <span>Abertas agora: <strong className="text-foreground">{p.open_now}</strong></span>
+                    <span>Recebidas hoje: <strong className="text-foreground">{p.today}</strong></span>
+                    <span>7 dias: <strong className="text-foreground">{p.week}</strong></span>
+                    <span>Último: {p.last_at ? formatDistanceToNow(new Date(p.last_at), { addSuffix: true, locale: ptBR }) : 'nunca'}</span>
+                  </div>
                 </div>
+                <Switch checked={p.member_active} onCheckedChange={(v) => toggleMember(p, v)} />
               </div>
-              <Switch checked={p.member_active} onCheckedChange={(v) => toggleMember(p, v)} />
-            </div>
-          ))}
-          {blocked.length > 0 && (
-            <div className="pt-4 space-y-1">
-              {blocked.map((p) => (
-                <p key={p.user_id} className="text-sm text-muted-foreground">
-                  {p.full_name} — perfil sem acesso ao Atendimento
-                </p>
-              ))}
-            </div>
-          )}
+            )}
+          />
         </CardContent>
       </Card>
 
