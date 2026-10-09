@@ -131,3 +131,12 @@ Fora (salvos pela tela depois de 04:16): Consultor (Central, 04:44:42) e Custome
 ## Consultor (Central Trabalhista) — Atendimentos Ver = "nenhum"
 A conversão não gera "nenhum" para Ver (mínimo "meus"). O perfil foi salvo depois da ligação, às 04:44:42 UTC, pela tela nova, que é o único caminho que grava esse valor. Autor: [INCERTO]. permission_profiles não tem coluna nem auditoria de quem alterou, e os logs do servidor desse horário não estão mais disponíveis. Não alterado.
 Antes da ligação (modelo antigo, privacidade ligada, view_all_threads=false): Atendimentos = só as conversas atribuídas ao próprio consultor (5.790 das 6.927 de atendimento da org estão com algum dos 7 consultores), sem encerrar (can_close_threads=false) e sem reatribuir (takeover/escalate=false).
+
+## 2026-10-09 ~17:00 UTC — Atribuição em lote (Comercial sem responsável)
+- Viagi (b246ef6f…): 47 conversas → Ketlyn Vieira (Admin, vê Conversas comerciais "todos").
+- blueviza (f677a500…): 141 conversas → Lucas Costa (Admin, "todos").
+- Critério: abertas (status não resolved/closed), sem responsável, business_context 'sales' ou nulo.
+- Histórico: 188 linhas em thread_assignment_history com "Atribuída em lote pelo administrador".
+- Notificações: 2 (uma resumo por pessoa). Dono do contato não alterado; nenhuma mensagem enviada.
+- Conferência: 0 conversas de outras organizações, 0 de outro tipo; restam 0 nesse critério.
+- Desfazer: rollback/bulk-assign-2026-10-09.sql
