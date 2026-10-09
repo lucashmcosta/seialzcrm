@@ -137,11 +137,13 @@ export function UsersSettings() {
     try {
       const { data, error } = await supabase
         .from('permission_profiles')
-        .select('id, name')
+        .select('id, name, is_system')
         .eq('organization_id', organization.id)
         .order('name');
 
       if (error) throw error;
+      const { data: isSysAdmin } = await supabase.rpc('is_org_system_admin' as never, { _org: organization.id } as never);
+      setAmSystemAdmin(isSysAdmin === true);
       setPermissionProfiles(data || []);
       
       // Set default to Sales Rep or first profile
@@ -552,7 +554,8 @@ export function UsersSettings() {
                           <TableCell className="font-medium">{membership.users?.full_name}</TableCell>
                           <TableCell>{membership.users?.email}</TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
-                            {membership.user_id === userProfile?.id ? (
+                            {membership.user_id === userProfile?.id ||
+                              (!amSystemAdmin && permissionProfiles.find((p: any) => p.id === membership.permission_profile_id)?.is_system) ? (
                               <Badge variant="outline">
                                 {membership.permission_profiles?.name || 'Sem perfil'}
                               </Badge>
@@ -566,7 +569,7 @@ export function UsersSettings() {
                                   <SelectValue placeholder="Sem perfil" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {permissionProfiles.map((profile) => (
+                                  {assignableProfiles.map((profile) => (
                                     <SelectItem key={profile.id} value={profile.id}>
                                       {profile.name}
                                     </SelectItem>
@@ -629,7 +632,7 @@ export function UsersSettings() {
                     <SelectValue placeholder="Selecione um perfil" />
                   </SelectTrigger>
                   <SelectContent>
-                    {permissionProfiles.map((profile) => (
+                    {assignableProfiles.map((profile) => (
                       <SelectItem key={profile.id} value={profile.id}>
                         {profile.name}
                       </SelectItem>
@@ -732,7 +735,7 @@ export function UsersSettings() {
                     <SelectValue placeholder="Selecione um perfil" />
                   </SelectTrigger>
                   <SelectContent>
-                    {permissionProfiles.map((profile) => (
+                    {assignableProfiles.map((profile) => (
                       <SelectItem key={profile.id} value={profile.id}>
                         {profile.name}
                       </SelectItem>
