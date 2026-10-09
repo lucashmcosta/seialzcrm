@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useIsOrgSystemAdmin } from '@/hooks/useIsOrgSystemAdmin';
 // Fase 2.5 — UI Comercial (Route/número/provider). Somente leitura.
 import { RouteBadge, type EndpointState } from '@/components/messages/route/RouteIndicators';
 import { SalesRouteDetailsDialog } from '@/components/messages/route/SalesRouteDetailsDialog';
@@ -371,6 +372,7 @@ const getLastInboundTime = (
 
 function DesktopMessagesList() {
   const { organization, locale, userProfile } = useOrganization();
+  const isOrgSystemAdmin = useIsOrgSystemAdmin();
   const messageEditOn = useMessageEditFlag(organization?.id);
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { permissions } = usePermissions();
@@ -1943,7 +1945,7 @@ function DesktopMessagesList() {
                   {t('nav.messages')}
                 </h1>
                 <div className="flex items-center gap-2">
-                  <Button
+                  {isOrgSystemAdmin && <Button
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
@@ -1952,7 +1954,7 @@ function DesktopMessagesList() {
                     title={locale === 'pt-BR' ? 'Exportar conversas (oportunidades ganhas)' : 'Export conversations (won opportunities)'}
                   >
                     {isExporting ? <SpinnerGap className="w-4 h-4 animate-spin" /> : <DownloadSimple className="w-4 h-4" />}
-                  </Button>
+                  </Button>}
                   <Button
                     variant="outline"
                     size="icon"
