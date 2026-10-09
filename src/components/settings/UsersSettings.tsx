@@ -58,6 +58,7 @@ interface UserMembership {
 interface PermissionProfile {
   id: string;
   name: string;
+  is_system?: boolean;
 }
 
 interface Invitation {
