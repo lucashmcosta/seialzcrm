@@ -14363,6 +14363,7 @@ export type Database = {
         }
         Returns: Json
       }
+      assign_cs_round_robin: { Args: { _org: string }; Returns: string }
       assign_round_robin:
         | { Args: { _org_id: string }; Returns: string }
         | { Args: { _org_id: string; _queue: string }; Returns: string }
