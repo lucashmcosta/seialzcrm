@@ -76,6 +76,10 @@ export function UsersSettings() {
   const { toast } = useToast();
   const [memberships, setMemberships] = useState<UserMembership[]>([]);
   const [permissionProfiles, setPermissionProfiles] = useState<PermissionProfile[]>([]);
+  const [amSystemAdmin, setAmSystemAdmin] = useState(false);
+  const assignableProfiles = amSystemAdmin
+    ? permissionProfiles
+    : permissionProfiles.filter((p: any) => !p.is_system);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   
