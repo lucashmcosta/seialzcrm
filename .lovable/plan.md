@@ -1,43 +1,40 @@
-# Mensagens de permissão em português + botões bloqueados (sem mudar regras)
+# Atribuição em lote — Comercial sem responsável (Viagi e blueviza)
 
-## Item 3 — resultado da consulta (só leitura, nada alterado)
+## 1. Conferência (já feita, só leitura)
 
-Perfis comuns (fora o perfil de sistema) que veem Atendimentos ou Conversas comerciais, mas têm Encerrar ou Atribuir em "nenhum". AT = Atendimentos, CC = Conversas comerciais (ver / encerrar / atribuir).
+| Organização | id | Conversas abertas do Comercial sem responsável | Usuário ativo encontrado | Perfil | Vê Conversas comerciais |
+|---|---|---|---|---|---|
+| Viagi | b246ef6f… | 47 | Ketlyn Vieira (95697f6c…) — único "Ketlyn" | Admin (perfil de sistema) | Sim, "todos" |
+| blueviza | f677a500… | 141 | Lucas Costa (58ce5ec9…) — único "Lucas" | Admin (perfil de sistema) | Sim, "todos" |
 
-| Organização | Perfil | Pessoas | AT | CC |
-|---|---|---|---|---|
-| Campoar | Sales Rep | 12 | todos / nenhum / nenhum | todos / todos / nenhum |
-| Central Trabalhista | Consultor | 7 | nenhum / nenhum / nenhum | meus / meus / nenhum |
-| Central Trabalhista | Juridico | 6 | todos / nenhum / nenhum | todos / todos / nenhum |
-| Viagi | Sales Rep | 6 | todos / nenhum / nenhum | todos / todos / nenhum |
-| blueviza | Sales Rep | 1 | todos / nenhum / nenhum | todos / todos / nenhum |
-| Blueviza, Minha Empresa (4), Squadra (2), Plamev, VIAGI, Viagi (Sales Rep + Customer Service) | — | 0 cada | todos / nenhum / nenhum | todos / todos / nenhum |
-| MSM Soluções Metlálicas | Sales Rep | 0 | meus / nenhum / nenhum | meus / meus / nenhum |
+- Existem outras organizações com nome parecido (Blueviza, VIAGI e uma segunda Viagi); todas têm 0 conversas nesse critério e ficam fora.
+- Na Viagi também existem "Lucas Costa" e "Lucas Kim", mas não importam: na Viagi o destino é a Ketlyn.
+- Nenhuma parada foi necessária: um único nome em cada organização.
 
-Em resumo: 32 pessoas em 5 perfis em uso não conseguem atribuir em nenhum dos dois módulos, e não conseguem encerrar Atendimentos. Nada será corrigido automaticamente.
+## 2. O que será feito
 
-## Item 1 — Textos de erro
+Uma única operação no banco, por organização, com o id fixo da organização e da pessoa:
+- Conversas com `status` diferente de resolvida/encerrada, sem responsável, e `business_context` = 'sales' ou vazio.
+- Só o responsável da conversa muda. Dono do contato, status, mensagens e Atendimento/'other' não mudam.
+- O histórico de atribuição de cada conversa recebe o motivo "Atribuída em lote pelo administrador" (tipo `manual_assignment`).
+- Uma notificação resumo para cada pessoa: "47 conversas foram atribuídas a você" (Ketlyn) e "141 conversas foram atribuídas a você" (Lucas), com os números reais da execução.
 
-O servidor usa só 4 códigos: `rbac_close_denied`, `rbac_assign_denied`, `rbac_create_denied`, `rbac_delete_denied`. Eles serão traduzidos assim:
-- close: "Você não tem permissão para resolver esta conversa."
-- assign: "Você não tem permissão para reatribuir esta conversa."
-- create: "Você não tem permissão para criar este registro."
-- delete: "Você não tem permissão para excluir este registro."
-- `rbac_*` sem tradução: "Você não tem permissão para esta ação."
+## 3. Cuidados confirmados
 
-## Item 2 — Botões
+- O aviso automático de "conversa transferida" só dispara quando a conversa passa a precisar de atendimento humano; esse campo não será tocado, então não sai notificação por conversa.
+- Não há envio de mensagem nem webhook ligado à troca de responsável nessas conversas; nenhuma mensagem é gravada.
+- A trava de permissão aceita a operação interna do administrador do sistema.
 
-Quando o perfil não permitir a ação, o botão continua visível, mas desabilitado, com uma dica explicando o motivo ao passar o mouse (no celular, aparece um aviso ao tocar). Telas:
-- Atendimento (web e celular): Resolver/Encerrar, Reatribuir para mim, Atribuir/Transferir.
-- Comercial (web e celular): Encerrar, Atribuir responsável, Reatribuir.
-- Contatos, Oportunidades e Tarefas: Excluir (individual e em massa) e Novo, quando o perfil não puder criar.
+## 4. Conferência depois
 
-O escopo é respeitado: com "meus", o botão só fica liberado em itens atribuídos à própria pessoa; com "equipe", em itens da própria equipe; com "todos", sempre. Em itens sem responsável, vale a opção "sem responsável" do perfil. O servidor continua sendo quem decide; a tela só antecipa a resposta.
+- Contar quantas foram para cada pessoa (esperado 47 e 141).
+- Confirmar que restam 0 conversas nesse critério nas duas organizações, que as de 'other' e de Atendimento continuam como estavam, e que nenhuma outra organização teve conversa alterada no horário da operação.
+- Confirmar 1 linha de histórico por conversa e só 2 notificações novas.
+- Registrar tudo em `docs/platform/security/rbac-v2/etapa1-log.md`.
 
 ## Detalhes técnicos
 
-- Novo `src/lib/permissions/errors.ts` com `rbacErrorMessage(err)`. Ele será usado dentro de `toErrorMessageString`, para que todos os avisos e toasts existentes passem a mostrar o texto traduzido sem ser preciso alterar cada tela.
-- Novo hook `useCan(path, record?)` em `usePermissions.ts`. Ele lê `canV2`/`permAt` e compara o escopo com `assigned_user_id`/`owner_user_id` e com `my_team_user_ids` (que já existe; será carregado uma vez e guardado em cache).
-- Componente `PermissionGate` (Tooltip + `disabled`), aplicado em InboxThreadDetail, MobileInbox, SalesConversationHeader/MessagesList, MobileMessagesList, BulkActionsBar e nos botões Novo e Excluir das listas.
-- Sem migration, sem mudança em policies ou RPCs, sem Edge Functions. O mapeamento do business_context (Comercial ou Atendimento) segue o que já existe: nulo é tratado como Comercial.
-- Verificação: typecheck, teste unitário de `rbacErrorMessage` e do `useCan` (escopos meus/equipe/todos/sem responsável), e captura de tela simulando um perfil Consultor.
+- `UPDATE message_threads SET assigned_user_id = <pessoa>, last_routing_decision = jsonb_build_object('action','manual_assignment','reason','Atribuída em lote pelo administrador','source','bulk_admin_2026-10-09') WHERE organization_id = <org> AND assigned_user_id IS NULL AND status NOT IN ('resolved','closed') AND COALESCE(business_context,'sales')='sales' RETURNING id` — o trigger `trg_log_thread_assignment_change` grava `thread_assignment_history`.
+- Antes do update: guardar a lista de ids (para conferência e eventual desfazer).
+- Notificação: 1 INSERT em `notifications` por pessoa, `type='bulk_assignment'`, `entity_type='message_thread'`.
+- Para desfazer: voltar `assigned_user_id` a NULL nos ids guardados.
