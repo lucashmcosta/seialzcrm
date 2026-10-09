@@ -6,7 +6,14 @@
  * being rendered directly, which crashes React with
  * "Objects are not valid as a React child".
  */
+import { rbacErrorMessage } from '@/lib/permissions/errors';
+
 export function toErrorMessageString(err: unknown, fallback = 'Erro desconhecido'): string {
+  const raw = toRaw(err, fallback);
+  return rbacErrorMessage(raw) ?? raw;
+}
+
+function toRaw(err: unknown, fallback: string): string {
   if (err == null) return fallback;
   if (typeof err === 'string') return err;
   if (typeof err === 'number' || typeof err === 'boolean') return String(err);

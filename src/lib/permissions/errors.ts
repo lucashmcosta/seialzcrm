@@ -11,7 +11,7 @@ export const RBAC_FALLBACK = 'Você não tem permissão para esta ação.';
 /** Se o texto contém um código rbac_*, devolve a tradução; senão, null. */
 export function rbacErrorMessage(text: unknown): string | null {
   if (typeof text !== 'string') return null;
-  const m = text.match(/\brbac_[a-z_]+/);
+  const m = text.match(/\brbac_[a-z_]*denied\b/);
   if (!m) return null;
   return RBAC_MESSAGES[m[0]] ?? RBAC_FALLBACK;
 }
