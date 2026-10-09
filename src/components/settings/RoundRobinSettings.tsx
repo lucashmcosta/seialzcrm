@@ -5,6 +5,7 @@ import { usePermissions, canV2 } from '@/hooks/usePermissions';
 import { useIsOrgSystemAdmin } from '@/hooks/useIsOrgSystemAdmin';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CsRoundRobinTab } from './CsRoundRobinTab';
+import { RoundRobinPeopleList } from './RoundRobinPeopleList';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -252,20 +253,16 @@ function CommercialRoundRobinTab() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {members.length === 0 && (
-              <p className="text-sm text-muted-foreground py-8 text-center">Nenhum usuário ativo na organização.</p>
-            )}
-            {members.map((m) => (
-              <div
-                key={m.uo_id}
-                className="flex items-center justify-between gap-4 p-3 rounded-md border bg-card"
-              >
+          <RoundRobinPeopleList
+            items={members.map((m) => ({ ...m, id: m.uo_id, name: m.full_name, email: m.email, profileName: m.profile_name, active: m.receives_leads }))}
+            emptyText="Nenhum usuário ativo na organização."
+            renderRow={(m) => (
+              <div className="flex items-center justify-between gap-4 p-3 rounded-md border bg-card">
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{m.full_name}</p>
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{m.email}</p>
                   {m.receives_leads && (
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
                       <span>Hoje: <strong className="text-foreground">{m.count_today}</strong></span>
                       <span>7 dias: <strong className="text-foreground">{m.count_week}</strong></span>
                       <span>
@@ -276,13 +273,10 @@ function CommercialRoundRobinTab() {
                     </div>
                   )}
                 </div>
-                <Switch
-                  checked={m.receives_leads}
-                  onCheckedChange={(v) => toggleReceivesLeads(m, v)}
-                />
+                <Switch checked={m.receives_leads} onCheckedChange={(v) => toggleReceivesLeads(m, v)} />
               </div>
-            ))}
-          </div>
+            )}
+          />
         </CardContent>
       </Card>
     </div>
