@@ -54,3 +54,8 @@
 - [ ] Consultor: Atendimentos Ver = nenhum — aguarda decisão do usuário
 - [x] Atribuição em lote Viagi/blueviza + arquivo de desfazer (2026-10-09)
 - [x] Rodízio Atendimento: reabertura ignora entradas "sem responsável" no histórico (pega a última pessoa)
+
+## Escopo RBAC v2 nas funções do app (2026-10-13) — rollback em docs/platform/security/rbac-v2/rollback/rpc-scope-urgent-2026-10-13.sql
+- [x] rpc_search_contacts, rpc_list_inbox_threads, rpc_inbox_queue_counts aplicam escopo (antes do LIMIT/OFFSET), 1 versão cada, grants iguais
+- [ ] Teste de ponta a ponta no app com Consultora — aguarda Nelson Junior
+- [ ] get_opportunity_stage_counts e get_home_dashboard_stats — usar escopo v2 (não urgentes); "equipe" no painel [TODO]
