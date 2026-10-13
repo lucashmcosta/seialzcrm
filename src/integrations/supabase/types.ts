@@ -15829,6 +15829,7 @@ export type Database = {
           p_organization_id: string
           p_resolved_since: string
           p_tab: string
+          p_unassigned_only?: boolean
         }
         Returns: Json[]
       }
