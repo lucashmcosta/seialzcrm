@@ -57,6 +57,8 @@ export interface ScopeParams {
    */
   csIncludesServiceEndpoints?: boolean;
   limit?: number;
+  /** Quando true, só conversas sem responsável (restringe, nunca amplia). */
+  unassignedOnly?: boolean;
 }
 
 export interface ScopeDebug {
@@ -109,6 +111,8 @@ export async function fetchInboxScopedThreads(
     p_resolved_since: startOfDayIso(p.orgTimezone),
     p_include_service_endpoints: !!p.csIncludesServiceEndpoints,
     p_limit: p.limit ?? 200,
+    // Só enviado quando true: mantém a chamada idêntica à anterior por padrão.
+    ...(p.unassignedOnly ? { p_unassigned_only: true } : {}),
   } as any);
 
   if (error) {
