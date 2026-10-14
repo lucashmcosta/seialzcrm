@@ -1,6 +1,7 @@
-import { Calculator } from '@phosphor-icons/react';
+import { Calculator, GridNine } from '@phosphor-icons/react';
 import type { WidgetDefinition } from './types';
 import { OvertimeCalculatorWidget } from './overtime-calculator/OvertimeCalculatorWidget';
+import { TicTacToeWidget } from './tic-tac-toe/TicTacToeWidget';
 
 /**
  * Catálogo global de widgets. Tudo aqui aparece em Configurações para todos
@@ -14,6 +15,14 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     icon: Calculator,
     contextMode: 'none',
     Component: OvertimeCalculatorWidget,
+  },
+  {
+    key: 'tic_tac_toe',
+    name: 'Jogo da Velha',
+    description: 'Partida rápida de jogo da velha contra o computador.',
+    icon: GridNine,
+    contextMode: 'none',
+    Component: TicTacToeWidget,
   },
 ];
 
