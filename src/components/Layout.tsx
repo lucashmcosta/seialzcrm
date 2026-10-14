@@ -11,6 +11,7 @@ import {
   CheckSquare,
   ShieldCheck,
   Question,
+  PuzzlePiece,
   ChatCircleText,
   Phone,
   ChartLineUp,
@@ -108,7 +109,7 @@ export function Layout({ children }: LayoutProps) {
     if (isPlatformAdmin) {
       sysItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: ShieldCheck });
     }
-    sysItems.push({ label: 'Central de Ajuda', href: '/docs', icon: Question });
+    sysItems.push({ label: 'Widgets', href: '/widgets', icon: PuzzlePiece });
     groups.push({ label: 'SISTEMA', items: sysItems });
     // RBAC v2: some do menu o que o perfil não permite (sem efeito com o interruptor desligado)
     for (const g of groups) g.items = g.items.filter((i) => areaAllowed(permissions, i.href));
@@ -196,7 +197,7 @@ export function Layout({ children }: LayoutProps) {
     footerItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: ShieldCheck });
   }
 
-  footerItems.push({ label: 'Central de Ajuda', href: '/docs', icon: Question });
+  footerItems.push({ label: 'Widgets', href: '/widgets', icon: PuzzlePiece });
 
   // Logo section with skeleton
   const logoSize = organization?.logo_size || 40;

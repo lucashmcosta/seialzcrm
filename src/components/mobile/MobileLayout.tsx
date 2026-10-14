@@ -23,6 +23,7 @@ import {
   Buildings,
   ShieldCheck,
   Question,
+  PuzzlePiece,
   ChartLineUp,
 } from '@phosphor-icons/react';
 
@@ -90,7 +91,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
   if (isPlatformAdmin) {
     systemItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: ShieldCheck });
   }
-  systemItems.push({ label: 'Central de Ajuda', href: '/docs', icon: Question });
+  systemItems.push({ label: 'Widgets', href: '/widgets', icon: PuzzlePiece });
 
   const isActive = (href: string) => location.pathname === href || location.pathname.startsWith(href + '/');
 
