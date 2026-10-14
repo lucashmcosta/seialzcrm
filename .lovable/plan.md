@@ -1,100 +1,50 @@
-# Widget Workspace V2 — auditoria read-only e plano
+# Widgets como módulo global (catálogo + Workspace V2)
 
-Esta etapa é só auditoria. Nada foi alterado. A implementação depende de aprovação explícita.
+## O que muda para o usuário
+- Menu lateral: "Central de Ajuda" vira "Widgets", que abre a página `/widgets`.
+- `/widgets`: grade de cartões (ícone, nome, descrição, botão "Abrir") com os widgets ligados na organização. "Abrir" usa o Workspace V2 atual. Se a janela já existe, ela é restaurada e trazida para frente, sem duplicar.
+- Configurações → Widgets: fica só o interruptor por widget. Saem os botões Modal/Drawer e os interruptores por tela.
+- Comercial e Atendimento: o botão de widgets e os atalhos fixados continuam no mesmo lugar e abrem as mesmas janelas.
 
-## 1. Arquitetura atual (código lido)
-- `src/widgets/registry.ts`: catálogo global (1 item: `overtime_calculator`, telas commercial/inbox, modos modal/drawer).
-- `src/widgets/useOrgWidgets.ts`: `useOrgWidgetConfig` lê `organization_widgets` e `organization_widget_screens` via React Query (`['org-widgets', orgId]`). **Cada instância do hook abre um canal Realtime próprio**, com nome aleatório. Essa foi a correção da regressão, mas com N consumidores ficam N canais abertos. `resolveEffectiveWidgets` cruza o registry com o widget ligado e a tela ligada.
-- `src/widgets/useWidgetPins.ts`: `user_widget_preferences(organization_id, user_id, screen, pinned_widget_keys)`, upsert otimista.
-- `WidgetsTrigger`: atalhos fixados e menu Popover. O menu abre o `WidgetHost` (Dialog/Sheet com backdrop). O atalho alterna o `PinnedWidgetPanel`.
-- `PinnedWidgetContext` e `PinnedWidgetPanel`: estado só da sessão, montado dentro de `MessagesList.tsx` e `InboxPage.tsx`. Por isso o widget se perde ao trocar de tela, e em telas a partir de 1536px ele comprime a conversa.
-- Ordem dos providers em `App.tsx`: `QueryClient > Tooltip > BrowserRouter > Auth > Organization > Telephony > Theme > Routes`. `ProtectedRoute` envolve cada rota do CRM, e o `Layout`/`MobileLayout` é montado por página.
-- Dependências: `framer-motion` já está instalada. Não há biblioteca de arrastar/redimensionar.
+## Auditoria (estado atual)
+- O item "Central de Ajuda" (`/docs`) aparece em 3 lugares: `Layout.tsx` (barra lateral Seialz, linha 111), `Layout.tsx` (rodapé legado, linha 199) e `MobileLayout.tsx` (linha 93).
+- `ws.open(key)` já faz abrir/restaurar/focar com uma instância por widget (`openWindow` em `layout.ts`). O catálogo pode usar isso direto.
+- O Workspace já usa só a habilitação global (`enabledKeys`); `organization_widget_screens` só filtra os lançadores (`resolveEffectiveWidgets` → `WidgetsTrigger`) e a tela de Configurações.
+- Desligar um widget na org já fecha as janelas pelo Realtime (`WidgetWorkspaceLayer` filtra por `enabledKeys`). Não muda nada nisso.
+- `open_mode` já não tem efeito desde a V2.
 
-## 2. Reutilizados
-Registry, `WidgetDefinition` (com campos novos), `OvertimeCalculatorWidget`, `organization_widgets`, `organization_widget_screens`, RLS, `can_manage_settings`, a tela Configurações > Widgets e `resolveEffectiveWidgets`.
+## Regras de acesso
+- Catálogo `/widgets`: qualquer membro ativo da org vê o que estiver ligado (a RLS de leitura de `organization_widgets` continua a mesma). Sem nova permissão.
+- Ligar/desligar: continua exigindo `can_manage_settings` (RLS atual + checagem na tela).
+- Rota protegida pelo `ProtectedRoute` (precisa de sessão). Não entra em `/admin`.
+- Celular (abaixo de 768px): o Workspace não monta. `/widgets` mostra o aviso "Widgets disponíveis no computador", e o menu do celular troca o item do mesmo jeito para manter a consistência.
 
-## 3. Substituídos ou removidos
-`WidgetHost` (Dialog/Sheet), `PinnedWidgetProvider`, `PinnedWidgetPanel`, a coluna lateral em `MessagesList`/`InboxPage` e o estado `openKey` local do `WidgetsTrigger`. O `WidgetsTrigger` passa a ser apenas um lançador.
+## Compatibilidade
+- `organization_widget_screens`: passa a ser só de compatibilidade. Ninguém lê nem grava mais nela; tabela, dados, RLS e FK ficam como estão. Remover só numa etapa futura.
+- O canal Realtime deixa de ouvir `organization_widget_screens`. Continua um canal por org, só com `organization_widgets`.
+- Lançadores do Comercial e do Atendimento mostram: widget ligado na org ∩ tela listada no `def.screens` do registry (que hoje inclui as duas telas). Os atalhos fixados (`user_widget_preferences`) e os layouts (`user_widget_workspace`) não mudam.
+- O campo `openModes`/`defaultOpenMode` sai do tipo e do registry. `WidgetOpenMode` e os campos lidos de screens também saem do hook.
+- `/docs` continua acessível por URL; só o item do menu é trocado. [INCERTO] Diga se a Central de Ajuda precisa de outro ponto de acesso, por exemplo no perfil.
 
-## 4. Arquitetura proposta
-```text
-App > ... > OrganizationProvider > Theme > Routes
-                                  └─ WidgetWorkspaceProvider (key = userId:orgId)
-                                       ├─ 1 canal Realtime de config (singleton)
-                                       ├─ store do layout (por usuário e organização)
-                                       └─ WidgetWorkspaceLayer (portal fixo, pointer-events:none)
-                                            └─ WidgetWindow xN (pointer-events:auto)
-Telas publicam contexto -> WidgetContextBridge (só leitura)
-```
-- **Camada**: um `div` fixo em tela cheia, sem backdrop e com `pointer-events:none`. Só as janelas capturam cliques, então o CRM continua clicável.
-- **Janela**: título, minimizar, fechar e menu (...) com "Remover do espaço de trabalho". Clicar na janela traz ela para frente. Minimizadas aparecem como "chips" num dock no canto inferior direito.
-- **Uma instância por widget**, identificada pela `widget_key`.
-- **Lançadores**: o menu Widgets e os atalhos fixados abrem ou focam a janela. A partir daqui, "fixar" significa só ter um atalho no cabeçalho.
-- **Visibilidade**: a janela continua aberta em qualquer tela interna. Se o administrador desligar o widget na organização, a janela some na hora (via Realtime). [INCERTO] A habilitação "por tela" passa a controlar só onde o lançador aparece, não se a janela continua aberta. Isso precisa de decisão sua.
+## Arquivos
+- `src/components/Layout.tsx`: trocar os 2 itens para `{ label: 'Widgets', href: '/widgets', icon: PuzzlePiece }`.
+- `src/components/mobile/MobileLayout.tsx`: mesma troca.
+- `src/App.tsx`: rota `/widgets` (lazy, protegida, dentro de `Layout`).
+- `src/pages/widgets/WidgetsCatalog.tsx` (novo): cartões, botão "Abrir" chamando `ws.open`, estado vazio ("Nenhum widget ligado nesta organização"), e link para Configurações para quem tem `canManageSettings`.
+- `src/widgets/useOrgWidgets.ts`: buscar só `organization_widgets`, criar `useEnabledWidgets(screen?)` e remover `resolveEffectiveWidgets` por tela.
+- `src/widgets/WidgetsTrigger.tsx`: usar o novo hook. A lógica de abrir e de pins fica igual.
+- `src/widgets/workspace/WidgetWorkspaceProvider.tsx`: tirar a assinatura de `organization_widget_screens`.
+- `src/pages/settings/WidgetsSettings.tsx`: ficar só com o interruptor global e trocar o texto ("aparecem no catálogo Widgets e nos atalhos do Comercial/Atendimento").
+- `src/widgets/types.ts`, `src/widgets/registry.ts`: remover open modes. `ACTIVE_SCREENS`/`SCREEN_LABELS` só se ficarem sem uso.
+- `docs/modules/widgets/README.md`, `docs/product/navigation-map.md`, `AGENTS.md` (regra do catálogo global) e `roadmap.md`.
+- Sem migrations, sem mudança de RLS e sem Edge Functions.
 
-## 5. Biblioteca
-**react-rnd** (react-draggable + re-resizable). É madura, tem tipagem TypeScript, funciona com React 18, oferece `bounds="parent"`, `minWidth`/`maxWidth`, `dragHandleClassName` e os eventos `onDragStop`/`onResizeStop`. O z-index fica num contador próprio, que é simples. Alternativa considerada: `@dnd-kit`, descartada porque não faz redimensionamento e é voltada para listas.
+## Riscos de regressão
+- Lançadores passam a aparecer nas duas telas para qualquer widget ligado, mesmo que antes a tela estivesse desligada. Hoje só existe a calculadora, então o efeito é pequeno. Isso é intencional, conforme o pedido.
+- Os 3 menus precisam mudar juntos, ou a navegação fica diferente entre eles. O filtro `areaAllowed` precisa aceitar `/widgets`, ou o item some (vou conferir em `RequirePerm`/areas).
+- Abrir pelo catálogo sem contexto: widgets `contact`/`thread` mostram o estado vazio que já existe. A calculadora (`none`) não é afetada.
+- Conversas, composer, envio e roteamento não são tocados: nenhum arquivo de Messages/Inbox muda além do import já existente do `WidgetsTrigger`.
 
-## 6. Persistência
-Nova tabela `user_widget_workspace`, com uma linha por `(organization_id, user_id)`:
-- `layout jsonb`: `{ version:1, windows: { [key]: { state:'open'|'minimized', x, y, w, h, z } } }`
-- `updated_at`
-- RLS: SELECT, INSERT e UPDATE somente quando `user_id = current_user_id()` e `organization_id = ANY(current_user_org_ids())`. DELETE pelo próprio usuário. Grants explícitos para `authenticated` e nenhum para `anon`.
-- Fechar remove a entrada do mapa. Remover também remove e limpa o layout salvo. Na V2 os dois têm o mesmo efeito no banco. [INCERTO] Fechar pode guardar a última posição para reabrir no mesmo lugar, e Remover apagaria tudo.
-- Escrita: o estado vive localmente durante o arraste, sem gravar nada. A gravação acontece em `onDragStop`/`onResizeStop`/abrir/fechar, com debounce de 800 ms e um único upsert com o layout inteiro, mais um flush em `beforeunload`/`visibilitychange`. Isso dá no máximo cerca de 1 UPDATE por gesto.
-- A tabela não entra no Realtime: o layout é pessoal e não precisa sincronizar entre abas nesta etapa.
-- `user_widget_preferences.pinned_widget_keys` continua servindo para os atalhos.
-
-## 7. Montagem global
-- O provider fica dentro de `OrganizationProvider` e `BrowserRouter`, fora de `Routes`. Assim ele não é desmontado ao navegar.
-- Ele só renderiza quando há usuário autenticado, `organization` e `userProfile`, e a rota não é `/admin/*`, `/auth/*`, pública, nem mobile (`useIsMobile`).
-- `key={userId:orgId}`: trocar de organização ou fazer logout desmonta tudo, limpa o estado e fecha o canal. Isso impede vazamento entre organizações. O cache do React Query também já é separado por `orgId`.
-- **Realtime**: o canal passa a ser único, aberto pelo provider. `useOrgWidgetConfig` passa a só ler o cache, sem abrir canal. Isso elimina canais duplicados.
-
-## 8. Contexto
-- `WidgetDefinition.contextMode: 'none' | 'contact' | 'thread'`.
-- As telas publicam o contexto com `useWidgetContextSource({ screen, contactId, threadId })`. Ao desmontar, a tela limpa o contexto. A publicação usa comparação por campos, o que evita loops.
-- O contexto sempre carrega `organizationId`. A janela confere se ele é igual à organização ativa; se não for, mostra estado vazio.
-- Widgets `none` (calculadora) ignoram o contexto. Widgets `contact`/`thread` mostram estado vazio quando não há contexto. A troca de contato remonta o corpo do widget com `key=contactId`, então nunca aparecem dados do contato anterior.
-
-## 9. Responsividade
-- Limites: as janelas ficam dentro da área visível, com pelo menos 48 px da barra de título sempre visíveis. Tamanho mínimo 280x200, máximo 90% da tela.
-- Ao redimensionar o navegador, as posições são reajustadas para dentro da tela (com throttle de 150 ms).
-- Abaixo de 768 px, ou no mobile, a camada não é montada e o lançador usa o modo antigo, apenas como fallback. [INCERTO] Para o mobile nesta etapa: esconder os widgets ou manter um Sheet simples?
-- A camada fica abaixo de modais e toasts do sistema e acima do conteúdo, para nunca cobrir diálogos críticos. A posição inicial é em cascata, longe do composer.
-
-## 10. Riscos de regressão
-| Risco | Mitigação |
-|---|---|
-| Canais Realtime duplicados | Canal singleton no provider |
-| Provider no nível errado ou desmontado ao navegar | Fora de `Routes`, com `key` por usuário e organização |
-| Loops de contexto | Comparação por campos e `useMemo` nas telas |
-| Gravações excessivas no banco | Debounce e gravação só ao terminar o gesto |
-| Vazamento entre organizações | `key`, checagem de `organizationId` e RLS por usuário e organização |
-| Cliques bloqueados | `pointer-events:none` na camada |
-| Conflito V1/V2 | Remover `WidgetHost` e o `PinnedWidgetPanel` no mesmo passo |
-| Composer, WhatsApp, rotas | Nenhum arquivo dessas áreas é tocado. Em `MessagesList` e `InboxPage` só sai o wrapper do painel e entra uma chamada ao hook de contexto |
-
-## 11. Etapas
-1. Migration de `user_widget_workspace` + RLS + grants, com rollback salvo em `docs/`.
-2. `bun add react-rnd`. Criação de `WidgetWorkspaceProvider`, store, `WidgetWorkspaceLayer`, `WidgetWindow`, dock e `useWidgetContextSource`. Canal Realtime singleton.
-3. Montagem global em `App.tsx` com os guards de rota e organização.
-4. `WidgetsTrigger` vira lançador. Remoção de `WidgetHost`, `PinnedWidget*` e dos wrappers em `MessagesList`/`InboxPage`.
-5. Inclusão de `contextMode` no registry (calculadora = `none`).
-6. Atualização de `docs/modules/widgets/README.md`, de um ADR e da regra de widgets no `AGENTS.md`.
-7. Verificação: typecheck, build e testes unitários do store (clamp, z-order, serialização).
-
-## 12. Critérios de aceitação
-- Abrir 2 ou mais widgets: arrastar, redimensionar, minimizar, restaurar, fechar e remover funcionam. O CRM continua clicável e não há escurecimento.
-- Navegar entre Comercial, Atendimento, Contatos e Oportunidades: as janelas continuam nas mesmas posições. Após recarregar a página, o layout é restaurado.
-- Trocar de organização: as janelas somem e voltam conforme o layout salvo daquela organização. Logout limpa tudo.
-- O administrador desliga o widget: a janela fecha na hora para todos.
-- Arrastar uma janela gera no máximo 1 gravação. Existe só 1 canal `org-widgets` ativo.
-- A conversa não muda de largura. O composer e o envio continuam iguais.
-- Teste manual com sessão real, porque o Playwright não consegue autenticar neste projeto.
-
-## Pontos para sua decisão
-1. A habilitação "por tela" passa a controlar só onde o lançador aparece? (proposto: sim)
-2. Fechar deve guardar a última posição? (proposto: sim; Remover apaga)
-3. Mobile e telas abaixo de 768 px: esconder os widgets ou usar o Sheet antigo?
+## Verificação
+- Build/typecheck e testes de layout existentes.
+- Playwright logado: menu → `/widgets` → Abrir (janela abre) → Abrir de novo (foca, sem duplicar) → minimizar → Abrir (restaura). Desligar em Configurações faz o widget sumir do catálogo e fecha a janela. Conferir o atalho no Comercial e no Atendimento.
