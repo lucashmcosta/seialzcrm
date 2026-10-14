@@ -47,8 +47,6 @@ import { useIsOrgSystemAdmin } from '@/hooks/useIsOrgSystemAdmin';
 import { RouteBadge, type EndpointState } from '@/components/messages/route/RouteIndicators';
 import { SalesRouteDetailsDialog } from '@/components/messages/route/SalesRouteDetailsDialog';
 import { WidgetsTrigger } from '@/widgets/WidgetsTrigger';
-import { PinnedWidgetProvider } from '@/widgets/PinnedWidgetContext';
-import { PinnedWidgetPanel } from '@/widgets/PinnedWidgetPanel';
 import { SalesConversationHeader } from '@/components/messages/route/SalesConversationHeader';
 import { SalesComposerStatus } from '@/components/messages/route/SalesComposerStatus';
 import { ManualReplySelector } from '@/components/messages/route/ManualReplySelector';
@@ -3168,7 +3166,6 @@ function DesktopMessagesList() {
               </div>
             )}
           </div>
-        <PinnedWidgetPanel />
       </div>
 
 
@@ -3420,8 +3417,6 @@ export default function MessagesList() {
   const isMobile = useIsMobile();
   if (isMobile) return <MobileMessagesList />;
   return (
-    <PinnedWidgetProvider screen="commercial">
-      <DesktopMessagesList />
-    </PinnedWidgetProvider>
+    <DesktopMessagesList />
   );
 }

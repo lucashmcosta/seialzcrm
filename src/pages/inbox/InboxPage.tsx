@@ -15,8 +15,6 @@ import { useInboxQueueCounts } from '@/hooks/inbox/useInboxQueueCounts';
 import { useInboxThreads } from '@/hooks/inbox/useInboxThreads';
 import type { InboxTab } from '@/hooks/inbox/inboxScope';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
-import { PinnedWidgetProvider } from '@/widgets/PinnedWidgetContext';
-import { PinnedWidgetPanel } from '@/widgets/PinnedWidgetPanel';
 
 
 export default function InboxPage() {
@@ -84,7 +82,6 @@ export default function InboxPage() {
 
   return (
     <Layout>
-      <PinnedWidgetProvider screen="inbox">
       <div className="h-full flex flex-col min-h-0">
         <InboxMetricsBar
           counts={counts}
@@ -106,10 +103,8 @@ export default function InboxPage() {
             threadId={selectedId}
             onThreadStatusChanged={() => { refreshCounts(); refreshThreads(); }}
           />
-          <PinnedWidgetPanel />
         </div>
       </div>
-      </PinnedWidgetProvider>
 
       <NewConversationDialog
         open={newConvOpen}
