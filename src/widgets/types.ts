@@ -19,6 +19,8 @@ export interface WidgetDefinition {
   screens: WidgetScreen[];
   openModes: WidgetOpenMode[];
   defaultOpenMode: WidgetOpenMode;
+  /** none = genérico; contact/thread = usa o contexto atual ou mostra estado vazio. */
+  contextMode?: 'none' | 'contact' | 'thread';
   Component: ComponentType<{ context: WidgetContext }>;
 }
 

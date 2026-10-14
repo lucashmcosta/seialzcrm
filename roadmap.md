@@ -61,7 +61,7 @@
 - [ ] get_opportunity_stage_counts e get_home_dashboard_stats — usar escopo v2 (não urgentes); "equipe" no painel [TODO]
 
 ## Widget Workspace V2 (2026-10-14) — aprovado
-- [ ] Etapa 1: tabela user_widget_workspace + RLS + rollback
-- [ ] Etapa 2: Workspace global (react-rnd), dock, Realtime único
-- [ ] Etapa 3: lançadores + remoção V1 (WidgetHost, PinnedWidget*)
-- [ ] Etapa 4: testes e docs; validação visual e publicação aguardam Nelson Junior
+- [x] Etapa 1: tabela user_widget_workspace + RLS + rollback
+- [x] Etapa 2: Workspace global (react-rnd), dock, Realtime único
+- [x] Etapa 3: lançadores + remoção V1 (WidgetHost, PinnedWidget*)
+- [x] Etapa 4: testes e docs. [ ] Pendente: validação visual e publicação aguardam Nelson Junior

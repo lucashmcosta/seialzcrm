@@ -10,6 +10,7 @@ import { TelephonyProvider } from "@/contexts/OutboundCallContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
+import { WidgetWorkspaceRoot } from "@/widgets/workspace/WidgetWorkspaceProvider";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
 import { SiteI18nProvider } from "@/i18n/SiteI18nProvider";
@@ -391,6 +392,7 @@ const App = () => (
         <TelephonyProvider>
         <ThemeProvider>
         <GlobalCallHandler />
+        <WidgetWorkspaceRoot>
         <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<RootRedirect />} />
@@ -811,6 +813,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
         </Suspense>
+        </WidgetWorkspaceRoot>
         </ThemeProvider>
         </TelephonyProvider>
         </OrganizationProvider>

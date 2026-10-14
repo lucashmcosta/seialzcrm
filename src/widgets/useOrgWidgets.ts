@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { WIDGET_REGISTRY } from './registry';
@@ -18,7 +18,6 @@ export const orgWidgetsKey = (orgId?: string) => ['org-widgets', orgId] as const
 export function useOrgWidgetConfig() {
   const { organization } = useOrganization();
   const orgId = organization?.id;
-  const qc = useQueryClient();
 
   const query = useQuery({
     queryKey: orgWidgetsKey(orgId),
@@ -36,19 +35,7 @@ export function useOrgWidgetConfig() {
     },
   });
 
-  useEffect(() => {
-    if (!orgId) return;
-    const invalidate = () => qc.invalidateQueries({ queryKey: orgWidgetsKey(orgId) });
-    const filter = `organization_id=eq.${orgId}`;
-    const channel = supabase
-      // Nome único por instância: vários componentes usam este hook ao mesmo tempo.
-      .channel(`org-widgets-${orgId}-${Math.random().toString(36).slice(2)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'organization_widgets', filter }, invalidate)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'organization_widget_screens', filter }, invalidate)
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [orgId, qc]);
-
+  // Realtime centralizado no WidgetWorkspaceProvider (um canal por org).
   return { ...query, orgId };
 }
 

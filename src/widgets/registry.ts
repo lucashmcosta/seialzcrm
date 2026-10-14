@@ -15,6 +15,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     screens: ['commercial', 'inbox'],
     openModes: ['modal', 'drawer'],
     defaultOpenMode: 'drawer',
+    contextMode: 'none',
     Component: OvertimeCalculatorWidget,
   },
 ];
