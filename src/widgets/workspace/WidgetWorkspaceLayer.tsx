@@ -1,7 +1,6 @@
 import { Rnd } from 'react-rnd';
-import { DotsThree, Minus, X, Trash } from '@phosphor-icons/react';
+import { Minus, X } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { getWidget } from '../registry';
 import { useWidgetWorkspace } from './WidgetWorkspaceContext';
 import { MIN_H, MIN_W } from './layout';
@@ -74,18 +73,6 @@ function WidgetWindow({ def, widgetKey }: { def: WidgetDefinition; widgetKey: st
         <Icon size={14} />
         <span className="text-sm font-semibold truncate flex-1">{def.name}</span>
         <div className="widget-no-drag flex items-center gap-0.5">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label="Opções" title="Opções">
-                <DotsThree size={16} weight="bold" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="z-[60]">
-              <DropdownMenuItem onClick={() => ws.remove(widgetKey)}>
-                <Trash size={14} className="mr-2" /> Remover do espaço de trabalho
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label="Minimizar" title="Minimizar" onClick={() => ws.minimize(widgetKey)}>
             <Minus size={14} />
           </Button>
