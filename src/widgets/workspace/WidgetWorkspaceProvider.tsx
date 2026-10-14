@@ -26,16 +26,21 @@ export function WidgetWorkspaceRoot({ children }: { children?: ReactNode }) {
   const isMobile = useIsMobile();
   const { pathname } = useLocation();
   const blocked = pathname.startsWith('/admin') || pathname.startsWith('/auth') || pathname === '/obs';
-  if (!isAuthenticated || !organization?.id || !userProfile?.id || isMobile || blocked) return <>{children}</>;
-  // key: trocar org/usuário desmonta tudo (estado, canal, contexto) — sem vazamento entre tenants.
+  const active = isAuthenticated && !!organization?.id && !!userProfile?.id && !isMobile && !blocked;
+  const [api, setApi] = useState<WidgetWorkspaceApi | null>(null);
+  // As rotas (children) nunca são remontadas: só o motor interno é recriado.
   return (
-    <WorkspaceInner key={`${userProfile.id}:${organization.id}`} orgId={organization.id} userId={userProfile.id}>
+    <WorkspaceCtx.Provider value={active ? api : null}>
       {children}
-    </WorkspaceInner>
+      {active && (
+        // key: trocar org/usuário desmonta estado, canal e contexto — sem vazamento entre tenants.
+        <WorkspaceInner key={`${userProfile!.id}:${organization!.id}`} orgId={organization!.id} userId={userProfile!.id} onApi={setApi} />
+      )}
+    </WorkspaceCtx.Provider>
   );
 }
 
-function WorkspaceInner({ orgId, userId, children }: { orgId: string; userId: string; children?: ReactNode }) {
+function WorkspaceInner({ orgId, userId, onApi }: { orgId: string; userId: string; onApi: (a: WidgetWorkspaceApi | null) => void }) {
   const qc = useQueryClient();
   const { data: config } = useOrgWidgetConfig();
   const [layout, setLayout] = useState<WorkspaceLayout>(emptyLayout);
@@ -154,10 +159,8 @@ function WorkspaceInner({ orgId, userId, children }: { orgId: string; userId: st
     setContext,
   }), [orgId, layout, enabledKeys, context, saveError, apply, setContext]);
 
-  return (
-    <WorkspaceCtx.Provider value={api}>
-      {children}
-      {loaded && <WidgetWorkspaceLayer />}
-    </WorkspaceCtx.Provider>
-  );
+  useEffect(() => { onApi(api); }, [api, onApi]);
+  useEffect(() => () => onApi(null), [onApi]);
+
+  return loaded ? <WidgetWorkspaceLayer /> : null;
 }

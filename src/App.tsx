@@ -392,7 +392,7 @@ const App = () => (
         <TelephonyProvider>
         <ThemeProvider>
         <GlobalCallHandler />
-        <WidgetWorkspaceRoot />
+        <WidgetWorkspaceRoot>
         <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<RootRedirect />} />
@@ -813,6 +813,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
         </Suspense>
+        </WidgetWorkspaceRoot>
         </ThemeProvider>
         </TelephonyProvider>
         </OrganizationProvider>
