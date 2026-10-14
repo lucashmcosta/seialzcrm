@@ -1,10 +1,10 @@
 import type { ComponentType } from 'react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 
+/** Telas que publicam contexto e guardam pins próprios. Widgets em si são globais. */
 export type WidgetScreen = 'commercial' | 'inbox' | 'opportunities' | 'contacts';
-export type WidgetOpenMode = 'modal' | 'drawer';
 
-/** Contexto entregue ao widget por tela. Oportunidades/Contatos: previstos, ainda sem host. */
+/** Contexto opcional entregue ao widget. Sem contexto (ex.: aberto pelo catálogo) = null. */
 export type WidgetContext =
   | { screen: 'commercial'; organizationId: string; threadId: string | null; contactId: string | null }
   | { screen: 'inbox'; organizationId: string; threadId: string | null; contactId: string | null }
@@ -16,20 +16,7 @@ export interface WidgetDefinition {
   name: string;
   description: string;
   icon: PhosphorIcon;
-  screens: WidgetScreen[];
-  openModes: WidgetOpenMode[];
-  defaultOpenMode: WidgetOpenMode;
-  /** none = genérico; contact/thread = usa o contexto atual ou mostra estado vazio. */
+  /** none = independente (qualquer tela); contact/thread = usa o contexto atual ou mostra estado vazio. */
   contextMode?: 'none' | 'contact' | 'thread';
   Component: ComponentType<{ context: WidgetContext }>;
 }
-
-export const SCREEN_LABELS: Record<WidgetScreen, string> = {
-  commercial: 'Comercial',
-  inbox: 'Atendimento',
-  opportunities: 'Oportunidades',
-  contacts: 'Contatos',
-};
-
-/** Telas que já têm host nesta etapa. */
-export const ACTIVE_SCREENS: WidgetScreen[] = ['commercial', 'inbox'];
