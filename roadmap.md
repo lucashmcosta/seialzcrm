@@ -76,3 +76,7 @@
 ## Widget Jogo da Velha (2026-10-14) — aprovado
 - [x] Widget tic_tac_toe no registry (desligado por padrão), estado isolado por usuário+org, jogada atrasada invalidada
 - [ ] Roteiro com 2 janelas logado — sem sessão automática (Supabase próprio); aguarda Nelson Junior
+
+## Galeria /widgets moderna (2026-10-14) — aprovado
+- [x] Cartões com prévia, estado Aberto/No dock, animações só visuais, grade 280px
+- [ ] Conferência visual logada — aguarda Nelson Junior
