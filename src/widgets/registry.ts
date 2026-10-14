@@ -2,6 +2,8 @@ import { Calculator, GridNine } from '@phosphor-icons/react';
 import type { WidgetDefinition } from './types';
 import { OvertimeCalculatorWidget } from './overtime-calculator/OvertimeCalculatorWidget';
 import { TicTacToeWidget } from './tic-tac-toe/TicTacToeWidget';
+import { OvertimePreview } from './overtime-calculator/OvertimePreview';
+import { TicTacToePreview } from './tic-tac-toe/TicTacToePreview';
 
 /**
  * Catálogo global de widgets. Tudo aqui aparece em Configurações para todos
@@ -15,6 +17,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     icon: Calculator,
     contextMode: 'none',
     Component: OvertimeCalculatorWidget,
+    Preview: OvertimePreview,
   },
   {
     key: 'tic_tac_toe',
@@ -23,6 +26,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     icon: GridNine,
     contextMode: 'none',
     Component: TicTacToeWidget,
+    Preview: TicTacToePreview,
   },
 ];
 

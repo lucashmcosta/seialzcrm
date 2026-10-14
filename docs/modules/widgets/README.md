@@ -28,5 +28,6 @@ Ferramentas abertas em janelas independentes que acompanham o usuário entre as 
 - Telas publicam contexto via `useWidgetContextSource` (o `WidgetsTrigger` já faz isso).
 
 Rollback: `docs/platform/security/rbac-v2/rollback/widget-workspace-v2-2026-10-14.sql`.
+- Galeria `/widgets`: cartões com `Preview` estático opcional do registry (nunca monta o widget); estado só leitura do layout.
 - Widgets atuais: `overtime_calculator`, `tic_tac_toe` (partida em memória por `userId:orgId`; descartada ao trocar usuário/org ou sair).
 [TODO] lançadores em Oportunidades e Contatos.

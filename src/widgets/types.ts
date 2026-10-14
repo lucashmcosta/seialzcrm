@@ -19,4 +19,6 @@ export interface WidgetDefinition {
   /** none = independente (qualquer tela); contact/thread = usa o contexto atual ou mostra estado vazio. */
   contextMode?: 'none' | 'contact' | 'thread';
   Component: ComponentType<{ context: WidgetContext }>;
+  /** Prévia estática para a galeria /widgets. Nunca monta o widget funcional. */
+  Preview?: ComponentType;
 }
