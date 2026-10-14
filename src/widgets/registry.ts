@@ -12,7 +12,6 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     name: 'Calculadora de Horas Extras',
     description: 'Estimativa simples do valor de horas extras a partir do salário mensal.',
     icon: Calculator,
-    screens: ['commercial', 'inbox'], // informativo; widgets são globais
     contextMode: 'none',
     Component: OvertimeCalculatorWidget,
   },
