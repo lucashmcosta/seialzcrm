@@ -27,6 +27,7 @@ Layout / MobileLayout
 ├── /opportunities   (Kanban)
 ├── /opportunities/:id
 ├── /tasks
+├── /widgets         (catálogo global de widgets)
 ├── /messages        (legacy)
 ├── /inbox           (Inbox v2 — feature-flag)
 ├── /marketing[/ads|/ads/:id|/funnel|/timeline]

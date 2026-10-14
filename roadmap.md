@@ -65,3 +65,10 @@
 - [x] Etapa 2: Workspace global (react-rnd), dock, Realtime único
 - [x] Etapa 3: lançadores + remoção V1 (WidgetHost, PinnedWidget*)
 - [x] Etapa 4: testes e docs. [ ] Pendente: validação visual e publicação aguardam Nelson Junior
+
+## Widgets como módulo global (2026-10-14) — aprovado
+- [x] Menu: Central de Ajuda → Widgets (/widgets); /docs segue por URL
+- [x] Catálogo /widgets abrindo pelo Workspace V2 (sem duplicar)
+- [x] Configurações: só liga/desliga global; Modal/Drawer e por tela removidos da interface (dados preservados)
+- [x] Atalhos Comercial/Atendimento com widgets globais; pins preservados
+- [ ] Validação logada na prévia — conexão externa não permite sessão automática; aguarda Nelson Junior
