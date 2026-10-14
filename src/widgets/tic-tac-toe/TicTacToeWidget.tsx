@@ -5,12 +5,15 @@ import { useOrganization } from '@/hooks/useOrganization';
 import type { WidgetContext } from '../types';
 import { isDraw, winnerOf } from './ticTacToe';
 import * as store from './store';
+import { supabase } from '@/integrations/supabase/client';
+
+store.watchSignOut((cb) => { supabase.auth.onAuthStateChange((event) => cb(event)); });
 
 export function TicTacToeWidget(_props: { context: WidgetContext }) {
   const { organization, userProfile } = useOrganization();
   const key = organization?.id && userProfile?.id ? `${userProfile.id}:${organization.id}` : null;
   // bind antes de ler: chave nova nunca enxerga a partida anterior.
-  store.bind(key);
+  store.bind(key, false);
   const game = useSyncExternalStore(store.subscribe, () => store.getSnapshot(key));
   useEffect(() => { store.bind(key); }, [key]);
 

@@ -72,3 +72,7 @@
 - [x] Configurações: só liga/desliga global; Modal/Drawer e por tela removidos da interface (dados preservados)
 - [x] Atalhos Comercial/Atendimento com widgets globais; pins preservados
 - [ ] Validação logada na prévia — conexão externa não permite sessão automática; aguarda Nelson Junior
+
+## Widget Jogo da Velha (2026-10-14) — aprovado
+- [x] Widget tic_tac_toe no registry (desligado por padrão), estado isolado por usuário+org, jogada atrasada invalidada
+- [ ] Roteiro com 2 janelas logado — sem sessão automática (Supabase próprio); aguarda Nelson Junior

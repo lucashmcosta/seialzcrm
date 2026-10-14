@@ -20,11 +20,16 @@ const cancelTimer = () => { if (timer) clearTimeout(timer); timer = null; };
 function fresh(): Game { cancelTimer(); return { gameId: ++seq, board: emptyBoard(), thinking: false }; }
 
 /** Garante a chave ativa; chave diferente zera tudo (nada da sessão anterior fica visível). */
-export function bind(key: string | null) {
+export function bind(key: string | null, notify = true) {
   if (key === currentKey) return;
   currentKey = key;
   game = fresh();
-  emit();
+  if (notify) emit();
+}
+
+/** Logout descarta a partida mesmo com a janela fora da tela. */
+export function watchSignOut(onAuth: (cb: (event: string) => void) => void) {
+  onAuth((event) => { if (event === 'SIGNED_OUT') bind(null); });
 }
 
 export const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
