@@ -59,3 +59,9 @@
 - [x] rpc_search_contacts, rpc_list_inbox_threads, rpc_inbox_queue_counts aplicam escopo (antes do LIMIT/OFFSET), 1 versão cada, grants iguais
 - [ ] Teste de ponta a ponta no app com Consultora — aguarda Nelson Junior
 - [ ] get_opportunity_stage_counts e get_home_dashboard_stats — usar escopo v2 (não urgentes); "equipe" no painel [TODO]
+
+## Widget Workspace V2 (2026-10-14) — aprovado
+- [ ] Etapa 1: tabela user_widget_workspace + RLS + rollback
+- [ ] Etapa 2: Workspace global (react-rnd), dock, Realtime único
+- [ ] Etapa 3: lançadores + remoção V1 (WidgetHost, PinnedWidget*)
+- [ ] Etapa 4: testes e docs; validação visual e publicação aguardam Nelson Junior
