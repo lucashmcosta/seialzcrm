@@ -1,50 +1,31 @@
-# Widgets como módulo global (catálogo + Workspace V2)
+# Segundo widget: Jogo da Velha
 
-## O que muda para o usuário
-- Menu lateral: "Central de Ajuda" vira "Widgets", que abre a página `/widgets`.
-- `/widgets`: grade de cartões (ícone, nome, descrição, botão "Abrir") com os widgets ligados na organização. "Abrir" usa o Workspace V2 atual. Se a janela já existe, ela é restaurada e trazida para frente, sem duplicar.
-- Configurações → Widgets: fica só o interruptor por widget. Saem os botões Modal/Drawer e os interruptores por tela.
-- Comercial e Atendimento: o botão de widgets e os atalhos fixados continuam no mesmo lugar e abrem as mesmas janelas.
+## O que o usuário vai ver
+- Em Configurações → Widgets aparece o "Jogo da Velha", desligado para todas as organizações. Isso acontece sozinho porque não existe registro ligado.
+- Depois de ligado, ele aparece no catálogo `/widgets` e nos atalhos do Comercial e do Atendimento. Abre numa janela do Workspace V2, como a calculadora.
+- Tabuleiro 3×3: você joga com X e o computador responde com O logo em seguida. A tela mostra de quem é a vez e, no fim, "Você venceu", "Você perdeu" ou "Empate", com a linha vencedora destacada e o botão "Jogar novamente".
 
-## Auditoria (estado atual)
-- O item "Central de Ajuda" (`/docs`) aparece em 3 lugares: `Layout.tsx` (barra lateral Seialz, linha 111), `Layout.tsx` (rodapé legado, linha 199) e `MobileLayout.tsx` (linha 93).
-- `ws.open(key)` já faz abrir/restaurar/focar com uma instância por widget (`openWindow` em `layout.ts`). O catálogo pode usar isso direto.
-- O Workspace já usa só a habilitação global (`enabledKeys`); `organization_widget_screens` só filtra os lançadores (`resolveEffectiveWidgets` → `WidgetsTrigger`) e a tela de Configurações.
-- Desligar um widget na org já fecha as janelas pelo Realtime (`WidgetWorkspaceLayer` filtra por `enabledKeys`). Não muda nada nisso.
-- `open_mode` já não tem efeito desde a V2.
+## Achado técnico importante
+Hoje a janela minimizada sai da tela: o Workspace só desenha as janelas abertas, e o dock mostra só um botão. Por isso, guardar a partida dentro do componente faria ela se perder ao minimizar. Como a regra é não mexer no Workspace, a partida fica guardada **no próprio módulo do jogo**, na memória da aba, separada por organização.
+- Minimizar e restaurar: a partida continua.
+- Navegar entre telas: a partida continua.
+- Fechar e abrir de novo: a partida também continua. O pedido permite começar uma nova, mas não é obrigatório. Para recomeçar, basta "Jogar novamente".
+- Recarregar a página: começa uma partida nova. Nada é salvo no banco.
 
-## Regras de acesso
-- Catálogo `/widgets`: qualquer membro ativo da org vê o que estiver ligado (a RLS de leitura de `organization_widgets` continua a mesma). Sem nova permissão.
-- Ligar/desligar: continua exigindo `can_manage_settings` (RLS atual + checagem na tela).
-- Rota protegida pelo `ProtectedRoute` (precisa de sessão). Não entra em `/admin`.
-- Celular (abaixo de 768px): o Workspace não monta. `/widgets` mostra o aviso "Widgets disponíveis no computador", e o menu do celular troca o item do mesmo jeito para manter a consistência.
-
-## Compatibilidade
-- `organization_widget_screens`: passa a ser só de compatibilidade. Ninguém lê nem grava mais nela; tabela, dados, RLS e FK ficam como estão. Remover só numa etapa futura.
-- O canal Realtime deixa de ouvir `organization_widget_screens`. Continua um canal por org, só com `organization_widgets`.
-- Lançadores do Comercial e do Atendimento mostram: widget ligado na org ∩ tela listada no `def.screens` do registry (que hoje inclui as duas telas). Os atalhos fixados (`user_widget_preferences`) e os layouts (`user_widget_workspace`) não mudam.
-- O campo `openModes`/`defaultOpenMode` sai do tipo e do registry. `WidgetOpenMode` e os campos lidos de screens também saem do hook.
-- `/docs` continua acessível por URL; só o item do menu é trocado. [INCERTO] Diga se a Central de Ajuda precisa de outro ponto de acesso, por exemplo no perfil.
+## Regras do computador
+- Joga sozinho cerca de 350 ms depois da sua jogada, e o tabuleiro fica travado enquanto isso.
+- Ordem de decisão: ganhar se puder; senão bloquear você; senão centro; senão um canto livre; senão qualquer casa livre. Assim ele é desafiador, mas dá para vencer.
+- Você sempre começa.
 
 ## Arquivos
-- `src/components/Layout.tsx`: trocar os 2 itens para `{ label: 'Widgets', href: '/widgets', icon: PuzzlePiece }`.
-- `src/components/mobile/MobileLayout.tsx`: mesma troca.
-- `src/App.tsx`: rota `/widgets` (lazy, protegida, dentro de `Layout`).
-- `src/pages/widgets/WidgetsCatalog.tsx` (novo): cartões, botão "Abrir" chamando `ws.open`, estado vazio ("Nenhum widget ligado nesta organização"), e link para Configurações para quem tem `canManageSettings`.
-- `src/widgets/useOrgWidgets.ts`: buscar só `organization_widgets`, criar `useEnabledWidgets(screen?)` e remover `resolveEffectiveWidgets` por tela.
-- `src/widgets/WidgetsTrigger.tsx`: usar o novo hook. A lógica de abrir e de pins fica igual.
-- `src/widgets/workspace/WidgetWorkspaceProvider.tsx`: tirar a assinatura de `organization_widget_screens`.
-- `src/pages/settings/WidgetsSettings.tsx`: ficar só com o interruptor global e trocar o texto ("aparecem no catálogo Widgets e nos atalhos do Comercial/Atendimento").
-- `src/widgets/types.ts`, `src/widgets/registry.ts`: remover open modes. `ACTIVE_SCREENS`/`SCREEN_LABELS` só se ficarem sem uso.
-- `docs/modules/widgets/README.md`, `docs/product/navigation-map.md`, `AGENTS.md` (regra do catálogo global) e `roadmap.md`.
-- Sem migrations, sem mudança de RLS e sem Edge Functions.
+- `src/widgets/tic-tac-toe/ticTacToe.ts` (novo): funções puras: vencedor/linha, empate, jogada do computador.
+- `src/widgets/tic-tac-toe/store.ts` (novo): estado em memória por organização, com `useSyncExternalStore`.
+- `src/widgets/tic-tac-toe/TicTacToeWidget.tsx` (novo): tabuleiro compacto que se ajusta ao tamanho da janela, só com tokens do design system (`bg-muted`, `text-primary`, borda de 6px, Outfit/Share Tech Mono).
+- `src/widgets/registry.ts`: nova entrada `tic_tac_toe`, ícone `GridNine`, `contextMode: 'none'`.
+- `tests/tic-tac-toe.test.ts` (novo): vitória em linha, coluna e diagonal; empate; computador ganha quando pode; bloqueia você; nunca joga em casa ocupada.
+- `docs/modules/widgets/README.md` e `roadmap.md`.
+- Sem mudanças no Workspace, nas mensagens, no composer ou no WhatsApp. Sem migrations, tabelas, Edge Functions ou dependências novas.
 
-## Riscos de regressão
-- Lançadores passam a aparecer nas duas telas para qualquer widget ligado, mesmo que antes a tela estivesse desligada. Hoje só existe a calculadora, então o efeito é pequeno. Isso é intencional, conforme o pedido.
-- Os 3 menus precisam mudar juntos, ou a navegação fica diferente entre eles. O filtro `areaAllowed` precisa aceitar `/widgets`, ou o item some (vou conferir em `RequirePerm`/areas).
-- Abrir pelo catálogo sem contexto: widgets `contact`/`thread` mostram o estado vazio que já existe. A calculadora (`none`) não é afetada.
-- Conversas, composer, envio e roteamento não são tocados: nenhum arquivo de Messages/Inbox muda além do import já existente do `WidgetsTrigger`.
-
-## Verificação
-- Build/typecheck e testes de layout existentes.
-- Playwright logado: menu → `/widgets` → Abrir (janela abre) → Abrir de novo (foca, sem duplicar) → minimizar → Abrir (restaura). Desligar em Configurações faz o widget sumir do catálogo e fecha a janela. Conferir o atalho no Comercial e no Atendimento.
+## Validação e limitação
+- Typecheck, testes do jogo e testes atuais do layout das janelas.
+- O roteiro com duas janelas (abrir as duas, arrastar, redimensionar, sobrepor e focar, minimizar as duas para o dock, restaurar cada uma, fechar uma, navegar, desligar só o jogo) precisa de sessão logada. Este projeto usa um Supabase próprio, então a prévia não aceita login automático aqui. Vou deixar um roteiro de Playwright pronto em `/tmp` e rodar a parte possível sem login, que é o jogo isolado. Para o roteiro completo, vou pedir que você o faça na prévia, ou que forneça uma conta de teste.
