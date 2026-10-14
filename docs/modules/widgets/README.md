@@ -16,7 +16,7 @@ Ferramentas abertas em janelas independentes que acompanham o usuário entre as 
 - Motor interno com `key = userId:orgId`: trocar de organização ou sair descarta estado, contexto e canal.
 - Um único canal Realtime por org (`widget-workspace-config-<org>`), só `organization_widgets`. `useOrgWidgetConfig` não abre canal.
 - Janelas: `react-rnd`, sem backdrop; a camada usa `pointer-events: none`. Uma instância por widget.
-- Estados: `open`, `minimized` (dock no canto), `closed` (preserva posição/tamanho). "Remover" apaga a entrada do layout.
+- Estados: `open`, `minimized` (dock no canto), `closed` (preserva posição/tamanho). Cabeçalho só com Minimizar e Fechar (sem "Remover").
 
 ## Persistência
 - `user_widget_workspace(organization_id, user_id, layout jsonb)`, uma linha por usuário/org, RLS só do próprio usuário nas orgs ativas.
