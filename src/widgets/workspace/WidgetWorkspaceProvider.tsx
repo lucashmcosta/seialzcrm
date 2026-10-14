@@ -62,7 +62,6 @@ function WorkspaceInner({ orgId, userId, onApi }: { orgId: string; userId: strin
     const ch = supabase
       .channel(`widget-workspace-config-${orgId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'organization_widgets', filter }, invalidate)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'organization_widget_screens', filter }, invalidate)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [orgId, qc]);

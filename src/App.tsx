@@ -226,6 +226,7 @@ const CommercialOriginsReport = lazyWithRetry("CommercialOriginsReport", () => i
 // Settings layout + grid (replaces old Settings page)
 const SettingsLayout = lazyWithRetry("SettingsLayout", () => import("./components/settings/SettingsLayout"), "SettingsLayout");
 const WidgetsSettings = lazyWithRetry("WidgetsSettings", () => import("./pages/settings/WidgetsSettings"));
+const WidgetsCatalog = lazyWithRetry("WidgetsCatalog", () => import("./pages/widgets/WidgetsCatalog"));
 const SettingsGrid = lazyWithRetry("SettingsGrid", () => import("./components/settings/SettingsGrid"), "SettingsGrid");
 const GeneralSettings = lazyWithRetry("GeneralSettings", () => import("./components/settings/GeneralSettings"), "GeneralSettings");
 const ThemeSettings = lazyWithRetry("ThemeSettings", () => import("./components/settings/ThemeSettings"), "ThemeSettings");
@@ -651,6 +652,7 @@ const App = () => (
               </ProtectedRoute>
             }
           />
+          <Route path="/widgets" element={<ProtectedRoute><WidgetsCatalog /></ProtectedRoute>} />
           <Route
             path="/tasks"
             element={

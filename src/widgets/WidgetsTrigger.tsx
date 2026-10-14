@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { PuzzlePiece, PushPin, PushPinSlash } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useEffectiveWidgets } from './useOrgWidgets';
+import { useEnabledWidgets } from './useOrgWidgets';
 import { useWidgetPins } from './useWidgetPins';
 import { useWidgetWorkspace } from './workspace/WidgetWorkspaceContext';
 import { useWidgetContextSource } from './workspace/useWidgetContextSource';
@@ -14,10 +14,11 @@ interface Props {
   size?: 'sm' | 'xs';
 }
 
-/** Lançador: a habilitação por tela controla só onde ele aparece. Abre/foca janelas do Workspace global. */
+/** Lançador do Comercial/Atendimento: widgets globais ligados na org; pins por tela. Abre/foca janelas do Workspace global. */
 export function WidgetsTrigger({ screen, context, size = 'sm' }: Props) {
   const ws = useWidgetWorkspace();
-  const { widgets } = useEffectiveWidgets(screen);
+  const { widgets: defs } = useEnabledWidgets();
+  const widgets = defs.map((def) => ({ def }));
   const { pins, togglePin } = useWidgetPins(screen);
   const [menuOpen, setMenuOpen] = useState(false);
   useWidgetContextSource(context);

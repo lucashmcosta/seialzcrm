@@ -4,15 +4,17 @@ Ferramentas abertas em janelas independentes que acompanham o usuário entre as 
 
 ## Catálogo e configuração (inalterados da V1)
 - Catálogo global em código: `src/widgets/registry.ts`. Não registrar widgets de teste.
-- Por organização: `organization_widgets` (liga/desliga) e `organization_widget_screens` (tela). Escrita exige `can_manage_settings`.
-- Habilitação por tela controla **só onde o lançador aparece**. Janela aberta continua disponível ao navegar.
+- Widgets são **globais**: por organização só `organization_widgets` (liga/desliga). Escrita exige `can_manage_settings`.
+- Catálogo em `/widgets` (menu lateral, no lugar de "Central de Ajuda"; `/docs` segue acessível por URL). "Abrir" chama `ws.open` (abre/restaura/foca).
+- `organization_widget_screens` ficou só por compatibilidade: não é lida nem gravada; dados preservados.
+- Atalhos do Comercial/Atendimento mostram todos os widgets ligados; pins continuam por tela.
 - Widget desligado na org some imediatamente de todas as telas (Realtime).
-- `open_mode` (Modal/Drawer) da V1 ficou sem efeito; Modal/Drawer foram removidos.
+- `open_mode` (Modal/Drawer) removido da interface; coluna preservada.
 
 ## Workspace
 - `WidgetWorkspaceRoot` envolve as rotas em `App.tsx`; não monta em `/admin`, `/auth`, sem sessão/org ou abaixo de 768px (sem fallback).
 - Motor interno com `key = userId:orgId`: trocar de organização ou sair descarta estado, contexto e canal.
-- Um único canal Realtime por org (`widget-workspace-config-<org>`). `useOrgWidgetConfig` não abre canal.
+- Um único canal Realtime por org (`widget-workspace-config-<org>`), só `organization_widgets`. `useOrgWidgetConfig` não abre canal.
 - Janelas: `react-rnd`, sem backdrop; a camada usa `pointer-events: none`. Uma instância por widget.
 - Estados: `open`, `minimized` (dock no canto), `closed` (preserva posição/tamanho). "Remover" apaga a entrada do layout.
 
