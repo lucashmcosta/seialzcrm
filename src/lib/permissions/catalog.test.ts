@@ -27,11 +27,11 @@ describe('permissões do módulo de classificação', () => {
     expect(ADMIN_ITEMS.filter(on).map((a) => a.key)).toContain('ver_numeros_classificacao');
   });
 
-  it('modelos: vendedor classifica e vê as próprias; não libera correção nem vê números', () => {
+  it('modelos: vendedor classifica; não acessa o relatório, não libera correção nem vê números', () => {
     const v = tpl('vendedor');
     expect(v.ferramentas.classificar).toBe(true);
     expect(v.ferramentas.liberar_correcao).toBe(false);
-    expect(v.dados.classificacoes.ver).toBe('meus');
+    expect(v.dados.classificacoes.ver).toBe('nenhum');
     expect(v.administracao.ver_numeros_classificacao).toBe(false);
   });
 

@@ -47,16 +47,18 @@ DO $$ DECLARE n int; BEGIN
 END $$;
 
 SET LOCAL ROLE authenticated;
--- Vendedora: só as dela, sem números
+-- Vendedora (escopo "meus"): NUNCA acessa o relatório; vê a dela só no widget (faixa e comissão)
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
-SELECT pg_temp.assert((pg_temp.rep()->>'total')::int = 3 AND (pg_temp.rep()->>'numeros')::boolean = false, 'vendedora: 3, sem números');
-SELECT pg_temp.assert(NOT (pg_temp.rep()->'linhas'->0 ? 'score') OR pg_temp.rep()->'linhas'->0->>'score' IS NULL, 'vendedora: sem score');
-SELECT pg_temp.assert((pg_temp.rep()->'linhas'->0->>'oportunidade') LIKE 'Caso %' AND pg_temp.rep()->'linhas'->0->>'vendedor' = 'Vera', 'linha com oportunidade e vendedor');
-SELECT pg_temp.assert(jsonb_array_length(pg_temp.exp()->'linhas') = 3 AND pg_temp.exp()->'linhas'->0->>'tese' IS NULL, 'exportação sem números: 1 linha por classificação');
-SELECT pg_temp.expect_error($q$SELECT pc_report_detail((SELECT id FROM process_classifications WHERE seller_user_id = '00000000-0000-0000-0000-0000000000b2' LIMIT 1))$q$, 'pc:not_found', 'não abre o de outro vendedor');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.rep()$q$, 'pc:forbidden', 'vendedora não abre o relatório (escada de faixas, versões)');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.exp()$q$, 'pc:forbidden', 'vendedora não exporta');
+SELECT pg_temp.expect_error($q$SELECT pc_report_detail((SELECT id FROM process_classifications WHERE seller_user_id = '00000000-0000-0000-0000-0000000000b1' LIMIT 1))$q$, 'pc:not_found', 'nem o detalhe da própria');
+SELECT pg_temp.assert((SELECT count(*) = 3 AND bool_and(seller_user_id = '00000000-0000-0000-0000-0000000000b1') FROM process_classifications), 'a própria classificação (faixa/comissão) segue legível para o widget');
+SELECT pg_temp.assert((SELECT count(*) FROM process_classification_results) = 0, 'sem números');
 -- Gestor: todas, sem números
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000d1');
 SELECT pg_temp.assert((pg_temp.rep()->>'total')::int = 5 AND (pg_temp.rep()->>'numeros')::boolean = false, 'gestor: 5, sem números');
+SELECT pg_temp.assert((pg_temp.rep()->'linhas'->0->>'oportunidade') LIKE 'Caso %' AND pg_temp.rep()->'linhas'->0->>'score' IS NULL, 'linha com oportunidade, sem score');
+SELECT pg_temp.assert(jsonb_array_length(pg_temp.exp()->'linhas') = 5 AND pg_temp.exp()->'linhas'->0->>'tese' IS NULL, 'exportação sem números: 1 linha por classificação');
 SELECT pg_temp.assert((pg_temp.rep()->>'comissaoTotal')::numeric = 1500, 'comissão total');
 SELECT pg_temp.assert(pg_temp.rep()->'porFaixa' = '{"OURO":4,"DIAMANTE":1}', 'por faixa');
 SELECT pg_temp.assert((pg_temp.rep(50, 0, 'DIAMANTE')->>'total')::int = 1, 'filtro de faixa');

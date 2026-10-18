@@ -97,7 +97,8 @@ SELECT pg_temp.assert((SELECT source = 'nammux' AND external_actor = 'entrevista
 -- ===== RLS =====
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
-SELECT pg_temp.assert((SELECT count(*) FROM process_classification_certifications) = 5, 'vendedor vê as certificações dele (com o histórico)');
+SELECT pg_temp.assert((SELECT count(*) FROM process_classification_certifications) = 0, 'vendedor NÃO lê a certificação direto (faixa/comissão certificadas ensinariam a regra)');
+SELECT pg_temp.assert((SELECT count(*) FROM opportunity_commissions) > 0, 'vendedor continua vendo a própria comissão');
 SELECT pg_temp.assert((SELECT count(*) FROM process_classification_certification_results) = 0, 'vendedor não vê os números');
 SELECT pg_temp.expect_error($q$SELECT pc_record_certification(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)$q$, '%permission denied%', 'só o servidor certifica');
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000e1');

@@ -1,6 +1,8 @@
 -- Classificação de processos — Fase 5: relatórios e exportação (SPEC §8.4).
 -- Rollback: supabase/rollback/20261018210000_process_classification_reports_DOWN.sql
--- Mesma visibilidade da RLS (pc_can_view_classification: própria / equipe / todas). Números do caso (score, valores,
+-- Só para quem vê classificações de OUTRAS pessoas (escopo equipe/todos ou Admin): o vendedor vê a dele só no widget
+-- (faixa e comissão), nunca o relatório (que mostra a escada de faixas, versões etc.). Dentro disso, mesma visibilidade
+-- da RLS (pc_can_view_classification: equipe / todas). Números do caso (score, valores,
 -- chance por tese) só com administracao.ver_numeros_classificacao. Funções SECURITY DEFINER que filtram pelo usuário
 -- atual: o navegador chama direto (authenticated), sem service_role.
 
@@ -10,7 +12,9 @@ CREATE OR REPLACE FUNCTION public.pc_report(
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_num boolean; v_out jsonb;
 BEGIN
-  IF NOT (_org = ANY(public.current_user_org_ids())) THEN RAISE EXCEPTION 'pc:forbidden' USING ERRCODE = '42501'; END IF;
+  IF NOT (_org = ANY(public.current_user_org_ids())) OR NOT public.pc_pode_ver_outros(_org) THEN
+    RAISE EXCEPTION 'pc:forbidden' USING ERRCODE = '42501';
+  END IF;
   v_num := public.pc_has_flag(_org, '{administracao,ver_numeros_classificacao}');
   WITH base AS (
     SELECT c.*, v.number AS calibration_number
@@ -63,6 +67,7 @@ DECLARE c record; v_num boolean;
 BEGIN
   SELECT * INTO c FROM public.process_classifications WHERE id = _id;
   IF NOT FOUND OR NOT (c.organization_id = ANY(public.current_user_org_ids()))
+     OR NOT public.pc_pode_ver_outros(c.organization_id)
      OR NOT public.pc_can_view_classification(c.organization_id, c.seller_user_id) THEN
     RAISE EXCEPTION 'pc:not_found';
   END IF;
@@ -86,7 +91,9 @@ CREATE OR REPLACE FUNCTION public.pc_report_export(
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_num boolean;
 BEGIN
-  IF NOT (_org = ANY(public.current_user_org_ids())) THEN RAISE EXCEPTION 'pc:forbidden' USING ERRCODE = '42501'; END IF;
+  IF NOT (_org = ANY(public.current_user_org_ids())) OR NOT public.pc_pode_ver_outros(_org) THEN
+    RAISE EXCEPTION 'pc:forbidden' USING ERRCODE = '42501';
+  END IF;
   v_num := public.pc_has_flag(_org, '{administracao,ver_numeros_classificacao}');
   RETURN jsonb_build_object('numeros', v_num, 'linhas', COALESCE((
     WITH base AS (

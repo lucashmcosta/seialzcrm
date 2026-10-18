@@ -1,15 +1,14 @@
-/** Prévia estática para a galeria /widgets (não chama o servidor nem carrega o assistente). */
-const FAIXAS = [['prata', 'Prata'], ['ouro', 'Ouro'], ['titanio', 'Titânio'], ['diamante', 'Diamante']] as const;
+import { Scales } from '@phosphor-icons/react';
 
+/**
+ * Prévia estática para a galeria /widgets (todos os usuários veem). Neutra de propósito: não mostra as faixas
+ * (o vendedor nunca vê a escada Prata → Diamante, SPEC §5.3).
+ */
 export function ProcessClassificationPreview() {
   return (
-    <div className="flex items-center justify-center gap-3 py-3">
-      {FAIXAS.map(([k, nome]) => (
-        <div key={k} className="flex flex-col items-center gap-1">
-          <span className="h-7 w-7 rounded-full border-2" style={{ borderColor: `hsl(var(--band-${k}))`, background: `hsl(var(--band-${k}) / 0.15)` }} />
-          <span className="text-[10px] text-muted-foreground">{nome}</span>
-        </div>
-      ))}
+    <div className="flex flex-col items-center gap-1.5 py-3 text-center">
+      <Scales size={32} weight="duotone" className="text-primary" />
+      <span className="text-xs text-muted-foreground">Classificação do processo na oportunidade</span>
     </div>
   );
 }

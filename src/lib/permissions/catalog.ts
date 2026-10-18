@@ -84,7 +84,7 @@ export const DATA_OBJECTS: ObjectDef[] = [
   {
     key: 'classificacoes', label: 'Classificações de processos', subtitle: 'Faixa, comissão e respostas', module: 'process_classification',
     actions: [
-      { key: 'ver', label: 'Ver', kind: 'scope', hint: 'Chances e valores só com "Ver números da classificação"' },
+      { key: 'ver', label: 'Ver', kind: 'scope', hint: 'Relatório de classificações: só Equipe ou Todos. "Meus" não dá acesso (o vendedor vê a dele só no widget). Chances e valores só com "Ver números".' },
     ],
   },
 ];
@@ -176,7 +176,7 @@ export const TEMPLATES: { key: string; label: string; description: string; perms
       atendimentos: NONE_THR,
       chamadas: { ver: 'meus', exportar: 'nenhum' },
       tarefas: task('meus', true, 'meus', 'meus', 'meus'),
-      classificacoes: { ver: 'meus' },
+      classificacoes: { ver: 'nenhum' }, // o vendedor vê a própria classificação só no widget (faixa + comissão)
     }, ferramentas: tools(['importar', 'marketing', 'relatorios', 'liberar_correcao', 'certificar_classificacao']), administracao: admin([]) },
   },
   {

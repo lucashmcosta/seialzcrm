@@ -52,9 +52,20 @@ DO $$ DECLARE t text; BEGIN
     EXECUTE format('GRANT ALL ON public.%I TO service_role', t);
   END LOOP;
 END $$;
+-- O vendedor NUNCA lê a certificação direto (ela tem a faixa/comissão certificadas, que ensinariam a regra mesmo quando
+-- não mudam nada). Ele vê só o resultado final no widget (edge). Leem: quem vê classificações de outras pessoas
+-- (escopo equipe/todos ou Admin) e quem certifica.
+CREATE OR REPLACE FUNCTION public.pc_pode_ver_outros(_org uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT public.is_org_system_admin(_org)
+      OR COALESCE(public.my_perms_v2(_org) #>> '{dados,classificacoes,ver}', 'nenhum') IN ('equipe', 'todos')
+$$;
+REVOKE EXECUTE ON FUNCTION public.pc_pode_ver_outros(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.pc_pode_ver_outros(uuid) TO authenticated, service_role;
+
 CREATE POLICY pcc_select ON public.process_classification_certifications FOR SELECT TO authenticated USING (
   organization_id = ANY(public.current_user_org_ids()) AND (
-    public.pc_can_view_classification(organization_id, seller_user_id)
+    (public.pc_pode_ver_outros(organization_id) AND public.pc_can_view_classification(organization_id, seller_user_id))
     OR public.pc_has_flag(organization_id, '{ferramentas,certificar_classificacao}')));
 CREATE POLICY pccr_select ON public.process_classification_certification_results FOR SELECT TO authenticated USING (
   organization_id = ANY(public.current_user_org_ids())

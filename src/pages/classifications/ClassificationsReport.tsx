@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { DownloadSimple, Scales, SpinnerGap } from '@phosphor-icons/react';
 import { Layout } from '@/components/Layout';
@@ -22,6 +22,8 @@ import { dataHora, formatarBRL, NOME_FAIXA } from '@/components/process-classifi
 import { ResumoEntrada } from '@/components/process-classification/ResumoEntrada';
 import { ResultadoCompleto } from '@/components/process-classification/settings/calibracao/Janelas';
 import { useProcessClassificationEnabled } from '@/components/process-classification/useProcessClassificationEnabled';
+import { podeVerRelatorioClassificacoes } from '@/components/process-classification/permissoes';
+import { usePermissions } from '@/hooks/usePermissions';
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- respostas das RPCs pc_report* (supabase/migrations/20261018210000_process_classification_reports.sql) */
 
@@ -43,6 +45,14 @@ function argumentos(org: string, f: Filtros) {
 
 /** Relatório de classificações (SPEC §8.4): filtros, detalhe por permissão e CSV (por tese, com números). */
 export default function ClassificationsReport() {
+  const { permissions, loading } = usePermissions();
+  if (loading) return null;
+  // O vendedor nunca vê o relatório (escada de faixas, versões, números): só a própria classificação, no widget.
+  if (!podeVerRelatorioClassificacoes(permissions)) return <Navigate to="/dashboard" replace />;
+  return <Relatorio />;
+}
+
+function Relatorio() {
   const { organization } = useOrganization();
   const moduloLigado = useProcessClassificationEnabled();
   const isMobile = useIsMobile();

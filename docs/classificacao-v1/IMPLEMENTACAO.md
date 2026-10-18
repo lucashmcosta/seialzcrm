@@ -34,7 +34,7 @@ O navegador só lê (RLS). Toda escrita é feita pela edge (service_role) atrav�
 
 | Chave | Família | Modelos que já vêm com ela |
 |---|---|---|
-| `dados.classificacoes.ver` (meus/equipe/todos) | Dados | Vendedor = meus · Líder = equipe · Gestor e Somente leitura = todos |
+| `dados.classificacoes.ver` (equipe/todos) | Dados | Vendedor = **nenhum** · Líder = equipe · Gestor e Somente leitura = todos. "Meus" não dá acesso a nada: o vendedor vê a própria classificação só no widget |
 | `ferramentas.classificar` | Ferramentas | Vendedor, Líder, Gestor |
 | `ferramentas.liberar_correcao` | Ferramentas | Líder, Gestor |
 | `administracao.ver_numeros_classificacao` | Administração | só Admin |
@@ -189,13 +189,25 @@ Página **`/classificacoes`** (permissão "Ver classificações"; atalhos nos Da
 | CSV (Excel pt-BR: `;`, vírgula decimal, BOM) | `src/components/process-classification/csv.ts` |
 
 - **Filtros:** período, vendedor, faixa, versão da calibração, só em revisão, incluir substituídas/anuladas. Resumo: total, comissão das ativas (já com a comissão final após certificação) e contagem por faixa. Paginação de 50.
-- **Quem vê o quê:** o vendedor vê as próprias; o gestor, as do escopo (equipe/todas); score e números só com `administracao.ver_numeros_classificacao`.
+- **Quem vê o quê:** só quem tem escopo **Equipe ou Todos** (o Admin tem Todos). O **vendedor nunca** acessa o relatório, o detalhe nem a exportação (mostrariam a escada de faixas e versões): vê a própria classificação só no widget, com faixa e comissão. Score e números só com `administracao.ver_numeros_classificacao`.
 - **Detalhe:** respostas do vendedor, pedidos de correção, certificação e, com números, o resultado completo por tese.
 - **Exportar CSV:** com números, uma linha por **classificação × tese** (versões, chance, chance automática, valor bruto e esperado, selo, aviso, faixa, comissão e certificação) — a base para comparar com a jurimetria; sem números, uma linha por classificação. Até 10 mil classificações por exportação.
 
 ```
 psql -d BANCO_DESCARTAVEL -v ON_ERROR_STOP=1 -f supabase/tests/process_classification_fixture.sql -f supabase/tests/process_classification_reports.sql
 ```
+
+## O que o vendedor vê (regra de ouro do desenho)
+
+Só a **faixa** e a **própria comissão**, no widget da oportunidade (e, se houve certificação, a faixa/comissão final e o motivo). Nunca: chances, valores, score, calibração, a escada de faixas, versões, o cálculo certificado ou o relatório.
+
+Garantido no banco e no servidor, não só na tela:
+- RLS: o vendedor não lê resultados, calibrações, certificações (`pc_pode_ver_outros`), configurações nem desfechos.
+- Relatório, detalhe e exportação (`pc_report*`) recusam quem só tem escopo "meus".
+- Edge: `get_state`/`classify` devolvem só faixa e comissão; a edge da calibração recusa (403).
+- Bundle: o navegador não leva motor, semente nem explicações jurídicas (checagem no CI).
+- Galeria `/widgets`: prévia neutra, sem as faixas.
+- Auditoria ponta a ponta com o token real de um consultor tentando todas as tabelas, funções e edges do módulo: nada além da faixa e da própria comissão.
 
 ## Pontos para o jurídico (não alterados no motor)
 
