@@ -6,14 +6,15 @@
 //   { action: 'classify', opportunity_id, entrada, idempotency_key } → grava e devolve faixa + comissão
 //   { action: 'request_correction', opportunity_id }                → vendedor pede correção (§6); avisa quem libera
 //   { action: 'decide_correction', opportunity_id, release, reason? } → gestor libera ou recusa (§6)
+//   { action: 'certify', opportunity_id, entrada, note, dry_run?, redo? } → certificação pós-ganho (Fase 3b)
 //
 // LGPD (§7): nunca logar entrada, resultado nem calibração. Só ids e códigos.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import {
-  calcular, chaveValida, estadoDoWidget, MODULE_KEY, type Pedido, type Perms, podeClassificar, podeLiberar, podeVerTodas, Recusa,
-  recusaDaRpc, visaoVendedor,
+  calcular, camposAlterados, chaveValida, decidirCertificacao, estadoDoWidget, MODULE_KEY, type Pedido, type Perms, podeCertificar,
+  podeClassificar, podeLiberar, podeVerTodas, Recusa, recusaDaRpc, visaoVendedor,
 } from "./logic.ts";
 
 function json(status: number, body: Record<string, unknown>) {
@@ -35,7 +36,7 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json(400, { error: "invalid_json" }); }
   const action = body?.action;
   const opportunityId = body?.opportunity_id;
-  if (!["get_state", "classify", "request_correction", "decide_correction"].includes(action)) return json(400, { error: "invalid_action" });
+  if (!["get_state", "classify", "request_correction", "decide_correction", "certify"].includes(action)) return json(400, { error: "invalid_action" });
   if (typeof opportunityId !== "string" || !UUID.test(opportunityId)) return json(400, { error: "invalid_opportunity_id" });
 
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -54,7 +55,7 @@ Deno.serve(async (req) => {
   if (!opp || opp.deleted_at) return json(404, { error: "not_found" });
   const org = opp.organization_id as string;
 
-  const { data: membership } = await db.from("user_organizations").select("id")
+  const { data: membership } = await db.from("user_organizations").select("id, permission_profile_id")
     .eq("user_id", me.id).eq("organization_id", org).eq("is_active", true).maybeSingle();
   if (!membership) return json(403, { error: "forbidden" });
 
@@ -65,11 +66,17 @@ Deno.serve(async (req) => {
   const { data: permsData } = await db.rpc("pc_user_perms", { _org: org, _user: me.id });
   const perms = (permsData ?? null) as Perms;
   const isOwner = opp.owner_user_id === me.id;
+  // Refazer certificação: só o Admin (perfil de sistema). Consulta direta, sem depender de embed do PostgREST.
+  const { data: perfil } = membership.permission_profile_id
+    ? await db.from("permission_profiles").select("is_system").eq("id", membership.permission_profile_id).maybeSingle()
+    : { data: null };
+  const isSystemAdmin = perfil?.is_system === true;
 
   try {
     if (action === "get_state") {
       const liberador = podeLiberar(perms) && !isOwner;
-      if (!isOwner && !podeVerTodas(perms) && !liberador) return json(403, { error: "forbidden" });
+      const certificador = podeCertificar(perms);
+      if (!isOwner && !podeVerTodas(perms) && !liberador && !certificador) return json(403, { error: "forbidden" });
       const { data: ativa } = await db.from("process_classifications")
         .select("id, band, commission, in_review, created_at, input, seller_user_id").eq("opportunity_id", opportunityId).eq("status", "active").maybeSingle();
       let pedido: Pedido | null = null;
@@ -82,6 +89,12 @@ Deno.serve(async (req) => {
       const estado = estadoDoWidget(opp.status === "open", ativa ?? null, pedido);
       const aberta = opp.status === "open";
       const podeDecidir = aberta && liberador && pedido?.status === "pending" && ativa?.seller_user_id !== me.id;
+      const { data: cert } = ativa
+        ? await db.from("process_classification_certifications")
+          .select("outcome, original_band, original_commission, final_band, final_commission, note, created_at, source, input")
+          .eq("classification_id", ativa.id).eq("status", "active").maybeSingle()
+        : { data: null };
+      const podeCertificarAgora = opp.status === "won" && !!ativa && certificador && (!cert || isSystemAdmin);
       return json(200, {
         estado,
         podeClassificar: isOwner && podeClassificar(perms),
@@ -92,8 +105,44 @@ Deno.serve(async (req) => {
         classificacao: ativa ? { id: ativa.id, ...visaoVendedor(ativa) } : null,
         pedido: pedido ? { status: pedido.status, criadoEm: pedido.created_at, motivo: pedido.reason } : null,
         // §6.2: para decidir, o gestor vê as respostas do vendedor (a Entrada não tem números calculados).
-        respostas: podeDecidir ? ativa?.input ?? null : null,
+        respostas: podeDecidir || podeCertificarAgora ? (cert?.input ?? ativa?.input ?? null) : null,
+        podeCertificar: podeCertificarAgora,
+        refazendoCertificacao: podeCertificarAgora && !!cert,
+        certificacao: cert ? {
+          resultado: cert.outcome, motivo: cert.note, certificadoEm: cert.created_at, origem: cert.source,
+          original: { faixa: cert.original_band, comissao: Number(cert.original_commission) },
+          final: { faixa: cert.final_band, comissao: Number(cert.final_commission) },
+        } : null,
       });
+    }
+
+    if (action === "certify") {
+      if (!podeCertificar(perms)) return json(403, { error: "forbidden" });
+      if (opp.status !== "won") return recusa(recusaDaRpc("pc:not_won"));
+      const { data: ativa } = await db.from("process_classifications")
+        .select("id, band, commission, input, calibration_version_id").eq("opportunity_id", opportunityId).eq("status", "active").maybeSingle();
+      if (!ativa) return recusa(recusaDaRpc("pc:not_classified"));
+      const redo = body?.redo === true;
+      if (redo && !isSystemAdmin) return json(403, { error: "forbidden", message: "Só o Admin pode refazer uma certificação." });
+      // Mesma versão de calibração usada pelo vendedor: a comparação é justa mesmo se a calibração mudou depois.
+      const { data: cal } = await db.from("classification_calibration_versions")
+        .select("id, content, motor_version").eq("id", ativa.calibration_version_id).single();
+      const { entrada, resultado } = calcular(body?.entrada, cal!);
+      const mudou = camposAlterados(ativa.input as Record<string, unknown>, entrada);
+      const original = { faixa: ativa.band as string | null, comissao: Number(ativa.commission) };
+      const certificada = { faixa: resultado.faixa as string | null, comissao: Number(resultado.comissao) };
+      const decisao = decidirCertificacao(original, certificada);
+      if (body?.dry_run === true) {
+        return json(200, { original, certificada, final: decisao.final, resultado: decisao.resultado, mudou });
+      }
+      const note = typeof body?.note === "string" ? body.note.slice(0, 1000) : "";
+      const { data, error } = await db.rpc("pc_record_certification", {
+        _org: org, _opp: opportunityId, _source: "seialz", _actor: me.id, _external_actor: null, _external_event_id: null,
+        _input: entrada, _changed: mudou, _result: resultado, _note: note, _redo: redo,
+      });
+      if (error) return recusa(recusaDaRpc(error.message ?? ""));
+      const r = data as { outcome: string; finalBand: string | null; finalCommission: number; certifiedAt: string };
+      return json(200, { resultado: r.outcome, final: { faixa: r.finalBand, comissao: Number(r.finalCommission) }, certificadoEm: r.certifiedAt, mudou });
     }
 
     if (action === "request_correction") {

@@ -3,7 +3,7 @@ import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.224.
 // @ts-types="../_shared/classificacao/motor.d.ts"
 import * as M from "../_shared/classificacao/motor.mjs";
 import exportada from "../../../packages/motor-classificacao/dados/calibracao-exportada-2026-10-16.json" with { type: "json" };
-import { calcular, chaveValida, estadoDoWidget, podeLiberar, podeVerTodas, Recusa, recusaDaRpc, visaoVendedor } from "./logic.ts";
+import { calcular, camposAlterados, chaveValida, decidirCertificacao, estadoDoWidget, podeCertificar, podeLiberar, podeVerTodas, Recusa, recusaDaRpc, visaoVendedor } from "./logic.ts";
 
 const V2 = { id: "cal-2", motor_version: "1.0.0", content: M.mesclarCalibracao(exportada, M.CALIBRACAO_V1).calibracao };
 const ENTRADA = {
@@ -109,4 +109,30 @@ Deno.test("correção: permissões e mensagens (§6)", () => {
   assertEquals(recusaDaRpc("pc:own_request").status, 403);
   assertEquals([recusaDaRpc("pc:reason_required").status, recusaDaRpc("pc:reason_required").mensagem], [422, "Informe o motivo da recusa."]);
   assertEquals(recusaDaRpc("pc:not_classified").status, 409);
+});
+
+Deno.test("certificação: só para baixo, decidido pela comissão (Fase 3b)", () => {
+  const ouro = { faixa: "OURO", comissao: 200 };
+  assertEquals(decidirCertificacao(ouro, { faixa: "PRATA", comissao: 100 }), { resultado: "reduced", final: { faixa: "PRATA", comissao: 100 } });
+  assertEquals(decidirCertificacao(ouro, { faixa: "OURO", comissao: 200 }), { resultado: "confirmed", final: ouro });
+  assertEquals(decidirCertificacao(ouro, { faixa: "DIAMANTE", comissao: 900 }), { resultado: "confirmed", final: ouro }, "subir não muda");
+  // faixa menor com % de score maior pode dar comissão maior: vale o dinheiro, então não reduz
+  assertEquals(decidirCertificacao(ouro, { faixa: "PRATA", comissao: 250 }).resultado, "confirmed");
+  assertEquals(decidirCertificacao(ouro, { faixa: "OURO", comissao: 199.99 }).resultado, "reduced");
+});
+
+Deno.test("certificação: campos que mudaram entre o declarado e o certificado", () => {
+  const declarada = calcular(ENTRADA, V2).entrada;
+  const certificada = calcular({ ...ENTRADA, testemunha: false, teses: ["horas_extras", "dano_moral"],
+    respostas: { horas_extras: { ...ENTRADA.respostas.horas_extras, he_dia: 1 }, dano_moral: { dano_sits: ["atraso"] } } }, V2).entrada;
+  assertEquals(camposAlterados(declarada, certificada), ["testemunha", "-fgts", "+dano_moral", "horas_extras.he_dia"]);
+  assertEquals(camposAlterados(declarada, declarada), []);
+});
+
+Deno.test("certificação: permissão própria", () => {
+  assert(podeCertificar({ ferramentas: { certificar_classificacao: true } }));
+  assert(!podeCertificar({ ferramentas: { liberar_correcao: true, classificar: true } }));
+  assertEquals(recusaDaRpc("pc:not_won").status, 409);
+  assertEquals(recusaDaRpc("pc:already_certified").status, 409);
+  assertEquals(recusaDaRpc("pc:note_required").status, 422);
 });

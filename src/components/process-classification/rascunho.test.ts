@@ -3,8 +3,10 @@ import { describe, expect, it } from 'bun:test';
 // O motor completo só entra no TESTE (para conferir a tela contra o cálculo); nunca no bundle.
 import * as M from '../../../supabase/functions/_shared/classificacao/motor.mjs';
 import {
-  TESES, alternarTese, errosDados, escolherSaida, montarEntrada, numeroBR, pendencia, rascunhoInicial, responder, telaDaTese,
+  TESES, alternarTese, errosDados, escolherSaida, montarEntrada, numeroBR, pendencia, rascunhoDeEntrada, rascunhoInicial, responder, rotuloCampo, telaDaTese,
 } from './rascunho';
+import { canonicalizar } from './perguntas';
+import ouro from '../../../packages/motor-classificacao/tests/casos-ouro.json';
 
 const base = () => {
   let r = rascunhoInicial();
@@ -88,5 +90,24 @@ describe('assistente do vendedor', () => {
     expect('vinculoTemProva' in e).toBe(false);
     expect(e.respostas.horas_extras).toEqual({ he_ponto: 'nao_havia', he_dia: 2 });
     expect(e.testemunha).toBe(false);
+  });
+
+  it('certificação: Entrada gravada → tela → Entrada é exata (casos-ouro)', () => {
+    let n = 0;
+    for (const c of ouro.casos) {
+      const crua = { ...c.entrada }; delete crua.ajusteManual;
+      let can;
+      try { can = canonicalizar(crua); } catch { continue; }
+      expect(montarEntrada(rascunhoDeEntrada(can))).toEqual(can);
+      n++;
+    }
+    expect(n).toBeGreaterThan(250);
+  });
+
+  it('certificação: rótulos dos campos alterados', () => {
+    expect(rotuloCampo('testemunha')).toBe('Testemunha do período?');
+    expect(rotuloCampo('horas_extras.he_dia')).toBe('Horas extras — Horas extra/dia');
+    expect(rotuloCampo('+fgts')).toBe('Tese incluída: FGTS não depositado');
+    expect(rotuloCampo('-fgts')).toBe('Tese removida: FGTS não depositado');
   });
 });

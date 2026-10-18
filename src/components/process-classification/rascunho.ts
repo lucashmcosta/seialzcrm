@@ -124,3 +124,29 @@ export function montarEntrada(r: Rascunho): Record<string, unknown> {
 }
 
 export const nomeTese = (t: TeseId) => NOME_TESE[t];
+
+const SIM_NAO_TOPO = new Set(['testemunha', 'vinculoEmpresaAdmite', 'vinculoTemProva', 'jcEmpresaTemProva']);
+
+/** Entrada gravada → rascunho da tela (certificação começa com as respostas do vendedor). Ida e volta é exata. */
+export function rascunhoDeEntrada(e: Record<string, unknown>): Rascunho {
+  const r = rascunhoInicial();
+  for (const p of [...PASSO_DADOS, ...PASSO_SAIDA]) {
+    const v = e[p.campo as string];
+    if (v === undefined) continue;
+    r.topo[p.campo as string] = SIM_NAO_TOPO.has(p.campo as string) ? (v ? 'sim' : 'nao') : String(v);
+  }
+  r.teses = [...((e.teses ?? []) as TeseId[])];
+  r.respostas = JSON.parse(JSON.stringify(e.respostas ?? {}));
+  return r;
+}
+
+/** Rótulo legível de um campo alterado na certificação ("testemunha", "horas_extras.he_dia", "+fgts", "-fgts"). */
+export function rotuloCampo(caminho: string): string {
+  if (caminho.startsWith('+')) return `Tese incluída: ${NOME_TESE[caminho.slice(1) as TeseId] ?? caminho.slice(1)}`;
+  if (caminho.startsWith('-')) return `Tese removida: ${NOME_TESE[caminho.slice(1) as TeseId] ?? caminho.slice(1)}`;
+  const [t, id] = caminho.split('.');
+  if (!id) return [...PASSO_DADOS, ...PASSO_SAIDA].find((p) => p.campo === t)?.rotulo ?? t;
+  const p = PERGUNTAS[t as TeseId]?.find((q) => q.id === id);
+  const rotulo = p && typeof p.rotulo === 'string' ? p.rotulo : id;
+  return `${NOME_TESE[t as TeseId] ?? t} — ${rotulo}`;
+}

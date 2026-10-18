@@ -111,6 +111,45 @@ bun run build && node scripts/check-seller-bundle.mjs
 psql -d BANCO_DESCARTAVEL -v ON_ERROR_STOP=1 -f supabase/tests/process_classification_fixture.sql -f supabase/tests/process_classification_f3.sql
 ```
 
+## Fase 3b — certificação pós-ganho
+
+O vendedor **declara** a classificação. Depois do ganho, o Jurídico/Triagem entrevista o cliente e **certifica**: corrige o que não bateu, e o servidor recalcula com a **mesma versão de calibração** que o vendedor usou.
+
+| Peça | Onde |
+|---|---|
+| Migração (tabelas, RPC `pc_record_certification`, permissão para o Admin) | `supabase/migrations/20261018170000_process_classification_certification.sql` |
+| Rollback | `supabase/rollback/20261018170000_process_classification_certification_DOWN.sql` |
+| Edge: ação `certify` (`dry_run` mostra a comparação antes de gravar); `get_state` com `certificacao`/`podeCertificar` | `supabase/functions/process-classification/index.ts`, `logic.ts` |
+| Tela: botão "Certificar classificação" na oportunidade ganha → assistente já preenchido → comparação → nota → confirmar | `src/components/process-classification/ClassificationWizard.tsx`, `ProcessClassificationCard.tsx` |
+
+**Regras**
+- **Só para baixo, decidido pela comissão:** comissão certificada menor → faixa e comissão passam a ser as certificadas; igual ou maior → nada muda (mérito da triagem). O cálculo certificado é sempre guardado (declarado × certificado × final). O banco impede comissão final acima da original (`pcc_final_never_up`).
+- Só com a oportunidade **ganha**; sem prazo. **Uma certificação por classificação**; refazer só o **Admin** (o mínimo é sempre contra a original, então refazer pode devolver a comissão original).
+- A classificação do vendedor nunca é alterada. A comissão ativa vira `superseded` e entra a nova, com `note` ("Certificação: …"). O vendedor é notificado.
+- Permissão `ferramentas.certificar_classificacao` (dar ao perfil Jurídico no rollout; o Admin já tem).
+
+**Contrato para o Nammux (pronto, NÃO ligado)**
+Quando a entrevista for feita no Nammux, ele envia um evento assinado pelo canal que já existe (`nammux-webhook-ingest`, HMAC por org, `schema_version: 1`):
+
+```json
+{
+  "event_id": "…", "event_type": "classification.certified", "schema_version": 1,
+  "source_organization_id": "…", "target_organization_id": "…", "occurred_at": "2026-…",
+  "data": {
+    "seialz_opportunity_id": "…",
+    "entrada": { "…": "respostas certificadas, no formato da Entrada (ver canonicalizar.ts)" },
+    "note": "o que a entrevista mostrou",
+    "interviewer": "nome ou e-mail de quem entrevistou"
+  }
+}
+```
+
+Para ligar: aceitar `classification.certified` no `nammux-webhook-ingest`, canonicalizar e calcular como a ação `certify` (mesma calibração da classificação) e chamar `pc_record_certification` com `_source = 'nammux'`, `_external_actor = interviewer` e `_external_event_id = event_id`. O mesmo evento reenviado vira replay, sem gravar de novo.
+
+```
+psql -d BANCO_DESCARTAVEL -v ON_ERROR_STOP=1 -f supabase/tests/process_classification_fixture.sql -f supabase/tests/process_classification_certification.sql
+```
+
 ## Pontos para o jurídico (não alterados no motor)
 
 1. **"Recebeu a rescisão?" em "Sem registro".** A tela esconde a pergunta, mas o motor lê `resc` se ela vier na entrada (`motor.ts`, verbas rescisórias). Como a SPEC manda não enviar perguntas escondidas, o motor assume `nada` (verbas cheias) quando a saída é "Sem registro" e o 13º/férias eram pagos. Nos casos-ouro, 6 casos aleatórios divergem só por isso. Confirmar com o Renan se é o comportamento desejado.

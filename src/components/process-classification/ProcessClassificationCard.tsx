@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Lock, Scales } from '@phosphor-icons/react';
+import { Lock, Scales, SealCheck } from '@phosphor-icons/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -8,11 +8,11 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { ClassificationApiError, useClassificationState, useDecideCorrection, useRequestCorrection, type EstadoWidget } from './api';
+import { ClassificationApiError, useClassificationState, useDecideCorrection, useRequestCorrection, type Certificacao, type EstadoWidget } from './api';
 import { ResumoEntrada } from './ResumoEntrada';
 import { ClassificationReveal } from './ClassificationReveal';
 import { ClassificationWizard, EmRevisao } from './ClassificationWizard';
-import { dataHora } from './formato';
+import { NOME_FAIXA, dataHora, formatarBRL } from './formato';
 import { useProcessClassificationEnabled } from './useProcessClassificationEnabled';
 
 
@@ -28,7 +28,7 @@ function Entrada({ podeClassificar, onComecar }: { podeClassificar: boolean; onC
   );
 }
 
-function Corpo({ estado, opportunityId, onComecar }: { estado: EstadoWidget; opportunityId: string; onComecar: () => void }) {
+function Corpo({ estado, opportunityId, onComecar, onCertificar }: { estado: EstadoWidget; opportunityId: string; onComecar: () => void; onCertificar: () => void }) {
   const c = estado.classificacao;
   switch (estado.estado) {
     case 'sem_classificacao':
@@ -45,9 +45,12 @@ function Corpo({ estado, opportunityId, onComecar }: { estado: EstadoWidget; opp
       return <EmRevisao />;
     default: {
       if (!c?.faixa) return <EmRevisao />;
+      // Depois de uma certificação que reduziu, o que vale é o final; o quadro da certificação mostra de onde veio.
+      const vale = estado.certificacao?.resultado === 'reduced' && estado.certificacao.final.faixa
+        ? { faixa: estado.certificacao.final.faixa, comissao: estado.certificacao.final.comissao } : { faixa: c.faixa, comissao: c.comissao };
       return (
         <div className="space-y-3">
-          <ClassificationReveal faixa={c.faixa} comissao={c.comissao} classificadoEm={c.classificadoEm} opportunityId={opportunityId} animar={false}
+          <ClassificationReveal faixa={vale.faixa} comissao={vale.comissao} classificadoEm={c.classificadoEm} opportunityId={opportunityId} animar={false}
             paraVendedor={estado.doVendedor !== false} />
           {estado.estado === 'fechada_classificada' && (
             <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
@@ -62,6 +65,14 @@ function Corpo({ estado, opportunityId, onComecar }: { estado: EstadoWidget; opp
               Pedido de correção recusado pelo gestor{estado.pedido.motivo ? `: ${estado.pedido.motivo}` : '.'}
             </p>
           )}
+          {estado.certificacao && <CertificacaoInfo c={estado.certificacao} />}
+          {estado.podeCertificar && estado.respostas && (
+            <div className="text-center">
+              <Button variant={estado.refazendoCertificacao ? 'outline' : 'default'} size="sm" onClick={onCertificar}>
+                <SealCheck className="mr-1.5 h-4 w-4" />{estado.refazendoCertificacao ? 'Refazer certificação (Admin)' : 'Certificar classificação'}
+              </Button>
+            </div>
+          )}
           {estado.podePedirCorrecao && <PedirCorrecao opportunityId={opportunityId} />}
           {estado.podeDecidir && estado.respostas && estado.pedido && (
             <DecidirCorrecao opportunityId={opportunityId} respostas={estado.respostas} criadoEm={estado.pedido.criadoEm} />
@@ -70,6 +81,29 @@ function Corpo({ estado, opportunityId, onComecar }: { estado: EstadoWidget; opp
       );
     }
   }
+}
+
+const nomeFaixa = (f: string | null) => (f ? NOME_FAIXA[f as keyof typeof NOME_FAIXA] ?? f : '—');
+
+/** Resultado da certificação pós-ganho (Fase 3b): vendedor, gestor e jurídico veem. */
+function CertificacaoInfo({ c }: { c: Certificacao }) {
+  const reduzida = c.resultado === 'reduced';
+  return (
+    <div className={reduzida ? 'rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm' : 'rounded-md border p-3 text-sm'}>
+      <p className="flex items-center gap-1.5 font-medium">
+        <SealCheck className="h-4 w-4" />
+        {reduzida ? 'Ajustada na certificação' : 'Certificada: a entrevista confirmou a classificação'}
+      </p>
+      {reduzida && (
+        <p className="mt-1">
+          {c.original.faixa !== c.final.faixa && <>{nomeFaixa(c.original.faixa)} → <strong>{nomeFaixa(c.final.faixa)}</strong> · </>}
+          Comissão {formatarBRL(c.original.comissao)} → <strong>{formatarBRL(c.final.comissao)}</strong>
+        </p>
+      )}
+      <p className="mt-1 text-muted-foreground">{reduzida ? `Motivo: ${c.motivo}` : c.motivo}</p>
+      <p className="mt-1 text-xs text-muted-foreground">Em {dataHora(c.certificadoEm)}{c.origem === 'nammux' ? ' · pelo Nammux' : ''}</p>
+    </div>
+  );
 }
 
 const erroDe = (e: unknown) => (e instanceof ClassificationApiError ? e.message : 'Não foi possível concluir. Tente de novo.');
@@ -130,7 +164,10 @@ function DecidirCorrecao({ opportunityId, respostas, criadoEm }: { opportunityId
 export function ProcessClassificationCard({ opportunityId, variant = 'card' }: { opportunityId: string; variant?: 'card' | 'inline' }) {
   const enabled = useProcessClassificationEnabled();
   const { data: estado, isLoading, isError, refetch } = useClassificationState(opportunityId, enabled);
-  const [preenchendo, setPreenchendo] = useState(false);
+  // null = fechado; 'classificar' = vendedor; 'certificar' = Jurídico depois da entrevista
+  const [modo, setModo] = useState<null | 'classificar' | 'certificar'>(null);
+  const preenchendo = modo !== null;
+  const setPreenchendo = (v: boolean) => { if (!v) setModo(null); };
   const isMobile = useIsMobile();
 
   if (!enabled || estado === null) {
@@ -139,7 +176,10 @@ export function ProcessClassificationCard({ opportunityId, variant = 'card' }: {
       : null;
   }
 
-  const wizard = <ClassificationWizard key={opportunityId} opportunityId={opportunityId} onDone={() => setPreenchendo(false)} />;
+  const wizard = (
+    <ClassificationWizard key={`${opportunityId}:${modo}`} opportunityId={opportunityId} onDone={() => setModo(null)}
+      certificar={modo === 'certificar' && estado?.respostas ? { respostas: estado.respostas, refazer: !!estado.refazendoCertificacao } : undefined} />
+  );
   const corpo = isLoading ? (
     <div className="space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-9 w-48" /></div>
   ) : isError || !estado ? (
@@ -148,7 +188,7 @@ export function ProcessClassificationCard({ opportunityId, variant = 'card' }: {
       <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar de novo</Button>
     </div>
   ) : (
-    <Corpo estado={estado} opportunityId={opportunityId} onComecar={() => setPreenchendo(true)} />
+    <Corpo estado={estado} opportunityId={opportunityId} onComecar={() => setModo('classificar')} onCertificar={() => setModo('certificar')} />
   );
 
   if (variant === 'inline') return <div className="p-1">{preenchendo ? wizard : corpo}</div>;
@@ -166,7 +206,7 @@ export function ProcessClassificationCard({ opportunityId, variant = 'card' }: {
         <SheetContent side={isMobile ? 'bottom' : 'right'} onInteractOutside={(e) => e.preventDefault()}
           className={cn('flex flex-col', isMobile ? 'h-[100dvh]' : 'w-full sm:max-w-lg')}>
           <SheetHeader>
-            <SheetTitle>Classificação do processo</SheetTitle>
+            <SheetTitle>{modo === 'certificar' ? 'Certificar classificação' : 'Classificação do processo'}</SheetTitle>
             <SheetDescription className="sr-only">Assistente de classificação do processo desta oportunidade</SheetDescription>
           </SheetHeader>
           <div className="min-h-0 flex-1">{preenchendo && wizard}</div>

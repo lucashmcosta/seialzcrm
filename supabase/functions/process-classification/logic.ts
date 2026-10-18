@@ -63,6 +63,9 @@ export function recusaDaRpc(msg: string): Recusa {
     no_pending_request: [409, "Não há pedido de correção pendente nesta oportunidade."],
     own_request: [403, "Você não pode decidir o seu próprio pedido de correção."],
     reason_required: [422, "Informe o motivo da recusa."],
+    not_won: [409, "A certificação só pode ser feita depois que a oportunidade é ganha."],
+    already_certified: [409, "Esta classificação já foi certificada. Só o Admin pode refazer."],
+    note_required: [422, "Explique o que a entrevista mostrou."],
   };
   const [status, mensagem] = tabela[code] ?? [500, "Não foi possível finalizar a classificação."];
   return new Recusa(status, code, mensagem);
@@ -96,3 +99,30 @@ export function calcular(entradaBruta: unknown, cal: Calibracao) {
 
 const IDEM = /^[A-Za-z0-9_-]{8,100}$/;
 export const chaveValida = (k: unknown): k is string => typeof k === "string" && IDEM.test(k);
+
+// ===== Certificação pós-ganho (Fase 3b) =====
+export const podeCertificar = (p: Perms) => p?.ferramentas?.certificar_classificacao === true;
+
+/** Caminhos da Entrada que mudaram entre o que o vendedor declarou e o que foi certificado (ex.: "testemunha", "horas_extras.he_dia"). */
+export function camposAlterados(declarada: Record<string, unknown>, certificada: Record<string, unknown>): string[] {
+  const igual = (x: unknown, y: unknown) => JSON.stringify(x) === JSON.stringify(y);
+  const out: string[] = [];
+  const topo = new Set([...Object.keys(declarada), ...Object.keys(certificada)].filter((k) => k !== "respostas" && k !== "teses"));
+  for (const k of [...topo].sort()) if (!igual(declarada[k], certificada[k])) out.push(k);
+  const tA = (declarada.teses ?? []) as string[], tB = (certificada.teses ?? []) as string[];
+  for (const t of tA) if (!tB.includes(t)) out.push(`-${t}`);
+  for (const t of tB) if (!tA.includes(t)) out.push(`+${t}`);
+  const rA = (declarada.respostas ?? {}) as Record<string, Record<string, unknown>>;
+  const rB = (certificada.respostas ?? {}) as Record<string, Record<string, unknown>>;
+  for (const t of tB.filter((x) => tA.includes(x))) {
+    const ids = new Set([...Object.keys(rA[t] ?? {}), ...Object.keys(rB[t] ?? {})]);
+    for (const id of [...ids].sort()) if (!igual(rA[t]?.[id], rB[t]?.[id])) out.push(`${t}.${id}`);
+  }
+  return out;
+}
+
+/** Só para baixo: comissão certificada menor que a original → vale a certificada; senão nada muda. Mesma regra da RPC. */
+export function decidirCertificacao(original: { faixa: string | null; comissao: number }, certificada: { faixa: string | null; comissao: number }) {
+  const reduzida = Math.round(certificada.comissao * 100) < Math.round(original.comissao * 100);
+  return { resultado: reduzida ? "reduced" as const : "confirmed" as const, final: reduzida ? certificada : original };
+}

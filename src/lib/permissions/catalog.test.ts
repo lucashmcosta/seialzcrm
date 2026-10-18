@@ -43,6 +43,10 @@ describe('permissões do módulo de classificação', () => {
     expect(g.administracao.calibrar_classificacao).toBe(false);
   });
 
+  it('nenhum modelo certifica (atribuído ao Jurídico no rollout)', () => {
+    for (const t of TEMPLATES) expect(t.perms.ferramentas.certificar_classificacao).toBe(false);
+  });
+
   it('modelos de atendimento não classificam', () => {
     for (const k of ['atendente', 'supervisor']) {
       expect(tpl(k).ferramentas.classificar).toBe(false);

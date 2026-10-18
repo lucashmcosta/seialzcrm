@@ -20,8 +20,21 @@ export interface EstadoWidget {
   doVendedor?: boolean;
   /** Gestor com "Liberar correção" e pedido pendente. */
   podeDecidir?: boolean;
-  /** Respostas do vendedor (Entrada), só para quem decide o pedido. */
+  /** Respostas do vendedor (Entrada), só para quem decide o pedido ou certifica. */
   respostas?: Record<string, unknown> | null;
+  /** Jurídico/Triagem: oportunidade ganha e ainda sem certificação (ou Admin refazendo). */
+  podeCertificar?: boolean;
+  refazendoCertificacao?: boolean;
+  certificacao?: Certificacao | null;
+}
+
+export interface FaixaComissao { faixa: Faixa | null; comissao: number }
+export interface Certificacao {
+  resultado: 'reduced' | 'confirmed'; motivo: string; certificadoEm: string; origem: 'seialz' | 'nammux';
+  original: FaixaComissao; final: FaixaComissao;
+}
+export interface PreviaCertificacao {
+  original: FaixaComissao; certificada: FaixaComissao; final: FaixaComissao; resultado: 'reduced' | 'confirmed'; mudou: string[];
 }
 
 export class ClassificationApiError extends Error {
@@ -93,4 +106,18 @@ export function useDecideCorrection(opportunityId: string) {
 export function tabelaClassificacao(nome: 'classification_calibration_versions' | 'process_classification_settings') {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (supabase as any).from(nome);
+}
+
+export function useCertify(opportunityId: string) {
+  const qc = useQueryClient();
+  const previa = useMutation({
+    mutationFn: (v: { entrada: Record<string, unknown> }) =>
+      call<PreviaCertificacao>('certify', { opportunity_id: opportunityId, entrada: v.entrada, dry_run: true }),
+  });
+  const confirmar = useMutation({
+    mutationFn: (v: { entrada: Record<string, unknown>; note: string; redo: boolean }) =>
+      call<{ resultado: string; final: FaixaComissao }>('certify', { opportunity_id: opportunityId, entrada: v.entrada, note: v.note, redo: v.redo }),
+    onSettled: () => qc.invalidateQueries({ queryKey: classificationKey(opportunityId) }),
+  });
+  return { previa, confirmar };
 }
