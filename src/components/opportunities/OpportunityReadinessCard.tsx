@@ -43,6 +43,9 @@ export function OpportunityReadinessCard({ organizationId, opportunityId, onGoTo
             {item.status === 'missing' && item.action === 'edit_documents' && onGoToDocuments && (
               <Button variant="link" size="sm" onClick={onGoToDocuments}>Ir para Documentos</Button>
             )}
+            {item.status === 'missing' && item.action === 'classify' && (
+              <span className="text-xs text-muted-foreground">Card "Classificação do processo"</span>
+            )}
           </div>
         ))}
         {evaluation.mode === 'monitor' && evaluation.missing_count > 0 && (

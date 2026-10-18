@@ -3,6 +3,23 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
+import type { Plugin } from "vite";
+
+// Classificação de processos (risco R3): o perguntas.ts do motor importa o CATALOGO completo, com as
+// explicações jurídicas de cada chance. No navegador vai só o catálogo reduzido (nomes e rótulos),
+// gerado por scripts/gen-catalogo-vendedor.mjs. O motor (packages/motor-classificacao) não é editado.
+function catalogoVendedor(): Plugin {
+  const perguntas = path.resolve(__dirname, "packages/motor-classificacao/src/perguntas.ts");
+  const reduzido = path.resolve(__dirname, "src/components/process-classification/catalogoVendedor.ts");
+  return {
+    name: "seialz-catalogo-vendedor",
+    enforce: "pre",
+    resolveId(source, importer) {
+      if (source === "./catalogo" && importer && path.resolve(importer) === perguntas) return reduzido;
+      return null;
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -42,6 +59,7 @@ export default defineConfig(({ mode }) => {
       __SENTRY_RELEASE__: JSON.stringify(release),
     },
     plugins: [
+      catalogoVendedor(),
       react(),
       mode === "development" && componentTagger(),
       sentryEnabled &&

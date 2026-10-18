@@ -151,9 +151,19 @@ button, nav, [role="tablist"], [role="tab"] {
     --glass-bg: hsl(0 0% 100% / 0.7);
     --glass-border: hsl(0 0% 100% / 0.2);
     --glass-blur: 12px;
+    /* Classificação de processos: destaque de cada material (texto AA sobre o fundo do tema) */
+    --band-prata: 215 14% 40%;
+    --band-ouro: 35 85% 33%;
+    --band-titanio: 218 35% 40%;
+    --band-diamante: 189 80% 29%;
   }
 
   .dark {
+    /* Classificação de processos: destaque de cada material */
+    --band-prata: 213 20% 80%;
+    --band-ouro: 41 88% 62%;
+    --band-titanio: 217 50% 74%;
+    --band-diamante: 186 72% 68%;
     /* Dark Mode */
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
@@ -229,6 +239,11 @@ button, nav, [role="tablist"], [role="tab"] {
    * Dark-first, verde accent (#00FF88), Outfit + Share Tech Mono
    * ═══════════════════════════════════════════════════════ */
   .theme-seialz {
+    /* Classificação de processos: destaque de cada material */
+    --band-prata: 213 20% 80%;
+    --band-ouro: 41 88% 62%;
+    --band-titanio: 217 50% 74%;
+    --band-diamante: 186 72% 68%;
     /* ═══ BACKGROUNDS ═══ */
     --background: 240 20% 3%;           /* #07070A — page bg */
     --foreground: 240 3% 94%;           /* #F0F0F0 — t1 */

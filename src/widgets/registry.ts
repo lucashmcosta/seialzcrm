@@ -1,9 +1,11 @@
-import { Calculator, GridNine } from '@phosphor-icons/react';
+import { Calculator, GridNine, Scales } from '@phosphor-icons/react';
 import type { WidgetDefinition } from './types';
 import { OvertimeCalculatorWidget } from './overtime-calculator/OvertimeCalculatorWidget';
 import { TicTacToeWidget } from './tic-tac-toe/TicTacToeWidget';
 import { OvertimePreview } from './overtime-calculator/OvertimePreview';
 import { TicTacToePreview } from './tic-tac-toe/TicTacToePreview';
+import { ProcessClassificationWidget } from './process-classification/ProcessClassificationWidget';
+import { ProcessClassificationPreview } from './process-classification/ProcessClassificationPreview';
 
 /**
  * Catálogo global de widgets. Tudo aqui aparece em Configurações para todos
@@ -27,6 +29,17 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     contextMode: 'none',
     Component: TicTacToeWidget,
     Preview: TicTacToePreview,
+  },
+  {
+    // Ligar este widget liga o módulo de classificação na org (exige calibração publicada; ver docs/classificacao-v1).
+    key: 'process_classification',
+    name: 'Classificação do processo',
+    description: 'O vendedor classifica o caso trabalhista e vê a faixa e a comissão da venda.',
+    icon: Scales,
+    contextMode: 'opportunity',
+    Component: ProcessClassificationWidget,
+    Preview: ProcessClassificationPreview,
+    settings: () => import('@/components/process-classification/settings/ProcessClassificationSettings'),
   },
 ];
 

@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Motor de comissão — Central Trabalhista</title>
+<style>
+  :root{
+    --bg:#0f1319; --panel:#171c25; --panel2:#1e2531; --line:#2a3340;
+    --ink:#e8ecf2; --mut:#8a95a6; --dim:#596475;
+    --accent:#5b8def; --accent-dim:#26344d;
+    --prata:#c3c9d2; --ouro:#e8b23a; --titanio:#7fa6d9; --diamante:#63d8e6;
+    --ok:#3fb984; --warn:#e0a53a; --stop:#e06a5a;
+    --r:12px; --r-sm:8px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;line-height:1.45}
+  .top{border-bottom:1px solid var(--line);padding:14px 20px;display:flex;align-items:baseline;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:10}
+  .top h1{font-size:15px;font-weight:650;margin:0}
+  .top .sub{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px}
+  .tabs{display:flex;gap:4px;padding:10px 20px 0;border-bottom:1px solid var(--line)}
+  .tab{padding:9px 16px;border-radius:var(--r-sm) var(--r-sm) 0 0;font-size:13px;color:var(--mut);cursor:pointer;border:1px solid transparent;border-bottom:none}
+  .tab[aria-selected=true]{background:var(--panel);color:var(--ink);border-color:var(--line);font-weight:600}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px;display:grid;grid-template-columns:1fr 360px;gap:20px}
+  .wrap.single{grid-template-columns:1fr;max-width:900px}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}}
+  .page{display:none}.page.on{display:block}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);margin-bottom:16px;overflow:hidden}
+  .ch{padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel2);font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+  .ch .tag{font-size:11px;font-weight:400;color:var(--dim)}
+  .cb{padding:14px 16px;display:grid;gap:13px}
+  .row{display:grid;gap:5px}
+  .row.two{grid-template-columns:1fr 1fr;gap:12px}
+  .row.three{grid-template-columns:1fr 1fr 1fr;gap:10px}
+  label{font-size:12px;color:var(--mut)}
+  label .h{color:var(--dim)}
+  input,select{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 10px;font-size:14px;font-family:inherit;appearance:none}
+  input:focus,select:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+  select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a95a6' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+  input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{flex:1;min-width:52px;text-align:center;padding:8px 6px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--bg);color:var(--mut);font-size:13px;cursor:pointer;user-select:none}
+  .chip[aria-pressed=true]{background:var(--accent-dim);border-color:var(--accent);color:#cfe0ff;font-weight:600}
+  .teses{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  @media(max-width:560px){.teses{grid-template-columns:1fr}}
+  .tese{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg);cursor:pointer;font-size:13px;user-select:none}
+  .tese[aria-pressed=true]{border-color:var(--accent);background:var(--accent-dim);color:#cfe0ff}
+  .tese .box{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--dim);flex:none;display:grid;place-items:center;font-size:11px}
+  .tese[aria-pressed=true] .box{border-color:var(--accent);background:var(--accent);color:#fff}
+  .proc{border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:10px;overflow:hidden}
+  .proc-h{padding:10px 12px;background:var(--panel2);display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600}
+  .selo{font-size:11px;padding:2px 10px;border-radius:999px;font-weight:600}
+  .selo.forte{background:#10241a;color:var(--ok);border:1px solid #22402f}
+  .selo.media{background:#241d10;color:var(--warn);border:1px solid #4a3d22}
+  .selo.fraca{background:#241310;color:var(--stop);border:1px solid #4a2a24}
+  .proc-b{padding:12px;display:grid;gap:11px}
+  .mini{font-size:11px;color:var(--dim);font-style:italic}
+  .ovbox{border-top:1px dashed var(--line);margin-top:4px;padding-top:10px}
+  .ovbox.on{border-color:var(--accent)}
+  .ovhead{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--mut)}
+  .ovtog{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px}
+  .ovtog input{width:auto;accent-color:var(--accent)}
+  .ovslide{margin-top:9px;display:grid;gap:5px}
+  .ovslide .sl{display:grid;grid-template-columns:1fr 46px;gap:10px;align-items:center}
+  .ovslide .sl input[type=range]{accent-color:var(--warn)}
+  .ovslide .v{font-weight:600;text-align:right;color:var(--warn)}
+  .result{position:sticky;top:70px}
+  .medal{width:92px;height:92px;border-radius:50%;display:grid;place-items:center;text-align:center;background:radial-gradient(circle at 35% 30%,#242c38,#141922);border:2px solid var(--line);margin:0 auto 10px;transition:.3s}
+  .medal .t{font-size:16px;font-weight:750}.medal .c{font-size:12px;color:var(--mut);margin-top:3px}
+  .gauge{height:8px;border-radius:5px;background:var(--bg);overflow:hidden;margin:8px 0}
+  .gauge i{display:block;height:100%;border-radius:5px;transition:.4s}
+  .kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}
+  .kv:last-child{border:none}.kv b{font-variant-numeric:tabular-nums}
+  .scorebadge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600}
+  .mods{font-size:12px;color:var(--mut);margin-top:10px;line-height:1.6}
+  .mods .up{color:var(--ok)}.mods .down{color:var(--stop)}
+  .teselist{margin-top:12px;font-size:12px}
+  .teselist .ti{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)}
+  .teselist .ti:last-child{border:none}
+  /* slider rows */
+  .sl{display:grid;grid-template-columns:1fr 46px;gap:10px;align-items:center}
+  .sl input[type=range]{width:100%;accent-color:var(--accent)}
+  .sl .v{font-variant-numeric:tabular-nums;text-align:right;font-weight:600;font-size:13px}
+  .slbar{height:6px;border-radius:4px;overflow:hidden;background:var(--bg);margin-top:3px}
+  .slbar i{display:block;height:100%;border-radius:4px}
+  .note{font-size:11px;color:var(--dim);font-style:italic}
+  h3.sec{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);margin:6px 0 2px}
+  .empty{color:var(--dim);font-size:13px;text-align:center;padding:20px}
+  /* config tese accordion */
+  .acc{border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:10px;overflow:hidden}
+  .acc-h{padding:12px 14px;background:var(--panel2);display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-weight:600;font-size:13px}
+  .acc-h .arrow{color:var(--dim);transition:.2s}
+  .acc[aria-expanded=true] .arrow{transform:rotate(90deg)}
+  .acc-b{display:none;padding:14px;gap:13px}
+  .acc[aria-expanded=true] .acc-b{display:grid}
+  .agcard{border:1px solid var(--line);border-radius:var(--r-sm);padding:11px 12px;display:grid;gap:8px;background:var(--bg)}
+  .aghead{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px}
+  .aghead select{width:auto;padding:5px 26px 5px 9px;font-size:12px}
+  .onus-note{font-size:12px;color:var(--titanio);background:#141c28;border:1px solid #233048;border-radius:var(--r-sm);padding:9px 11px;line-height:1.4}
+  .cfggrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.cfggrid{grid-template-columns:1fr}}
+  .pct-label{display:flex;justify-content:space-between;font-size:12px;color:var(--mut)}
+  .btnrow{display:flex;gap:8px;margin-top:4px}
+  .btn{flex:1;padding:9px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--panel2);color:var(--ink);font-size:13px;cursor:pointer;font-family:inherit}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .liveflag{font-size:11px;color:var(--ok);display:flex;align-items:center;gap:5px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block;animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  /* ajuste pela qualidade (faixas de score) */
+  .bands{display:grid;grid-template-columns:minmax(70px,90px) 1fr minmax(90px,120px);gap:6px 10px;align-items:center}
+  .bands .hd{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px}
+  .bands .sc{font-weight:600;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:7px}
+  .bands .sc i{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .bands select,.bands input{padding:6px 9px;font-size:13px}
+  .bm{border-collapse:collapse;width:100%;font-size:11px;font-variant-numeric:tabular-nums;min-width:640px}
+  .bm th,.bm td{border:1px solid var(--line);padding:6px 4px;text-align:center}
+  .bm th{color:var(--dim);font-weight:600;background:var(--panel2)}
+  .bm td.lab{text-align:left;font-weight:650;padding-left:8px;white-space:nowrap}
+  .bm td.cur{outline:2px solid var(--accent);outline-offset:-2px;background:var(--accent-dim)}
+  .bm td .t{font-weight:700;font-size:10px;letter-spacing:.4px}
+  /* barra de calibração salva */
+  .savebar{max-width:1180px;margin:12px auto 0;padding:0 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--mut)}
+  .savebar .sbtns{display:flex;gap:6px;flex-wrap:wrap}
+  .btn.sm{flex:none;padding:6px 11px;font-size:12px}
+  .importbox{max-width:1180px;margin:10px auto 0;padding:0 20px}
+  .importbox .in{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;gap:9px}
+  textarea{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 10px;font-size:12px;font-family:ui-monospace,Menlo,monospace;resize:vertical}
+</style>
+</head>
+<body>
+<div class="top"><div><h1>Motor de comissão</h1></div><div class="sub">Central Trabalhista · procedência por tese</div></div>
+<div class="tabs">
+  <div class="tab" data-tab="sim" aria-selected="true">Simular caso</div>
+  <div class="tab" data-tab="cfg" aria-selected="false">Calibrar teses</div>
+  <div class="tab" data-tab="geral" aria-selected="false">Faixas e score</div>
+</div>
+<div class="savebar">
+  <span id="saveStat">Calibração padrão</span>
+  <span class="sbtns">
+    <button class="btn sm" id="exportCfg">Exportar calibração</button>
+    <button class="btn sm" id="importCfg">Importar</button>
+    <button class="btn sm" id="resetCfg">Restaurar padrão</button>
+  </span>
+</div>
+<div class="importbox" id="importBox" style="display:none"><div class="in">
+  <p class="note" style="margin:0">Escolha o arquivo .json exportado ou cole o texto copiado (vale também o "Exportar" da versão antiga, que copiava o texto).</p>
+  <input type="file" id="importFile" accept=".json,application/json">
+  <textarea id="importText" rows="5" placeholder="Cole aqui o JSON da calibração"></textarea>
+  <div class="btnrow"><button class="btn primary" id="importApply">Aplicar calibração</button><button class="btn" id="importCancel">Cancelar</button></div>
+  <p class="note" id="importMsg" style="margin:0"></p>
+</div></div>
+
+<!-- ===== SIMULAR ===== -->
+<div class="page on" id="page-sim">
+<div class="wrap">
+  <div>
+    <div class="card">
+      <div class="ch">Dados base</div>
+      <div class="cb">
+        <div class="row two">
+          <div class="row"><label>Salário mensal <span class="h">R$</span></label><input id="salario" type="number" value="2500"></div>
+          <div class="row"><label>Meses de vínculo</label><input id="meses" type="number" value="36"></div>
+        </div>
+        <div class="row two">
+          <div class="row"><label>Nº de funcionários <span class="h">na empresa</span></label><input id="funcionarios" type="number" value="25"></div>
+          <div class="row"><label>Dias/semana</label><input id="dias_semana" type="number" value="5"></div>
+        </div>
+        <div class="row"><label>Como saiu</label>
+          <select id="saida">
+            <option value="sem_justa_causa">Dispensa sem justa causa</option>
+            <option value="rescisao_indireta">Rescisão indireta</option>
+            <option value="pedido_demissao">Pedido de demissão (vício)</option>
+            <option value="sem_registro">Sem registro (vínculo)</option>
+            <option value="justa_causa">Justa causa (reverter)</option>
+          </select></div>
+        <div class="row" id="riRow" style="display:none"><label>Rescisão indireta: qual a principal falta da empresa? <span class="h">o cliente prova</span></label>
+          <div class="chips" data-single id="ri_falta" style="flex-wrap:wrap">
+            <div class="chip" data-v="doc" aria-pressed="true" style="flex:1 1 auto">Atraso de salário / FGTS não depositado</div>
+            <div class="chip" data-v="verbas" style="flex:1 1 auto">Não pagava extras/adicionais</div>
+            <div class="chip" data-v="conduta" style="flex:1 1 auto">Assédio, ofensas, rigor excessivo</div>
+          </div></div>
+        <div class="row" id="vincRow" style="display:none"><label>Sem registro: a empresa admite que ele trabalhou lá? <span class="h">mesmo dizendo que era autônomo/PJ</span></label>
+          <div class="chips" data-single id="vinc_admite">
+            <div class="chip" data-v="nao" aria-pressed="true">Não, nega</div>
+            <div class="chip" data-v="sim">Sim, admite</div>
+          </div>
+          <p class="note" style="margin:4px 0 0">Sem registro: marcamos sozinho FGTS (todo o período), verbas rescisórias (13º e férias de todo o período) e dano moral por informalidade. Desmarque o que não se aplicar.</p>
+          <label style="margin-top:8px">Tem prova do trabalho? <span class="h">PIX, mensagens, crachá, fotos</span></label>
+          <div class="chips" data-single id="vinc_doc">
+            <div class="chip" data-v="nao" aria-pressed="true">Não</div>
+            <div class="chip" data-v="sim">Sim</div>
+          </div></div>
+        <div class="row" id="jcRow" style="display:none"><label>Justa causa: a empresa tem advertências, suspensões ou prova da falta? <span class="h">o ônus é dela</span></label>
+          <div class="chips" data-single id="jc_prova">
+            <div class="chip" data-v="nao" aria-pressed="true">Não</div>
+            <div class="chip" data-v="sim">Sim</div>
+          </div></div>
+        <div class="row two">
+          <div class="row"><label>Trabalho <span class="h">afeta jornada</span></label>
+            <div class="chips" data-single id="local">
+              <div class="chip" data-v="interno" aria-pressed="true">Interno</div>
+              <div class="chip" data-v="externo">Externo</div>
+            </div></div>
+          <div class="row"><label>Testemunha do período? <span class="h">reforça as teses</span></label>
+            <div class="chips" data-single id="testemunha">
+              <div class="chip" data-v="nao" aria-pressed="true">Não</div>
+              <div class="chip" data-v="sim">Sim</div>
+            </div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch">Quais teses o caso tem? <span class="tag">marque as que se aplicam</span></div>
+      <div class="cb"><div class="teses" id="teses"></div></div>
+    </div>
+    <div class="card">
+      <div class="ch">Procedência <span class="tag">confirma a força de cada tese</span></div>
+      <div class="cb" id="procBody"><div class="empty">Marque uma tese acima.</div></div>
+    </div>
+  </div>
+  <div class="result">
+    <div class="card">
+      <div class="ch">Resultado</div>
+      <div class="cb">
+        <div class="medal" id="medal"><div><div class="t" id="tier">—</div><div class="c" id="comm">—</div></div></div>
+        <div class="kv"><span id="valorlab">Valor composto</span><b id="valor">R$ 0</b></div>
+        <div class="kv"><span>Faixa por valor</span><b id="faixaval">—</b></div>
+        <div class="kv"><span>Score de qualidade</span><b><span class="scorebadge" id="scorebadge">0</span></b></div>
+        <div class="gauge"><i id="scoregauge" style="width:0%"></i></div>
+        <div class="kv"><span>Ajuste pelo score</span><b id="scoreadj">—</b></div>
+        <div class="mods" id="mods"></div>
+        <div class="teselist" id="teselist"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ===== CALIBRAR TESES ===== -->
+<div class="page" id="page-cfg">
+<div class="wrap single">
+  <div class="card">
+    <div class="ch">Calibrar cada tese <span class="liveflag"><span class="dot"></span>atualiza em tempo real</span></div>
+    <div class="cb">
+      <p class="note">Cada tese: probabilidade de êxito por cenário e valores de referência. Abra uma tese para ajustar. Qualquer mudança reflete na simulação na hora.</p>
+      <div id="cfgTeses"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ===== FAIXAS E SCORE ===== -->
+<div class="page" id="page-geral">
+<div class="wrap" style="grid-template-columns:1fr 1fr">
+  <div class="card">
+    <div class="ch">Faixas e comissão</div>
+    <div class="cb">
+      <h3 class="sec">Limites de valor da faixa (R$)</h3>
+      <div class="row three">
+        <div class="row"><label>Prata→Ouro</label><input type="number" id="lim1" value="40000"></div>
+        <div class="row"><label>Ouro→Titânio</label><input type="number" id="lim2" value="90000"></div>
+        <div class="row"><label>Titânio→Diamante</label><input type="number" id="lim3" value="200000"></div>
+      </div>
+      <h3 class="sec">Comissão (R$)</h3>
+      <div class="row three" style="grid-template-columns:1fr 1fr 1fr 1fr">
+        <div class="row"><label>Prata</label><input type="number" id="com0" value="50"></div>
+        <div class="row"><label>Ouro</label><input type="number" id="com1" value="110"></div>
+        <div class="row"><label>Titânio</label><input type="number" id="com2" value="180"></div>
+        <div class="row"><label>Diamante</label><input type="number" id="com3" value="300"></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch">Score e parâmetros</div>
+    <div class="cb">
+      <h3 class="sec">Peso: tamanho × solidez na faixa</h3>
+      <div class="row"><div class="pct-label"><span>Peso do tamanho do caso</span><span class="note">o resto é solidez</span></div>
+        <div class="sl"><input type="range" id="peso_tamanho" min="0" max="100" value="40"><span class="v" id="peso_tamanho_v">40</span></div>
+        <div class="slbar"><i id="peso_bar" style="width:40%;background:var(--titanio)"></i></div></div>
+      <p class="note" id="peso_desc">Faixa = 40% tamanho (valor bruto) + 60% solidez (probabilidade). Puxar pra 0 = só qualidade manda; pra 100 = só tamanho. Default puxa forte pra solidez: caso grande e fraco não paga cheio.</p>
+      <h3 class="sec">Limiares de selo (%)</h3>
+      <div class="row two">
+        <div class="row"><label>Forte a partir de</label><input type="number" id="selo_forte" value="65"></div>
+        <div class="row"><label>Média a partir de</label><input type="number" id="selo_media" value="40"></div>
+      </div>
+      <h3 class="sec">Legais 2026</h3>
+      <div class="row two">
+        <div class="row"><label>Salário mínimo</label><input type="number" id="sm" value="1621"></div>
+        <div class="row"><label>Fator de reflexos</label><input type="number" id="reflexo" value="1.37" step="0.01"></div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="grid-column:1/-1">
+    <div class="ch">Ajuste pela qualidade (score) <span class="liveflag"><span class="dot"></span>atualiza em tempo real</span></div>
+    <div class="cb">
+      <div class="row"><label>Valor que define a faixa</label>
+        <select id="base_faixa">
+          <option value="composto">Composto: tamanho + solidez (atual)</option>
+          <option value="bruto">Só o tamanho (valor bruto) — a qualidade entra só pela tabela abaixo</option>
+          <option value="esperado">Valor esperado (bruto × chance)</option>
+        </select>
+        <p class="note" id="base_desc"></p></div>
+      <h3 class="sec">Faixas de score (a cada 10%)</h3>
+      <p class="note">Para cada faixa de score: mover a faixa de comissão e/ou pagar um % da comissão. Começa neutro (mantém, 100%) — o resultado de hoje só muda quando você ajustar.</p>
+      <div class="bands" id="scoreBands"></div>
+      <div class="btnrow"><button class="btn" id="resetBands">Voltar ao neutro</button></div>
+      <h3 class="sec">Prévia: comissão final por faixa de valor × score</h3>
+      <p class="note">Linha = faixa pelo valor; coluna = faixa de score. O quadro azul é o caso que está na simulação.</p>
+      <div style="overflow-x:auto" id="bandMatrix"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const brl=v=>'R$ '+Math.round(v).toLocaleString('pt-BR');
+const NOMES=['PRATA','OURO','TITANIO','DIAMANTE'];
+const COR={PRATA:'var(--prata)',OURO:'var(--ouro)',TITANIO:'var(--titanio)',DIAMANTE:'var(--diamante)'};
+const selocol=s=>s==='forte'?'var(--ok)':s==='media'?'var(--warn)':'var(--stop)';
+
+// ---------- CONFIG EDITÁVEL (probabilidades e valores por tese) ----------
+const CFG_PADRAO={
+  horas_extras:{nome:'Horas extras',probs:{
+    forte_sem_ponto:{v:85,label:'21+ func, sem ponto, sem testemunha',sub:'ônus da empresa (Súm.338,I)'},
+    forte_sem_ponto_test:{v:95,label:'21+ func, sem ponto, COM testemunha',sub:'ônus da empresa + prova oral'},
+    sem_ponto_peq:{v:22,label:'Sem ponto, até 20 func, SEM testemunha',sub:'sem obrigação legal → ônus do cliente, sem prova = quase perda'},
+    sem_ponto_peq_test:{v:75,label:'Sem ponto, até 20 func, COM testemunha',sub:'sem obrigação, mas prova oral supre'},
+    ponto_real_nao_pagou:{v:90,label:'Ponto real, extras NÃO pagas',sub:'factual — o próprio ponto prova o débito'},
+    fraude_sem_test:{v:12,label:'Ponto NÃO mostra o real, SEM testemunha',sub:'alega fraude mas ônus é do cliente — quase perda'},
+    fraude_com_test:{v:78,label:'Ponto NÃO mostra o real, COM testemunha',sub:'testemunha derruba o ponto falso'},
+    externo_sem_test:{v:10,label:'Externo sem ponto, SEM testemunha',sub:'art.62,I: sem obrigação de controle → ônus do cliente, sem prova = quase perda'},
+    externo_test:{v:70,label:'Externo sem ponto, COM testemunha',sub:'testemunha é a prova do cliente'},
+  }},
+  intrajornada:{nome:'Intervalo de almoço',onus:'INTERNO 21+ func sem registro: concessão é fato extintivo → ônus da empresa. ATÉ 20 func (sem obrigação de ponto) ou EXTERNO (art.62): ônus do cliente, testemunha decide',probs:{
+    pre_sem_test:{v:12,label:'Ponto marca 1h mas não tirava, SEM testemunha',sub:'pré-assinalação vale como prova da empresa → ônus do cliente derrubar, sem prova = quase perda'},
+    pre_test:{v:78,label:'Ponto marca 1h mas não tirava, COM testemunha',sub:'testemunha derruba a pré-assinalação'},
+    ponto_real_suprimido:{v:90,label:'Ponto registra intervalo suprimido (<1h)',sub:'o próprio ponto prova a supressão (Súm.437)'},
+    interno_sem_reg_test:{v:80,label:'Interno 21+ func, sem registro, COM testemunha',sub:'ônus da empresa + reforço'},
+    interno_sem_reg:{v:65,label:'Interno 21+ func, sem registro, SEM testemunha',sub:'obrigada a registrar (art.74 §2º) → ônus da empresa'},
+    peq_sem_reg_test:{v:75,label:'Até 20 func, sem registro, COM testemunha',sub:'sem obrigação de ponto, mas a testemunha prova'},
+    peq_sem_reg:{v:22,label:'Até 20 func, sem registro, SEM testemunha',sub:'sem obrigação de ponto → ônus do cliente, sem prova = quase perda'},
+    externo_test:{v:70,label:'Externo, COM testemunha',sub:'ônus do cliente, testemunha é a prova'},
+    externo_sem_test:{v:10,label:'Externo, SEM testemunha',sub:'art.62: ônus do cliente, sem prova = quase perda'},
+  }},
+  noturno:{nome:'Adicional noturno',onus:'Se pagava algo, o trabalho noturno é incontroverso. Se não pagava, decide quem prova o horário após 22h: ponto real = prova pronta; 21+ func sem ponto = ônus da empresa; ponto falso, até 20 func sem ponto ou externo = ônus do cliente (testemunha decide)',probs:{
+    ponto_real:{v:90,label:'Ponto registra o horário após 22h e não pagava',sub:'factual — o próprio ponto prova'},
+    grande_sem_ponto:{v:80,label:'Sem ponto, 21+ func, SEM testemunha',sub:'ônus da empresa (Súm.338,I)'},
+    grande_sem_ponto_test:{v:92,label:'Sem ponto, 21+ func, COM testemunha',sub:'ônus da empresa + prova oral'},
+    peq_sem_ponto:{v:20,label:'Sem ponto, até 20 func, SEM testemunha',sub:'sem obrigação de controle → ônus do cliente, sem prova'},
+    peq_sem_ponto_test:{v:72,label:'Sem ponto, até 20 func, COM testemunha',sub:'testemunha prova o horário'},
+    fraude_sem_test:{v:12,label:'Ponto NÃO mostra o horário real, SEM testemunha',sub:'ônus do cliente derrubar o ponto — quase perda'},
+    fraude_com_test:{v:75,label:'Ponto NÃO mostra o horário real, COM testemunha',sub:'testemunha derruba o ponto'},
+    externo_sem_test:{v:15,label:'Externo sem ponto, SEM testemunha',sub:'art.62: ônus do cliente, sem prova = quase perda'},
+    externo_test:{v:68,label:'Externo sem ponto, COM testemunha',sub:'testemunha prova o horário'},
+    pagou_a_menor:{v:78,label:'Pagava, mas sem hora reduzida',sub:'trabalho noturno incontroverso — cobra a diferença'},
+  }},
+  insalubridade:{nome:'Insalubridade',onus:'resolve por PERÍCIA (art.195); a testemunha reforça (confirma exposição habitual e EPI não entregue/não usado). Cada agente tem anexo, grau e efeito do EPI próprios',probs:{
+    reforco_test:{v:6,label:'Reforço da testemunha (pontos)',sub:'confirma a exposição e o EPI não usado/fiscalizado (Súm.289)'},
+    ja_recebe:{v:78,label:'Recebe grau menor que o devido',sub:'cobra só a diferença de grau (item 237)'},
+    agravante:{v:5,label:'Reforço por agente adicional (pontos)',sub:'cada agente a mais que se enquadra soma na chance'},
+  },agentes:{
+    biologico:{label:'Biológico',sub:'Anexo 14 — hospital, esgoto, lixo urbano',grau:0.4,prob:65,prob_epi:50,epi:'luva/máscara/avental'},
+    frio:{label:'Frio',sub:'Anexo 9 — câmara fria, frigorífico',grau:0.2,prob:65,prob_epi:35,epi:'roupa térmica/japona'},
+    calor:{label:'Calor',sub:'Anexo 3 — depende da medição IBUTG (forno, fundição, cozinha industrial)',grau:0.2,prob:50,prob_epi:45,epi:'vestimenta de proteção térmica'},
+    quimico:{label:'Químico',sub:'Anexos 11/13 — grau varia conforme o produto',grau:0.2,prob:50,prob_epi:25,epi:'luva/respirador'},
+    umidade:{label:'Umidade',sub:'Anexo 10 — trabalho encharcado',grau:0.2,prob:55,prob_epi:25,epi:'bota/avental impermeável'},
+    ruido:{label:'Ruído',sub:'Anexo 1 — só acima do limite (~85 dB); protetor auricular costuma neutralizar',grau:0.2,prob:45,prob_epi:15,prob_fora:10,fora:'ruído moderado/intermitente',epi:'protetor auricular'},
+    poeira:{label:'Poeira',sub:'Anexo 12 — só poeira mineral (sílica, amianto, manganês); poeira comum não enquadra',grau:0.2,prob:45,prob_epi:15,prob_fora:5,fora:'poeira comum (madeira, farinha, terra)',epi:'máscara PFF2/respirador'},
+  }},
+  periculosidade:{nome:'Periculosidade',onus:'resolve por PERÍCIA (art.195) — enquadramento mais objetivo; a testemunha reforça (confirma a atividade e a habitualidade)',probs:{
+    reforco_test:{v:6,label:'Reforço da testemunha (pontos)',sub:'confirma a atividade de risco e a habitualidade'},
+    enquadra_claro:{v:72,label:'Atividade claramente enquadrada (NR-16)',sub:'eletricidade, inflamável/GLP, vigilância, motocicleta (art.193 §4º)'},
+    enquadra_duvidoso:{v:50,label:'Enquadramento discutível',sub:'depende do laudo'},
+    ja_recebe:{v:80,label:'Recebe sobre base errada',sub:'cobra só a diferença de base — holerite prova'},
+  }},
+  verbas_rescisorias:{nome:'Verbas rescisórias',onus:'ônus da EMPRESA provar o pagamento (documental). MULTA 477: prazo de 10 dias para pagar E entregar os documentos (§6º). JUSTA CAUSA: ônus da EMPRESA provar a falta grave. RESCISÃO INDIRETA: ônus do CLIENTE provar a falta da empresa. SEM REGISTRO: se a empresa nega o trabalho, ônus do cliente; se admite e diz que era autônomo/PJ, ônus da empresa — e sem vínculo NENHUMA tese existe. Essas chances valem para todas as teses afetadas. Seguro-desemprego NÃO entra no valor (decisão comercial)',probs:{
+    documental:{v:92,label:'Não pagas — empresa tem que provar quitação',sub:'TRCT/recibo'},
+    multa477_guias:{v:70,label:'Multa 477 — pagou em dia, mas as guias/documentos atrasaram',sub:'art.477 §6º inclui os documentos; há decisões contra'},
+    ri_doc:{v:85,label:'Reconhecer rescisão indireta — atraso de salário / FGTS não depositado',sub:'falta documental (extrato, holerite)'},
+    ri_verbas:{v:60,label:'Reconhecer rescisão indireta — não pagava extras/adicionais',sub:'depende de a tese principal ser provada'},
+    ri_conduta:{v:20,label:'Reconhecer rescisão indireta — assédio/rigor, SEM testemunha',sub:'ônus do cliente, sem prova = quase perda'},
+    ri_conduta_test:{v:70,label:'Reconhecer rescisão indireta — assédio/rigor, COM testemunha',sub:'testemunha prova a conduta'},
+    ri_reforco_test:{v:5,label:'Reforço da testemunha na rescisão indireta documental (pontos)',sub:''},
+    vinc_admite:{v:75,label:'Vínculo — empresa admite o trabalho (diz autônomo/PJ), SEM testemunha',sub:'ônus da empresa provar a autonomia'},
+    vinc_admite_test:{v:85,label:'Vínculo — empresa admite o trabalho, COM testemunha',sub:'ônus da empresa + prova oral'},
+    vinc_nega_nada:{v:10,label:'Vínculo — empresa nega, cliente sem prova',sub:'ônus do cliente — quase perda'},
+    vinc_nega_doc:{v:60,label:'Vínculo — empresa nega, cliente tem PIX/mensagens/crachá',sub:'prova documental do trabalho'},
+    vinc_nega_test:{v:70,label:'Vínculo — empresa nega, cliente tem testemunha',sub:'prova oral'},
+    vinc_nega_doc_test:{v:85,label:'Vínculo — empresa nega, cliente tem documento + testemunha',sub:''},
+    jc_sem_prova:{v:70,label:'Reverter justa causa — empresa SEM advertência/prova, sem testemunha',sub:'ônus da empresa provar a falta grave'},
+    jc_sem_prova_test:{v:82,label:'Reverter justa causa — empresa SEM prova, COM testemunha',sub:'ônus da empresa + prova oral do cliente'},
+    jc_com_prova:{v:20,label:'Reverter justa causa — empresa COM advertência/prova, sem testemunha',sub:'empresa cumpriu o ônus — quase perda'},
+    jc_com_prova_test:{v:40,label:'Reverter justa causa — empresa COM prova, COM testemunha',sub:'testemunha contradiz a versão da empresa'},
+  }},
+  fgts:{nome:'FGTS não depositado',onus:'DEPÓSITO é fato extintivo → ônus da EMPRESA (Súm.461 TST)',probs:{
+    com_extrato:{v:92,label:'Extrato mostra meses sem depósito',sub:'prova documental pronta'},
+    sem_extrato:{v:70,label:'Sem extrato — empresa tem que provar o depósito',sub:'ônus da empresa (Súm.461); não juntar extrato não derruba'},
+  }},
+  equiparacao:{nome:'Equiparação salarial',onus:'Súm.6,VIII — cliente prova função igual; empresa prova fato impeditivo',probs:{
+    paradigma_test:{v:65,label:'Paradigma nomeado + testemunha',sub:'prova mesma função'},
+    paradigma_sem_test:{v:40,label:'Paradigma nomeado, sem testemunha',sub:'depende de ficha/holerite'},
+    sem_paradigma:{v:12,label:'Sem paradigma nomeado',sub:'não há como provar — quase perda'},
+  }},
+  por_fora:{nome:'Salário por fora',onus:'ônus do CLIENTE provar o pagamento fora da folha (fato constitutivo). PIX/extrato é prova pronta; dinheiro vivo depende de testemunha. O valor por fora também entra na base das horas extras',probs:{
+    pix:{v:85,label:'PIX / transferência',sub:'extrato bancário prova'},
+    recibo:{v:75,label:'Dinheiro com recibo/anotação da empresa',sub:'documento da própria empresa'},
+    dinheiro_test:{v:60,label:'Dinheiro em espécie, COM testemunha',sub:'prova oral'},
+    dinheiro_sem:{v:15,label:'Dinheiro em espécie, SEM testemunha',sub:'ônus do cliente, sem prova = quase perda'},
+  }},
+  acidente:{nome:'Acidente de trabalho',onus:'Nexo e tamanho do dano: PERÍCIA médica decide (testemunha reforça como aconteceu). Culpa: ônus do cliente, exceto atividade de risco (objetiva — Tema 932 STF); a empresa prova que cumpria as NRs (EPI, treinamento). Estabilidade (art.118 Lei 8.213): no acidente típico EXIGE afastamento de mais de 15 dias pelo INSS (Súm.378,II) — sem afastamento não há; com B91 é documental; com B31 (auxílio comum) converte em acidentário com CAT/SINAN/atestado. O Tema 125 (dispensa o afastamento) vale só para DOENÇA ocupacional. Pensão NÃO entra na comissão',probs:{
+    dm_culpa:{v:70,label:'Dano moral — falha da empresa apontada',sub:'sem EPI, sem treinamento ou máquina sem proteção'},
+    dm_risco:{v:75,label:'Dano moral — atividade de risco',sub:'responsabilidade objetiva (Tema 932 STF): não precisa provar culpa'},
+    dm_sem_culpa:{v:35,label:'Dano moral — sem falha apontada',sub:'só o acidente, sem falha concreta da empresa'},
+    dm_trajeto:{v:10,label:'Dano moral — trajeto',sub:'sem culpa da empresa — quase perda'},
+    dm_trajeto_transp:{v:60,label:'Dano moral — trajeto no transporte da empresa',sub:'empresa responde como transportadora'},
+    sem_doc:{v:25,label:'Sem CAT/atestado/laudo (pontos a menos)',sub:'sem registro do acidente a prova fica fraca'},
+    reforco_test:{v:8,label:'Reforço da testemunha (pontos)',sub:'confirma como aconteceu e a falha da empresa'},
+    estab_b91:{v:88,label:'Estabilidade — B91 e desligado no período',sub:'documental (art.118 Lei 8.213)'},
+    estab_b31:{v:65,label:'Estabilidade — INSS deu auxílio comum (B31), acidente provado',sub:'converte em acidentário com CAT/SINAN/atestado (Súm.378,II)'},
+    estab_pedido:{v:55,label:'Estabilidade — pediu a conta no período SEM sindicato',sub:'art.500 CLT: pedido do estável sem sindicato é inválido'},
+    estab_pedido_sind:{v:10,label:'Estabilidade — pediu a conta COM sindicato',sub:'renúncia válida, salvo pressão provada'},
+    materiais:{v:40,label:'Danos materiais (lucros cessantes / gastos)',sub:'perícia + comprovantes; o INSS já pagou parte'},
+  },valores:{
+    dm_leve:{v:20000,label:'Dano moral — leve (planilha do escritório)'},
+    dm_medio:{v:30000,label:'Dano moral — média (planilha do escritório)'},
+    dm_grave:{v:50000,label:'Dano moral — grave (planilha do escritório)'},
+    materiais_sal:{v:12,label:'Danos materiais (nº de salários — planilha)'},
+  }},
+  doenca:{nome:'Doença ocupacional',onus:'Nexo (ou concausa) e incapacidade: PERÍCIA médica decide. B91 do INSS já reconhece o nexo. Doença da idade/degenerativa derruba a chance. Testemunha reforça as condições de trabalho. Estabilidade SEM afastamento do INSS vale se o nexo for reconhecido depois da saída (Tema 125 TST, vinculante) — indeniza os 12 meses. Pensão NÃO entra na comissão',probs:{
+    dm_b91:{v:70,label:'Dano moral — laudo/CID e INSS deu B91',sub:'o INSS já reconheceu o nexo com o trabalho'},
+    dm_laudo:{v:50,label:'Dano moral — laudo/CID, sem B91',sub:'perícia decide nexo ou concausa'},
+    dm_sem_laudo:{v:20,label:'Dano moral — sem laudo/CID',sub:'sem diagnóstico — quase perda'},
+    degenerativa:{v:25,label:'Pode ser da idade/degenerativa (pontos a menos)',sub:'hérnia, artrose… a perícia tende a negar o nexo'},
+    reforco_test:{v:6,label:'Reforço da testemunha (pontos)',sub:'confirma ritmo, peso, postura, pressão'},
+    estab_b91:{v:85,label:'Estabilidade — B91 e desligado no período',sub:'documental (art.118 Lei 8.213)'},
+    estab_nexo_t125:{v:50,label:'Estabilidade — sem B91, com laudo (Tema 125 TST)',sub:'vinculante: dispensa afastamento se a perícia reconhecer o nexo depois da saída'},
+    estab_sem_laudo:{v:15,label:'Estabilidade — sem B91 e sem laudo',sub:'quase perda'},
+    estab_pedido:{v:55,label:'Estabilidade — pediu a conta no período SEM sindicato',sub:'art.500 CLT'},
+    estab_pedido_sind:{v:10,label:'Estabilidade — pediu a conta COM sindicato',sub:'renúncia válida, salvo pressão provada'},
+    materiais:{v:35,label:'Danos materiais (lucros cessantes / gastos)',sub:'perícia + comprovantes'},
+  },valores:{
+    dm_leve:{v:20000,label:'Dano moral — leve (planilha do escritório)'},
+    dm_medio:{v:30000,label:'Dano moral — média (planilha do escritório)'},
+    dm_grave:{v:50000,label:'Dano moral — grave (planilha do escritório)'},
+    materiais_sal:{v:12,label:'Danos materiais (nº de salários — planilha)'},
+  }},
+  gestante:{nome:'Gestante (estabilidade)',onus:'Da gravidez até 5 meses após o parto (ADCT art.10,II,b). Objetiva: a empresa não saber não importa (Súm.244,I; vale no aviso prévio — art.391-A). Contrato de EXPERIÊNCIA também tem (Tema 163 TST). Recusar voltar ao emprego NÃO tira a indenização (Tema 134 TST, Pleno 2025). Pediu a conta SEM sindicato = pedido inválido (art.500; TST SDI-1 2024). TEMPORÁRIA (Lei 6.019) é controversa: TST Pleno superou o IAC 2 em mar/2026 (14×11), modulação em aberto. A cliente prova que já estava grávida (exame)',probs:{
+    dispensa:{v:90,label:'Dispensada sem justa causa (inclui contrato de experiência)',sub:'objetiva — Súm.244,I, art.391-A e Tema 163 TST (experiência)'},
+    temporaria_2026:{v:55,label:'Temporária (agência, Lei 6.019) — controverso',sub:'TST Pleno superou o IAC 2 em mar/2026 (14×11); modulação para casos anteriores em aberto'},
+    pedido_sem_sind:{v:80,label:'Pediu a conta SEM o sindicato',sub:'art.500 CLT — pedido inválido'},
+    pedido_com_sind:{v:10,label:'Pediu a conta COM o sindicato',sub:'só com pressão provada'},
+    pedido_com_sind_test:{v:30,label:'Pediu a conta COM o sindicato + testemunha da pressão',sub:'vício de consentimento'},
+    sem_exame:{v:30,label:'Teto sem exame que mostre a gravidez antes da saída',sub:'ônus da cliente provar que já estava grávida'},
+    dm:{v:40,label:'Dano moral da gestante',sub:'sai sozinho se o caso tiver a tese de dano moral (regra D11)'},
+  },valores:{
+    dm:{v:10000,label:'Dano moral da gestante'},
+  }},
+  dano_moral:{nome:'Dano moral',onus:'ônus INTEGRAL do cliente provar fato e nexo. Cada situação é um pedido com valor próprio (somam). Com testemunha (topo) todas entram; sem testemunha, só as que têm documento',probs:{
+    reforco_doc_test:{v:10,label:'Documento + testemunha (pontos)',sub:'as duas provas juntas reforçam a situação'},
+  },
+  situacoes:{
+    assedio:{label:'Assédio moral (ofensas, humilhação)',valor:20000,prob:60},
+    sexual:{label:'Assédio sexual / discriminação',valor:25000,prob:55},
+    sem_banheiro:{label:'Sem banheiro (trabalho externo)',valor:15000,prob:65},
+    restricao_banheiro:{label:'Restrição ao uso do banheiro',valor:10000,prob:55},
+    refeicao:{label:'Sem local adequado para refeição',valor:18000,prob:60},
+    degradante:{label:'Condições degradantes (higiene, pragas)',valor:18000,prob:60},
+    atraso:{label:'Atraso reiterado de salário/FGTS/rescisórias',valor:10000,prob:75},
+    jc_improbidade:{label:'Justa causa por acusação de furto/desonestidade',valor:10000,prob:55},
+    informalidade:{label:'Informalidade total (sem registro)',valor:15000,prob:60},
+  }},
+};
+let CFG=JSON.parse(JSON.stringify(CFG_PADRAO));
+const pp=(t,k)=>CFG[t].probs[k].v/100;      // prob 0-1
+const pv=(t,k)=>CFG[t].valores[k].v;         // valor R$
+
+// ---------- perguntas de procedência (simulação) ----------
+const TESES={
+  horas_extras:{perg:[
+    {id:'he_ponto',label:'Como marcava o ponto?',tipo:'select',ops:[['relogio','Relógio/cartão'],['app','Aplicativo'],['manual','Folha manual'],['nao_havia','Não havia']],defFn:B=>defPonto(B,'relogio')},
+    {id:'he_real',label:'Ponto mostrava horário real?',tipo:'chip',ops:[['sim','Sim'],['nao','Não/fixo']],cond:(r,B)=>(r.he_ponto??defPonto(B,'relogio'))!=='nao_havia'},
+    {id:'he_pagou',label:'A empresa pagou as extras que o ponto registra?',tipo:'chip',ops:[['nao','Não'],['parte','Parte'],['sim','Sim, todas']],cond:(r,B)=>r.he_real!=='nao'&&(r.he_ponto??defPonto(B,'relogio'))!=='nao_havia'},
+    {id:'he_dia',label:'Horas extra/dia',tipo:'num',val:2},
+  ]},
+  intrajornada:{perg:[
+    {id:'intra_min',label:'Minutos de almoço reais',tipo:'num',val:30},
+    {id:'intra_registro',label:'O que o ponto mostrava do intervalo?',tipo:'select',ops:[['nao','Não registrava / sem ponto'],['pre','Marcava 1h, mas na prática não tirava (pré-assinalado)'],['sim_suprimido','Marcava menos de 1h (o próprio ponto mostra)']]},
+  ]},
+  noturno:{perg:[
+    {id:'not_h',label:'Horas após 22h/dia',tipo:'num',val:2},
+    {id:'not_sit',label:'Como era o adicional noturno?',tipo:'select',ops:[['nao_pagou','Não pagava'],['a_menor','Pagava a menor / sem hora reduzida'],['pagou','Pagava certo']]},
+    {id:'not_ponto',label:'O ponto registrava o horário depois das 22h?',tipo:'select',
+      ops:[['real','Sim, marcava o horário real'],['fraude','Não — marcava saída antes / horário fixo'],['nao_havia','Não havia controle de ponto']],
+      defFn:B=>defPonto(B,'real'),cond:r=>(r.not_sit||'nao_pagou')==='nao_pagou'},
+  ]},
+  insalubridade:{perg:[
+    {id:'ins_agentes',label:'Agentes (marque todos — são agravantes)',tipo:'multi',
+      get ops(){return Object.entries(CFG.insalubridade.agentes).map(([k,a])=>[k,a.label+' '+Math.round(a.grau*100)+'%']);}},
+    {id:'ins_ruido_nivel',label:'Como era o barulho?',tipo:'chip',ops:[['alto','Alto o dia todo (precisava gritar pra conversar)'],['moderado','Moderado / de vez em quando']],
+      cond:r=>Array.isArray(r.ins_agentes)&&r.ins_agentes.includes('ruido')},
+    {id:'ins_poeira_tipo',label:'Que tipo de poeira?',tipo:'chip',ops:[['mineral','Mineral (sílica, cimento, amianto, carvão)'],['comum','Comum (madeira, farinha, terra)']],
+      cond:r=>Array.isArray(r.ins_agentes)&&r.ins_agentes.includes('poeira')},
+    {id:'ins_recebe',label:'Já recebe insalubridade?',tipo:'chip',ops:[['nao','Não'],['sim','Sim']]},
+    {id:'ins_grau_recebe',label:'Qual grau recebe hoje?',tipo:'chip',ops:[['i10','10%'],['i20','20%'],['i40','40%']],val:'i20',cond:r=>r.ins_recebe==='sim'},
+    {id:'ins_epi_ags',label:'Recebia EPI com ficha assinada? Marque os agentes em que recebia (deixe desmarcado se não recebia)',tipo:'multi',
+      opsFn:r=>(Array.isArray(r.ins_agentes)?r.ins_agentes:[]).filter(a=>CFG.insalubridade.agentes[a]).map(a=>{const x=CFG.insalubridade.agentes[a];return [a,x.label+' — '+x.epi];}),
+      cond:r=>r.ins_recebe!=='sim'&&Array.isArray(r.ins_agentes)&&r.ins_agentes.length>0},
+  ]},
+  periculosidade:{perg:[
+    {id:'per_ativs',label:'Atividades perigosas (marque todas)',tipo:'multi',ops:[['eletricidade','Eletricidade'],['inflamavel','Inflamável/GLP'],['vigilancia','Vigilância'],['moto','Motocicleta'],['explosivo','Explosivos'],['radiacao','Radiação']]},
+    {id:'per_recebe',label:'Já recebe periculosidade?',tipo:'chip',ops:[['nao','Não'],['sim','Sim, 30% certo'],['base','Sim, base errada']]},
+    {id:'per_dif_base',label:'Valor mensal fora da base de cálculo (R$)',tipo:'num',val:300,cond:r=>r.per_recebe==='base'},
+  ]},
+  verbas_rescisorias:{perg:[
+    {id:'resc',label:'Recebeu a rescisão?',tipo:'chip',ops:[['nada','Nada'],['parcial','Parte'],['tudo','Tudo']],cond:(r,B)=>B.saida!=='sem_registro'},
+    {id:'prazo477',label:'Pagou E entregou os documentos (guias) em até 10 dias?',tipo:'chip',ops:[['sim','Sim, tudo em dia'],['atrasou','Pagou atrasado'],['guias','Pagou em dia, guias atrasaram']],
+      cond:(r,B)=>(r.resc||'nada')==='tudo'&&['sem_justa_causa','pedido_demissao','justa_causa'].includes(B.saida)},
+    {id:'sr_13ferias',label:'Recebia 13º e férias mesmo sem registro?',tipo:'chip',ops:[['nao','Não (o normal sem registro)'],['sim','Sim']],cond:(r,B)=>B.saida==='sem_registro'},
+    {id:'ferias_venc',label:'Tirou as férias dos anos completos?',tipo:'chip',ops:[['sim','Sim, tirou'],['ultimo','Não tirou a do último ano'],['dois','Ficou 2+ anos sem tirar']],
+      cond:(r,B)=>B.meses>=12&&(r.resc||'nada')!=='tudo'},
+  ]},
+  fgts:{perg:[
+    // sem registro: nada foi depositado — não pergunta, usa o período todo
+    {id:'fgts_extrato',label:'Extrato mostra meses sem depósito?',tipo:'chip',ops:[['sim','Sim'],['nao','Não/não sabe']],cond:(r,B)=>B.saida!=='sem_registro'},
+    {id:'fgts_meses',label:'Meses sem depósito',tipo:'num',val:12,cond:(r,B)=>B.saida!=='sem_registro'},
+  ]},
+  equiparacao:{perg:[
+    {id:'eq_paradigma',label:'Sabe o nome de um funcionário que ganha mais para a mesma função?',tipo:'chip',ops:[['nao','Não'],['sim','Sim']]},
+    {id:'eq_dif',label:'Quanto esse colega ganha a mais por mês (R$)',tipo:'num',val:0},
+  ]},
+  por_fora:{perg:[
+    {id:'pf_valor',label:'Quanto recebia por fora (R$/mês)',tipo:'num',val:500},
+    {id:'pf_forma',label:'Como recebia?',tipo:'select',ops:[['pix','PIX / transferência (o extrato prova)'],['recibo','Dinheiro, com recibo ou anotação da empresa'],['dinheiro','Dinheiro em espécie, sem comprovante']]},
+  ]},
+  acidente:{perg:[
+    {id:'ac_tipo',label:'Onde aconteceu?',tipo:'chip',ops:[['tipico','No trabalho'],['trajeto','No trajeto casa–trabalho']]},
+    {id:'ac_grav',label:'Gravidade',tipo:'chip',ops:[['leve','Leve (sem sequela)'],['medio','Média (afastou e recuperou)'],['grave','Grave (sequela permanente)']]},
+    {id:'ac_inss',label:'Afastou pelo INSS?',tipo:'select',ops:[['nao','Não afastou / menos de 15 dias'],['b31','Sim, auxílio comum (B31)'],['b91','Sim, auxílio acidentário (B91)']]},
+    {id:'ac_doc',label:'Tem CAT, atestado, laudo ou registro do atendimento?',tipo:'chip',ops:[['sim','Sim'],['nao','Não']]},
+    {id:'ac_culpa',label:'O que se aplica? (marque tudo)',tipo:'multi',ops:[['epi','Não dava EPI'],['treino','Sem treinamento'],['maquina','Máquina sem proteção'],['risco','Atividade de risco (moto, eletricidade, altura…)']],cond:r=>(r.ac_tipo||'tipico')==='tipico'},
+    {id:'ac_transp',label:'Ia no transporte da empresa?',tipo:'chip',ops:[['nao','Não'],['sim','Sim']],cond:r=>r.ac_tipo==='trajeto'},
+    // estabilidade no acidente típico só existe se afastou mais de 15 dias pelo INSS (Súm.378,II)
+    {id:'ac_estab',label:'Foi desligado até 12 meses depois de voltar do INSS?',tipo:'chip',ops:[['nao','Não'],['sim','Sim']],cond:r=>(r.ac_inss||'nao')!=='nao'},
+    {id:'ac_meses_volta',label:'Quantos meses depois de voltar foi desligado?',tipo:'num',val:3,cond:r=>(r.ac_inss||'nao')!=='nao'&&r.ac_estab==='sim'},
+    {id:'ac_sind',label:'Teve assistência do sindicato no pedido de demissão?',tipo:'chip',ops:[['nao','Não'],['sim','Sim']],cond:(r,B)=>(r.ac_inss||'nao')!=='nao'&&r.ac_estab==='sim'&&B.saida==='pedido_demissao'},
+  ]},
+  doenca:{perg:[
+    {id:'do_grav',label:'Gravidade',tipo:'chip',ops:[['leve','Leve (sem sequela)'],['medio','Média (afastou e recuperou)'],['grave','Grave (sequela permanente)']]},
+    {id:'do_inss',label:'Afastou pelo INSS?',tipo:'select',ops:[['nao','Não afastou / menos de 15 dias'],['b31','Sim, auxílio comum (B31)'],['b91','Sim, auxílio acidentário (B91)']]},
+    {id:'do_laudo',label:'Tem atestado ou laudo com CID (diagnóstico)?',tipo:'chip',ops:[['sim','Sim'],['nao','Não']]},
+    {id:'do_degen',label:'Pode ser doença da idade/degenerativa? (hérnia, artrose, bico de papagaio)',tipo:'chip',ops:[['nao','Não'],['sim','Sim / talvez']]},
+    // sem afastamento, a estabilidade da doença vem do Tema 125 (nexo reconhecido depois da saída) e indeniza os 12 meses
+    {id:'do_estab',labelFn:r=>(r.do_inss||'nao')==='nao'?'Foi desligado já com a doença? (sem afastamento — Tema 125)':'Foi desligado até 12 meses depois de voltar do INSS?',tipo:'chip',ops:[['nao','Não'],['sim','Sim']]},
+    {id:'do_meses_volta',label:'Quantos meses depois de voltar foi desligado?',tipo:'num',val:3,cond:r=>(r.do_inss||'nao')!=='nao'&&r.do_estab==='sim'},
+    {id:'do_sind',label:'Teve assistência do sindicato no pedido de demissão?',tipo:'chip',ops:[['nao','Não'],['sim','Sim']],cond:(r,B)=>r.do_estab==='sim'&&B.saida==='pedido_demissao'},
+  ]},
+  gestante:{perg:[
+    {id:'ge_momento',label:'Na saída…',tipo:'chip',ops:[['gravida','Estava grávida'],['nasceu','O bebê já tinha nascido']]},
+    {id:'ge_meses',label:'Meses de gravidez na saída',tipo:'num',val:3,cond:r=>(r.ge_momento||'gravida')==='gravida'},
+    {id:'ge_meses_bebe',label:'Meses do bebê na saída',tipo:'num',val:1,cond:r=>r.ge_momento==='nasceu'},
+    {id:'ge_contrato',label:'Tipo de contrato',tipo:'select',ops:[['normal','Normal (prazo indeterminado)'],['experiencia','Contrato de experiência (tem estabilidade — Tema 163)'],['temporario','Temporária (agência, Lei 6.019) — controverso']]},
+    {id:'ge_exame',label:'Tem exame/ultrassom que mostra a gravidez antes da saída?',tipo:'chip',ops:[['sim','Sim'],['nao','Não']],cond:r=>(r.ge_momento||'gravida')==='gravida'},
+    {id:'ge_sind',label:'Teve assistência do sindicato no pedido de demissão?',tipo:'chip',ops:[['nao','Não'],['sim','Sim']],cond:(r,B)=>B.saida==='pedido_demissao'},
+  ]},
+  dano_moral:{perg:[
+    {id:'dano_sits',label:'Situações (marque todas — cada uma é um pedido com valor próprio)',tipo:'multi',
+      get ops(){return Object.entries(CFG.dano_moral.situacoes).map(([k,x])=>[k,x.label+' · R$ '+Math.round(x.valor/1000)+' mil']);}},
+    {id:'dano_provas',get label(){return selSingle('testemunha')==='sim'
+        ?'Quais também têm documento? (mensagem, áudio, foto) — com testemunha todas já entram; documento reforça'
+        :'Quais têm documento? (mensagem, áudio, foto) — SEM testemunha, só entra o que tem documento';},tipo:'multi',
+      opsFn:r=>(Array.isArray(r.dano_sits)?r.dano_sits:[]).filter(k=>CFG.dano_moral.situacoes[k]).map(k=>[k,CFG.dano_moral.situacoes[k].label]),
+      cond:r=>Array.isArray(r.dano_sits)&&r.dano_sits.length>0},
+  ]},
+};
+
+const ativas=new Set(), resp={};
+function geral(){return {
+  lim:[+$('lim1').value,+$('lim2').value,+$('lim3').value],
+  com:[+$('com0').value,+$('com1').value,+$('com2').value,+$('com3').value],
+  selo_forte:+$('selo_forte').value/100,selo_media:+$('selo_media').value/100,
+  peso_tamanho:(+$('peso_tamanho').value)/100,
+  sm:+$('sm').value,reflexo:+$('reflexo').value };}
+const base=()=>{const s=+$('salario').value||0;
+  // salário por fora entra na base das horas extras/noturno/intervalo (catálogo do agente, itens 127-129)
+  // (sem registro: o salário inteiro já é "por fora" — não soma de novo)
+  const pf=ativas.has('por_fora')&&$('saida').value!=='sem_registro'?(+(((resp.por_fora||{}).pf_valor)??500)||0):0;
+  return{sal:s,pf,m:Math.min(+$('meses').value||0,60),func:+$('funcionarios').value||0,
+  sh:(s+pf)/220,vd:s/30,dm:(+$('dias_semana').value||5)*4.33,saida:$('saida').value,meses:+$('meses').value||0,
+  local:selSingle('local')||'interno', test:selSingle('testemunha')==='sim'};};
+const seloTxt=r=>r.aviso?r.aviso:r.bruto<=0.5?'SEM DÉBITO':r.selo.toUpperCase()+' · '+Math.round(r.prob*100)+'%';
+function selSingle(id){const c=$(id)?.querySelector('[aria-pressed=true]');return c?c.dataset.v:null;}
+// externo costuma não ter ponto: default "não havia" (art.62,I); se tiver ponto, a empresa controlava e valem as regras normais
+const defPonto=(B,padrao)=>B.local==='externo'?'nao_havia':padrao;
+const reforca=(p,pts)=>Math.min(0.92,p+pts);  // reforço da testemunha em teses decididas por perícia
+const lim01=p=>Math.max(0.03,Math.min(0.92,p));
+const razao=(a,b)=>b>0?a/b:(a>0?1:0);  // divisão segura: calibrar a base em 0% não quebra o cálculo
+// JUSTA CAUSA: ônus da empresa provar a falta grave; a chance de reverter pesa em várias teses
+const ehJC=B=>B.saida==='justa_causa';
+const pRev=B=>pp('verbas_rescisorias',selSingle('jc_prova')==='sim'?(B.test?'jc_com_prova_test':'jc_com_prova'):(B.test?'jc_sem_prova_test':'jc_sem_prova'));
+// multa de 40% do FGTS: devida na dispensa sem justa causa, rescisão indireta e vínculo reconhecido; justa causa só se reverter; pedido de demissão não
+// (rescisão indireta e justa causa: os 40% dependem de reconhecer/reverter — tratados à parte)
+const temMulta40=B=>['sem_justa_causa','sem_registro'].includes(B.saida);
+// RESCISÃO INDIRETA: ônus do cliente provar a falta grave da empresa
+const pRI=B=>{const f=selSingle('ri_falta')||'doc', R=k=>pp('verbas_rescisorias',k);
+  if(f==='conduta')return B.test?R('ri_conduta_test'):R('ri_conduta');
+  return Math.min(0.92,(f==='verbas'?R('ri_verbas'):R('ri_doc'))+(B.test?R('ri_reforco_test'):0));};
+// VÍNCULO (sem registro): empresa nega → ônus do cliente; admite e diz autônomo/PJ → ônus da empresa
+const pVinc=B=>{const R=k=>pp('verbas_rescisorias',k), adm=selSingle('vinc_admite')==='sim', doc=selSingle('vinc_doc')==='sim';
+  if(adm)return B.test?R('vinc_admite_test'):R('vinc_admite');
+  return doc&&B.test?R('vinc_nega_doc_test'):doc?R('vinc_nega_doc'):B.test?R('vinc_nega_test'):R('vinc_nega_nada');};
+// indenização de estabilidade: salário + 13º (1/12) + férias+1/3 (1/12×4/3) + FGTS 8% + 40%
+const REFL_ESTAB=1+1/12+(1/12)*(4/3)+0.08*1.4;
+// meses sem depósito já cobrados na tese de FGTS (com os 40%) — para não contar a multa duas vezes
+const mesesSemDeposito=B=>!ativas.has('fgts')?0:B.saida==='sem_registro'?B.m:Math.max(0,Math.min(+(((resp.fgts||{}).fgts_meses)??12),B.m));
+// teses com várias partes (cada uma com valor e chance): valor soma, chance = média ponderada pelo valor
+const somaPartes=parts=>{const br=parts.reduce((s,p)=>s+p[1],0);return [br,br>0?parts.reduce((s,p)=>s+p[1]*p[2],0)/br:0];};
+const detPartes=parts=>parts.map(p=>`${p[0]} ${brl(p[1])} (${Math.round(p[2]*100)}%)`).join(' · ');
+const GRAV={leve:'leve',medio:'média',grave:'grave'};
+
+function calcTese(t,G,B){
+  const r=resp[t]||{}, g=(k,d)=>r[k]!==undefined?r[k]:d; let bruto=0,prob=0.5,det='',aviso='';
+  if(t==='horas_extras'){
+    bruto=B.sh*1.5*(+g('he_dia',2))*B.dm*B.m*G.reflexo;
+    const ponto=g('he_ponto',defPonto(B,'relogio')), real=g('he_real','sim')==='sim', tem_ponto=ponto!=='nao_havia';
+    if(!tem_ponto&&B.local==='externo'){  // art.62,I: sem obrigação de controle -> ônus do CLIENTE, testemunha decide
+      prob=B.test?pp(t,'externo_test'):pp(t,'externo_sem_test');
+      det=B.test?'externo sem ponto: ônus do cliente, testemunha é a prova':'externo sem ponto (art.62,I): ônus do cliente, SEM testemunha = quase perda';}
+    else if(!tem_ponto){
+      // SEM ponto: ônus da empresa se 21+ func
+      if(B.func>20){prob=B.test?pp(t,'forte_sem_ponto_test'):pp(t,'forte_sem_ponto');det=B.test?'sem ponto 21+ func + testemunha':'sem ponto 21+ func: ônus da empresa';}
+      else{prob=B.test?pp(t,'sem_ponto_peq_test'):pp(t,'sem_ponto_peq');det=B.test?'sem ponto até 20 func + testemunha':'sem ponto até 20 func';}
+    }
+    else if(real){
+      // ponto mostra o horário real -> decisivo é se a empresa pagou o que o ponto registra
+      const pg=g('he_pagou','nao');
+      if(pg==='sim'){bruto=0;prob=0;det='extras do ponto pagas corretamente: nada a cobrar';}
+      else{if(pg==='parte')bruto*=0.5;prob=pp(t,'ponto_real_nao_pagou');
+        det=pg==='parte'?'pagou só parte: cobra o saldo — o ponto prova':'ponto real e extras NÃO pagas: factual, o ponto prova';}
+    }
+    else{
+      // indício de FRAUDE no ponto -> ônus do cliente; testemunha decide
+      prob=B.test?pp(t,'fraude_com_test'):pp(t,'fraude_sem_test');
+      det=B.test?'fraude no ponto: testemunha derruba':'fraude no ponto SEM testemunha: ônus do cliente, quase perda';
+    }
+  }
+  else if(t==='intrajornada'){const min=+g('intra_min',30);bruto=min<60?((60-min)/60*B.sh*1.5*B.dm*B.m):0;
+    const reg=g('intra_registro','nao');  // pre | sim_suprimido | nao
+    if(reg==='pre'){  // pré-assinalação (art.74 §2º) vale como prova da empresa -> ônus do cliente derrubar; testemunha decide
+      prob=B.test?pp(t,'pre_test'):pp(t,'pre_sem_test');
+      det=B.test?'ponto marca 1h mas não tirava: testemunha derruba a pré-assinalação':'ponto marca 1h, SEM testemunha: ônus do cliente, quase perda';}
+    else if(reg==='sim_suprimido'){prob=pp(t,'ponto_real_suprimido');det='ponto registra a supressão — prova pronta (Súm.437)';}
+    else if(B.local==='externo'){  // art.62: sem obrigação de controle -> ônus do CLIENTE, testemunha decide
+      prob=B.test?pp(t,'externo_test'):pp(t,'externo_sem_test');
+      det=B.test?'externo: ônus do cliente, testemunha é a prova':'externo (art.62): ônus do cliente, SEM testemunha = quase perda';}
+    else if(B.func>20){  // interno 21+ sem registro: obrigada a registrar -> ônus da EMPRESA
+      prob=B.test?pp(t,'interno_sem_reg_test'):pp(t,'interno_sem_reg');
+      det=B.test?'21+ func sem registro: ônus da empresa + testemunha':'21+ func sem registro: ônus da empresa provar a concessão';}
+    else{  // até 20 func: sem obrigação de ponto -> ônus do CLIENTE, testemunha decide
+      prob=B.test?pp(t,'peq_sem_reg_test'):pp(t,'peq_sem_reg');
+      det=B.test?'até 20 func sem registro: testemunha prova a supressão':'até 20 func sem registro, SEM testemunha: ônus do cliente, quase perda';}}
+  else if(t==='noturno'){bruto=(+g('not_h',2))*B.sh*0.2*B.dm*B.m*G.reflexo;
+    const sit=g('not_sit','nao_pagou');  // nao_pagou | a_menor | pagou
+    if(sit==='pagou'){bruto=0;prob=0;det='adicional pago corretamente: nada a cobrar';}
+    else if(sit==='a_menor'){  // pagava 20% mas sem hora reduzida (52m30s): diferença = 1/7 das horas a 120%
+      bruto=(+g('not_h',2))*(1/7)*B.sh*1.2*B.dm*B.m*G.reflexo;
+      prob=pp(t,'pagou_a_menor');det='pagava sem hora reduzida: cobra só a diferença (art.73 §1º)';}
+    else{  // não pagava: decide quem prova o horário após as 22h
+      const pt=g('not_ponto',defPonto(B,'real'));
+      if(pt==='real'){prob=pp(t,'ponto_real');det='ponto registra o horário noturno e não pagava: factual';}
+      else if(B.local==='externo'){prob=B.test?pp(t,'externo_test'):pp(t,'externo_sem_test');
+        det=B.test?'externo: ônus do cliente, testemunha prova o horário':'externo (art.62): ônus do cliente, SEM testemunha = quase perda';}
+      else if(pt==='fraude'){prob=B.test?pp(t,'fraude_com_test'):pp(t,'fraude_sem_test');
+        det=B.test?'ponto não mostra o real: testemunha derruba':'ponto não mostra o real SEM testemunha: ônus do cliente, quase perda';}
+      else if(B.func>20){prob=B.test?pp(t,'grande_sem_ponto_test'):pp(t,'grande_sem_ponto');
+        det='sem ponto, 21+ func: ônus da empresa (Súm.338,I)'+(B.test?' + testemunha':'');}
+      else{prob=B.test?pp(t,'peq_sem_ponto_test'):pp(t,'peq_sem_ponto');
+        det=B.test?'sem ponto, até 20 func: testemunha prova o horário':'sem ponto, até 20 func, SEM testemunha: ônus do cliente, sem prova';}}}
+  else if(t==='insalubridade'){
+    const A=CFG.insalubridade.agentes;
+    const ags=g('ins_agentes',[]); const lst=(Array.isArray(ags)?ags:(ags?[ags]:[])).filter(a=>A[a]);
+    if(!lst.length){bruto=0;prob=0;aviso='MARQUE OS AGENTES';det='marque os agentes de exposição';}
+    else if(g('ins_recebe','nao')==='sim'){  // só cobra a DIFERENÇA de grau; se já recebe o grau devido, nada
+      const grauMax=Math.max(...lst.map(a=>A[a].grau));  // NÃO soma: maior grau
+      const gr={i10:0.1,i20:0.2,i40:0.4}[g('ins_grau_recebe','i20')];
+      const dif=Math.max(0,grauMax-gr);
+      bruto=dif*G.sm*B.m*G.reflexo; prob=dif>0?pp(t,'ja_recebe'):0;
+      if(dif>0&&B.test)prob=reforca(prob,pp(t,'reforco_test'));
+      det=dif>0?`recebe ${Math.round(gr*100)}%, devido ${Math.round(grauMax*100)}%: cobra só a diferença${B.test?' · + testemunha':''}`:'já recebe o grau devido: nada a cobrar';}
+    else{
+      const epiAgs=Array.isArray(g('ins_epi_ags',[]))?g('ins_epi_ags',[]):[];
+      const comEpi=a=>epiAgs.includes(a);
+      const foraDoCaso=a=>(a==='ruido'&&g('ins_ruido_nivel','alto')==='moderado')||(a==='poeira'&&g('ins_poeira_tipo','mineral')==='comum');
+      const pAg=a=>{const x=A[a];let p=foraDoCaso(a)?(x.prob_fora??x.prob):x.prob;if(comEpi(a))p=Math.min(p,x.prob_epi);return p/100;};
+      // agente principal = maior valor esperado (grau × chance); o valor NÃO soma graus
+      const princ=lst.reduce((best,a)=>A[a].grau*pAg(a)>A[best].grau*pAg(best)?a:best,lst[0]);
+      bruto=A[princ].grau*G.sm*B.m*G.reflexo;
+      prob=pAg(princ);
+      // agravante: cada OUTRO agente que se enquadra (chance >= 30%) reforça a procedência
+      const extras=lst.filter(a=>a!==princ&&pAg(a)>=0.30).length;
+      if(extras)prob=Math.min(0.92,prob+pp(t,'agravante')*extras);
+      if(B.test)prob=reforca(prob,pp(t,'reforco_test'));
+      det=`principal: ${A[princ].label} ${Math.round(A[princ].grau*100)}%${extras?` · +${extras} agravante(s)`:''}${comEpi(princ)?' · '+A[princ].epi+' c/ ficha reduz':''}${foraDoCaso(princ)?' · '+A[princ].fora+': não enquadra':''}${B.test?' · + testemunha':''}`;}}
+  else if(t==='periculosidade'){bruto=0.3*B.sal*B.m*G.reflexo;
+    const ats=g('per_ativs',[]); const lst=Array.isArray(ats)?ats:(ats?[ats]:[]);
+    const rec=g('per_recebe','nao');
+    if(rec==='sim'){bruto=0;prob=0;det='já recebe os 30%: nada a cobrar (periculosidade não tem grau)';}
+    else if(rec==='base'){bruto=0.3*(+g('per_dif_base',300))*B.m*G.reflexo;prob=pp(t,'ja_recebe');
+      det='recebe sobre base errada: cobra só os 30% sobre o que ficou fora da base';}
+    else{
+      const claros=['eletricidade','inflamavel','vigilancia','moto','explosivo','radiacao'];
+      const temClaro=lst.some(a=>claros.includes(a));
+      prob=temClaro?pp(t,'enquadra_claro'):pp(t,'enquadra_duvidoso');
+      if(lst.length>1)prob=Math.min(0.92,prob+0.04*(lst.length-1));
+      if(B.test)prob=reforca(prob,pp(t,'reforco_test'));
+      det=`${lst.length||1} atividade(s)${lst.length>1?' · agravantes':''} (NR-16 / art.193 §4º)${B.test?' · + testemunha':''}`;}}
+  else if(t==='verbas_rescisorias'){const resc={nada:1,parcial:0.5,tudo:0}[g('resc','nada')];
+    const flag=B.saida==='pedido_demissao'?0:1,anos=Math.floor(B.meses/12);
+    // férias: proporcionais do período em curso + períodos completos não tirados (o mais recente simples, os anteriores em dobro — art.137)
+    // no aniversário exato o último período acabou de fechar e não deu tempo de tirar → conta como não tirado
+    const mFer=B.meses%12, aniv=B.meses>0&&mFer===0;
+    let nVenc={sim:0,ultimo:1,dois:2}[g('ferias_venc','sim')]??0; if(aniv)nVenc=Math.max(nVenc,1);
+    nVenc=Math.min(nVenc,Math.floor(B.meses/12));
+    const fatorVenc=nVenc>=1?1+(nVenc-1)*2:0;  // 1 simples + (n-1) em dobro
+    // multa de 40% do FGTS (dispensa sem justa causa, rescisão indireta, vínculo reconhecido) sobre o vínculo todo;
+    // os meses não depositados já levam os 40% na tese de FGTS (×1,4) — não conta duas vezes
+    const mSemDep=mesesSemDeposito(B), doc=pp(t,'documental'), S=B.saida, rk=g('resc','nada');
+    const saldo=B.vd*15, dec=B.sal*0.5, ferProp=B.sal*(mFer/12)*(4/3), ferVenc=B.sal*fatorVenc*(4/3);
+    const aviso_=B.vd*Math.min(30+3*anos,90), multa40=0.4*0.08*B.sal*Math.max(0,B.meses-mSemDep);
+    // multa do art.477 (1 salário): 10 dias para pagar E entregar os documentos (§6º); vínculo reconhecido em juízo também gera (Súm.462)
+    const p477=rk!=='tudo'?doc:({sim:0,atrasou:doc,guias:pp(t,'multa477_guias')}[g('prazo477','sim')]??0);
+    const parts=[]; let cab;
+    if(S==='justa_causa'){const pr=pRev(B);
+      // saldo + férias vencidas são devidos de qualquer jeito; aviso, 13º e férias proporcionais (Súm.171) e 40% só se reverter
+      parts.push(['devidas mesmo com justa causa (saldo, férias vencidas)',resc*(saldo+ferVenc),doc],
+                 ['multa 477',B.sal,p477],
+                 ['se reverter (aviso, 13º e férias proporcionais, multa 40%)',aviso_+dec+ferProp+multa40,pr]);
+      cab=`justa causa — reverter ${Math.round(pr*100)}% (${selSingle('jc_prova')==='sim'?'empresa tem prova':'empresa sem prova'}${B.test?' + testemunha':''})`;}
+    else if(S==='rescisao_indireta'){const pr=pRI(B);
+      // saldo, 13º e férias são devidos mesmo se não reconhecer (vira pedido de demissão); aviso, 40% e multa 477 só se reconhecer
+      parts.push(['devidas de qualquer jeito (saldo, 13º, férias)',resc*(saldo+dec+ferProp+ferVenc),doc],
+                 ['se reconhecer (aviso, multa 40%, multa 477)',aviso_+multa40+B.sal,pr]);
+      cab=`rescisão indireta — reconhecer ${Math.round(pr*100)}%`;}
+    else if(S==='pedido_demissao'){
+      parts.push(['saldo, 13º e férias',resc*(saldo+dec+ferProp+ferVenc),doc],['multa 477',B.sal,p477]);
+      cab='pedido de demissão: sem aviso e sem multa de 40%';}
+    else if(S==='sem_registro'&&g('sr_13ferias','nao')==='nao'){
+      // sem registro: 13º e férias nunca foram pagos — cobra o período todo não prescrito (até 60 meses);
+      // férias: o período completo mais recente simples, os anteriores em dobro (art.137) + proporcionais
+      const nP=Math.floor(Math.max(0,B.m-mFer)/12), fv=nP>=1?1+(nP-1)*2:0;
+      parts.push(['saldo e aviso',saldo+aviso_,doc],[`13º de todo o período (${B.m} meses)`,B.sal*B.m/12,doc],
+                 [`férias de todo o período (${nP} período(s)${nP>1?`, ${nP-1} em dobro`:''}) + proporcionais`,B.sal*(fv+mFer/12)*(4/3),doc],
+                 ['multa 40% FGTS',multa40,doc],['multa 477 (Súm.462)',B.sal,doc]);
+      cab='sem registro: 13º e férias de todo o período';}
+    else{  // sem justa causa (ou sem registro em que recebia 13º e férias); o vínculo pesa em todas as teses, no fim
+      parts.push(['saldo, aviso, 13º e férias',resc*(saldo+aviso_+dec+ferProp+ferVenc),doc],['multa 40% FGTS',resc*multa40,doc],
+                 ['multa 477',B.sal,S==='sem_registro'?doc:p477]);
+      cab=S==='sem_registro'?'sem registro (recebia 13º e férias)':'dispensa sem justa causa';}
+    const ok=parts.filter(p=>p[1]>0&&p[2]>0);
+    [bruto,prob]=somaPartes(ok);
+    const srTodo=S==='sem_registro'&&g('sr_13ferias','nao')==='nao';
+    det=!ok.length?'pagou tudo e entregou as guias em até 10 dias: nada a cobrar'
+      :srTodo?`${cab} · `+detPartes(ok)
+      :`${cab} · férias ${mFer}/12`+(nVenc?` + ${nVenc} período(s) não tirado(s)${nVenc>1?' (em dobro)':''}`:'')+' · '+detPartes(ok);}
+  else if(t==='fgts'){
+    // sem registro: nada foi depositado — período todo (até 60 meses) e prova pronta assim que o vínculo for reconhecido
+    const sr=B.saida==='sem_registro';
+    const digitado=sr?B.m:+g('fgts_meses',12), mFgts=Math.max(0,Math.min(digitado,B.m));  // prescrição quinquenal (Súm.362) e nunca acima do vínculo
+    const ext=sr||g('fgts_extrato','sim')==='sim', pf_=ext?pp(t,'com_extrato'):pp(t,'sem_extrato');
+    const dep=0.08*B.sal*mFgts, parts=[['depósitos 8%',dep,pf_]];
+    // multa de 40% sobre os meses não depositados: só onde a saída dá direito; na justa causa, só se reverter
+    if(temMulta40(B))parts.push(['multa 40%',dep*0.4,pf_]);
+    else if(ehJC(B))parts.push(['multa 40% (se reverter a justa causa)',dep*0.4,Math.min(pf_,pRev(B))]);
+    else if(B.saida==='rescisao_indireta')parts.push(['multa 40% (se reconhecer a rescisão indireta)',dep*0.4,Math.min(pf_,pRI(B))]);
+    [bruto,prob]=somaPartes(parts);
+    det=(sr?'sem registro: nada foi depositado':ext?'extrato prova':'sem extrato')+` · ${mFgts} meses`+(B.meses>mFgts&&mFgts===60?' (limitado a 60: prescrição)':digitado>mFgts?(mFgts===60?' (limitado a 60: prescrição)':' (limitado ao vínculo)'):'')
+      +' · '+detPartes(parts)+(B.saida==='pedido_demissao'?' · pedido de demissão: sem multa de 40%':'');}
+  else if(t==='equiparacao'){bruto=(+g('eq_dif',0))*B.m*G.reflexo;
+    if(g('eq_paradigma','nao')!=='sim'){prob=pp(t,'sem_paradigma');det='não sabe o nome do colega (paradigma): quase perda';}
+    else{prob=B.test?pp(t,'paradigma_test'):pp(t,'paradigma_sem_test');det=B.test?'colega nomeado + testemunha':'colega nomeado, sem testemunha';}
+    if(!(+g('eq_dif',0)>0)){aviso='INFORME A DIFERENÇA';det='informe quanto o colega ganha a mais por mês';}}
+  else if(t==='por_fora'){
+    const v=+g('pf_valor',500), f=g('pf_forma','pix');
+    if(B.saida==='sem_registro'){bruto=0;prob=0;aviso='NÃO SE APLICA';
+      det='sem registro: o salário inteiro já é "por fora" e já entra em FGTS, 13º e férias — informe o salário total no topo';}
+    else{
+    // o valor por fora já foi pago: cobra-se a integração ao salário = 13º (1/12) + férias+1/3 (1/12×4/3) + FGTS 8% + multa 40%
+    bruto=v*B.m*((1/12)+(1/12)*(4/3)+0.08*(temMulta40(B)?1.4:1));  // 40% só onde a saída dá direito
+    if(f==='pix'){prob=pp(t,'pix');det='PIX/extrato: prova documental';}
+    else if(f==='recibo'){prob=pp(t,'recibo');det='recibo/anotação da própria empresa';}
+    else{prob=B.test?pp(t,'dinheiro_test'):pp(t,'dinheiro_sem');det=B.test?'dinheiro + testemunha':'dinheiro SEM testemunha: ônus do cliente, sem prova';}
+    det+=' · cobra os reflexos (o valor em si já foi pago) e entra na base das horas extras';}}
+  else if(t==='acidente'||t==='doenca'){
+    const ac=t==='acidente', P=k=>pp(t,k), q=k=>(ac?'ac_':'do_')+k;
+    const grav=g(q('grav'),'leve'), inss=g(q('inss'),'nao'), parts=[];  // padrão = o que a tela mostra marcado (leve)
+    // 1) dano moral — valor pela gravidade (planilha do escritório)
+    let pdm;
+    if(ac){
+      if(g('ac_tipo','tipico')==='trajeto')pdm=g('ac_transp','nao')==='sim'?P('dm_trajeto_transp'):P('dm_trajeto');
+      else{const c=Array.isArray(g('ac_culpa',[]))?g('ac_culpa',[]):[];
+        pdm=c.includes('risco')?P('dm_risco'):c.length?P('dm_culpa'):P('dm_sem_culpa');}
+      if(g('ac_doc','sim')==='nao')pdm-=P('sem_doc');
+    }else{
+      const laudo=g('do_laudo','sim')==='sim';
+      pdm=!laudo?P('dm_sem_laudo'):inss==='b91'?P('dm_b91'):P('dm_laudo');
+      if(g('do_degen','nao')==='sim')pdm-=P('degenerativa');
+    }
+    if(B.test)pdm+=P('reforco_test');
+    parts.push(['dano moral '+GRAV[grav],pv(t,'dm_'+grav),lim01(pdm)]);
+    // 2) danos materiais — só se afastou pelo INSS ou ficou com sequela (pensão NÃO entra)
+    if(inss!=='nao'||grav==='grave')
+      parts.push(['danos materiais',pv(t,'materiais_sal')*B.sal,lim01(P('materiais')+(B.test?P('reforco_test'):0)-(ac&&g('ac_doc','sim')==='nao'?P('sem_doc'):0))]);
+    // 3) estabilidade de 12 meses (art.118) — indenização dos meses que faltavam
+    // acidente típico: só com afastamento do INSS (Súm.378,II). Doença: também sem afastamento (Tema 125) — aí indeniza 12 meses
+    const afastou=inss!=='nao';
+    if(g(q('estab'),'nao')==='sim'&&(afastou||!ac)){
+      const mr=afastou?Math.max(0,12-(+g(q('meses_volta'),3))):12;
+      let direito;
+      if(inss==='b91')direito=1;
+      else if(ac){direito=razao(P('estab_b31'),P('estab_b91'));if(g('ac_doc','sim')==='nao')direito=Math.max(0,direito-P('sem_doc'));}
+      else direito=razao(g('do_laudo','sim')==='sim'?P('estab_nexo_t125'):P('estab_sem_laudo'),P('estab_b91'));
+      let pe;
+      if(B.saida==='pedido_demissao')pe=(g(q('sind'),'nao')==='sim'?P('estab_pedido_sind'):P('estab_pedido'))*Math.min(1,direito);
+      else pe=P('estab_b91')*Math.min(1,direito);
+      if(ehJC(B))pe*=pRev(B);  // justa causa: a estabilidade só existe se reverter
+      else if(B.saida==='rescisao_indireta')pe*=pRI(B);  // rescisão indireta: só se reconhecer
+      const motivo=inss==='b91'?' (B91)':ac?' (B31: converter em acidentário)':afastou?' (B31: nexo por perícia)':' (Tema 125: nexo depois da saída)';
+      if(mr>0)parts.push([`estabilidade ${mr} meses${motivo}`+(ehJC(B)?' (se reverter a justa causa)':B.saida==='rescisao_indireta'?' (se reconhecer a rescisão indireta)':''),B.sal*mr*REFL_ESTAB,lim01(pe)]);
+    }
+    [bruto,prob]=somaPartes(parts);
+    det=detPartes(parts)+' · pensão não entra';}
+  else if(t==='gestante'){
+    const P=k=>pp(t,k), nasc=g('ge_momento','gravida')==='nasceu';
+    // meses que faltavam: até 5 meses após o parto
+    const mr=nasc?Math.max(0,5-(+g('ge_meses_bebe',1))):Math.max(0,Math.min(14,9-(+g('ge_meses',3))+5));
+    // tipo de contrato: experiência = igual à dispensa (Tema 163 TST); temporária = controverso (fator sobre a chance)
+    // recusa de voltar ao emprego NÃO pesa (Tema 134 TST) — por isso não é perguntada
+    const ct=g('ge_contrato','normal'); let pe,base_;
+    const fatorCt=ct==='temporario'?razao(P('temporaria_2026'),P('dispensa')):1;
+    const ctTxt=ct==='temporario'?` · temporária: controverso (${Math.round(P('temporaria_2026')*100)}%)`:ct==='experiencia'?' · experiência: tem estabilidade (Tema 163)':'';
+    if(B.saida==='pedido_demissao'){const sind=g('ge_sind','nao')==='sim';
+      pe=(sind?(B.test?P('pedido_com_sind_test'):P('pedido_com_sind')):P('pedido_sem_sind'))*fatorCt;
+      base_=sind?'pediu a conta COM sindicato'+(B.test?' + testemunha da pressão':''):'pediu a conta SEM sindicato: pedido inválido (art.500)';}
+    else if(B.saida==='rescisao_indireta'){const pr=pRI(B);pe=P('dispensa')*pr*fatorCt;base_=`rescisão indireta: só se reconhecer (${Math.round(pr*100)}%)`;}
+    else if(ehJC(B)){const pr=pRev(B);pe=P('dispensa')*pr*fatorCt;base_=`justa causa: só se reverter (${Math.round(pr*100)}%)`;}
+    else{pe=P('dispensa')*fatorCt;base_='dispensada: estabilidade objetiva';}
+    base_+=ctTxt;
+    if(!nasc&&g('ge_exame','sim')==='nao'){pe=Math.min(pe,P('sem_exame'));base_+=' · sem exame';}
+    pe=lim01(pe);
+    if(mr<=0){bruto=0;prob=0;aviso='FORA DA ESTABILIDADE';det='saiu depois dos 5 meses após o parto: não há estabilidade';}
+    else{const parts=[[`indenização ${mr} meses`,B.sal*mr*REFL_ESTAB,pe]];
+      // pedido de demissão anulado vira dispensa: soma aviso prévio + multa de 40%
+      if(B.saida==='pedido_demissao'){const anos=Math.floor(B.meses/12);
+        parts.push(['conversão em dispensa (aviso + multa 40%)',B.vd*Math.min(30+3*anos,90)+0.4*0.08*B.sal*Math.max(0,B.meses-mesesSemDeposito(B)),pe]);}
+      // regra D11: o dano moral da gestante sai se o caso tiver a tese de dano moral
+      if(!ativas.has('dano_moral'))parts.push(['dano moral',pv(t,'dm'),Math.min(pe,P('dm'))]);
+      [bruto,prob]=somaPartes(parts);
+      det=base_+' · '+detPartes(parts)+(ativas.has('dano_moral')?' · dano moral fica na tese de dano moral (D11)':'');}}
+  else if(t==='dano_moral'){
+    const S=CFG.dano_moral.situacoes;
+    const sits=(Array.isArray(g('dano_sits',[]))?g('dano_sits',[]):[]).filter(k=>S[k]);
+    const provas=Array.isArray(g('dano_provas',[]))?g('dano_provas',[]):[];
+    // testemunha do topo prova todas as situações; sem testemunha, só entra o que tem documento
+    const comDoc=k=>provas.includes(k);
+    // acusação de furto/desonestidade só vale se a saída foi por justa causa — e depende de reverter
+    const naoAplica=sits.filter(k=>k==='jc_improbidade'&&!ehJC(B)).length;
+    // sem registro: a informalidade se prova junto com o vínculo (o fator do vínculo pesa no fim)
+    const autoProva=k=>k==='informalidade'&&B.saida==='sem_registro';
+    const comProva=sits.filter(k=>(B.test||comDoc(k)||autoProva(k))&&!(k==='jc_improbidade'&&!ehJC(B))), semProva=sits.length-comProva.length-naoAplica;
+    const pSit=k=>{let p=Math.min(0.95,S[k].prob/100+(B.test&&comDoc(k)?pp(t,'reforco_doc_test'):0));if(k==='jc_improbidade')p=Math.min(p,pRev(B));return p;};
+    if(!sits.length){bruto=0;prob=0;aviso='MARQUE AS SITUAÇÕES';det='marque as situações de dano';}
+    else if(!comProva.length&&naoAplica===sits.length){bruto=0;prob=0;aviso='SÓ COM JUSTA CAUSA';det='acusação de furto/desonestidade só vale se a saída foi por justa causa';}
+    else if(!comProva.length){bruto=0;prob=0;aviso='SEM PROVA';det='sem testemunha e sem documento: nenhuma situação entra (ônus do cliente)';}
+    else{  // cada situação é um pedido com valor próprio: somam
+      bruto=comProva.reduce((s,k)=>s+S[k].valor,0);
+      prob=bruto>0?comProva.reduce((s,k)=>s+S[k].valor*pSit(k),0)/bruto:0;  // situação calibrada com valor 0 não quebra o cálculo
+      const nDocTest=B.test?comProva.filter(comDoc).length:0;
+      det=`${comProva.length} situação(ões) somam`+(B.test?' (testemunha prova)':comProva.every(autoProva)?'':' (com documento)')
+        +(nDocTest?` · ${nDocTest} com documento + testemunha (reforço)`:'')
+        +(semProva?` · ${semProva} sem documento não entra(m)`:'')
+        +(naoAplica?' · acusação de furto só vale com justa causa':'')
+        +(comProva.some(autoProva)?' · informalidade: provada junto com o vínculo':'');}}
+  // SEM REGISTRO: sem vínculo reconhecido nenhuma tese existe — a chance do vínculo pesa em todas
+  if(B.saida==='sem_registro'&&bruto>0){const pv_=pVinc(B);prob*=pv_;det+=` · só se reconhecer o vínculo (${Math.round(pv_*100)}%)`;}
+  const probAuto=prob;
+  // override manual da procedência (o gestor ajusta um caso específico)
+  const ov=(resp[t]||{}).__override;
+  if(ov!==undefined&&ov!==null){prob=ov/100;det='ajuste manual (auto era '+Math.round(probAuto*100)+'%)';}
+  const selo=prob>=G.selo_forte?'forte':prob>=G.selo_media?'media':'fraca';
+  return {bruto,prob,probAuto,esperado:bruto*prob,det,selo,aviso,override:ov!==undefined&&ov!==null};
+}
+
+// ---------- SIMULAR UI ----------
+function buildTeses(){
+  $('teses').innerHTML=Object.entries(CFG).map(([k,v])=>
+    `<div class="tese" data-t="${k}" aria-pressed="${ativas.has(k)}"><span class="box">${ativas.has(k)?'✓':''}</span>${v.nome}</div>`).join('');
+  $('teses').querySelectorAll('.tese').forEach(el=>el.addEventListener('click',()=>{
+    const t=el.dataset.t;
+    if(ativas.has(t)){ativas.delete(t);}else{ativas.add(t);}
+    el.setAttribute('aria-pressed',ativas.has(t));el.querySelector('.box').textContent=ativas.has(t)?'✓':'';
+    renderProc();run();
+  }));
+}
+function renderProc(){
+  if(!ativas.size){$('procBody').innerHTML='<div class="empty">Marque uma tese acima.</div>';return;}
+  const G=geral(),B=base();
+  $('procBody').innerHTML=[...ativas].map(t=>{
+    const def=TESES[t],r=resp[t]||{},res=calcTese(t,G,B);
+    const campos=def.perg.filter(p=>!p.cond||p.cond(r,B)).map(p0=>{
+      const p=p0.labelFn?{...p0,label:p0.labelFn(r,B)}:p0;  // rótulo que muda conforme as respostas
+      const cur=r[p.id]!==undefined?r[p.id]:(p.defFn?p.defFn(B):(p.val!==undefined?p.val:(p.ops?p.ops[0][0]:'')));
+      if(p.tipo==='num')return `<div class="row"><label>${p.label}</label><input type="number" data-t="${t}" data-p="${p.id}" value="${cur}"></div>`;
+      if(p.tipo==='select')return `<div class="row"><label>${p.label}</label><select data-t="${t}" data-p="${p.id}">${p.ops.map(([v,l])=>`<option value="${v}" ${v===cur?'selected':''}>${l}</option>`).join('')}</select></div>`;
+      if(p.tipo==='multi'){const arr=Array.isArray(cur)?cur:[];const ops=p.opsFn?p.opsFn(r):p.ops;
+        return `<div class="row"><label>${p.label}</label><div class="chips multi" data-t="${t}" data-p="${p.id}" style="flex-wrap:wrap">${ops.map(([v,l])=>`<div class="chip" data-v="${v}" aria-pressed="${arr.includes(v)}" style="flex:0 1 auto">${l}</div>`).join('')}</div></div>`;}
+      return `<div class="row"><label>${p.label}</label><div class="chips" data-t="${t}" data-p="${p.id}">${p.ops.map(([v,l])=>`<div class="chip" data-v="${v}" aria-pressed="${v===cur}">${l}</div>`).join('')}</div></div>`;
+    }).join('');
+    const ovOn=res.override;
+    const ovVal=ovOn?(resp[t].__override):Math.round(res.probAuto*100);
+    const ovUI=`<div class="ovbox ${ovOn?'on':''}">
+      <div class="ovhead"><span>Ajustar procedência à mão</span>
+        <label class="ovtog"><input type="checkbox" data-t="${t}" class="ovchk" ${ovOn?'checked':''}> sobrescrever</label></div>
+      <div class="ovslide" ${ovOn?'':'style="display:none"'}>
+        <div class="sl"><input type="range" class="ovrange" data-t="${t}" min="0" max="100" value="${ovVal}"><span class="v">${ovVal}%</span></div>
+        <div class="mini">automático era ${Math.round(res.probAuto*100)}% — você está forçando ${ovVal}%</div>
+      </div>
+    </div>`;
+    return `<div class="proc"><div class="proc-h"><span>${CFG[t].nome}</span><span class="selo ${res.selo}">${seloTxt(res)}${ovOn?' ✎':''}</span></div><div class="proc-b">${campos}<div class="mini">${res.det} · bruto ${brl(res.bruto)} → esperado ${brl(res.esperado)}</div>${ovUI}</div></div>`;
+  }).join('');
+  // number inputs: caminho leve (não re-renderiza, preserva foco)
+  $('procBody').querySelectorAll('input[type=number]').forEach(el=>el.addEventListener('input',()=>{
+    (resp[el.dataset.t]=resp[el.dataset.t]||{})[el.dataset.p]=+el.value;run();refreshSelos();}));
+  // select: re-renderiza (pode mostrar/esconder pergunta condicional)
+  $('procBody').querySelectorAll('select').forEach(el=>el.addEventListener('change',()=>{
+    (resp[el.dataset.t]=resp[el.dataset.t]||{})[el.dataset.p]=el.value;renderProc();run();}));
+  $('procBody').querySelectorAll('.chips').forEach(gr=>gr.addEventListener('click',e=>{
+    const c=e.target.closest('.chip');if(!c)return;
+    const tt=gr.dataset.t,pp2=gr.dataset.p;resp[tt]=resp[tt]||{};
+    if(gr.classList.contains('multi')){  // toggle de membership
+      let arr=Array.isArray(resp[tt][pp2])?resp[tt][pp2].slice():[];
+      const v=c.dataset.v;if(arr.includes(v))arr=arr.filter(x=>x!==v);else arr.push(v);
+      resp[tt][pp2]=arr;renderProc();run();
+    }else{  // single-select
+      gr.querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===c));
+      resp[tt][pp2]=c.dataset.v;renderProc();run();}}));
+  // override: checkbox liga/desliga
+  $('procBody').querySelectorAll('.ovchk').forEach(ch=>ch.addEventListener('change',()=>{
+    const t=ch.dataset.t;resp[t]=resp[t]||{};
+    if(ch.checked){const G=geral(),B=base();resp[t].__override=Math.round(calcTese(t,G,B).probAuto*100);}
+    else delete resp[t].__override;
+    renderProc();run();}));
+  // override: slider ajusta o valor forçado
+  $('procBody').querySelectorAll('.ovrange').forEach(sl=>sl.addEventListener('input',()=>{
+    const t=sl.dataset.t;resp[t]=resp[t]||{};resp[t].__override=+sl.value;
+    sl.parentElement.querySelector('.v').textContent=sl.value+'%';
+    run();refreshSelos();
+    const mini=sl.closest('.ovslide').querySelector('.mini');
+    if(mini){const G=geral(),B=base();mini.textContent='automático era '+Math.round(calcTese(t,G,B).probAuto*100)+'% — você está forçando '+sl.value+'%';}}));
+}
+function refreshSelos(){
+  const G=geral(),B=base();
+  const procs=$('procBody').querySelectorAll('.proc');
+  [...ativas].forEach((t,i)=>{const res=calcTese(t,G,B);const el=procs[i]?.querySelector('.proc-h .selo');
+    if(el){el.className='selo '+res.selo;el.textContent=seloTxt(res)+(res.override?' ✎':'');}
+    const mini=procs[i]?.querySelector('.proc-b > .mini');  // só a linha de detalhe da tese (não a do ajuste manual)
+    if(mini)mini.textContent=res.det+' · bruto '+brl(res.bruto)+' → esperado '+brl(res.esperado);});
+}
+// ---------- AJUSTE PELA QUALIDADE: faixas de score a cada 10% ----------
+// cada faixa de score move a faixa de comissão (−3..+2) e/ou paga um % da comissão
+const BANDS_PADRAO=Array.from({length:10},()=>({shift:0,mult:100}));
+let BANDS=JSON.parse(JSON.stringify(BANDS_PADRAO));
+const bandOf=s=>Math.min(9,Math.max(0,Math.floor(s/10)));
+const bandLabel=i=>i===9?'90–100%':`${i*10}–${i*10+9}%`;
+const SHIFT_TXT={'-3':'−3 faixas','-2':'−2 faixas','-1':'−1 faixa','0':'mantém','1':'+1 faixa','2':'+2 faixas'};
+function aplicaScore(nivelValor,score,G){
+  const i=bandOf(score),b=BANDS[i],n=Math.max(0,Math.min(3,nivelValor+b.shift));
+  return {nivel:n,com:Math.round(G.com[n]*b.mult/100),band:i,b};}
+const BASE_DESC={
+  composto:'A faixa sai do valor composto (tamanho + solidez, peso ao lado). A qualidade já pesa aqui — a tabela abaixo soma por cima.',
+  bruto:'A faixa sai só do tamanho do caso. A qualidade entra apenas pela tabela abaixo — use para separar "quanto vale" de "quão bom é".',
+  esperado:'A faixa sai do valor esperado (cada tese × sua chance). A qualidade já pesa aqui — a tabela abaixo soma por cima.'};
+function buildBands(){
+  const scCol=i=>i>=6?'var(--ok)':i>=4?'var(--warn)':'var(--stop)';
+  $('scoreBands').innerHTML='<div class="hd">Score</div><div class="hd">Faixa de comissão</div><div class="hd">% da comissão</div>'+
+    BANDS.map((b,i)=>`<div class="sc"><i style="background:${scCol(i)}"></i>${bandLabel(i)}</div>
+      <select class="band-shift" data-i="${i}">${[-3,-2,-1,0,1,2].map(v=>`<option value="${v}" ${v===b.shift?'selected':''}>${SHIFT_TXT[v]}</option>`).join('')}</select>
+      <input type="number" class="band-mult" data-i="${i}" min="0" max="300" step="5" value="${b.mult}">`).join('');
+  $('scoreBands').querySelectorAll('.band-shift').forEach(s=>s.addEventListener('change',()=>{BANDS[+s.dataset.i].shift=+s.value;run();}));
+  $('scoreBands').querySelectorAll('.band-mult').forEach(n=>n.addEventListener('input',()=>{BANDS[+n.dataset.i].mult=Math.max(0,+n.value||0);run();}));
+}
+function renderMatrix(G,cur){
+  const head='<tr><th>Faixa por valor</th>'+BANDS.map((_,i)=>`<th>${bandLabel(i)}</th>`).join('')+'</tr>';
+  const rows=NOMES.map((nm,nv)=>'<tr><td class="lab" style="color:'+COR[nm]+'">'+nm+'</td>'+BANDS.map((_,i)=>{
+    const a=aplicaScore(nv,i*10+5,G),fin=NOMES[a.nivel],isCur=cur&&cur.nv===nv&&cur.band===i;
+    return `<td class="${isCur?'cur':''}">${a.com>0?`<div class="t" style="color:${COR[fin]}">${fin}</div>${brl(a.com)}`:'<span style="color:var(--dim)">sem comissão</span>'}</td>`;}).join('')+'</tr>').join('');
+  $('bandMatrix').innerHTML=`<table class="bm">${head}${rows}</table>`;
+}
+function run(){
+  const G=geral(),B=base(); let veTot=0,vbTot=0,veW=0,vbW=0;const linhas=[];
+  // art.193 §2º: insalubridade × periculosidade são EXCLUDENTES — fica só a de maior valor
+  let excluir=null;
+  if(ativas.has('insalubridade')&&ativas.has('periculosidade')){
+    const ri=calcTese('insalubridade',G,B),rp=calcTese('periculosidade',G,B);
+    excluir=ri.bruto>=rp.bruto?'periculosidade':'insalubridade';}
+  for(const t of ativas){const res=calcTese(t,G,B);const w=(CFG[t].peso!==undefined?CFG[t].peso:1);
+    const ex=(t===excluir);
+    const esp=ex?0:res.esperado, bru=ex?0:res.bruto;
+    veTot+=esp;vbTot+=bru; veW+=esp*w; vbW+=bru*w;
+    linhas.push([CFG[t].nome+(ex?' (excluída: fica a de maior valor)':''),ex?'fraca':res.selo,ex?0:Math.round(res.prob*100),esp]);}
+  // solidez = quanto do bruto sobrevive à probabilidade (ponderado por peso de tese)
+  const solidez=vbW>0?veW/vbW:0;              // 0..1
+  const score=Math.round(solidez*100);
+  // VALOR COMPOSTO: mistura tamanho (bruto) e solidez, com peso global calibrável
+  // pTam=peso do tamanho; (1-pTam)=peso da solidez. Default puxa forte pra solidez.
+  const pTam=G.peso_tamanho;                  // 0..1
+  const valorComposto=vbTot*(pTam + (1-pTam)*solidez);
+  const fx=v=>v>G.lim[2]?3:v>G.lim[1]?2:v>G.lim[0]?1:0;
+  // 1) faixa pelo VALOR (base escolhida na calibração)  2) ajuste pela QUALIDADE (faixa de score a cada 10%)
+  const modo=$('base_faixa').value, valorFaixa=modo==='bruto'?vbTot:modo==='esperado'?veTot:valorComposto;
+  const baseN=fx(valorFaixa), adj=aplicaScore(baseN,score,G);
+  const nivel=adj.nivel,tier=NOMES[nivel],com=adj.com;
+  $('tier').textContent=ativas.size?tier:'—';$('tier').style.color=ativas.size?COR[tier]:'var(--dim)';
+  $('comm').textContent=ativas.size?(com>0?brl(com):'sem comissão'):'—';
+  $('medal').style.borderColor=ativas.size?COR[tier]:'var(--line)';$('medal').style.boxShadow=ativas.size?('0 0 22px -6px '+COR[tier]):'none';
+  $('valorlab').textContent={composto:'Valor composto',bruto:'Valor bruto',esperado:'Valor esperado'}[modo];
+  $('valor').textContent=ativas.size?brl(valorFaixa):'R$ 0';
+  $('faixaval').textContent=ativas.size?NOMES[baseN]:'—';
+  const neutro=adj.b.shift===0&&adj.b.mult===100;
+  $('scoreadj').textContent=ativas.size?`${bandLabel(adj.band)}: ${SHIFT_TXT[adj.b.shift]} · ${adj.b.mult}%`:'—';
+  $('scoreadj').style.color=!ativas.size||neutro?'':(adj.b.shift>0||adj.b.mult>100)?'var(--ok)':'var(--stop)';
+  const sb=$('scorebadge');sb.textContent=score;const sc=score>=65?'var(--ok)':score>=40?'var(--warn)':'var(--stop)';
+  sb.style.background=sc+'22';sb.style.color=sc;$('scoregauge').style.width=score+'%';$('scoregauge').style.background=sc;
+  let mod;
+  if(!ativas.size)mod='Marque as teses do caso.';
+  else{
+    mod=modo==='composto'?`Faixa = ${Math.round(pTam*100)}% tamanho + ${Math.round((1-pTam)*100)}% solidez. Bruto ${brl(vbTot)} · esperado ${brl(veTot)} · composto <b>${brl(valorComposto)}</b>.`
+      :`Faixa pelo ${modo==='bruto'?'valor bruto':'valor esperado'} <b>${brl(valorFaixa)}</b> · bruto ${brl(vbTot)} · esperado ${brl(veTot)}.`;
+    if(modo!=='bruto'&&fx(vbTot)>baseN)mod+=`<br><span class="down">↓ teses fracas puxaram de ${NOMES[fx(vbTot)]} para ${NOMES[baseN]}</span>`;
+    if(!neutro){const up=adj.nivel>baseN||(adj.nivel===baseN&&adj.b.mult>100);
+      mod+=`<br><span class="${up?'up':'down'}">${up?'↑':'↓'} score ${score} (${bandLabel(adj.band)}): ${NOMES[baseN]} → ${tier}${adj.b.mult!==100?` · ${adj.b.mult}% da comissão`:''}</span>`;}}
+  $('mods').innerHTML=mod;
+  renderMatrix(G,ativas.size?{nv:baseN,band:adj.band}:null);
+  linhas.sort((a,b)=>b[3]-a[3]);
+  $('teselist').innerHTML=linhas.length?('<div style="color:var(--mut);padding-bottom:4px">Teses (valor esperado):</div>'+
+    linhas.map(([n,s,p,v])=>`<div class="ti"><span><span class="selo ${s}" style="font-size:10px;padding:1px 7px">${p}%</span> ${n}</span><b>${brl(v)}</b></div>`).join('')):'';
+}
+
+// ---------- CALIBRAR TESES UI ----------
+function buildCfgTeses(){
+  $('cfgTeses').innerHTML=Object.entries(CFG).map(([t,def])=>{
+    const probs=Object.entries(def.probs).map(([k,o])=>sliderRow(t,'probs',k,o,0,100,'%')).join('');
+    const vals=def.valores?('<h3 class="sec">Valores de referência (R$)</h3>'+Object.entries(def.valores).map(([k,o])=>
+      `<div class="row"><div class="pct-label"><span>${o.label}</span></div><input type="number" data-t="${t}" data-g="valores" data-k="${k}" value="${o.v}"></div>`).join('')):'';
+    const onusLine=def.onus?`<div class="onus-note">⚖️ Ônus: ${def.onus}</div>`:'';
+    const agRow=(a,k,lbl,v)=>{const col=v>=65?'var(--ok)':v>=40?'var(--warn)':'var(--stop)';
+      return `<div class="row"><div class="pct-label"><span>${lbl}</span></div>
+        <div class="sl"><input type="range" class="ag-sl" data-t="${t}" data-a="${a}" data-k="${k}" min="0" max="100" value="${v}"><span class="v">${v}</span></div>
+        <div class="slbar"><i style="width:${v}%;background:${col}"></i></div></div>`;};
+    const ags=def.agentes?('<h3 class="sec">Agentes — calibrar um a um</h3>'+Object.entries(def.agentes).map(([a,x])=>
+      `<div class="agcard"><div class="aghead"><b>${x.label}</b>
+        <select class="ag-grau" data-t="${t}" data-a="${a}">${[0.1,0.2,0.4].map(gv=>`<option value="${gv}" ${gv===x.grau?'selected':''}>grau ${Math.round(gv*100)}%</option>`).join('')}</select></div>
+        <div class="note">${x.sub}</div>
+        ${agRow(a,'prob','Chance de êxito (se enquadra)',x.prob)}
+        ${agRow(a,'prob_epi','Chance com EPI eficaz + ficha assinada',x.prob_epi)}
+        ${x.prob_fora!==undefined?agRow(a,'prob_fora','Chance se for '+x.fora,x.prob_fora):''}
+      </div>`).join('')):'';
+    const sits=def.situacoes?('<h3 class="sec">Situações — calibrar uma a uma</h3>'+Object.entries(def.situacoes).map(([k,x])=>{
+      const col=x.prob>=65?'var(--ok)':x.prob>=40?'var(--warn)':'var(--stop)';
+      return `<div class="agcard"><div class="aghead"><b>${x.label}</b></div>
+        <div class="row"><div class="pct-label"><span>Valor de referência (R$)</span></div><input type="number" class="sit-val" data-t="${t}" data-s="${k}" value="${x.valor}"></div>
+        <div class="row"><div class="pct-label"><span>Chance de êxito com prova</span></div>
+          <div class="sl"><input type="range" class="sit-sl" data-t="${t}" data-s="${k}" min="0" max="100" value="${x.prob}"><span class="v">${x.prob}</span></div>
+          <div class="slbar"><i style="width:${x.prob}%;background:${col}"></i></div></div></div>`;}).join('')):'';
+    const peso=def.peso!==undefined?def.peso:1;
+    const pesoRow=`<h3 class="sec">Peso da tese no caso</h3>
+      <div class="row"><div class="pct-label"><span>Importância relativa</span><span class="note">1 = normal · >1 pesa mais · <1 pesa menos</span></div>
+      <div class="sl"><input type="range" class="peso-tese" data-t="${t}" min="0" max="3" step="0.25" value="${peso}"><span class="v">${peso.toFixed(2)}×</span></div></div>`;
+    return `<div class="acc" data-t="${t}" aria-expanded="false">
+      <div class="acc-h"><span>${def.nome}</span><span class="arrow">▸</span></div>
+      <div class="acc-b">${onusLine}${probs?'<h3 class="sec">Probabilidade de êxito (%)</h3>'+probs:''}${ags}${sits}${vals}${pesoRow}</div>
+    </div>`;
+  }).join('');
+  // accordion toggle
+  $('cfgTeses').querySelectorAll('.acc-h').forEach(h=>h.addEventListener('click',()=>{
+    const acc=h.parentElement;acc.setAttribute('aria-expanded',acc.getAttribute('aria-expanded')!=='true');}));
+  // sliders de probabilidade
+  // agentes: chance (sliders) e grau (select) — cada um independente
+  $('cfgTeses').querySelectorAll('.ag-sl').forEach(sl=>sl.addEventListener('input',()=>{
+    const {t,a,k}=sl.dataset;CFG[t].agentes[a][k]=+sl.value;
+    sl.parentElement.querySelector('.v').textContent=sl.value;
+    const bar=sl.closest('.row').querySelector('.slbar i');if(bar){bar.style.width=sl.value+'%';bar.style.background=sl.value>=65?'var(--ok)':sl.value>=40?'var(--warn)':'var(--stop)';}
+    run();refreshSelos();}));
+  $('cfgTeses').querySelectorAll('.ag-grau').forEach(s=>s.addEventListener('change',()=>{
+    CFG[s.dataset.t].agentes[s.dataset.a].grau=+s.value;renderProc();run();}));
+  // situações de dano moral: valor e chance, cada uma independente
+  $('cfgTeses').querySelectorAll('.sit-sl').forEach(sl=>sl.addEventListener('input',()=>{
+    CFG[sl.dataset.t].situacoes[sl.dataset.s].prob=+sl.value;
+    sl.parentElement.querySelector('.v').textContent=sl.value;
+    const bar=sl.closest('.row').querySelector('.slbar i');if(bar){bar.style.width=sl.value+'%';bar.style.background=sl.value>=65?'var(--ok)':sl.value>=40?'var(--warn)':'var(--stop)';}
+    run();refreshSelos();}));
+  $('cfgTeses').querySelectorAll('.sit-val').forEach(inp=>inp.addEventListener('input',()=>{
+    CFG[inp.dataset.t].situacoes[inp.dataset.s].valor=+inp.value;renderProc();run();}));
+  $('cfgTeses').querySelectorAll('input[type=range]:not(.peso-tese):not(.ag-sl):not(.sit-sl)').forEach(sl=>sl.addEventListener('input',()=>{
+    const {t,g,k}=sl.dataset;CFG[t][g][k].v=+sl.value;
+    sl.parentElement.querySelector('.v').textContent=sl.value;
+    const bar=sl.closest('.row').querySelector('.slbar i');if(bar){bar.style.width=sl.value+'%';bar.style.background=sl.value>=65?'var(--ok)':sl.value>=40?'var(--warn)':'var(--stop)';}
+    run();refreshSelos();}));
+  // slider de peso da tese
+  $('cfgTeses').querySelectorAll('.peso-tese').forEach(sl=>sl.addEventListener('input',()=>{
+    CFG[sl.dataset.t].peso=+sl.value;
+    sl.parentElement.querySelector('.v').textContent=(+sl.value).toFixed(2)+'×';
+    run();refreshSelos();}));
+  // number inputs (valores)
+  $('cfgTeses').querySelectorAll('input[type=number]:not(.sit-val)').forEach(inp=>inp.addEventListener('input',()=>{
+    const {t,g,k}=inp.dataset;CFG[t][g][k].v=+inp.value;run();refreshSelos();}));
+}
+function sliderRow(t,g,k,o,min,max,suf){
+  const col=o.v>=65?'var(--ok)':o.v>=40?'var(--warn)':'var(--stop)';
+  return `<div class="row">
+    <div class="pct-label"><span>${o.label}</span>${o.sub?`<span class="note">${o.sub}</span>`:''}</div>
+    <div class="sl"><input type="range" data-t="${t}" data-g="${g}" data-k="${k}" min="${min}" max="${max}" value="${o.v}"><span class="v">${o.v}</span></div>
+    <div class="slbar"><i style="width:${o.v}%;background:${col}"></i></div>
+  </div>`;
+}
+
+// tabs
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected',x===t));
+  $('page-sim').classList.toggle('on',t.dataset.tab==='sim');
+  $('page-cfg').classList.toggle('on',t.dataset.tab==='cfg');
+  $('page-geral').classList.toggle('on',t.dataset.tab==='geral');
+}));
+// geral listeners
+['lim1','lim2','lim3','com0','com1','com2','com3','selo_forte','selo_media','sm','reflexo'].forEach(id=>$(id).addEventListener('input',()=>{run();renderProc();}));
+function atualizaPesoLabel(){
+  const v=+$('peso_tamanho').value;$('peso_tamanho_v').textContent=v;$('peso_bar').style.width=v+'%';
+  $('peso_desc').textContent=`Faixa = ${v}% tamanho (valor bruto) + ${100-v}% solidez (probabilidade). Puxar pra 0 = só qualidade manda; pra 100 = só tamanho.`;}
+$('peso_tamanho').addEventListener('input',()=>{atualizaPesoLabel();run();refreshSelos();});
+['salario','meses','funcionarios','dias_semana','saida'].forEach(id=>$(id).addEventListener('input',()=>{run();renderProc();}));
+// header single-chips (local / testemunha) — fatores gerais
+// justa causa: mostra a pergunta da prova da empresa só quando a saída for justa causa
+$('saida').addEventListener('input',()=>{const s=$('saida').value;
+  $('jcRow').style.display=s==='justa_causa'?'':'none';$('riRow').style.display=s==='rescisao_indireta'?'':'none';$('vincRow').style.display=s==='sem_registro'?'':'none';
+  // sem registro: o que é certo quando o vínculo for reconhecido já vem marcado (o vendedor pode desmarcar)
+  if(s==='sem_registro'){['verbas_rescisorias','fgts','dano_moral'].forEach(t=>ativas.add(t));
+    resp.dano_moral=resp.dano_moral||{};const ds=Array.isArray(resp.dano_moral.dano_sits)?resp.dano_moral.dano_sits:[];
+    if(!ds.includes('informalidade'))resp.dano_moral.dano_sits=[...ds,'informalidade'];
+    buildTeses();renderProc();run();}});
+['local','testemunha','jc_prova','ri_falta','vinc_admite','vinc_doc'].forEach(id=>$(id).addEventListener('click',e=>{
+  const c=e.target.closest('.chip');if(!c)return;
+  $(id).querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===c));
+  run();renderProc();}));
+// ---------- CALIBRAÇÃO SALVA: não se perde entre versões do arquivo ----------
+// salva sozinha no navegador a cada ajuste; Exportar baixa um .json; Importar aceita o .json ou o texto colado (inclusive da versão antiga)
+const STORE_KEY='motor_comissao_calibracao';
+const GERAL_IDS=['lim1','lim2','lim3','com0','com1','com2','com3','peso_tamanho','selo_forte','selo_media','sm','reflexo'];
+function snapshot(){
+  const out={_versao:2,_salvo_em:new Date().toISOString()};
+  for(const t in CFG){out[t]={probs:{}};for(const k in CFG[t].probs)out[t].probs[k]=CFG[t].probs[k].v;
+    if(CFG[t].valores){out[t].valores={};for(const k in CFG[t].valores)out[t].valores[k]=CFG[t].valores[k].v;}
+    if(CFG[t].situacoes){out[t].situacoes={};for(const k in CFG[t].situacoes){const x=CFG[t].situacoes[k];out[t].situacoes[k]={valor:x.valor,prob:x.prob};}}
+    if(CFG[t].agentes){out[t].agentes={};for(const a in CFG[t].agentes){const x=CFG[t].agentes[a];
+      out[t].agentes[a]={grau:x.grau,prob:x.prob,prob_epi:x.prob_epi,...(x.prob_fora!==undefined?{prob_fora:x.prob_fora}:{})};}}}
+  out._faixas={limites:geral().lim,comissao:geral().com,peso_tamanho:+$('peso_tamanho').value,base_faixa:$('base_faixa').value,
+    score_faixas:BANDS.map((b,i)=>({score:bandLabel(i),mover_faixa:b.shift,pct_comissao:b.mult}))};
+  out._pesos_tese={};for(const t in CFG)out._pesos_tese[t]=CFG[t].peso!==undefined?CFG[t].peso:1;
+  out._geral={selo_forte:+$('selo_forte').value,selo_media:+$('selo_media').value,sm:+$('sm').value,reflexo:+$('reflexo').value};
+  return out;}
+// aplica só o que existe na versão atual (chave nova fica no padrão; chave que saiu é ignorada)
+function aplicarValores(o){
+  if(!o||typeof o!=='object'||Array.isArray(o))throw new Error('formato inválido');
+  const num=v=>v!==null&&v!==''&&isFinite(+v);let n=0;
+  for(const t in CFG){const x=o[t];if(!x||typeof x!=='object')continue;
+    if(x.probs)for(const k in x.probs)if(CFG[t].probs[k]&&num(x.probs[k])){CFG[t].probs[k].v=+x.probs[k];n++;}
+    if(x.valores&&CFG[t].valores)for(const k in x.valores)if(CFG[t].valores[k]&&num(x.valores[k])){CFG[t].valores[k].v=+x.valores[k];n++;}
+    if(x.situacoes&&CFG[t].situacoes)for(const k in x.situacoes){const s=CFG[t].situacoes[k],y=x.situacoes[k];
+      if(s&&y){if(num(y.valor))s.valor=+y.valor;if(num(y.prob))s.prob=+y.prob;n++;}}
+    if(x.agentes&&CFG[t].agentes)for(const a in x.agentes){const s=CFG[t].agentes[a],y=x.agentes[a];
+      if(s&&y){['grau','prob','prob_epi','prob_fora'].forEach(f=>{if(s[f]!==undefined&&num(y[f]))s[f]=+y[f];});n++;}}}
+  if(o._pesos_tese)for(const t in o._pesos_tese)if(CFG[t]&&num(o._pesos_tese[t]))CFG[t].peso=+o._pesos_tese[t];
+  const f=o._faixas||{};
+  if(Array.isArray(f.limites))f.limites.forEach((v,i)=>{if(i<3&&num(v))$('lim'+(i+1)).value=+v;});
+  if(Array.isArray(f.comissao))f.comissao.forEach((v,i)=>{if(i<4&&num(v))$('com'+i).value=+v;});
+  if(num(f.peso_tamanho))$('peso_tamanho').value=+f.peso_tamanho;
+  if(['composto','bruto','esperado'].includes(f.base_faixa))$('base_faixa').value=f.base_faixa;
+  if(Array.isArray(f.score_faixas))f.score_faixas.forEach((b,i)=>{if(i<10&&b){
+    if(num(b.mover_faixa))BANDS[i].shift=Math.max(-3,Math.min(2,Math.round(+b.mover_faixa)));
+    if(num(b.pct_comissao))BANDS[i].mult=Math.max(0,+b.pct_comissao);}});
+  const gx=o._geral||{};['selo_forte','selo_media','sm','reflexo'].forEach(id=>{if(num(gx[id]))$(id).value=+gx[id];});
+  return n;}
+function refreshCalibUI(){buildCfgTeses();buildBands();setBaseDesc();atualizaPesoLabel();renderProc();run();}
+const hhmm=d=>d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+function marcaSalvo(d,carregada){$('saveStat').textContent=(carregada?'💾 Calibração salva carregada (de ':'💾 Calibração salva neste navegador (')+hhmm(d)+') — vale também nas próximas versões do arquivo';}
+let saveT=null;
+function salvarAgora(){try{const s=snapshot();localStorage.setItem(STORE_KEY,JSON.stringify(s));marcaSalvo(new Date(s._salvo_em));}
+  catch(e){$('saveStat').textContent='⚠️ Este navegador não deixou salvar — use "Exportar calibração" para guardar';}}
+function salvarDepois(){clearTimeout(saveT);saveT=setTimeout(salvarAgora,300);}
+function carregarSalva(){try{const raw=localStorage.getItem(STORE_KEY);if(!raw)return null;const o=JSON.parse(raw);aplicarValores(o);return o;}catch(e){return null;}}
+// qualquer ajuste nas abas de calibração salva sozinho
+['page-cfg','page-geral'].forEach(id=>{$(id).addEventListener('input',salvarDepois);$(id).addEventListener('change',salvarDepois);});
+$('resetBands').addEventListener('click',salvarDepois);
+// restaurar padrão: teses, faixas, score e parâmetros
+$('resetCfg').addEventListener('click',()=>{
+  CFG=JSON.parse(JSON.stringify(CFG_PADRAO));BANDS=JSON.parse(JSON.stringify(BANDS_PADRAO));
+  GERAL_IDS.forEach(id=>{$(id).value=$(id).defaultValue;});$('base_faixa').value='composto';
+  try{localStorage.removeItem(STORE_KEY);}catch(e){}
+  refreshCalibUI();$('saveStat').textContent='Calibração padrão (nada salvo)';});
+// exportar: baixa o .json e copia o texto
+$('exportCfg').addEventListener('click',()=>{
+  const data=JSON.stringify(snapshot(),null,2);
+  try{navigator.clipboard?.writeText(data).catch(()=>{});}catch(e){}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+  a.download='calibracao-motor-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();
+  $('exportCfg').textContent='Baixado e copiado ✓';setTimeout(()=>$('exportCfg').textContent='Exportar calibração',1800);});
+// importar: arquivo .json ou texto colado
+$('importCfg').addEventListener('click',()=>{$('importBox').style.display='';$('importMsg').textContent='';});
+$('importCancel').addEventListener('click',()=>{$('importBox').style.display='none';});
+$('importFile').addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];if(!f)return;
+  const rd=new FileReader();rd.onload=()=>{$('importText').value=rd.result;};rd.readAsText(f);});
+$('importApply').addEventListener('click',()=>{
+  try{const n=aplicarValores(JSON.parse($('importText').value));refreshCalibUI();salvarAgora();
+    $('importMsg').style.color='var(--ok)';$('importMsg').textContent=`Calibração importada ✓ (${n} ajustes de tese aplicados)`;
+    setTimeout(()=>{$('importBox').style.display='none';},1500);}
+  catch(e){$('importMsg').style.color='var(--stop)';$('importMsg').textContent='Não consegui ler esse JSON: '+e.message;}});
+
+// ajuste pela qualidade: base da faixa e faixas de score
+const setBaseDesc=()=>{$('base_desc').textContent=BASE_DESC[$('base_faixa').value];};
+$('base_faixa').addEventListener('change',()=>{setBaseDesc();run();});
+$('resetBands').addEventListener('click',()=>{BANDS=JSON.parse(JSON.stringify(BANDS_PADRAO));buildBands();run();});
+const salva=carregarSalva();  // carrega a calibração salva antes de montar a tela
+setBaseDesc();buildBands();atualizaPesoLabel();
+buildTeses();buildCfgTeses();renderProc();run();
+if(salva)marcaSalvo(new Date(salva._salvo_em||Date.now()),true);
+</script>
+</body>
+</html>

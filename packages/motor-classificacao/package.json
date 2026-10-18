@@ -1,0 +1,20 @@
+{
+  "name": "@central-trabalhista/motor-classificacao",
+  "version": "1.0.0",
+  "description": "Motor de classificação de processos (faixa e comissão do vendedor) — regras validadas no protótipo motor v3.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p . && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/motor.mjs",
+    "test": "vitest run",
+    "paridade": "npm run build && node paridade/gerar_casos.js 6000 paridade/casos.json && python3 paridade/comparar_v3.py paridade/casos.json ../referencia/motor_comercial_v3.html && python3 paridade/comparar_perguntas.py paridade/casos.json ../referencia/widget_vendedor.html"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "module": "dist/motor.mjs"
+}

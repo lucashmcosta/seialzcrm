@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,9 +18,10 @@ import { Plus, PencilSimple, TrashSimple, Copy, Lock } from '@phosphor-icons/rea
 import type { PermissionsV2, Scope } from '@/lib/permissions/types';
 import { SCOPE_ORDER } from '@/lib/permissions/types';
 import { fromLegacy, toLegacy } from '@/lib/permissions/convert';
+import { useOrgWidgetConfig } from '@/widgets/useOrgWidgets';
 import {
   ADMIN_ITEMS, DATA_OBJECTS, SCOPE_LABEL, SCOPE_RANK, TEMPLATES, TOOLS,
-  blankPerms, hasBroadAccess, normalize, sentence, summarize, usesTeam,
+  blankPerms, hasBroadAccess, normalize, sentence, summarize, usesTeam, visibleFor, withDefaults,
 } from '@/lib/permissions/catalog';
 
 interface ProfileRow {
@@ -32,7 +33,13 @@ interface ProfileRow {
 }
 
 const effective = (p: ProfileRow): PermissionsV2 =>
-  p.permissions_v2 ?? fromLegacy((p.permissions ?? {}) as Record<string, boolean>, true);
+  withDefaults(p.permissions_v2 ?? fromLegacy((p.permissions ?? {}) as Record<string, boolean>, true));
+
+/** Módulos ligados na org (organization_widgets): itens de permissão de módulo só aparecem com ele ligado. */
+function useEnabledModules(): ReadonlySet<string> {
+  const { data } = useOrgWidgetConfig();
+  return useMemo(() => new Set((data?.widgets ?? []).filter((w) => w.is_enabled).map((w) => w.widget_key)), [data]);
+}
 
 export function PermissionProfilesV2() {
   const { organization } = useOrganization();
@@ -179,6 +186,7 @@ function ProfileEditor({ orgId, initial, onClose, onSaved }: {
   const [perms, setPerms] = useState<PermissionsV2>(() => normalize(initial.perms));
   const [saving, setSaving] = useState(false);
   const [confirmBroad, setConfirmBroad] = useState(false);
+  const visible = visibleFor(useEnabledModules());
 
   const { data: teamCount = 0 } = useQuery({
     queryKey: ['teams-count', orgId],
@@ -225,7 +233,7 @@ function ProfileEditor({ orgId, initial, onClose, onSaved }: {
             <TabsTrigger value="administracao">Administração</TabsTrigger>
           </TabsList>
           <TabsContent value="dados" className="space-y-4">
-            {DATA_OBJECTS.map((obj) => {
+            {DATA_OBJECTS.filter(visible).map((obj) => {
               const o = (perms.dados as any)[obj.key] as Record<string, Scope | boolean>;
               return (
                 <div key={obj.key} className="rounded-md border p-3 space-y-2">
@@ -253,7 +261,7 @@ function ProfileEditor({ orgId, initial, onClose, onSaved }: {
             })}
           </TabsContent>
           <TabsContent value="ferramentas" className="space-y-2">
-            {TOOLS.filter((t) => !t.hidden).map((t) => (
+            {TOOLS.filter(visible).map((t) => (
               <div key={t.key} className="flex items-center justify-between rounded-md border p-3">
                 <span className="text-sm">{t.label}</span>
                 <Switch checked={!!perms.ferramentas[t.key]} onCheckedChange={(v) => setPerms((p) => ({ ...p, ferramentas: { ...p.ferramentas, [t.key]: v } }))} />
@@ -261,7 +269,7 @@ function ProfileEditor({ orgId, initial, onClose, onSaved }: {
             ))}
           </TabsContent>
           <TabsContent value="administracao" className="space-y-2">
-            {ADMIN_ITEMS.filter((a) => !a.hidden).map((a) => (
+            {ADMIN_ITEMS.filter(visible).map((a) => (
               <div key={a.key} className="flex items-center justify-between rounded-md border p-3">
                 <span className="text-sm">{a.label}</span>
                 <Switch checked={!!perms.administracao[a.key]} onCheckedChange={(v) => setPerms((p) => ({ ...p, administracao: { ...p.administracao, [a.key]: v } }))} />
@@ -271,7 +279,7 @@ function ProfileEditor({ orgId, initial, onClose, onSaved }: {
         </Tabs>
         <div className="rounded-md bg-muted p-3 space-y-1">
           <div className="text-xs font-semibold">Resumo</div>
-          {DATA_OBJECTS.map((o) => <p key={o.key} className="text-xs text-muted-foreground">{sentence(o, perms)}</p>)}
+          {DATA_OBJECTS.filter(visible).map((o) => <p key={o.key} className="text-xs text-muted-foreground">{sentence(o, perms)}</p>)}
         </div>
         {confirmBroad && (
           <p className="text-xs rounded-md border border-destructive/40 bg-destructive/10 p-2">

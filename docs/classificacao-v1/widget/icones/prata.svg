@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs><linearGradient id="mTop-prata" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FBFCFD"/><stop offset="1" stop-color="#C9D1DA"/></linearGradient>
+  <linearGradient id="mFr-prata" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#BCC5CF"/><stop offset="1" stop-color="#7E8996"/></linearGradient><linearGradient id="mShine-prata" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".8"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><clipPath id="mClip-prata"><path d="M34 34 H86 L99 57 L107 88 H13 L21 57 Z"/></clipPath></defs>
+  <ellipse cx="60" cy="100" rx="46" ry="6" fill="#000" opacity=".35"/>
+  <polygon points="34,34 86,34 99,57 21,57" fill="url(#mTop-prata)" stroke="#5E6874" stroke-width="1.2" stroke-linejoin="round"/>
+  <polygon points="21,57 99,57 107,88 13,88" fill="url(#mFr-prata)" stroke="#5E6874" stroke-width="1.2" stroke-linejoin="round"/>
+  <polygon points="29,62 91,62 97,83 23,83" fill="#fff" opacity=".10"/>
+  <line x1="22" y1="57.5" x2="98" y2="57.5" stroke="#fff" stroke-opacity=".7" stroke-width="1.4"/>
+  <line x1="36" y1="37" x2="84" y2="37" stroke="#fff" stroke-opacity=".55" stroke-width="1"/><g clip-path="url(#mClip-prata)"><rect class="mat-shine" x="-10" y="10" width="34" height="110" fill="url(#mShine-prata)" transform="skewX(-22)"/></g></svg>

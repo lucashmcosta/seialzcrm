@@ -9500,6 +9500,7 @@ export type Database = {
           organization_id: string
           require_complete_address: boolean
           require_cpf_verified: boolean
+          require_process_classification: boolean
           required_contact_custom_field_ids: string[]
           required_contact_fields: string[]
           required_opportunity_custom_field_ids: string[]
@@ -9516,6 +9517,7 @@ export type Database = {
           organization_id: string
           require_complete_address?: boolean
           require_cpf_verified?: boolean
+          require_process_classification?: boolean
           required_contact_custom_field_ids?: string[]
           required_contact_fields?: string[]
           required_opportunity_custom_field_ids?: string[]
@@ -9532,6 +9534,7 @@ export type Database = {
           organization_id?: string
           require_complete_address?: boolean
           require_cpf_verified?: boolean
+          require_process_classification?: boolean
           required_contact_custom_field_ids?: string[]
           required_contact_fields?: string[]
           required_opportunity_custom_field_ids?: string[]

@@ -109,6 +109,7 @@ export function OpportunityCloseDialog(props: Props) {
                     {item.label}{item.code === 'cpf_api_verified' && checkingCpf ? ' — consultando…' : ''}
                   </span>
                   {item.status === 'missing' && item.action === 'edit_contact' && props.contactId && <Button asChild variant="link" size="sm"><Link to={`/contacts/${props.contactId}/edit`}>Corrigir contato</Link></Button>}
+                  {item.status === 'missing' && item.action === 'classify' && <span className="text-xs text-muted-foreground">Classifique na Visão geral da oportunidade</span>}
                 </div>
               ))}
             </div>

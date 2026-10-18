@@ -1,0 +1,35 @@
+Vamos implementar a v1 da "Classificação de processos" no Seialz, como módulo do tenant Central Trabalhista (ligável por tenant).
+
+O pacote está em docs/classificacao-v1/ (ajuste o caminho se eu tiver colocado em outro lugar). Leia primeiro, nesta ordem:
+1. README.md
+2. SPEC.md (é a especificação; os critérios de aceite estão no §10)
+3. motor/src/tipos.ts, motor/src/perguntas.ts, motor/src/calibracao.ts (a API do motor)
+
+Regras que não mudam:
+- O motor (motor/src) já foi validado pelo jurídico e conferido contra o protótipo em 21 mil casos. NÃO reescreva nem "melhore" a lógica. Copie o pacote para o repositório como está, por exemplo como pacote interno, e use motor/dist/motor.mjs na edge function. Se achar um problema numa regra, me avise. Não corrija por conta própria.
+- O cálculo do vendedor roda no servidor. O navegador do vendedor nunca recebe calibração, percentuais nem valores do caso. Recebe só a faixa e a comissão dele.
+- Visual: use o design system do Seialz (componentes, tokens, tema claro e escuro). Não copie o CSS dos protótipos em referencia/. Deles, aproveite só os desenhos dos materiais (widget/icones/*.svg), os movimentos da revelação e o fluxo passo a passo.
+- Siga os padrões do repositório: multi-tenant com RLS, RBAC (famílias dados / ferramentas / administração), convenções das edge functions, migrações e notificações.
+
+Antes de escrever código:
+A) Explore o repositório e me traga um resumo curto de:
+   - onde fica a tela da oportunidade e como se adiciona um widget/aba nela;
+   - quais status contam como aberta, ganha e perdida;
+   - como o RBAC e os módulos por tenant funcionam;
+   - como são feitas as edge functions e as migrações;
+   - como se notifica um gestor;
+   - quais componentes do design system servem para o assistente passo a passo, chips, campos e cartões;
+   - se já existe algo de comissão.
+B) Responda os pontos do §12 da SPEC que o código não resolver, perguntando para mim.
+C) Proponha um plano em fases pequenas, cada uma testável. Sugestão:
+   1. motor + tabelas + edge function de classificar (com testes);
+   2. widget do vendedor;
+   3. correção pelo gestor + bloqueio de "ganha" sem classificação;
+   4. tela de calibração com versões, simulador e prévia de impacto;
+   5. relatórios e exportação.
+   Espere minha aprovação antes de começar cada fase.
+
+Em todas as fases:
+- npm test do motor tem que continuar passando (475 testes) no CI.
+- Escreva testes para o que for novo, inclusive os critérios de aceite do §10.
+- Ao terminar cada fase, me mostre como testar na prática (passo a passo de clique) e o que ficou de fora.
