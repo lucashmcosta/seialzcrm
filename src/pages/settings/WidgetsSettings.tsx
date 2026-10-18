@@ -1,6 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { usePermissions } from '@/hooks/usePermissions';
+import { Link } from 'react-router-dom';
+import { GearSix } from '@phosphor-icons/react';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
 import { WIDGET_REGISTRY } from '@/widgets/registry';
@@ -36,12 +39,17 @@ export default function WidgetsSettings() {
         const Icon = def.icon;
         const enabled = !!data?.widgets.find((w) => w.widget_key === def.key)?.is_enabled;
         return (
-          <div key={def.key} className="flex items-start gap-3 rounded-[6px] border border-border bg-card p-4">
+          <div key={def.key} className="flex flex-wrap items-start gap-3 rounded-[6px] border border-border bg-card p-4">
             <Icon size={20} className="mt-0.5 text-muted-foreground" />
             <div className="flex-1">
               <div className="font-medium text-foreground">{def.name}</div>
               <div className="text-sm text-muted-foreground">{def.description}</div>
             </div>
+            {def.settings && (
+              <Button asChild variant="outline" size="sm" className="h-8 gap-1.5">
+                <Link to={def.key}><GearSix size={14} /> Configurar</Link>
+              </Button>
+            )}
             <Switch aria-label={`Ativar ${def.name}`} checked={enabled} onCheckedChange={(v) => setWidget(def.key, v)} />
           </div>
         );

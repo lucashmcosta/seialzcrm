@@ -39,6 +39,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     contextMode: 'opportunity',
     Component: ProcessClassificationWidget,
     Preview: ProcessClassificationPreview,
+    settings: () => import('@/components/process-classification/settings/ProcessClassificationSettings'),
   },
 ];
 

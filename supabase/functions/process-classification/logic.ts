@@ -13,6 +13,7 @@ export type Perms = { ferramentas?: Record<string, boolean>; dados?: { classific
 export const podeClassificar = (p: Perms) => p?.ferramentas?.classificar === true;
 /** Ver o estado de uma oportunidade de outra pessoa: só com "Ver classificações = Todos" (o resto fica na RLS). */
 export const podeVerTodas = (p: Perms) => p?.dados?.classificacoes?.ver === "todos";
+export const podeLiberar = (p: Perms) => p?.ferramentas?.liberar_correcao === true;
 
 export const major = (v: string) => String(v ?? "").split(".")[0];
 
@@ -57,6 +58,11 @@ export function recusaDaRpc(msg: string): Recusa {
     calibration_changed: [409, "A calibração mudou enquanto você preenchia. Tente finalizar de novo."],
     idempotency_conflict: [409, "Não foi possível finalizar. Recarregue a página e tente de novo."],
     opportunity_not_found: [404, "Oportunidade não encontrada."],
+    not_classified: [409, "Esta oportunidade ainda não foi classificada."],
+    request_open: [409, "Já existe um pedido de correção em aberto para esta classificação."],
+    no_pending_request: [409, "Não há pedido de correção pendente nesta oportunidade."],
+    own_request: [403, "Você não pode decidir o seu próprio pedido de correção."],
+    reason_required: [422, "Informe o motivo da recusa."],
   };
   const [status, mensagem] = tabela[code] ?? [500, "Não foi possível finalizar a classificação."];
   return new Recusa(status, code, mensagem);

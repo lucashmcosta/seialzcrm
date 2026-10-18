@@ -6,7 +6,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
-import { useClassificationState, type EstadoWidget } from './api';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/hooks/use-toast';
+import { ClassificationApiError, useClassificationState, useDecideCorrection, useRequestCorrection, type EstadoWidget } from './api';
+import { ResumoEntrada } from './ResumoEntrada';
 import { ClassificationReveal } from './ClassificationReveal';
 import { ClassificationWizard, EmRevisao } from './ClassificationWizard';
 import { dataHora } from './formato';
@@ -58,10 +61,64 @@ function Corpo({ estado, opportunityId, onComecar }: { estado: EstadoWidget; opp
               Pedido de correção recusado pelo gestor{estado.pedido.motivo ? `: ${estado.pedido.motivo}` : '.'}
             </p>
           )}
+          {estado.podePedirCorrecao && <PedirCorrecao opportunityId={opportunityId} />}
+          {estado.podeDecidir && estado.respostas && estado.pedido && (
+            <DecidirCorrecao opportunityId={opportunityId} respostas={estado.respostas} criadoEm={estado.pedido.criadoEm} />
+          )}
         </div>
       );
     }
   }
+}
+
+const erroDe = (e: unknown) => (e instanceof ClassificationApiError ? e.message : 'Não foi possível concluir. Tente de novo.');
+
+/** Vendedor: "Errei alguma resposta" cria um pedido pendente e avisa quem pode liberar (§6.1). */
+function PedirCorrecao({ opportunityId }: { opportunityId: string }) {
+  const pedir = useRequestCorrection(opportunityId);
+  return (
+    <div className="text-center">
+      <Button variant="link" size="sm" disabled={pedir.isPending}
+        onClick={() => pedir.mutate(undefined, {
+          onSuccess: () => toast({ description: 'Pedido de correção enviado ao gestor.' }),
+          onError: (e) => toast({ variant: 'destructive', description: erroDe(e) }),
+        })}>
+        Errei alguma resposta — pedir correção ao gestor
+      </Button>
+    </div>
+  );
+}
+
+/** Gestor: vê as respostas, a faixa e a comissão (acima) e libera ou recusa com motivo (§6.2–6.3). */
+function DecidirCorrecao({ opportunityId, respostas, criadoEm }: { opportunityId: string; respostas: Record<string, unknown>; criadoEm: string }) {
+  const decidir = useDecideCorrection(opportunityId);
+  const [recusando, setRecusando] = useState(false);
+  const [motivo, setMotivo] = useState('');
+  const enviar = (release: boolean) => decidir.mutate({ release, reason: release ? undefined : motivo }, {
+    onSuccess: () => toast({ description: release ? 'Correção liberada. O vendedor pode refazer a classificação.' : 'Pedido recusado. O vendedor foi avisado.' }),
+    onError: (e) => toast({ variant: 'destructive', description: erroDe(e) }),
+  });
+  return (
+    <div className="space-y-3 rounded-md border border-warning/40 bg-warning/5 p-3">
+      <p className="text-sm font-medium">Pedido de correção enviado em {dataHora(criadoEm)}</p>
+      <p className="text-xs text-muted-foreground">Respostas do vendedor. Ao liberar, a classificação atual continua valendo até a nova ser finalizada.</p>
+      <ResumoEntrada entrada={respostas} detalhado />
+      {recusando ? (
+        <div className="space-y-2">
+          <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo da recusa (o vendedor vai ver)" maxLength={500} />
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setRecusando(false)}>Voltar</Button>
+            <Button variant="destructive" className="flex-1" disabled={!motivo.trim() || decidir.isPending} onClick={() => enviar(false)}>Recusar pedido</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex-1" disabled={decidir.isPending} onClick={() => setRecusando(true)}>Recusar</Button>
+          <Button className="flex-1" disabled={decidir.isPending} onClick={() => enviar(true)}>Liberar correção</Button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**

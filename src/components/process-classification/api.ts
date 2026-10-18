@@ -14,6 +14,12 @@ export interface EstadoWidget {
   podeClassificar: boolean;
   classificacao: Classificacao | null;
   pedido: { status: 'pending' | 'released' | 'refused'; criadoEm: string; motivo: string | null } | null;
+  /** Vendedor que classificou pode pedir correção agora. */
+  podePedirCorrecao?: boolean;
+  /** Gestor com "Liberar correção" e pedido pendente. */
+  podeDecidir?: boolean;
+  /** Respostas do vendedor (Entrada), só para quem decide o pedido. */
+  respostas?: Record<string, unknown> | null;
 }
 
 export class ClassificationApiError extends Error {
@@ -56,6 +62,23 @@ export function useClassify(opportunityId: string) {
   return useMutation({
     mutationFn: (v: { entrada: Record<string, unknown>; idempotencyKey: string }) =>
       call<Classificacao>('classify', { opportunity_id: opportunityId, entrada: v.entrada, idempotency_key: v.idempotencyKey }),
+    onSettled: () => qc.invalidateQueries({ queryKey: classificationKey(opportunityId) }),
+  });
+}
+
+export function useRequestCorrection(opportunityId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => call<{ criadoEm: string }>('request_correction', { opportunity_id: opportunityId }),
+    onSettled: () => qc.invalidateQueries({ queryKey: classificationKey(opportunityId) }),
+  });
+}
+
+export function useDecideCorrection(opportunityId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { release: boolean; reason?: string }) =>
+      call<{ status: string }>('decide_correction', { opportunity_id: opportunityId, release: v.release, reason: v.reason ?? null }),
     onSettled: () => qc.invalidateQueries({ queryKey: classificationKey(opportunityId) }),
   });
 }

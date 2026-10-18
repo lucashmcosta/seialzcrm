@@ -3,7 +3,7 @@ import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.224.
 // @ts-types="../_shared/classificacao/motor.d.ts"
 import * as M from "../_shared/classificacao/motor.mjs";
 import exportada from "../../../packages/motor-classificacao/dados/calibracao-exportada-2026-10-16.json" with { type: "json" };
-import { calcular, chaveValida, estadoDoWidget, Recusa, recusaDaRpc, visaoVendedor } from "./logic.ts";
+import { calcular, chaveValida, estadoDoWidget, podeLiberar, podeVerTodas, Recusa, recusaDaRpc, visaoVendedor } from "./logic.ts";
 
 const V2 = { id: "cal-2", motor_version: "1.0.0", content: M.mesclarCalibracao(exportada, M.CALIBRACAO_V1).calibracao };
 const ENTRADA = {
@@ -97,4 +97,16 @@ Deno.test("idempotency_key: formato", () => {
   assert(chaveValida("c1a2b3c4-d5e6"));
   assert(!chaveValida("curta"));
   assert(!chaveValida("tem espaço e ;drop"));
+});
+
+Deno.test("correção: permissões e mensagens (§6)", () => {
+  assert(podeLiberar({ ferramentas: { liberar_correcao: true } }));
+  assert(!podeLiberar({ ferramentas: { classificar: true } }));
+  assert(!podeLiberar(null));
+  assert(podeVerTodas({ dados: { classificacoes: { ver: "todos" } } }));
+  assert(!podeVerTodas({ dados: { classificacoes: { ver: "equipe" } } }));
+  assertEquals(recusaDaRpc("pc:request_open").status, 409);
+  assertEquals(recusaDaRpc("pc:own_request").status, 403);
+  assertEquals([recusaDaRpc("pc:reason_required").status, recusaDaRpc("pc:reason_required").mensagem], [422, "Informe o motivo da recusa."]);
+  assertEquals(recusaDaRpc("pc:not_classified").status, 409);
 });

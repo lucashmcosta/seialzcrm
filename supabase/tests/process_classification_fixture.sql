@@ -6,12 +6,22 @@ CREATE TABLE users(id uuid PRIMARY KEY, full_name text);
 CREATE TABLE permission_profiles(id uuid PRIMARY KEY, organization_id uuid, is_system boolean NOT NULL DEFAULT false, permissions_v2 jsonb);
 CREATE TABLE user_organizations(user_id uuid, organization_id uuid, is_active boolean, permission_profile_id uuid);
 CREATE TABLE team_members(organization_id uuid, team_id uuid, user_id uuid);
-CREATE TABLE opportunities(id uuid PRIMARY KEY, organization_id uuid, contact_id uuid, owner_user_id uuid, status text, deleted_at timestamptz);
+CREATE TABLE pipeline_stages(id uuid PRIMARY KEY, organization_id uuid, name text, type text);
+CREATE TABLE opportunities(id uuid PRIMARY KEY, organization_id uuid, contact_id uuid, owner_user_id uuid, status text, deleted_at timestamptz, title text, pipeline_stage_id uuid);
+CREATE TABLE notifications(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL, user_id uuid NOT NULL, type text NOT NULL, title text NOT NULL, body text, entity_type text, entity_id uuid, read_at timestamptz, created_at timestamptz DEFAULT now());
+-- tabelas que o avaliador real (e3d1) lê no caminho sem política
+CREATE TABLE opportunity_close_policies(organization_id uuid PRIMARY KEY, mode text, version integer, require_cpf_verified boolean, require_complete_address boolean,
+  required_contact_fields text[], required_opportunity_fields text[], required_contact_custom_field_ids uuid[], required_opportunity_custom_field_ids uuid[], document_rules jsonb);
+CREATE TABLE contacts(id uuid PRIMARY KEY, organization_id uuid, deleted_at timestamptz);
+CREATE TABLE contact_identity_profiles(contact_id uuid, organization_id uuid, cpf_verification_status text);
 CREATE TABLE organization_widgets(organization_id uuid, widget_key text, is_enabled boolean, UNIQUE(organization_id, widget_key));
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
 CREATE FUNCTION current_user_id() RETURNS uuid LANGUAGE sql STABLE AS $$SELECT nullif(current_setting('test.user_id',true),'')::uuid$$;
 CREATE FUNCTION current_user_org_ids() RETURNS uuid[] LANGUAGE sql STABLE SECURITY DEFINER AS $$SELECT array_agg(organization_id) FROM user_organizations WHERE user_id=current_user_id() AND is_active$$;
 CREATE FUNCTION is_org_system_admin(_org uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$SELECT EXISTS(SELECT 1 FROM user_organizations u JOIN permission_profiles p ON p.id=u.permission_profile_id WHERE u.user_id=current_user_id() AND u.organization_id=_org AND u.is_active AND p.is_system)$$;
+CREATE FUNCTION user_has_org_permission(_org uuid, _perm text) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT is_org_system_admin(_org) OR EXISTS(SELECT 1 FROM user_organizations u JOIN permission_profiles p ON p.id=u.permission_profile_id
+    WHERE u.user_id=current_user_id() AND u.organization_id=_org AND u.is_active AND (p.permissions_v2 #>> ARRAY['legacy',_perm])::boolean)$$;
 CREATE FUNCTION update_updated_at_column() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN NEW.updated_at := now(); RETURN NEW; END$$;
 CREATE FUNCTION rbac_full_perms() RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$SELECT '{}'::jsonb$$;
 -- rbac_ctx simplificado (mesma forma do real: orgs → perms efetivas; team → pessoas das equipes)
@@ -46,4 +56,6 @@ BEGIN
   RETURN false;
 END $$;
 INSERT INTO organizations VALUES('00000000-0000-0000-0000-0000000000c7','Central Trabalhista'),('00000000-0000-0000-0000-0000000000b2','Outra Org');
+\ir ../migrations/20260811210000_documents_module_e3d1.sql
 \ir ../migrations/20261018120000_process_classification_v1.sql
+\ir ../migrations/20261018150000_process_classification_f3.sql

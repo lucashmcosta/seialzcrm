@@ -21,4 +21,6 @@ export interface WidgetDefinition {
   Component: ComponentType<{ context: WidgetContext }>;
   /** Prévia estática para a galeria /widgets. Nunca monta o widget funcional. */
   Preview?: ComponentType;
+  /** Página de configuração do widget em /settings/widgets/:key (carregada sob demanda). Cada página faz o próprio controle de acesso. */
+  settings?: () => Promise<{ default: ComponentType<{ organizationId: string }> }>;
 }

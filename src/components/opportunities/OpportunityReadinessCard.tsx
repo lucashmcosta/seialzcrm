@@ -4,7 +4,7 @@ import { CheckCircle, WarningCircle, XCircle } from '@phosphor-icons/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { evaluateOpportunityClose, type OpportunityCloseEvaluation } from '@/lib/opportunityClose';
+import { evaluateOpportunityClose, type OpportunityCloseEvaluation, policyMissingCount } from '@/lib/opportunityClose';
 
 export function OpportunityReadinessCard({ organizationId, opportunityId, onGoToDocuments }: { organizationId: string; opportunityId: string; onGoToDocuments?: () => void }) {
   const [evaluation, setEvaluation] = useState<OpportunityCloseEvaluation | null>(null);
@@ -43,9 +43,12 @@ export function OpportunityReadinessCard({ organizationId, opportunityId, onGoTo
             {item.status === 'missing' && item.action === 'edit_documents' && onGoToDocuments && (
               <Button variant="link" size="sm" onClick={onGoToDocuments}>Ir para Documentos</Button>
             )}
+            {item.status === 'missing' && item.action === 'classify' && (
+              <span className="text-xs text-muted-foreground">Card "Classificação do processo"</span>
+            )}
           </div>
         ))}
-        {evaluation.mode === 'monitor' && evaluation.missing_count > 0 && (
+        {evaluation.mode === 'monitor' && policyMissingCount(evaluation) > 0 && (
           <p className="pt-2 text-xs text-muted-foreground">Modo monitor: estas pendências ainda não bloqueiam o ganho.</p>
         )}
       </CardContent>

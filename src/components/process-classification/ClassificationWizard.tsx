@@ -7,12 +7,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Escolha, Multipla, Numero, Rotulo } from './Campos';
 import { ClassificationReveal } from './ClassificationReveal';
 import { ClassificationApiError, useClassify, type Classificacao } from './api';
-import { NOME_TESE, PASSO_DADOS, SAIDAS, TITULOS_PASSO, type Pergunta, type TeseId } from './perguntas';
+import { NOME_TESE, PASSO_DADOS, TITULOS_PASSO, type Pergunta, type TeseId } from './perguntas';
 import {
   TESES, alternarTese, contexto, errosDados, escolherSaida, montarEntrada, pendencia, rascunhoInicial, responder,
   telaDaTese, topoVisivel, type Rascunho,
 } from './rascunho';
-import { formatarBRL } from './formato';
+import { ResumoEntrada } from './ResumoEntrada';
 
 type Passo = { tipo: 'dados' } | { tipo: 'saida' } | { tipo: 'teses' } | { tipo: 'tese'; tese: TeseId } | { tipo: 'revisao' };
 type Fase = 'preenchendo' | 'analisando' | 'resultado';
@@ -224,36 +224,9 @@ function PassoTese({ r, setR, tese, ctx }: { r: Rascunho; setR: (f: (x: Rascunho
 }
 
 function Revisao({ r }: { r: Rascunho }) {
-  const e = montarEntrada(r);
-  const nomeSaida = Object.fromEntries(SAIDAS)[e.saida as string];
-  const extras: string[] = [];
-  for (const p of topoVisivel(r)) {
-    const campo = p.campo as string;
-    if (['saida', 'local', 'testemunha'].includes(campo)) continue;
-    const op = (p.opcoes ?? []).find(([v]) => v === r.topo[campo]);
-    if (op) extras.push(`${p.rotulo} ${op[1]}`);
-  }
-  const linha = (t: string, v: string) => (
-    <div className="flex justify-between gap-4 py-1.5 text-sm"><span className="text-muted-foreground">{t}</span><span className="text-right font-medium">{v}</span></div>
-  );
   return (
     <div className="space-y-4">
-      <section className="divide-y rounded-md border px-3">
-        {linha('Salário', formatarBRL(e.salario as number))}
-        {linha('Meses de vínculo', String(e.meses))}
-        {linha('Funcionários', String(e.funcionarios))}
-        {linha('Dias por semana', String(e.diasSemana))}
-      </section>
-      <section className="divide-y rounded-md border px-3">
-        {linha('Saída', nomeSaida)}
-        {extras.map((x) => <p key={x} className="py-1.5 text-sm">{x}</p>)}
-        {linha('Trabalho', e.local === 'externo' ? 'Externo' : 'Interno')}
-        {linha('Testemunha', e.testemunha ? 'Sim' : 'Não')}
-      </section>
-      <section className="rounded-md border p-3">
-        <p className="mb-1 text-sm text-muted-foreground">Teses</p>
-        <p className="text-sm font-medium">{(e.teses as TeseId[]).map((t) => NOME_TESE[t]).join(' · ')}</p>
-      </section>
+      <ResumoEntrada entrada={montarEntrada(r)} />
       <p className="rounded-md bg-muted p-3 text-sm">Depois de finalizar, a classificação fica registrada e não dá para alterar. Confira antes.</p>
     </div>
   );

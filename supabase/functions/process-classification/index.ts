@@ -4,13 +4,15 @@
 // Ações (POST JSON):
 //   { action: 'get_state', opportunity_id }                         → estado do widget (§5.1)
 //   { action: 'classify', opportunity_id, entrada, idempotency_key } → grava e devolve faixa + comissão
+//   { action: 'request_correction', opportunity_id }                → vendedor pede correção (§6); avisa quem libera
+//   { action: 'decide_correction', opportunity_id, release, reason? } → gestor libera ou recusa (§6)
 //
 // LGPD (§7): nunca logar entrada, resultado nem calibração. Só ids e códigos.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import {
-  calcular, chaveValida, estadoDoWidget, MODULE_KEY, type Pedido, type Perms, podeClassificar, podeVerTodas, Recusa,
+  calcular, chaveValida, estadoDoWidget, MODULE_KEY, type Pedido, type Perms, podeClassificar, podeLiberar, podeVerTodas, Recusa,
   recusaDaRpc, visaoVendedor,
 } from "./logic.ts";
 
@@ -33,7 +35,7 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json(400, { error: "invalid_json" }); }
   const action = body?.action;
   const opportunityId = body?.opportunity_id;
-  if (action !== "get_state" && action !== "classify") return json(400, { error: "invalid_action" });
+  if (!["get_state", "classify", "request_correction", "decide_correction"].includes(action)) return json(400, { error: "invalid_action" });
   if (typeof opportunityId !== "string" || !UUID.test(opportunityId)) return json(400, { error: "invalid_opportunity_id" });
 
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -66,9 +68,10 @@ Deno.serve(async (req) => {
 
   try {
     if (action === "get_state") {
-      if (!isOwner && !podeVerTodas(perms)) return json(403, { error: "forbidden" });
+      const liberador = podeLiberar(perms) && !isOwner;
+      if (!isOwner && !podeVerTodas(perms) && !liberador) return json(403, { error: "forbidden" });
       const { data: ativa } = await db.from("process_classifications")
-        .select("id, band, commission, in_review, created_at").eq("opportunity_id", opportunityId).eq("status", "active").maybeSingle();
+        .select("id, band, commission, in_review, created_at, input, seller_user_id").eq("opportunity_id", opportunityId).eq("status", "active").maybeSingle();
       let pedido: Pedido | null = null;
       if (ativa) {
         const { data } = await db.from("classification_correction_requests")
@@ -77,12 +80,33 @@ Deno.serve(async (req) => {
         pedido = (data ?? null) as Pedido | null;
       }
       const estado = estadoDoWidget(opp.status === "open", ativa ?? null, pedido);
+      const aberta = opp.status === "open";
+      const podeDecidir = aberta && liberador && pedido?.status === "pending" && ativa?.seller_user_id !== me.id;
       return json(200, {
         estado,
         podeClassificar: isOwner && podeClassificar(perms),
+        podePedirCorrecao: aberta && !!ativa && ativa.seller_user_id === me.id && (estado === "classificada" || estado === "pedido_recusado" || estado === "em_revisao"),
+        podeDecidir,
         classificacao: ativa ? { id: ativa.id, ...visaoVendedor(ativa) } : null,
         pedido: pedido ? { status: pedido.status, criadoEm: pedido.created_at, motivo: pedido.reason } : null,
+        // §6.2: para decidir, o gestor vê as respostas do vendedor (a Entrada não tem números calculados).
+        respostas: podeDecidir ? ativa?.input ?? null : null,
       });
+    }
+
+    if (action === "request_correction") {
+      const { data, error } = await db.rpc("pc_request_correction", { _org: org, _opp: opportunityId, _seller: me.id });
+      if (error) return recusa(recusaDaRpc(error.message ?? ""));
+      return json(200, { criadoEm: (data as { criadoEm: string }).criadoEm });
+    }
+
+    if (action === "decide_correction") {
+      if (!podeLiberar(perms)) return json(403, { error: "forbidden" });
+      const release = body?.release === true;
+      const reason = typeof body?.reason === "string" ? body.reason.slice(0, 500) : null;
+      const { data, error } = await db.rpc("pc_decide_correction", { _org: org, _opp: opportunityId, _manager: me.id, _release: release, _reason: reason });
+      if (error) return recusa(recusaDaRpc(error.message ?? ""));
+      return json(200, data as Record<string, unknown>);
     }
 
     // classify
