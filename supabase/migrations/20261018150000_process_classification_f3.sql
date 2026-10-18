@@ -28,17 +28,17 @@ CREATE POLICY pcs_select ON public.process_classification_settings FOR SELECT TO
     public.user_has_org_permission(organization_id, 'can_manage_settings')
     OR public.pc_has_flag(organization_id, '{administracao,calibrar_classificacao}')));
 
-CREATE OR REPLACE FUNCTION public.pc_update_settings(_org uuid, _daily_limit integer)
+CREATE OR REPLACE FUNCTION public.pc_update_settings(_org uuid, _limit_per_opportunity integer)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE r public.process_classification_settings;
 BEGIN
   IF NOT (_org = ANY(public.current_user_org_ids()) AND public.user_has_org_permission(_org, 'can_manage_settings')) THEN
     RAISE EXCEPTION 'pc:forbidden' USING ERRCODE = '42501';
   END IF;
-  IF _daily_limit IS NOT NULL AND _daily_limit < 1 THEN RAISE EXCEPTION 'pc:invalid_limit'; END IF;
-  INSERT INTO public.process_classification_settings(organization_id, daily_limit_per_seller, updated_at)
-  VALUES (_org, _daily_limit, now())
-  ON CONFLICT (organization_id) DO UPDATE SET daily_limit_per_seller = EXCLUDED.daily_limit_per_seller, updated_at = now()
+  IF _limit_per_opportunity IS NOT NULL AND _limit_per_opportunity < 1 THEN RAISE EXCEPTION 'pc:invalid_limit'; END IF;
+  INSERT INTO public.process_classification_settings(organization_id, daily_limit_per_opportunity, updated_at)
+  VALUES (_org, _limit_per_opportunity, now())
+  ON CONFLICT (organization_id) DO UPDATE SET daily_limit_per_opportunity = EXCLUDED.daily_limit_per_opportunity, updated_at = now()
   RETURNING * INTO r;
   RETURN to_jsonb(r);
 END $$;

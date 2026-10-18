@@ -73,10 +73,10 @@ function Geral({ organizationId, podeVerVersao }: { organizationId: string; pode
     queryFn: async (): Promise<{ exigir: boolean; modo: string; limite: number | null }> => {
       const [pol, cfg] = await Promise.all([
         supabase.from('opportunity_close_policies').select('mode, require_process_classification').eq('organization_id', organizationId).maybeSingle(),
-        tabelaClassificacao('process_classification_settings').select('daily_limit_per_seller').eq('organization_id', organizationId).maybeSingle(),
+        tabelaClassificacao('process_classification_settings').select('daily_limit_per_opportunity').eq('organization_id', organizationId).maybeSingle(),
       ]);
       if (pol.error) throw pol.error;
-      return { exigir: !!pol.data?.require_process_classification, modo: pol.data?.mode ?? 'off', limite: cfg.data?.daily_limit_per_seller ?? null };
+      return { exigir: !!pol.data?.require_process_classification, modo: pol.data?.mode ?? 'off', limite: cfg.data ? cfg.data.daily_limit_per_opportunity : 2 /* sem linha = padrão do servidor */ };
     },
   });
   const { data: versao } = useVersaoPublicada(organizationId, podeVerVersao);
@@ -103,7 +103,7 @@ function Geral({ organizationId, podeVerVersao }: { organizationId: string; pode
       if (error) erros.push(error);
     }
     if (mudouLimite) {
-      const { error } = await supabase.rpc('pc_update_settings' as never, { _org: organizationId, _daily_limit: limiteNum } as never);
+      const { error } = await supabase.rpc('pc_update_settings' as never, { _org: organizationId, _limit_per_opportunity: limiteNum } as never);
       if (error) erros.push(error);
     }
     setSalvando(false);
@@ -143,10 +143,10 @@ function Geral({ organizationId, podeVerVersao }: { organizationId: string; pode
             )}
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="pc-limite" className="text-sm font-medium">Limite de classificações por vendedor (24 horas)</Label>
+            <Label htmlFor="pc-limite" className="text-sm font-medium">Limite de classificações por oportunidade (24 horas)</Label>
             <Input id="pc-limite" inputMode="numeric" className="max-w-[160px]" placeholder="Sem limite" value={limite} onChange={(e) => setLimite(e.target.value)} aria-invalid={limiteInvalido} />
             <p className={limiteInvalido ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
-              {limiteInvalido ? 'Use um número inteiro a partir de 1, ou deixe vazio.' : 'Evita que alguém classifique oportunidades de teste para descobrir a regra. Vazio = sem limite.'}
+              {limiteInvalido ? 'Use um número inteiro a partir de 1, ou deixe vazio.' : 'Conta a classificação e as reclassificações depois de correção. Evita testar respostas na mesma oportunidade para descobrir a regra. Padrão: 2. Vazio = sem limite.'}
             </p>
           </div>
           <Button onClick={salvar} disabled={!(mudouExigir || mudouLimite) || limiteInvalido || salvando}>Salvar</Button>

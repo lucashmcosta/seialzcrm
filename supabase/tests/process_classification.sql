@@ -98,10 +98,17 @@ SELECT pg_temp.assert((SELECT array_agg(status || ':' || amount ORDER BY status 
 SELECT pg_temp.assert((SELECT replacement_id IS NOT NULL FROM classification_correction_requests), 'liberação consumida');
 SELECT pg_temp.expect_error($q$SELECT pg_temp.rec('00000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-0000000000b1','chave-0009')$q$, 'pc:already_classified', 'uma liberação = uma reclassificação');
 
--- ===== Limite diário por vendedor (R2c) =====
-UPDATE process_classification_settings SET daily_limit_per_seller = 3 WHERE organization_id='00000000-0000-0000-0000-0000000000c7';
-SELECT pg_temp.expect_error($q$SELECT pg_temp.rec('00000000-0000-0000-0000-000000000105','00000000-0000-0000-0000-0000000000b1','chave-0010')$q$, 'pc:daily_limit', 'limite diário');
-UPDATE process_classification_settings SET daily_limit_per_seller = NULL;
+-- ===== Limite por oportunidade em 24 h (anti-abuso; padrão 2 = original + 1 correção) =====
+SELECT pg_temp.assert((SELECT daily_limit_per_opportunity = 2 FROM process_classification_settings), 'padrão 2 por oportunidade');
+INSERT INTO classification_correction_requests(organization_id, classification_id, seller_user_id, status, decided_by, decided_at)
+SELECT organization_id, id, seller_user_id, 'released', '00000000-0000-0000-0000-0000000000d1', now()
+  FROM process_classifications WHERE opportunity_id='00000000-0000-0000-0000-000000000101' AND status = 'active';
+SELECT pg_temp.expect_error($q$SELECT pg_temp.rec('00000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-0000000000b1','chave-0010')$q$, 'pc:daily_limit', '3ª classificação da mesma oportunidade no dia');
+SELECT pg_temp.assert((SELECT count(*) = 1 FROM process_classifications WHERE opportunity_id='00000000-0000-0000-0000-000000000101' AND status = 'active'), 'limite não grava nada');
+UPDATE process_classification_settings SET daily_limit_per_opportunity = NULL;
+SELECT pg_temp.rec('00000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-0000000000b1','chave-0010b');
+SELECT pg_temp.assert((SELECT count(*) = 3 FROM process_classifications WHERE opportunity_id='00000000-0000-0000-0000-000000000101'), 'sem limite: reclassifica');
+UPDATE process_classification_settings SET daily_limit_per_opportunity = 2;
 SELECT pg_temp.rec('00000000-0000-0000-0000-000000000105','00000000-0000-0000-0000-0000000000b1','chave-0011');
 
 -- ===== Oportunidade excluída → anulada, nunca apagada (R2b) =====
@@ -116,7 +123,7 @@ INSERT INTO process_classifications(organization_id, opportunity_id, seller_user
 VALUES ('00000000-0000-0000-0000-0000000000c7','00000000-0000-0000-0000-000000000103','00000000-0000-0000-0000-0000000000b2', pg_temp.cal(), '1.0.0', '{}', 'PRATA', 50, 'chave-b2-001');
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
-SELECT pg_temp.assert((SELECT count(*) FROM process_classifications) = 4 AND (SELECT bool_and(seller_user_id = '00000000-0000-0000-0000-0000000000b1') FROM process_classifications), 'vendedor vê só as próprias');
+SELECT pg_temp.assert((SELECT count(*) FROM process_classifications) = 5 AND (SELECT bool_and(seller_user_id = '00000000-0000-0000-0000-0000000000b1') FROM process_classifications), 'vendedor vê só as próprias');
 SELECT pg_temp.assert((SELECT count(*) FROM process_classification_results) = 0, 'vendedor não vê números');
 SELECT pg_temp.assert((SELECT count(*) FROM classification_calibration_versions) = 0, 'vendedor não vê calibração');
 SELECT pg_temp.assert((SELECT count(*) FROM opportunity_commissions) > 0 AND (SELECT bool_and(user_id = '00000000-0000-0000-0000-0000000000b1') FROM opportunity_commissions), 'vendedor vê só a própria comissão');
@@ -124,14 +131,14 @@ SELECT pg_temp.expect_error($q$UPDATE process_classifications SET commission = 9
 SELECT pg_temp.expect_error($q$INSERT INTO opportunity_commissions(organization_id, opportunity_id, user_id, amount, source_type) VALUES ('00000000-0000-0000-0000-0000000000c7','00000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-0000000000b1', 9999, 'process_classification')$q$, '%permission denied%', 'vendedor não cria comissão');
 SELECT pg_temp.expect_error($q$SELECT pc_record_classification(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)$q$, '%permission denied%', 'só o servidor grava classificação');
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000d1');
-SELECT pg_temp.assert((SELECT count(*) FROM process_classifications) = 5, 'gestor vê todas');
+SELECT pg_temp.assert((SELECT count(*) FROM process_classifications) = 6, 'gestor vê todas');
 SELECT pg_temp.assert((SELECT count(*) FROM process_classification_results) = 0, 'gestor não vê números (R5)');
-SELECT pg_temp.assert((SELECT count(*) FROM classification_correction_requests) = 1, 'gestor vê pedidos de correção');
+SELECT pg_temp.assert((SELECT count(*) FROM classification_correction_requests) = 2, 'gestor vê pedidos de correção');
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000e1');
 SELECT pg_temp.assert((SELECT count(*) FROM process_classification_results) > 0, 'jurídico vê números');
 SELECT pg_temp.assert((SELECT count(*) FROM classification_calibration_versions) = 2, 'jurídico vê calibração');
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
-SELECT pg_temp.assert((SELECT count(*) FROM process_classification_results) > 0 AND (SELECT count(*) FROM opportunity_commissions) = 3, 'admin vê tudo da org');
+SELECT pg_temp.assert((SELECT count(*) FROM process_classification_results) > 0 AND (SELECT count(*) FROM opportunity_commissions) = 4, 'admin vê tudo da org');
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000f1');
 SELECT pg_temp.assert((SELECT count(*) FROM process_classifications) + (SELECT count(*) FROM process_classification_results)
   + (SELECT count(*) FROM classification_calibration_versions) + (SELECT count(*) FROM opportunity_commissions) = 0, 'admin de outra org não vê nada');

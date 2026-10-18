@@ -103,7 +103,9 @@ CREATE TRIGGER trg_ccv_immutable BEFORE UPDATE OR DELETE ON public.classificatio
 -- ===== Configuração do módulo por tenant =====
 CREATE TABLE public.process_classification_settings (
   organization_id uuid PRIMARY KEY REFERENCES public.organizations(id) ON DELETE CASCADE,
-  daily_limit_per_seller integer CHECK (daily_limit_per_seller IS NULL OR daily_limit_per_seller > 0), -- NULL = sem limite
+  -- Anti-abuso (decisão do Lucas): limite por OPORTUNIDADE, não por vendedor. Conta a classificação original e as
+  -- reclassificações depois de correção nas últimas 24 h. Padrão 2 (original + 1 correção). NULL = sem limite.
+  daily_limit_per_opportunity integer DEFAULT 2 CHECK (daily_limit_per_opportunity IS NULL OR daily_limit_per_opportunity > 0),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -308,9 +310,10 @@ BEGIN
     IF v_rq IS NULL THEN RAISE EXCEPTION 'pc:already_classified'; END IF;
   END IF;
 
-  SELECT daily_limit_per_seller INTO lim FROM public.process_classification_settings WHERE organization_id = _org;
+  SELECT daily_limit_per_opportunity INTO lim FROM public.process_classification_settings WHERE organization_id = _org;
+  IF NOT FOUND THEN lim := 2; END IF;  -- org sem configuração: padrão (original + 1 correção)
   IF lim IS NOT NULL AND (SELECT count(*) FROM public.process_classifications
-                          WHERE organization_id = _org AND seller_user_id = _seller
+                          WHERE opportunity_id = _opp
                             AND created_at > now() - interval '24 hours') >= lim THEN
     RAISE EXCEPTION 'pc:daily_limit';
   END IF;

@@ -25,7 +25,7 @@ Spec: [SPEC.md](SPEC.md). Este arquivo registra **como** a v1 foi montada no rep
 - `classification_calibration_versions`: versões por org; publicada/arquivada imutáveis; 1 publicada e 1 rascunho por org; publicar exige nota.
 - `process_classifications`: entrada canônica, faixa, comissão, status (`active`/`superseded`/`voided`). Índice único: 1 ativa por oportunidade. `idempotency_key` única por org.
 - `process_classification_results`: resultado completo do motor (chances, valores, score). Só `administracao.ver_numeros_classificacao`.
-- `classification_correction_requests`, `classification_outcomes` (preparo da jurimetria), `process_classification_settings` (limite diário por vendedor; `NULL` = sem limite).
+- `classification_correction_requests`, `classification_outcomes` (preparo da jurimetria), `process_classification_settings` (limite de classificações **por oportunidade** em 24 h, contando as reclassificações depois de correção; padrão 2; `NULL` = sem limite).
 - `opportunity_commissions`: módulo de comissão agnóstico (`source_type` = `process_classification`, outras fontes no futuro).
 
 O navegador só lê (RLS). Toda escrita é feita pela edge (service_role) através de `pc_record_classification`.
@@ -104,7 +104,7 @@ bun run build && node scripts/check-seller-bundle.mjs
 **Correção (§6):** o vendedor pede → avisa (notificação) todos com `ferramentas.liberar_correcao` e o Admin → o gestor abre a oportunidade, vê as respostas, a faixa e a comissão → libera (a classificação atual continua valendo até a nova) ou recusa com motivo (o vendedor é avisado). Ninguém decide o próprio pedido. Com a oportunidade fechada, nada se mexe.
 
 **Configurações** (`/settings/widgets/process_classification`):
-- Aba **Geral** (quem gerencia Configurações): exigir classificação para ganhar (com o modo atual da política e link para mudá-lo), limite de classificações por vendedor em 24 h, situação da calibração.
+- Aba **Geral** (quem gerencia Configurações): exigir classificação para ganhar (com o modo atual da política e link para mudá-lo), limite de classificações por oportunidade em 24 h (padrão 2), situação da calibração.
 - Aba **Calibração** (`administracao.calibrar_classificacao` ou `publicar_calibracao`, por padrão só Admin): mostra a versão publicada; edição chega na Fase 4.
 
 ```

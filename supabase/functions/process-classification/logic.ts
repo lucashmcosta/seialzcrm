@@ -54,7 +54,7 @@ export function recusaDaRpc(msg: string): Recusa {
     already_classified: [409, "Esta oportunidade já tem uma classificação registrada."],
     not_owner: [403, "Só o responsável pela oportunidade pode classificar."],
     no_contact: [409, "Vincule um contato à oportunidade antes de classificar."],
-    daily_limit: [429, "Você atingiu o limite de classificações de hoje. Fale com o gestor."],
+    daily_limit: [429, "Esta oportunidade já foi classificada o máximo de vezes permitido hoje. Tente amanhã ou fale com o gestor."],
     calibration_changed: [409, "A calibração mudou enquanto você preenchia. Tente finalizar de novo."],
     idempotency_conflict: [409, "Não foi possível finalizar. Recarregue a página e tente de novo."],
     opportunity_not_found: [404, "Oportunidade não encontrada."],

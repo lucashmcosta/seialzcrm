@@ -87,10 +87,10 @@ SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
 SELECT pg_temp.expect_error($q$SELECT pc_update_settings('00000000-0000-0000-0000-0000000000c7', 3)$q$, 'pc:forbidden', 'vendedor não muda configurações');
 SELECT pg_temp.assert((SELECT count(*) FROM process_classification_settings) = 0, 'vendedor não lê configurações');
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
-SELECT pg_temp.assert((pc_update_settings('00000000-0000-0000-0000-0000000000c7', 5)->>'daily_limit_per_seller')::int = 5, 'admin muda o limite');
+SELECT pg_temp.assert((pc_update_settings('00000000-0000-0000-0000-0000000000c7', 5)->>'daily_limit_per_opportunity')::int = 5, 'admin muda o limite');
 SELECT pg_temp.expect_error($q$SELECT pc_update_settings('00000000-0000-0000-0000-0000000000c7', 0)$q$, 'pc:invalid_limit', 'limite precisa ser positivo');
 RESET ROLE;
-UPDATE process_classification_settings SET daily_limit_per_seller = NULL;
+UPDATE process_classification_settings SET daily_limit_per_opportunity = 2;
 UPDATE opportunity_close_policies SET mode = 'monitor';
 
 -- ===== Pedido de correção (§6) =====
