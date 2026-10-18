@@ -99,7 +99,7 @@ bun run build && node scripts/check-seller-bundle.mjs
 - A regra mora em `opportunity_close_policies.require_process_classification` (fonte única). Dá para marcar em Configurações de oportunidade (aparece com o widget ligado) ou na aba Geral do widget; os dois editam o mesmo campo.
 - Vira o item "Classificação do processo" no avaliador de fechamento e segue o **modo da política**: Monitorar só avisa; Aplicar e bloquear barra pelo guard que já existe (detalhe, Kanban, lote), com o mesmo "forçar ganho" do admin.
 - O item só aparece com a exigência marcada **e** o widget ligado **e** calibração publicada.
-- A migração marca a exigência na Central Trabalhista; se a política dela estiver em Monitorar, só avisa até mudar para Aplicar.
+- A migração **não** liga a exigência. Em produção a política da Central Trabalhista está em Aplicar e bloquear: a exigência deve ser ligada na tela só depois que os consultores já estiverem classificando (rollout em fases).
 
 **Correção (§6):** o vendedor pede → avisa (notificação) todos com `ferramentas.liberar_correcao` e o Admin → o gestor abre a oportunidade, vê as respostas, a faixa e a comissão → libera (a classificação atual continua valendo até a nova) ou recusa com motivo (o vendedor é avisado). Ninguém decide o próprio pedido. Com a oportunidade fechada, nada se mexe.
 

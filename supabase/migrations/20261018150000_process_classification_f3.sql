@@ -66,9 +66,9 @@ $b$  -- Classificação de processos (requisito da política, como os documentos
   EXECUTE n;
 END $$;
 
--- Central Trabalhista: a SPEC pede a exigência ligada. Segue o modo da política da org (monitor avisa, enforce bloqueia).
-UPDATE public.opportunity_close_policies p SET require_process_classification = true
-  FROM public.organizations o WHERE o.id = p.organization_id AND o.name = 'Central Trabalhista';
+-- A exigência NÃO é ligada aqui. Em produção a política da Central Trabalhista está em 'enforce' (18/10): ligar a
+-- exigência junto com o widget bloquearia todo ganho sem classificação no mesmo instante. Rollout em fases: liga o
+-- widget, os consultores começam a classificar, e só depois alguém marca "Exigir classificação" na tela.
 
 -- ===== Pedido de correção (§6) — só service_role (edge process-classification) =====
 -- Avisa quem pode liberar: perfis com ferramentas.liberar_correcao e o Admin (perfil de sistema).
