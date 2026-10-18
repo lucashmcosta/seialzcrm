@@ -13,7 +13,7 @@ import { ResumoEntrada } from './ResumoEntrada';
 import { ClassificationReveal } from './ClassificationReveal';
 import { ClassificationWizard, EmRevisao } from './ClassificationWizard';
 import { dataHora } from './formato';
-import { useProcessClassificationEnabled } from './ProcessClassificationSlot';
+import { useProcessClassificationEnabled } from './useProcessClassificationEnabled';
 
 
 function Entrada({ podeClassificar, onComecar }: { podeClassificar: boolean; onComecar: () => void }) {
@@ -47,7 +47,8 @@ function Corpo({ estado, opportunityId, onComecar }: { estado: EstadoWidget; opp
       if (!c?.faixa) return <EmRevisao />;
       return (
         <div className="space-y-3">
-          <ClassificationReveal faixa={c.faixa} comissao={c.comissao} classificadoEm={c.classificadoEm} opportunityId={opportunityId} animar={false} />
+          <ClassificationReveal faixa={c.faixa} comissao={c.comissao} classificadoEm={c.classificadoEm} opportunityId={opportunityId} animar={false}
+            paraVendedor={estado.doVendedor !== false} />
           {estado.estado === 'fechada_classificada' && (
             <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
               <Lock className="h-3.5 w-3.5" /> Oportunidade fechada — classificação final.

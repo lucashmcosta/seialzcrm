@@ -23,6 +23,7 @@ export function catalogoVendedor(c) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const body = `// GERADO por scripts/gen-catalogo-vendedor.mjs — não editar.\n` +
     `// Catálogo do vendedor: só nomes e rótulos (sem explicações jurídicas nem números).\n` +
+    `// eslint-disable-next-line @typescript-eslint/no-explicit-any -- mesmo tipo do CATALOGO do motor\n` +
     `export const CATALOGO: any = ${JSON.stringify(catalogoVendedor(cat), null, 1)};\n`;
   fs.writeFileSync(path.join(root, 'src/components/process-classification/catalogoVendedor.ts'), body);
   console.log('ok');

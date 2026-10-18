@@ -1,7 +1,13 @@
 import { NOME_TESE, PASSO_SAIDA, PERGUNTAS, SAIDAS, type CtxPergunta, type TeseId } from './perguntas';
 import { formatarBRL } from './formato';
 
-type Entrada = Record<string, any>;
+/** Entrada canônica (ver supabase/functions/_shared/classificacao/canonicalizar.ts). */
+interface Entrada {
+  salario: number; meses: number; funcionarios: number; diasSemana: number;
+  saida: CtxPergunta['saida']; local: CtxPergunta['local']; testemunha: boolean;
+  teses?: TeseId[]; respostas?: Partial<Record<TeseId, Record<string, unknown>>>;
+  [campo: string]: unknown;
+}
 
 const linha = (t: string, v: string) => (
   <div key={t} className="flex justify-between gap-4 py-1.5 text-sm">
@@ -21,7 +27,8 @@ function valorLegivel(opcoes: readonly (readonly [string, string])[], v: unknown
  * Resumo da Entrada (§5.2 "Confira antes de finalizar"). `detalhado` mostra também a resposta de cada pergunta
  * das teses: é o que o gestor vê para decidir um pedido de correção (§6.2). Não tem números calculados.
  */
-export function ResumoEntrada({ entrada, detalhado = false }: { entrada: Entrada; detalhado?: boolean }) {
+export function ResumoEntrada({ entrada: bruta, detalhado = false }: { entrada: Record<string, unknown>; detalhado?: boolean }) {
+  const entrada = bruta as Entrada;
   const ctx: CtxPergunta = { saida: entrada.saida, local: entrada.local, meses: entrada.meses, testemunha: entrada.testemunha, teses: entrada.teses ?? [] };
   const extras = PASSO_SAIDA
     .filter((p) => !['saida', 'local', 'testemunha'].includes(p.campo as string) && entrada[p.campo as string] !== undefined)
@@ -30,7 +37,7 @@ export function ResumoEntrada({ entrada, detalhado = false }: { entrada: Entrada
       const op = (p.opcoes ?? []).find(([k]) => k === (typeof v === 'boolean' ? (v ? 'sim' : 'nao') : v));
       return `${p.rotulo} ${op?.[1] ?? simNao(v)}`;
     });
-  const teses = (entrada.teses ?? []) as TeseId[];
+  const teses = entrada.teses ?? [];
 
   return (
     <div className="space-y-4">
@@ -41,13 +48,13 @@ export function ResumoEntrada({ entrada, detalhado = false }: { entrada: Entrada
         {linha('Dias por semana', String(entrada.diasSemana))}
       </section>
       <section className="divide-y rounded-md border px-3">
-        {linha('Saída', Object.fromEntries(SAIDAS)[entrada.saida] ?? String(entrada.saida))}
+        {linha('Saída', Object.fromEntries(SAIDAS)[entrada.saida as string] ?? String(entrada.saida))}
         {extras.map((x) => <p key={x} className="py-1.5 text-sm">{x}</p>)}
         {linha('Trabalho', entrada.local === 'externo' ? 'Externo' : 'Interno')}
         {linha('Testemunha', simNao(entrada.testemunha))}
       </section>
       {detalhado ? teses.map((t) => {
-        const r = (entrada.respostas?.[t] ?? {}) as Record<string, unknown>;
+        const r = entrada.respostas?.[t] ?? {};
         return (
           <section key={t} className="rounded-md border px-3 py-2">
             <p className="pb-1 text-sm font-semibold">{NOME_TESE[t]}</p>

@@ -12,8 +12,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useProcessClassificationEnabled } from '../ProcessClassificationSlot';
+import { useProcessClassificationEnabled } from '../useProcessClassificationEnabled';
 import { dataHora } from '../formato';
+import { tabelaClassificacao } from '../api';
 
 interface VersaoPublicada { number: number; published_at: string; note: string | null }
 
@@ -49,7 +50,7 @@ function useVersaoPublicada(organizationId: string, enabled: boolean) {
     queryKey: ['process-classification-published', organizationId],
     enabled,
     queryFn: async (): Promise<VersaoPublicada | null> => {
-      const { data, error } = await (supabase as any).from('classification_calibration_versions')
+      const { data, error } = await tabelaClassificacao('classification_calibration_versions')
         .select('number, published_at, note').eq('organization_id', organizationId).eq('status', 'published').maybeSingle();
       if (error) throw error;
       return data;
@@ -71,8 +72,8 @@ function Geral({ organizationId, podeVerVersao }: { organizationId: string; pode
     queryKey: settingsKey(organizationId),
     queryFn: async (): Promise<{ exigir: boolean; modo: string; limite: number | null }> => {
       const [pol, cfg] = await Promise.all([
-        (supabase as any).from('opportunity_close_policies').select('mode, require_process_classification').eq('organization_id', organizationId).maybeSingle(),
-        (supabase as any).from('process_classification_settings').select('daily_limit_per_seller').eq('organization_id', organizationId).maybeSingle(),
+        supabase.from('opportunity_close_policies').select('mode, require_process_classification').eq('organization_id', organizationId).maybeSingle(),
+        tabelaClassificacao('process_classification_settings').select('daily_limit_per_seller').eq('organization_id', organizationId).maybeSingle(),
       ]);
       if (pol.error) throw pol.error;
       return { exigir: !!pol.data?.require_process_classification, modo: pol.data?.mode ?? 'off', limite: cfg.data?.daily_limit_per_seller ?? null };
@@ -97,7 +98,7 @@ function Geral({ organizationId, podeVerVersao }: { organizationId: string; pode
     setSalvando(true);
     const erros: unknown[] = [];
     if (mudouExigir) {
-      const { error } = await (supabase as any).from('opportunity_close_policies')
+      const { error } = await supabase.from('opportunity_close_policies')
         .upsert({ organization_id: organizationId, require_process_classification: exigir }, { onConflict: 'organization_id' });
       if (error) erros.push(error);
     }

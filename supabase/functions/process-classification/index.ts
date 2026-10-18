@@ -87,6 +87,8 @@ Deno.serve(async (req) => {
         podeClassificar: isOwner && podeClassificar(perms),
         podePedirCorrecao: aberta && !!ativa && ativa.seller_user_id === me.id && (estado === "classificada" || estado === "pedido_recusado" || estado === "em_revisao"),
         podeDecidir,
+        // o resultado é do vendedor que classificou; para os outros a tela não diz "sua comissão"
+        doVendedor: !!ativa && ativa.seller_user_id === me.id,
         classificacao: ativa ? { id: ativa.id, ...visaoVendedor(ativa) } : null,
         pedido: pedido ? { status: pedido.status, criadoEm: pedido.created_at, motivo: pedido.reason } : null,
         // §6.2: para decidir, o gestor vê as respostas do vendedor (a Entrada não tem números calculados).

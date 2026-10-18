@@ -100,7 +100,7 @@ function Comissao({ valor, animar }: { valor: number; animar: boolean }) {
     return () => c.stop();
   }, [valor, animar]);
   return (
-    <motion.b className="block text-3xl font-extrabold tabular-nums text-success"
+    <motion.b className="block text-3xl font-extrabold tabular-nums text-success dark:text-success-foreground"
       animate={pulso ? { scale: [1, 1.18, 1] } : undefined} transition={{ duration: 0.5 }}>
       + {formatarBRL(Math.round(mostrado * 100) / 100)}
     </motion.b>
@@ -112,8 +112,10 @@ const surge = (animar: boolean, delay: number) => (animar
   : {});
 
 /** Revelação do resultado (§5.4). Ao reabrir (animar=false) ou com reduced motion, mostra direto. */
-export function ClassificationReveal({ faixa, comissao, classificadoEm, opportunityId, animar }: {
+export function ClassificationReveal({ faixa, comissao, classificadoEm, opportunityId, animar, paraVendedor = true }: {
   faixa: Faixa; comissao: number; classificadoEm: string; opportunityId: string; animar: boolean;
+  /** false = gestor/jurídico vendo a classificação de outra pessoa: sem "sua comissão" nem parabéns. */
+  paraVendedor?: boolean;
 }) {
   const reduzir = useReducedMotion();
   const a = animar && !reduzir;
@@ -125,13 +127,15 @@ export function ClassificationReveal({ faixa, comissao, classificadoEm, opportun
         Este é um processo <strong style={{ color: corFaixa(faixa) }}>{NOME_FAIXA[faixa]}</strong>
       </motion.p>
       <motion.div className="mx-auto mt-4 inline-grid gap-0.5 rounded-xl border bg-background px-6 py-3" {...surge(a, 0.8)}>
-        <small className="text-[11px] uppercase tracking-wider text-muted-foreground">Sua comissão desta venda</small>
+        <small className="text-[11px] uppercase tracking-wider text-muted-foreground">{paraVendedor ? 'Sua comissão desta venda' : 'Comissão do vendedor'}</small>
         <Comissao valor={comissao} animar={a} />
       </motion.div>
-      <motion.p className="mt-3 text-base font-semibold" {...surge(a, 1.1)}>
-        {titulo}
-        <span className="mt-0.5 block text-sm font-normal text-muted-foreground">{sub}</span>
-      </motion.p>
+      {paraVendedor && (
+        <motion.p className="mt-3 text-base font-semibold" {...surge(a, 1.1)}>
+          {titulo}
+          <span className="mt-0.5 block text-sm font-normal text-muted-foreground">{sub}</span>
+        </motion.p>
+      )}
       <motion.p className="mt-3 text-xs text-muted-foreground" {...surge(a, 1.3)}>
         Classificado em {dataHora(classificadoEm)} · Oportunidade {rotuloOportunidade(opportunityId)}
       </motion.p>

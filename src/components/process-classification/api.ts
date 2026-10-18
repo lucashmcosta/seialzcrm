@@ -16,6 +16,8 @@ export interface EstadoWidget {
   pedido: { status: 'pending' | 'released' | 'refused'; criadoEm: string; motivo: string | null } | null;
   /** Vendedor que classificou pode pedir correção agora. */
   podePedirCorrecao?: boolean;
+  /** A classificação ativa é de quem está vendo (o vendedor que classificou). */
+  doVendedor?: boolean;
   /** Gestor com "Liberar correção" e pedido pendente. */
   podeDecidir?: boolean;
   /** Respostas do vendedor (Entrada), só para quem decide o pedido. */
@@ -29,9 +31,10 @@ export class ClassificationApiError extends Error {
 async function call<T>(action: string, payload: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('process-classification', { body: { action, ...payload } });
   if (error) {
-    let body: any = null;
-    let status = 0;
-    try { status = (error as any).context?.status ?? 0; body = await (error as any).context?.json?.(); } catch { /* sem corpo */ }
+    let body: { error?: string; message?: string; [k: string]: unknown } | null = null;
+    const ctx = (error as { context?: Response }).context;
+    const status = ctx?.status ?? 0;
+    try { body = await ctx?.json?.(); } catch { /* sem corpo */ }
     throw new ClassificationApiError(body?.error ?? 'request_failed', body?.message ?? 'Não foi possível falar com o servidor. Tente de novo.', status, body ?? {});
   }
   return data as T;
@@ -81,4 +84,13 @@ export function useDecideCorrection(opportunityId: string) {
       call<{ status: string }>('decide_correction', { opportunity_id: opportunityId, release: v.release, reason: v.reason ?? null }),
     onSettled: () => qc.invalidateQueries({ queryKey: classificationKey(opportunityId) }),
   });
+}
+
+/**
+ * Tabelas do módulo que ainda não estão no types.ts gerado (regenerar depois de aplicar as migrações e trocar
+ * as chamadas por supabase.from tipado). Concentrado aqui para não espalhar casts.
+ */
+export function tabelaClassificacao(nome: 'classification_calibration_versions' | 'process_classification_settings') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (supabase as any).from(nome);
 }

@@ -14,7 +14,7 @@ import type { ClosePolicyMode } from '@/lib/opportunityClose';
 import { defaultRequiredCodes, defaultGroups, conditionalSets, buildDocumentRules, type DocumentSet, type RequiredGroup } from '@/lib/documentRules';
 import { useDocumentCatalog, type CatalogType } from '@/hooks/documents/useDocumentCatalog';
 import { AdvancedDocumentRules, type EditorCustomField } from '@/components/settings/AdvancedDocumentRules';
-import { useProcessClassificationEnabled } from '@/components/process-classification/ProcessClassificationSlot';
+import { useProcessClassificationEnabled } from '@/components/process-classification/useProcessClassificationEnabled';
 
 type Policy = {
   mode: ClosePolicyMode;

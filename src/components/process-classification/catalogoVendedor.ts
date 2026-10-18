@@ -1,5 +1,6 @@
 // GERADO por scripts/gen-catalogo-vendedor.mjs — não editar.
 // Catálogo do vendedor: só nomes e rótulos (sem explicações jurídicas nem números).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- mesmo tipo do CATALOGO do motor
 export const CATALOGO: any = {
  "horas_extras": {
   "nome": "Horas extras"
