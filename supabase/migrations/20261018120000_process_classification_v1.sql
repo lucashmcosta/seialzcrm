@@ -94,7 +94,7 @@ BEGIN
       RAISE EXCEPTION 'calibration_immutable' USING ERRCODE = '42501';
     END IF;
   END IF;
-  NEW.updated_at := now();
+  NEW.updated_at := clock_timestamp();  -- carimbo de concorrência do rascunho (Fase 4): muda a cada gravação
   RETURN NEW;
 END $$;
 CREATE TRIGGER trg_ccv_immutable BEFORE UPDATE OR DELETE ON public.classification_calibration_versions

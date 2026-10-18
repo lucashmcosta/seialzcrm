@@ -28,7 +28,7 @@ function Entrada({ podeClassificar, onComecar }: { podeClassificar: boolean; onC
   );
 }
 
-function Corpo({ estado, opportunityId, onComecar, onCertificar }: { estado: EstadoWidget; opportunityId: string; onComecar: () => void; onCertificar: () => void }) {
+function Corpo({ estado, opportunityId, onComecar }: { estado: EstadoWidget; opportunityId: string; onComecar: () => void }) {
   const c = estado.classificacao;
   switch (estado.estado) {
     case 'sem_classificacao':
@@ -66,13 +66,6 @@ function Corpo({ estado, opportunityId, onComecar, onCertificar }: { estado: Est
             </p>
           )}
           {estado.certificacao && <CertificacaoInfo c={estado.certificacao} />}
-          {estado.podeCertificar && estado.respostas && (
-            <div className="text-center">
-              <Button variant={estado.refazendoCertificacao ? 'outline' : 'default'} size="sm" onClick={onCertificar}>
-                <SealCheck className="mr-1.5 h-4 w-4" />{estado.refazendoCertificacao ? 'Refazer certificação (Admin)' : 'Certificar classificação'}
-              </Button>
-            </div>
-          )}
           {estado.podePedirCorrecao && <PedirCorrecao opportunityId={opportunityId} />}
           {estado.podeDecidir && estado.respostas && estado.pedido && (
             <DecidirCorrecao opportunityId={opportunityId} respostas={estado.respostas} criadoEm={estado.pedido.criadoEm} />
@@ -101,7 +94,7 @@ function CertificacaoInfo({ c }: { c: Certificacao }) {
         </p>
       )}
       <p className="mt-1 text-muted-foreground">{reduzida ? `Motivo: ${c.motivo}` : c.motivo}</p>
-      <p className="mt-1 text-xs text-muted-foreground">Em {dataHora(c.certificadoEm)}{c.origem === 'nammux' ? ' · pelo Nammux' : ''}</p>
+      <p className="mt-1 text-xs text-muted-foreground">Em {dataHora(c.certificadoEm)}{c.origem === 'nammux' ? ' · na entrevista (Nammux)' : ''}</p>
     </div>
   );
 }
@@ -164,10 +157,7 @@ function DecidirCorrecao({ opportunityId, respostas, criadoEm }: { opportunityId
 export function ProcessClassificationCard({ opportunityId, variant = 'card' }: { opportunityId: string; variant?: 'card' | 'inline' }) {
   const enabled = useProcessClassificationEnabled();
   const { data: estado, isLoading, isError, refetch } = useClassificationState(opportunityId, enabled);
-  // null = fechado; 'classificar' = vendedor; 'certificar' = Jurídico depois da entrevista
-  const [modo, setModo] = useState<null | 'classificar' | 'certificar'>(null);
-  const preenchendo = modo !== null;
-  const setPreenchendo = (v: boolean) => { if (!v) setModo(null); };
+  const [preenchendo, setPreenchendo] = useState(false);
   const isMobile = useIsMobile();
 
   if (!enabled || estado === null) {
@@ -176,10 +166,7 @@ export function ProcessClassificationCard({ opportunityId, variant = 'card' }: {
       : null;
   }
 
-  const wizard = (
-    <ClassificationWizard key={`${opportunityId}:${modo}`} opportunityId={opportunityId} onDone={() => setModo(null)}
-      certificar={modo === 'certificar' && estado?.respostas ? { respostas: estado.respostas, refazer: !!estado.refazendoCertificacao } : undefined} />
-  );
+  const wizard = <ClassificationWizard key={opportunityId} opportunityId={opportunityId} onDone={() => setPreenchendo(false)} />;
   const corpo = isLoading ? (
     <div className="space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-9 w-48" /></div>
   ) : isError || !estado ? (
@@ -188,7 +175,7 @@ export function ProcessClassificationCard({ opportunityId, variant = 'card' }: {
       <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar de novo</Button>
     </div>
   ) : (
-    <Corpo estado={estado} opportunityId={opportunityId} onComecar={() => setModo('classificar')} onCertificar={() => setModo('certificar')} />
+    <Corpo estado={estado} opportunityId={opportunityId} onComecar={() => setPreenchendo(true)} />
   );
 
   if (variant === 'inline') return <div className="p-1">{preenchendo ? wizard : corpo}</div>;
@@ -206,7 +193,7 @@ export function ProcessClassificationCard({ opportunityId, variant = 'card' }: {
         <SheetContent side={isMobile ? 'bottom' : 'right'} onInteractOutside={(e) => e.preventDefault()}
           className={cn('flex flex-col', isMobile ? 'h-[100dvh]' : 'w-full sm:max-w-lg')}>
           <SheetHeader>
-            <SheetTitle>{modo === 'certificar' ? 'Certificar classificação' : 'Classificação do processo'}</SheetTitle>
+            <SheetTitle>Classificação do processo</SheetTitle>
             <SheetDescription className="sr-only">Assistente de classificação do processo desta oportunidade</SheetDescription>
           </SheetHeader>
           <div className="min-h-0 flex-1">{preenchendo && wizard}</div>

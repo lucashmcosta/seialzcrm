@@ -115,12 +115,14 @@ psql -d BANCO_DESCARTAVEL -v ON_ERROR_STOP=1 -f supabase/tests/process_classific
 
 O vendedor **declara** a classificação. Depois do ganho, o Jurídico/Triagem entrevista o cliente e **certifica**: corrige o que não bateu, e o servidor recalcula com a **mesma versão de calibração** que o vendedor usou.
 
+**Onde se certifica:** na tela do **Nammux**, junto com a ligação de entrevista, chamando a API do Seialz (decisão do Lucas, 18/10). O Seialz **não** tem tela para certificar: só guarda, aplica a regra e mostra o resultado no card. O núcleo (RPC, regras e tabelas) e a ação `certify` (com prévia) estão prontos; a API para o Nammux será planejada com o time do Nammux.
+
 | Peça | Onde |
 |---|---|
 | Migração (tabelas, RPC `pc_record_certification`, permissão para o Admin) | `supabase/migrations/20261018170000_process_classification_certification.sql` |
 | Rollback | `supabase/rollback/20261018170000_process_classification_certification_DOWN.sql` |
 | Edge: ação `certify` (`dry_run` mostra a comparação antes de gravar); `get_state` com `certificacao`/`podeCertificar` | `supabase/functions/process-classification/index.ts`, `logic.ts` |
-| Tela: botão "Certificar classificação" na oportunidade ganha → assistente já preenchido → comparação → nota → confirmar | `src/components/process-classification/ClassificationWizard.tsx`, `ProcessClassificationCard.tsx` |
+| Exibição do resultado da certificação no card da oportunidade (vendedor, gestor, jurídico) | `src/components/process-classification/ProcessClassificationCard.tsx` |
 
 **Regras**
 - **Só para baixo, decidido pela comissão:** comissão certificada menor → faixa e comissão passam a ser as certificadas; igual ou maior → nada muda (mérito da triagem). O cálculo certificado é sempre guardado (declarado × certificado × final). O banco impede comissão final acima da original (`pcc_final_never_up`).
@@ -128,7 +130,7 @@ O vendedor **declara** a classificação. Depois do ganho, o Jurídico/Triagem e
 - A classificação do vendedor nunca é alterada. A comissão ativa vira `superseded` e entra a nova, com `note` ("Certificação: …"). O vendedor é notificado.
 - Permissão `ferramentas.certificar_classificacao` (dar ao perfil Jurídico no rollout; o Admin já tem).
 
-**Contrato para o Nammux (pronto, NÃO ligado)**
+**Rascunho de contrato para o Nammux (a planejar com o time deles; NÃO ligado)**
 Quando a entrevista for feita no Nammux, ele envia um evento assinado pelo canal que já existe (`nammux-webhook-ingest`, HMAC por org, `schema_version: 1`):
 
 ```json

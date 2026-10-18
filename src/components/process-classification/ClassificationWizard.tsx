@@ -6,19 +6,16 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Escolha, Multipla, Numero, Rotulo } from './Campos';
 import { ClassificationReveal } from './ClassificationReveal';
-import { ClassificationApiError, useCertify, useClassify, type Classificacao, type PreviaCertificacao } from './api';
-import { Textarea } from '@/components/ui/textarea';
-import { toast } from '@/hooks/use-toast';
+import { ClassificationApiError, useClassify, type Classificacao } from './api';
 import { NOME_TESE, PASSO_DADOS, TITULOS_PASSO, type Pergunta, type TeseId } from './perguntas';
 import {
-  TESES, alternarTese, contexto, errosDados, escolherSaida, montarEntrada, pendencia, rascunhoDeEntrada, rascunhoInicial, responder,
-  rotuloCampo, telaDaTese, topoVisivel, type Rascunho,
+  TESES, alternarTese, contexto, errosDados, escolherSaida, montarEntrada, pendencia, rascunhoInicial, responder,
+  telaDaTese, topoVisivel, type Rascunho,
 } from './rascunho';
 import { ResumoEntrada } from './ResumoEntrada';
-import { NOME_FAIXA, formatarBRL } from './formato';
 
 type Passo = { tipo: 'dados' } | { tipo: 'saida' } | { tipo: 'teses' } | { tipo: 'tese'; tese: TeseId } | { tipo: 'revisao' };
-type Fase = 'preenchendo' | 'analisando' | 'resultado' | 'previa';
+type Fase = 'preenchendo' | 'analisando' | 'resultado';
 
 const ANALISE_MIN_MS = 1500;
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -28,18 +25,9 @@ const rotuloDe = (p: Pergunta, r: Record<string, unknown>, c: ReturnType<typeof 
 const opcoesDe = (p: Pergunta, r: Record<string, unknown>, c: ReturnType<typeof contexto>) =>
   (typeof p.opcoes === 'function' ? p.opcoes(r as never, c, undefined as never) : p.opcoes) ?? [];
 
-/**
- * Assistente do vendedor (§5.2) + "Analisando…" + revelação (§5.4).
- * Com `certificar`: o Jurídico refaz as respostas depois da entrevista (Fase 3b). Começa com as respostas do vendedor,
- * mostra a comparação (só para baixo) e grava com nota.
- */
-export function ClassificationWizard({ opportunityId, onDone, certificar }: {
-  opportunityId: string; onDone: () => void; certificar?: { respostas: Record<string, unknown>; refazer: boolean };
-}) {
-  const [r, setR] = useState<Rascunho>(() => (certificar ? rascunhoDeEntrada(certificar.respostas) : rascunhoInicial()));
-  const [previa, setPrevia] = useState<PreviaCertificacao | null>(null);
-  const [nota, setNota] = useState('');
-  const cert = useCertify(opportunityId);
+/** Assistente do vendedor (§5.2) + "Analisando…" + revelação (§5.4). */
+export function ClassificationWizard({ opportunityId, onDone }: { opportunityId: string; onDone: () => void }) {
+  const [r, setR] = useState<Rascunho>(rascunhoInicial);
   const [i, setI] = useState(0);
   const [tentouAvancar, setTentouAvancar] = useState(false);
   const [fase, setFase] = useState<Fase>('preenchendo');
@@ -84,33 +72,6 @@ export function ClassificationWizard({ opportunityId, onDone, certificar }: {
     }
   };
 
-  const verResultado = async () => {
-    setErro(null);
-    try {
-      setPrevia(await cert.previa.mutateAsync({ entrada: montarEntrada(r) }));
-      setFase('previa');
-    } catch (e) {
-      const api = e instanceof ClassificationApiError ? e : null;
-      setErro({ mensagem: api?.message ?? 'Não foi possível calcular. Tente de novo.', pendencias: api?.extra?.pendencias as never });
-    }
-  };
-  const confirmarCertificacao = async () => {
-    try {
-      await cert.confirmar.mutateAsync({ entrada: montarEntrada(r), note: nota, redo: !!certificar?.refazer });
-      toast({ description: 'Certificação registrada. O vendedor foi avisado.' });
-      onDone();
-    } catch (e) {
-      toast({ variant: 'destructive', description: e instanceof ClassificationApiError ? e.message : 'Não foi possível certificar. Tente de novo.' });
-    }
-  };
-
-  if (fase === 'previa' && previa) {
-    return (
-      <PreviaCertificacaoPainel previa={previa} nota={nota} setNota={setNota} salvando={cert.confirmar.isPending}
-        onVoltar={() => setFase('preenchendo')} onConfirmar={confirmarCertificacao} />
-    );
-  }
-
   if (fase === 'analisando') {
     return (
       <div className="grid place-items-center gap-3 py-16 text-sm text-muted-foreground" role="status" aria-live="polite">
@@ -133,10 +94,7 @@ export function ClassificationWizard({ opportunityId, onDone, certificar }: {
     );
   }
 
-  const [titulo, subtitulo] = passo.tipo === 'tese' ? [NOME_TESE[passo.tese], TITULOS_PASSO.tese[1]]
-    : certificar && passo.tipo === 'revisao' ? ['Confira as respostas certificadas', 'Depois veja o resultado antes de confirmar']
-    : certificar && passo.tipo === 'dados' ? ['Certificar classificação', 'Corrija o que a entrevista mostrou ser diferente']
-    : TITULOS_PASSO[passo.tipo];
+  const [titulo, subtitulo] = passo.tipo === 'tese' ? [NOME_TESE[passo.tese], TITULOS_PASSO.tese[1]] : TITULOS_PASSO[passo.tipo];
   const ultimo = passo.tipo === 'revisao';
 
   return (
@@ -166,7 +124,7 @@ export function ClassificationWizard({ opportunityId, onDone, certificar }: {
           </div>
         )}
         {passo.tipo === 'tese' && <PassoTese r={r} setR={setR} tese={passo.tese} ctx={ctx} />}
-        {passo.tipo === 'revisao' && (certificar ? <ResumoEntrada entrada={montarEntrada(r)} detalhado /> : <Revisao r={r} />)}
+        {passo.tipo === 'revisao' && <Revisao r={r} />}
 
         {/* no passo 1 o erro já aparece embaixo de cada campo */}
         {bloqueio && passo.tipo !== 'dados' && (tentouAvancar || passo.tipo === 'tese') && (
@@ -189,7 +147,7 @@ export function ClassificationWizard({ opportunityId, onDone, certificar }: {
       <div className="flex gap-2 border-t pt-4">
         <Button variant="outline" onClick={voltar} disabled={i === 0} className="flex-1">Voltar</Button>
         {ultimo
-          ? <Button onClick={certificar ? verResultado : finalizar} className="flex-1" disabled={cert.previa.isPending}>{certificar ? 'Ver resultado' : 'Finalizar'}</Button>
+          ? <Button onClick={finalizar} className="flex-1">Finalizar</Button>
           : <Button onClick={avancar} className="flex-1" aria-disabled={!!bloqueio}>Próximo</Button>}
       </div>
     </div>
@@ -270,49 +228,6 @@ function Revisao({ r }: { r: Rascunho }) {
     <div className="space-y-4">
       <ResumoEntrada entrada={montarEntrada(r)} />
       <p className="rounded-md bg-muted p-3 text-sm">Depois de finalizar, a classificação fica registrada e não dá para alterar. Confira antes.</p>
-    </div>
-  );
-}
-
-const fc = (x: { faixa: string | null; comissao: number }) => `${x.faixa ? NOME_FAIXA[x.faixa as keyof typeof NOME_FAIXA] : '—'} · ${formatarBRL(x.comissao)}`;
-
-/** Comparação antes de confirmar (só para baixo) + nota obrigatória. */
-function PreviaCertificacaoPainel({ previa, nota, setNota, salvando, onVoltar, onConfirmar }: {
-  previa: PreviaCertificacao; nota: string; setNota: (v: string) => void; salvando: boolean; onVoltar: () => void; onConfirmar: () => void;
-}) {
-  const reduz = previa.resultado === 'reduced';
-  return (
-    <div className="flex h-full flex-col gap-4">
-      <div>
-        <h3 className="text-lg font-semibold">Resultado da certificação</h3>
-        <p className="text-sm text-muted-foreground">Calculado com a mesma calibração usada pelo vendedor.</p>
-      </div>
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Declarado pelo vendedor</p><p className="font-semibold">{fc(previa.original)}</p></div>
-        <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Com as respostas certificadas</p><p className="font-semibold">{fc(previa.certificada)}</p></div>
-      </div>
-      <Alert variant={reduz ? 'destructive' : 'default'}>
-        <AlertDescription>
-          {reduz
-            ? <>A classificação será <strong>reduzida</strong> para {fc(previa.final)}. O vendedor será avisado com o motivo.</>
-            : <>Sem mudança: a entrevista confirmou a classificação{previa.certificada.comissao > previa.original.comissao ? ' (o resultado certificado é maior, e a certificação só reduz)' : ''}.</>}
-        </AlertDescription>
-      </Alert>
-      <div className="space-y-1">
-        <p className="text-sm font-medium">Respostas alteradas ({previa.mudou.length})</p>
-        {previa.mudou.length === 0
-          ? <p className="text-sm text-muted-foreground">Nenhuma: as respostas da entrevista são as mesmas do vendedor.</p>
-          : <ul className="list-disc space-y-0.5 pl-5 text-sm">{previa.mudou.map((m) => <li key={m}>{rotuloCampo(m)}</li>)}</ul>}
-      </div>
-      <div className="space-y-1.5">
-        <p className="text-sm font-medium">O que a entrevista mostrou</p>
-        <Textarea value={nota} onChange={(e) => setNota(e.target.value)} maxLength={1000}
-          placeholder="Ex.: o cliente confirmou que havia controle de ponto real e as extras eram pagas." />
-      </div>
-      <div className="mt-auto flex gap-2 border-t pt-4">
-        <Button variant="outline" className="flex-1" onClick={onVoltar} disabled={salvando}>Voltar e ajustar</Button>
-        <Button className="flex-1" onClick={onConfirmar} disabled={!nota.trim() || salvando}>Confirmar certificação</Button>
-      </div>
     </div>
   );
 }
