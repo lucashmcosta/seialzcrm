@@ -33,3 +33,26 @@ jobs:
       # Sem npm install: scripts/docs-validate.mjs usa apenas node:fs/node:path.
       - name: docs:validate
         run: npm run docs:validate
+
+  # Motor de classificação (Central Trabalhista): pacote validado pelo jurídico, copiado sem alterações.
+  # Garante que os 475 testes continuam passando e que a cópia usada pela edge function
+  # (supabase/functions/_shared/classificacao/motor.mjs) é byte a byte o build do pacote.
+  motor-classificacao:
+    name: Motor de classificação (testes + paridade do bundle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: packages/motor-classificacao
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Bundle da edge = build do pacote
+        run: cmp dist/motor.mjs ../../supabase/functions/_shared/classificacao/motor.mjs

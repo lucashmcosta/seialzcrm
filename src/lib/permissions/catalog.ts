@@ -11,12 +11,16 @@ export interface ActionDef {
   hidden?: boolean; // mantido no catálogo, não exibido (recurso ainda não existe)
 }
 
+/** Item que só aparece quando o módulo (widget_key em organization_widgets) está ligado na org. */
+export type ModuleKey = 'process_classification';
+
 export interface ObjectDef {
   key: DataObject;
   label: string;
   subtitle: string;
   actions: ActionDef[];
   unassignedLabel?: string;
+  module?: ModuleKey;
 }
 
 export const DATA_OBJECTS: ObjectDef[] = [
@@ -77,9 +81,15 @@ export const DATA_OBJECTS: ObjectDef[] = [
       { key: 'atribuir', label: 'Atribuir', kind: 'scope', cap: 'ver' },
     ],
   },
+  {
+    key: 'classificacoes', label: 'Classificações de processos', subtitle: 'Faixa, comissão e respostas', module: 'process_classification',
+    actions: [
+      { key: 'ver', label: 'Ver', kind: 'scope', hint: 'Chances e valores só com "Ver números da classificação"' },
+    ],
+  },
 ];
 
-export const TOOLS: { key: ToolKey; label: string; hidden?: boolean }[] = [
+export const TOOLS: { key: ToolKey; label: string; hidden?: boolean; module?: ModuleKey }[] = [
   { key: 'tel_realizar', label: 'Realizar chamadas' },
   { key: 'tel_receber', label: 'Receber chamadas' },
   { key: 'tel_transferir', label: 'Transferir chamadas' },
@@ -90,9 +100,11 @@ export const TOOLS: { key: ToolKey; label: string; hidden?: boolean }[] = [
   { key: 'marketing', label: 'Marketing' },
   { key: 'relatorios', label: 'Relatórios' },
   { key: 'ia', label: 'Assistente de IA', hidden: true },
+  { key: 'classificar', label: 'Classificar processo', module: 'process_classification' },
+  { key: 'liberar_correcao', label: 'Liberar correção de classificação', module: 'process_classification' },
 ];
 
-export const ADMIN_ITEMS: { key: AdminKey; label: string; hidden?: boolean }[] = [
+export const ADMIN_ITEMS: { key: AdminKey; label: string; hidden?: boolean; module?: ModuleKey }[] = [
   { key: 'usuarios', label: 'Usuários e equipes' },
   { key: 'config', label: 'Configurações' },
   { key: 'distribuicao', label: 'Distribuição de leads' },
@@ -101,14 +113,31 @@ export const ADMIN_ITEMS: { key: AdminKey; label: string; hidden?: boolean }[] =
   { key: 'telefonia', label: 'Telefonia' },
   { key: 'cobranca', label: 'Cobrança' },
   { key: 'auditoria', label: 'Auditoria', hidden: true },
+  { key: 'ver_numeros_classificacao', label: 'Ver números da classificação', module: 'process_classification' },
+  { key: 'calibrar_classificacao', label: 'Calibrar classificação', module: 'process_classification' },
+  { key: 'publicar_calibracao', label: 'Publicar calibração', module: 'process_classification' },
 ];
+
+/** Itens visíveis para a org: sem `hidden` e, se forem de módulo, só com o módulo ligado. */
+export const visibleFor = (modules: ReadonlySet<string>) =>
+  <T extends { hidden?: boolean; module?: ModuleKey }>(item: T) => !item.hidden && (!item.module || modules.has(item.module));
 
 export const SCOPE_LABEL: Record<Scope, string> = { nenhum: 'Nenhum', meus: 'Meus', equipe: 'Equipe', todos: 'Todos' };
 export const SCOPE_RANK: Record<Scope, number> = { nenhum: 0, meus: 1, equipe: 2, todos: 3 };
 
+/** Completa chaves que perfis antigos não têm (objetos e itens de módulo criados depois): sem acesso. */
+export function withDefaults(p: PermissionsV2): PermissionsV2 {
+  const blank = blankPerms();
+  return {
+    dados: { ...blank.dados, ...p.dados },
+    ferramentas: { ...blank.ferramentas, ...p.ferramentas },
+    administracao: { ...blank.administracao, ...p.administracao },
+  };
+}
+
 /** Aplica regras automáticas: tetos, ver=nenhum zera criar/flag, ver=todos marca a flag. */
 export function normalize(p: PermissionsV2): PermissionsV2 {
-  const next: PermissionsV2 = JSON.parse(JSON.stringify(p));
+  const next: PermissionsV2 = JSON.parse(JSON.stringify(withDefaults(p)));
   for (const obj of DATA_OBJECTS) {
     const o = next.dados[obj.key] as unknown as Record<string, Scope | boolean>;
     for (const a of obj.actions) {
@@ -146,7 +175,8 @@ export const TEMPLATES: { key: string; label: string; description: string; perms
       atendimentos: NONE_THR,
       chamadas: { ver: 'meus', exportar: 'nenhum' },
       tarefas: task('meus', true, 'meus', 'meus', 'meus'),
-    }, ferramentas: tools(['importar', 'marketing', 'relatorios']), administracao: admin([]) },
+      classificacoes: { ver: 'meus' },
+    }, ferramentas: tools(['importar', 'marketing', 'relatorios', 'liberar_correcao']), administracao: admin([]) },
   },
   {
     key: 'lider', label: 'Líder de equipe', description: 'Acompanha e redistribui o trabalho das suas equipes.',
@@ -157,6 +187,7 @@ export const TEMPLATES: { key: string; label: string; description: string; perms
       atendimentos: NONE_THR,
       chamadas: { ver: 'equipe', exportar: 'equipe' },
       tarefas: task('equipe', true, 'equipe', 'equipe', 'equipe'),
+      classificacoes: { ver: 'equipe' },
     }, ferramentas: tools(['rodizio', 'importar']), administracao: admin([]) },
   },
   {
@@ -168,6 +199,7 @@ export const TEMPLATES: { key: string; label: string; description: string; perms
       atendimentos: NONE_THR,
       chamadas: { ver: 'todos', exportar: 'todos' },
       tarefas: task('todos', true, 'todos', 'todos', 'todos'),
+      classificacoes: { ver: 'todos' },
     }, ferramentas: tools(['rodizio']), administracao: admin(['usuarios', 'distribuicao', 'auditoria']) },
   },
   {
@@ -179,7 +211,8 @@ export const TEMPLATES: { key: string; label: string; description: string; perms
       atendimentos: thr('todos', 'meus', 'meus', 'meus', true),
       chamadas: { ver: 'meus', exportar: 'nenhum' },
       tarefas: task('meus', true, 'meus', 'meus', 'meus'),
-    }, ferramentas: tools(['rodizio', 'wa_ativa', 'importar', 'marketing', 'relatorios']), administracao: admin([]) },
+      classificacoes: { ver: 'nenhum' },
+    }, ferramentas: tools(['rodizio', 'wa_ativa', 'importar', 'marketing', 'relatorios', 'classificar', 'liberar_correcao']), administracao: admin([]) },
   },
   {
     key: 'supervisor', label: 'Supervisor de atendimento', description: 'Coordena toda a fila do Atendimento.',
@@ -190,7 +223,8 @@ export const TEMPLATES: { key: string; label: string; description: string; perms
       atendimentos: thr('todos', 'todos', 'todos', 'todos', true),
       chamadas: { ver: 'todos', exportar: 'todos' },
       tarefas: task('todos', true, 'todos', 'todos', 'todos'),
-    }, ferramentas: tools(['rodizio', 'marketing', 'importar']), administracao: admin(['config_atendimento']) },
+      classificacoes: { ver: 'nenhum' },
+    }, ferramentas: tools(['rodizio', 'marketing', 'importar', 'classificar', 'liberar_correcao']), administracao: admin(['config_atendimento']) },
   },
   {
     key: 'leitura', label: 'Somente leitura', description: 'Consulta tudo, sem alterar nada.',
@@ -201,6 +235,7 @@ export const TEMPLATES: { key: string; label: string; description: string; perms
       atendimentos: thr('todos', 'nenhum', 'nenhum', 'nenhum', true),
       chamadas: { ver: 'todos', exportar: 'nenhum' },
       tarefas: task('todos', false, 'nenhum', 'nenhum', 'nenhum'),
+      classificacoes: { ver: 'todos' },
     }, ferramentas: Object.fromEntries(TOOLS.map((t) => [t.key, t.key === 'relatorios'])) as PermissionsV2['ferramentas'], administracao: admin([]) },
   },
 ];

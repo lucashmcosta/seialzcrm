@@ -51,6 +51,7 @@ export function fromLegacy(l: LegacyPermissions, privacyOn: boolean, telephonyV2
       },
       chamadas: { ver: b(l.can_view_all_calls) || !telephonyV2On ? 'todos' : 'meus', exportar: 'nenhum' },
       tarefas: { ver: 'todos', criar: true, editar: 'todos', excluir: 'todos', atribuir: 'todos' },
+      classificacoes: { ver: 'nenhum' }, // módulo novo: perfis legados não ganham acesso
     },
     ferramentas,
     administracao,

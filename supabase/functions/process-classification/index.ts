@@ -1,0 +1,116 @@
+// process-classification — Classificação de processos v1 (módulo por tenant: organization_widgets 'process_classification').
+// Spec: docs/classificacao-v1/SPEC.md. O cálculo roda AQUI; o navegador do vendedor só recebe faixa + comissão.
+//
+// Ações (POST JSON):
+//   { action: 'get_state', opportunity_id }                         → estado do widget (§5.1)
+//   { action: 'classify', opportunity_id, entrada, idempotency_key } → grava e devolve faixa + comissão
+//
+// LGPD (§7): nunca logar entrada, resultado nem calibração. Só ids e códigos.
+
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
+import {
+  calcular, chaveValida, estadoDoWidget, MODULE_KEY, type Pedido, type Perms, podeClassificar, podeVerTodas, Recusa,
+  recusaDaRpc, visaoVendedor,
+} from "./logic.ts";
+
+function json(status: number, body: Record<string, unknown>) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+const recusa = (r: Recusa) => json(r.status, { error: r.codigo, message: r.mensagem, ...(r.extra ?? {}) });
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.startsWith("Bearer ")) return json(401, { error: "unauthorized" });
+
+  // deno-lint-ignore no-explicit-any
+  let body: any;
+  try { body = await req.json(); } catch { return json(400, { error: "invalid_json" }); }
+  const action = body?.action;
+  const opportunityId = body?.opportunity_id;
+  if (action !== "get_state" && action !== "classify") return json(400, { error: "invalid_action" });
+  if (typeof opportunityId !== "string" || !UUID.test(opportunityId)) return json(400, { error: "invalid_opportunity_id" });
+
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const userClient = createClient(url, anon, { global: { headers: { Authorization: authHeader } } });
+  const { data: auth, error: authErr } = await userClient.auth.getUser();
+  if (authErr || !auth?.user) return json(401, { error: "unauthorized" });
+
+  const db = createClient(url, service);
+  const { data: me } = await db.from("users").select("id").eq("auth_user_id", auth.user.id).maybeSingle();
+  if (!me?.id) return json(401, { error: "unauthorized" });
+
+  const { data: opp } = await db.from("opportunities")
+    .select("id, organization_id, owner_user_id, status, deleted_at").eq("id", opportunityId).maybeSingle();
+  if (!opp || opp.deleted_at) return json(404, { error: "not_found" });
+  const org = opp.organization_id as string;
+
+  const { data: membership } = await db.from("user_organizations").select("id")
+    .eq("user_id", me.id).eq("organization_id", org).eq("is_active", true).maybeSingle();
+  if (!membership) return json(403, { error: "forbidden" });
+
+  const { data: widget } = await db.from("organization_widgets").select("is_enabled")
+    .eq("organization_id", org).eq("widget_key", MODULE_KEY).maybeSingle();
+  if (widget?.is_enabled !== true) return json(403, { error: "module_disabled" });
+
+  const { data: permsData } = await db.rpc("pc_user_perms", { _org: org, _user: me.id });
+  const perms = (permsData ?? null) as Perms;
+  const isOwner = opp.owner_user_id === me.id;
+
+  try {
+    if (action === "get_state") {
+      if (!isOwner && !podeVerTodas(perms)) return json(403, { error: "forbidden" });
+      const { data: ativa } = await db.from("process_classifications")
+        .select("id, band, commission, in_review, created_at").eq("opportunity_id", opportunityId).eq("status", "active").maybeSingle();
+      let pedido: Pedido | null = null;
+      if (ativa) {
+        const { data } = await db.from("classification_correction_requests")
+          .select("status, created_at, reason, replacement_id").eq("classification_id", ativa.id)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        pedido = (data ?? null) as Pedido | null;
+      }
+      const estado = estadoDoWidget(opp.status === "open", ativa ?? null, pedido);
+      return json(200, {
+        estado,
+        podeClassificar: isOwner && podeClassificar(perms),
+        classificacao: ativa ? { id: ativa.id, ...visaoVendedor(ativa) } : null,
+        pedido: pedido ? { status: pedido.status, criadoEm: pedido.created_at, motivo: pedido.reason } : null,
+      });
+    }
+
+    // classify
+    if (!podeClassificar(perms)) return json(403, { error: "forbidden" });
+    if (!isOwner) return recusa(recusaDaRpc("pc:not_owner"));
+    if (opp.status !== "open") return recusa(recusaDaRpc("pc:opportunity_closed"));
+    const key = body?.idempotency_key;
+    if (!chaveValida(key)) return json(400, { error: "invalid_idempotency_key" });
+
+    const { data: cal } = await db.from("classification_calibration_versions")
+      .select("id, content, motor_version").eq("organization_id", org).eq("status", "published").maybeSingle();
+    if (!cal) return json(409, { error: "no_calibration", message: "O módulo ainda não tem calibração publicada. Fale com o administrador." });
+
+    const { entrada, resultado, motorVersao } = calcular(body?.entrada, cal);
+    const { data: gravado, error: rpcErr } = await db.rpc("pc_record_classification", {
+      _org: org, _opp: opportunityId, _seller: me.id, _key: key, _calibration_id: cal.id,
+      _motor_version: motorVersao, _input: entrada, _result: resultado,
+    });
+    if (rpcErr) {
+      const r = recusaDaRpc(rpcErr.message ?? "");
+      if (r.status >= 500) console.error("[process-classification] rpc_error", { opportunityId, code: rpcErr.code });
+      return recusa(r);
+    }
+    const g = gravado as { id: string; faixa: string | null; comissao: number; emRevisao: boolean; classificadoEm: string };
+    return json(200, { id: g.id, faixa: g.faixa, comissao: Number(g.comissao), emRevisao: g.emRevisao, classificadoEm: g.classificadoEm });
+  } catch (e) {
+    if (e instanceof Recusa) return recusa(e);
+    console.error("[process-classification] unexpected", { opportunityId, action, err: e instanceof Error ? e.name : "unknown" });
+    return json(500, { error: "internal_error" });
+  }
+});

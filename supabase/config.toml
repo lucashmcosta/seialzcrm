@@ -159,3 +159,8 @@ verify_jwt = false
 # JWT validado em código (getUser + user_organizations) para erros claros.
 [functions.evolution-edit-message]
 verify_jwt = false
+
+# Classificação de processos (módulo process_classification).
+# JWT validado em código (getUser + user_organizations + permissão RBAC v2).
+[functions.process-classification]
+verify_jwt = false
