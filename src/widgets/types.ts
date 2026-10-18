@@ -16,8 +16,8 @@ export interface WidgetDefinition {
   name: string;
   description: string;
   icon: PhosphorIcon;
-  /** none = independente (qualquer tela); contact/thread = usa o contexto atual ou mostra estado vazio. */
-  contextMode?: 'none' | 'contact' | 'thread';
+  /** none = independente (qualquer tela); contact/thread/opportunity = usa o contexto atual ou mostra estado vazio. */
+  contextMode?: 'none' | 'contact' | 'thread' | 'opportunity';
   Component: ComponentType<{ context: WidgetContext }>;
   /** Prévia estática para a galeria /widgets. Nunca monta o widget funcional. */
   Preview?: ComponentType;

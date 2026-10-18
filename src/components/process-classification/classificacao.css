@@ -1,0 +1,19 @@
+/* Movimentos internos dos SVGs dos materiais (classes que vêm nos desenhos: mat-shine, mat-twinkle).
+   Referência: docs/classificacao-v1/widget/icones/animacoes-referencia.css. Só movimento: cores vêm dos SVGs
+   e dos tokens --band-* do design system. */
+.pc-material .mat-shine { animation: pc-mat-shine 3.4s ease-in-out 1.2s infinite; }
+.pc-material .mat-twinkle { transform-box: fill-box; transform-origin: center; animation: pc-mat-twinkle 1.8s ease-in-out infinite; }
+.pc-material svg { width: 100%; height: 100%; overflow: visible; }
+
+@keyframes pc-mat-shine {
+  0% { transform: translateX(-90px); }
+  45%, 100% { transform: translateX(190px); }
+}
+@keyframes pc-mat-twinkle {
+  0%, 100% { transform: scale(0.4); opacity: 0.2; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+.pc-estatico .mat-shine, .pc-estatico .mat-twinkle { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .pc-material .mat-shine, .pc-material .mat-twinkle { animation: none; }
+}

@@ -56,3 +56,21 @@ jobs:
       - run: npm run build
       - name: Bundle da edge = build do pacote
         run: cmp dist/motor.mjs ../../supabase/functions/_shared/classificacao/motor.mjs
+
+  # Classificação de processos no front: testes do assistente/permissões e garantia de que o bundle do
+  # navegador não leva calibração, explicações jurídicas nem o cálculo do motor (risco R3).
+  classificacao-front:
+    name: Classificação (testes do front + bundle do vendedor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - run: bun install --frozen-lockfile
+      - run: bun test src/components/process-classification src/lib/permissions
+      - run: bun run build
+      - run: node scripts/check-seller-bundle.mjs

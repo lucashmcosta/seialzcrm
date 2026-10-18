@@ -93,6 +93,12 @@ function WidgetWindow({ def, widgetKey }: { def: WidgetDefinition; widgetKey: st
   );
 }
 
+const EMPTY_MESSAGE: Record<Exclude<WidgetDefinition['contextMode'], 'none' | undefined>, string> = {
+  contact: 'Selecione um contato para usar este widget.',
+  thread: 'Selecione uma conversa para usar este widget.',
+  opportunity: 'Abra uma oportunidade para usar este widget.',
+};
+
 type Resolved = { kind: 'ok'; value: WidgetContext; key: string } | { kind: 'empty'; message: string };
 
 function resolveContext(def: WidgetDefinition, ctx: WidgetContext | null, orgId: string): Resolved {
@@ -102,7 +108,8 @@ function resolveContext(def: WidgetDefinition, ctx: WidgetContext | null, orgId:
     return { kind: 'ok', value: safe ?? { screen: 'commercial', organizationId: orgId, threadId: null, contactId: null }, key: 'static' };
   }
   const id = safe && mode === 'contact' && 'contactId' in safe ? safe.contactId
-    : safe && mode === 'thread' && 'threadId' in safe ? safe.threadId : null;
-  if (!safe || !id) return { kind: 'empty', message: mode === 'contact' ? 'Selecione um contato para usar este widget.' : 'Selecione uma conversa para usar este widget.' };
+    : safe && mode === 'thread' && 'threadId' in safe ? safe.threadId
+    : safe && mode === 'opportunity' && 'opportunityId' in safe ? safe.opportunityId : null;
+  if (!safe || !id) return { kind: 'empty', message: EMPTY_MESSAGE[mode] };
   return { kind: 'ok', value: safe, key: `${mode}:${id}` };
 }

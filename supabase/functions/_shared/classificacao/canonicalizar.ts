@@ -144,5 +144,5 @@ export function criarCanonicalizador(api: PerguntasApi) {
     return e;
   }
 
-  return { canonicalizar };
+  return { canonicalizar, respostasDaTese };
 }

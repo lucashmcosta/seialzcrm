@@ -9,12 +9,12 @@ import { useWidgetContextSource } from './workspace/useWidgetContextSource';
 import type { WidgetContext, WidgetScreen } from './types';
 
 interface Props {
-  screen: Extract<WidgetScreen, 'commercial' | 'inbox'>;
+  screen: Extract<WidgetScreen, 'commercial' | 'inbox' | 'opportunities'>;
   context: WidgetContext;
   size?: 'sm' | 'xs';
 }
 
-/** Lançador do Comercial/Atendimento: widgets globais ligados na org; pins por tela. Abre/foca janelas do Workspace global. */
+/** Lançador do Comercial/Atendimento/Oportunidade: widgets globais ligados na org; pins por tela. Abre/foca janelas do Workspace global. */
 export function WidgetsTrigger({ screen, context, size = 'sm' }: Props) {
   const ws = useWidgetWorkspace();
   const { widgets: defs } = useEnabledWidgets();

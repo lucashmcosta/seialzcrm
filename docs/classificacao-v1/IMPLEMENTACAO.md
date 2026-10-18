@@ -59,6 +59,31 @@ psql -d BANCO_DESCARTAVEL -v ON_ERROR_STOP=1 -f supabase/tests/process_classific
 bun test src/lib/permissions
 ```
 
+## Fase 2 — widget do vendedor
+
+| Peça | Onde |
+|---|---|
+| Card na Visão geral da oportunidade (carregado só com o módulo ligado) | `src/components/process-classification/ProcessClassificationSlot.tsx` → `ProcessClassificationCard.tsx` |
+| Assistente passo a passo | `src/components/process-classification/ClassificationWizard.tsx`, `Campos.tsx`, `rascunho.ts` |
+| Revelação (materiais, faíscas, contagem da comissão) | `src/components/process-classification/ClassificationReveal.tsx` + `materiais/*.svg` |
+| Widget do Workspace (popup no desktop, `contextMode: 'opportunity'`) | `src/widgets/process-classification/`, `src/widgets/registry.ts` |
+| Cores de destaque das faixas (claro/escuro) | tokens `--band-*` em `src/index.css` |
+| Catálogo reduzido do vendedor + troca no bundle | `scripts/gen-catalogo-vendedor.mjs`, plugin em `vite.config.ts` |
+| Checagem do bundle publicado | `scripts/check-seller-bundle.mjs` (roda no CI depois do build) |
+
+- O navegador usa só `perguntas.ts` do motor, com o catálogo reduzido (nomes e rótulos). Calibração, explicações jurídicas e cálculo nunca vão para o bundle; o CI falha se aparecerem.
+- A Entrada enviada é montada com o mesmo canonicalizador do servidor (`supabase/functions/_shared/classificacao/canonicalizar.ts`).
+- "Analisando o caso…" dura pelo menos 1,5 s. Ao reabrir uma oportunidade já classificada, o resultado aparece sem animação. Com `prefers-reduced-motion`, sem animação.
+- O botão "Errei alguma resposta — pedir correção ao gestor" entra na Fase 3.
+- Ligar o widget em Configurações → Widgets liga o módulo na org. Sem calibração publicada, o vendedor vê "O módulo ainda não tem calibração publicada".
+
+### Testes da Fase 2
+
+```
+bun test src/components/process-classification src/lib/permissions
+bun run build && node scripts/check-seller-bundle.mjs
+```
+
 ## Pontos para o jurídico (não alterados no motor)
 
 1. **"Recebeu a rescisão?" em "Sem registro".** A tela esconde a pergunta, mas o motor lê `resc` se ela vier na entrada (`motor.ts`, verbas rescisórias). Como a SPEC manda não enviar perguntas escondidas, o motor assume `nada` (verbas cheias) quando a saída é "Sem registro" e o 13º/férias eram pagos. Nos casos-ouro, 6 casos aleatórios divergem só por isso. Confirmar com o Renan se é o comportamento desejado.

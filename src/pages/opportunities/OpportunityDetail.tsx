@@ -39,6 +39,8 @@ import { ContractSignatureEntry, useSignatureV2Pilot } from '@/components/signat
 import { PenNib } from '@phosphor-icons/react';
 import { TagSelector } from '@/components/common/TagSelector';
 import { NammuxOpportunityTab } from '@/components/opportunities/NammuxOpportunityTab';
+import { ProcessClassificationSlot } from '@/components/process-classification/ProcessClassificationSlot';
+import { WidgetsTrigger } from '@/widgets/WidgetsTrigger';
 
 interface Opportunity {
   id: string;
@@ -396,6 +398,7 @@ export default function OpportunityDetail() {
 
             {selectedTab === 'overview' && (
               <>
+              <ProcessClassificationSlot opportunityId={opportunity.id} />
               <CommercialAttributionPanel key={opportunity.id} entityType="opportunity" entityId={opportunity.id} contactId={opportunity.contact_id} />
               <Card>
                 <CardContent className="pt-6 space-y-4">
@@ -643,6 +646,10 @@ export default function OpportunityDetail() {
                     </DropdownMenu>
                   )}
                   {v2Pilot.sheet}
+                  {organization && (
+                    <WidgetsTrigger screen="opportunities"
+                      context={{ screen: 'opportunities', organizationId: organization.id, opportunityId: opportunity.id }} />
+                  )}
 
                   <div className="h-6 w-px bg-border mx-1" />
 
@@ -682,6 +689,7 @@ export default function OpportunityDetail() {
             </Tabs.List>
 
             <Tabs.Panel id="overview">
+              <ProcessClassificationSlot opportunityId={opportunity.id} />
               <CommercialAttributionPanel key={opportunity.id} entityType="opportunity" entityId={opportunity.id} contactId={opportunity.contact_id} />
               <Card>
                 <CardContent className="pt-6">
