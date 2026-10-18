@@ -16,6 +16,7 @@ import { useProcessClassificationEnabled } from '../useProcessClassificationEnab
 import { dataHora } from '../formato';
 import { tabelaClassificacao } from '../api';
 import { CalibracaoTab } from './calibracao/CalibracaoTab';
+import { LinkClassificacoes } from '../LinkClassificacoes';
 
 interface VersaoPublicada { number: number; published_at: string; note: string | null }
 
@@ -33,6 +34,8 @@ export default function ProcessClassificationSettings({ organizationId }: { orga
     return <p className="text-sm text-muted-foreground">Você não tem permissão para configurar este widget.</p>;
   }
   return (
+    <div className="space-y-4">
+    <LinkClassificacoes />
     <Tabs defaultValue={podeGeral ? 'geral' : 'calibracao'}>
       <TabsList>
         {podeGeral && <TabsTrigger value="geral">Geral</TabsTrigger>}
@@ -43,6 +46,7 @@ export default function ProcessClassificationSettings({ organizationId }: { orga
       {podeGeral && <TabsContent value="geral"><Geral organizationId={organizationId} podeVerVersao={podeCalibrar} /></TabsContent>}
       {podeCalibrar && <TabsContent value="calibracao"><CalibracaoTab organizationId={organizationId} /></TabsContent>}
     </Tabs>
+    </div>
   );
 }
 

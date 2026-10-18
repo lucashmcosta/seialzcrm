@@ -101,3 +101,4 @@ for each row execute function public.fn_guard_opportunity_won_requirements_v1();
 \ir ../migrations/20261018150000_process_classification_f3.sql
 \ir ../migrations/20261018170000_process_classification_certification.sql
 \ir ../migrations/20261018190000_process_classification_calibration.sql
+\ir ../migrations/20261018210000_process_classification_reports.sql

@@ -39,37 +39,7 @@ export function Simulador({ organizationId, conteudo, aberto, onFechar }: { orga
         <div className="min-h-0 flex-1 overflow-y-auto">
           {resultado ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                <Kpi rotulo="Faixa" valor={resultado.emRevisao ? 'Revisão' : nomeFaixa(resultado.faixa)} />
-                <Kpi rotulo="Comissão" valor={formatarBRL(resultado.comissao)} />
-                <Kpi rotulo="Score" valor={`${resultado.score}`} />
-                <Kpi rotulo="Faixa por valor" valor={nomeFaixa(resultado.faixaPorValor)} />
-                <Kpi rotulo="Bruto total" valor={formatarBRL(resultado.brutoTotal)} />
-                <Kpi rotulo="Esperado total" valor={formatarBRL(resultado.esperadoTotal)} />
-                <Kpi rotulo="Valor composto" valor={formatarBRL(resultado.valorComposto)} />
-                <Kpi rotulo="Ajuste do score" valor={resultado.ajusteScore ? `${resultado.ajusteScore.mover >= 0 ? '+' : ''}${resultado.ajusteScore.mover} · ${resultado.ajusteScore.pct}%` : '—'} />
-              </div>
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-xs text-muted-foreground"><th className="p-2">Tese</th><th className="p-2">Chance</th><th className="p-2">Valor</th><th className="p-2">Esperado</th><th className="p-2">Selo</th></tr></thead>
-                  <tbody>
-                    {resultado.teses.map((t: any) => (
-                      <tr key={t.tese} className="border-b align-top last:border-0">
-                        <td className="p-2">
-                          <span className="font-medium">{NOME_TESE[t.tese as keyof typeof NOME_TESE]}</span>
-                          {t.excluida && <span className="ml-1 text-xs text-muted-foreground">(excluída)</span>}
-                          {t.aviso && <span className="block text-xs text-destructive">{t.aviso}</span>}
-                          <span className="block text-xs text-muted-foreground">{t.detalhe}</span>
-                        </td>
-                        <td className="p-2 tabular-nums">{pct(t.prob)}</td>
-                        <td className="p-2 tabular-nums">{formatarBRL(t.bruto)}</td>
-                        <td className="p-2 tabular-nums">{formatarBRL(t.esperado)}</td>
-                        <td className="p-2">{t.selo}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ResultadoCompleto resultado={resultado} />
               <Button variant="outline" onClick={() => { setResultado(null); setRodada((x) => x + 1); }}>Simular outro caso</Button>
             </div>
           ) : (
@@ -78,6 +48,45 @@ export function Simulador({ organizationId, conteudo, aberto, onFechar }: { orga
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** Resultado completo do motor (só para quem vê os números): totais e, por tese, chance, valor, esperado, selo e detalhe. */
+export function ResultadoCompleto({ resultado }: { resultado: any }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+        <Kpi rotulo="Faixa" valor={resultado.emRevisao ? 'Revisão' : nomeFaixa(resultado.faixa)} />
+        <Kpi rotulo="Comissão" valor={formatarBRL(resultado.comissao)} />
+        <Kpi rotulo="Score" valor={`${resultado.score}`} />
+        <Kpi rotulo="Faixa por valor" valor={nomeFaixa(resultado.faixaPorValor)} />
+        <Kpi rotulo="Bruto total" valor={formatarBRL(resultado.brutoTotal)} />
+        <Kpi rotulo="Esperado total" valor={formatarBRL(resultado.esperadoTotal)} />
+        <Kpi rotulo="Valor composto" valor={formatarBRL(resultado.valorComposto)} />
+        <Kpi rotulo="Ajuste do score" valor={resultado.ajusteScore ? `${resultado.ajusteScore.mover >= 0 ? '+' : ''}${resultado.ajusteScore.mover} · ${resultado.ajusteScore.pct}%` : '—'} />
+      </div>
+      <div className="overflow-x-auto rounded-md border">
+        <table className="w-full text-sm">
+          <thead><tr className="border-b text-left text-xs text-muted-foreground"><th className="p-2">Tese</th><th className="p-2">Chance</th><th className="p-2">Valor</th><th className="p-2">Esperado</th><th className="p-2">Selo</th></tr></thead>
+          <tbody>
+            {resultado.teses.map((t: any) => (
+              <tr key={t.tese} className="border-b align-top last:border-0">
+                <td className="p-2">
+                  <span className="font-medium">{NOME_TESE[t.tese as keyof typeof NOME_TESE]}</span>
+                  {t.excluida && <span className="ml-1 text-xs text-muted-foreground">(excluída)</span>}
+                  {t.aviso && <span className="block text-xs text-destructive">{t.aviso}</span>}
+                  <span className="block text-xs text-muted-foreground">{t.detalhe}</span>
+                </td>
+                <td className="p-2 tabular-nums">{pct(t.prob)}</td>
+                <td className="p-2 tabular-nums">{formatarBRL(t.bruto)}</td>
+                <td className="p-2 tabular-nums">{formatarBRL(t.esperado)}</td>
+                <td className="p-2">{t.selo}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

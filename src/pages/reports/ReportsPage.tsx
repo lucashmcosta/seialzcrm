@@ -4,6 +4,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { Layout } from '@/components/Layout';
+import { LinkClassificacoes } from '@/components/process-classification/LinkClassificacoes';
 import { useOrganization } from '@/hooks/useOrganization';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
@@ -424,6 +425,7 @@ export default function ReportsPage() {
 
         {/* Content */}
         <div className="space-y-6 p-6 pb-10">
+            <LinkClassificacoes />
             {/* Filters */}
             <ReportFilters
               preset={preset}

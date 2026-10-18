@@ -227,6 +227,7 @@ const CommercialOriginsReport = lazyWithRetry("CommercialOriginsReport", () => i
 const SettingsLayout = lazyWithRetry("SettingsLayout", () => import("./components/settings/SettingsLayout"), "SettingsLayout");
 const WidgetsSettings = lazyWithRetry("WidgetsSettings", () => import("./pages/settings/WidgetsSettings"));
 const WidgetSettingsPage = lazyWithRetry("WidgetSettingsPage", () => import("./pages/settings/WidgetSettingsPage"));
+const ClassificationsReport = lazyWithRetry("ClassificationsReport", () => import("./pages/classifications/ClassificationsReport"));
 const WidgetsCatalog = lazyWithRetry("WidgetsCatalog", () => import("./pages/widgets/WidgetsCatalog"));
 const SettingsGrid = lazyWithRetry("SettingsGrid", () => import("./components/settings/SettingsGrid"), "SettingsGrid");
 const GeneralSettings = lazyWithRetry("GeneralSettings", () => import("./components/settings/GeneralSettings"), "GeneralSettings");
@@ -691,6 +692,14 @@ const App = () => (
             }
           />
           <Route path="/reports" element={<Navigate to="/dashboards" replace />} />
+          <Route
+            path="/classificacoes"
+            element={
+              <ProtectedRoute>
+                <RequirePerm path="dados.classificacoes.ver"><ClassificationsReport /></RequirePerm>
+              </ProtectedRoute>
+            }
+          />
           <Route path="/marketing" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingOverview /></RequirePerm></ProtectedRoute>} />
           <Route path="/marketing/ads" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingAds /></RequirePerm></ProtectedRoute>} />
           <Route path="/marketing/ads/:id" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingAdDetail /></RequirePerm></ProtectedRoute>} />

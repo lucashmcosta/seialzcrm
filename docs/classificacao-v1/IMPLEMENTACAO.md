@@ -178,6 +178,25 @@ psql -d BANCO_DESCARTAVEL -v ON_ERROR_STOP=1 -f supabase/tests/process_classific
 bun test src/components/process-classification
 ```
 
+## Fase 5 — relatórios e exportação
+
+Página **`/classificacoes`** (permissão "Ver classificações"; atalhos nos Dashboards e nas configurações do widget).
+
+| Peça | Onde |
+|---|---|
+| Funções de leitura (mesma visibilidade da RLS; números só com "Ver números") | `supabase/migrations/20261018210000_process_classification_reports.sql` (`pc_report`, `pc_report_detail`, `pc_report_export`) |
+| Página | `src/pages/classifications/ClassificationsReport.tsx` |
+| CSV (Excel pt-BR: `;`, vírgula decimal, BOM) | `src/components/process-classification/csv.ts` |
+
+- **Filtros:** período, vendedor, faixa, versão da calibração, só em revisão, incluir substituídas/anuladas. Resumo: total, comissão das ativas (já com a comissão final após certificação) e contagem por faixa. Paginação de 50.
+- **Quem vê o quê:** o vendedor vê as próprias; o gestor, as do escopo (equipe/todas); score e números só com `administracao.ver_numeros_classificacao`.
+- **Detalhe:** respostas do vendedor, pedidos de correção, certificação e, com números, o resultado completo por tese.
+- **Exportar CSV:** com números, uma linha por **classificação × tese** (versões, chance, chance automática, valor bruto e esperado, selo, aviso, faixa, comissão e certificação) — a base para comparar com a jurimetria; sem números, uma linha por classificação. Até 10 mil classificações por exportação.
+
+```
+psql -d BANCO_DESCARTAVEL -v ON_ERROR_STOP=1 -f supabase/tests/process_classification_fixture.sql -f supabase/tests/process_classification_reports.sql
+```
+
 ## Pontos para o jurídico (não alterados no motor)
 
 1. **"Recebeu a rescisão?" em "Sem registro".** A tela esconde a pergunta, mas o motor lê `resc` se ela vier na entrada (`motor.ts`, verbas rescisórias). Como a SPEC manda não enviar perguntas escondidas, o motor assume `nada` (verbas cheias) quando a saída é "Sem registro" e o 13º/férias eram pagos. Nos casos-ouro, 6 casos aleatórios divergem só por isso. Confirmar com o Renan se é o comportamento desejado.
