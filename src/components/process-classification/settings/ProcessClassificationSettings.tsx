@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { Lock, WarningCircle } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { usePermissions, canV2 } from '@/hooks/usePermissions';
@@ -14,7 +15,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProcessClassificationEnabled } from '../ProcessClassificationSlot';
 import { dataHora } from '../formato';
 
-interface Configuracao { require_classification_for_won: boolean; daily_limit_per_seller: number | null }
 interface VersaoPublicada { number: number; published_at: string; note: string | null }
 
 const settingsKey = (org: string) => ['process-classification-settings', org] as const;
@@ -57,49 +57,68 @@ function useVersaoPublicada(organizationId: string, enabled: boolean) {
   });
 }
 
+const MODO: Record<string, string> = {
+  off: 'Desligado: nenhuma regra de fechamento é cobrada.',
+  monitor: 'Monitorar sem bloquear: a classificação aparece como pendência, mas o ganho continua permitido.',
+  enforce: 'Aplicar e bloquear: sem classificação, a oportunidade não pode ir para ganha.',
+};
+
 function Geral({ organizationId, podeVerVersao }: { organizationId: string; podeVerVersao: boolean }) {
   const qc = useQueryClient();
   const moduloLigado = useProcessClassificationEnabled();
-  const { data: config, isLoading } = useQuery({
+  // A exigência mora na política de fechamento (mesma regra das Configurações de oportunidade e dos documentos).
+  const { data, isLoading } = useQuery({
     queryKey: settingsKey(organizationId),
-    queryFn: async (): Promise<Configuracao> => {
-      const { data, error } = await (supabase as any).from('process_classification_settings')
-        .select('require_classification_for_won, daily_limit_per_seller').eq('organization_id', organizationId).maybeSingle();
-      if (error) throw error;
-      return data ?? { require_classification_for_won: true, daily_limit_per_seller: null };
+    queryFn: async (): Promise<{ exigir: boolean; modo: string; limite: number | null }> => {
+      const [pol, cfg] = await Promise.all([
+        (supabase as any).from('opportunity_close_policies').select('mode, require_process_classification').eq('organization_id', organizationId).maybeSingle(),
+        (supabase as any).from('process_classification_settings').select('daily_limit_per_seller').eq('organization_id', organizationId).maybeSingle(),
+      ]);
+      if (pol.error) throw pol.error;
+      return { exigir: !!pol.data?.require_process_classification, modo: pol.data?.mode ?? 'off', limite: cfg.data?.daily_limit_per_seller ?? null };
     },
   });
   const { data: versao } = useVersaoPublicada(organizationId, podeVerVersao);
-  const [exigir, setExigir] = useState(true);
+  const [exigir, setExigir] = useState(false);
   const [limite, setLimite] = useState('');
   const [salvando, setSalvando] = useState(false);
   useEffect(() => {
-    if (!config) return;
-    setExigir(config.require_classification_for_won);
-    setLimite(config.daily_limit_per_seller ? String(config.daily_limit_per_seller) : '');
-  }, [config]);
+    if (!data) return;
+    setExigir(data.exigir);
+    setLimite(data.limite ? String(data.limite) : '');
+  }, [data]);
 
   const limiteNum = limite.trim() === '' ? null : Number(limite);
   const limiteInvalido = limiteNum !== null && !(Number.isInteger(limiteNum) && limiteNum >= 1);
-  const mudou = !!config && (exigir !== config.require_classification_for_won || limiteNum !== config.daily_limit_per_seller);
+  const mudouExigir = !!data && exigir !== data.exigir;
+  const mudouLimite = !!data && limiteNum !== data.limite;
 
   const salvar = async () => {
     setSalvando(true);
-    const { error } = await supabase.rpc('pc_update_settings' as never, { _org: organizationId, _require_for_won: exigir, _daily_limit: limiteNum } as never);
+    const erros: unknown[] = [];
+    if (mudouExigir) {
+      const { error } = await (supabase as any).from('opportunity_close_policies')
+        .upsert({ organization_id: organizationId, require_process_classification: exigir }, { onConflict: 'organization_id' });
+      if (error) erros.push(error);
+    }
+    if (mudouLimite) {
+      const { error } = await supabase.rpc('pc_update_settings' as never, { _org: organizationId, _daily_limit: limiteNum } as never);
+      if (error) erros.push(error);
+    }
     setSalvando(false);
-    if (error) return toast({ variant: 'destructive', description: 'Não foi possível salvar. Só quem gerencia Configurações pode alterar.' });
+    if (erros.length) return toast({ variant: 'destructive', description: 'Não foi possível salvar. Só quem gerencia Configurações pode alterar.' });
     toast({ description: 'Configurações salvas.' });
     qc.invalidateQueries({ queryKey: settingsKey(organizationId) });
   };
 
-  if (isLoading) return null;
+  if (isLoading || !data) return null;
   return (
     <div className="space-y-4 pt-2">
       {!moduloLigado && (
         <Alert><WarningCircle className="h-4 w-4" /><AlertDescription>O widget está desligado. As regras abaixo só valem depois de ligá-lo em Widgets.</AlertDescription></Alert>
       )}
       {podeVerVersao && versao === null && (
-        <Alert variant="destructive"><WarningCircle className="h-4 w-4" /><AlertDescription>Sem calibração publicada: os vendedores não conseguem classificar e o bloqueio de ganhar não vale. Publique uma calibração na aba Calibração.</AlertDescription></Alert>
+        <Alert variant="destructive"><WarningCircle className="h-4 w-4" /><AlertDescription>Sem calibração publicada: os vendedores não conseguem classificar e a exigência não é cobrada. Publique uma calibração na aba Calibração.</AlertDescription></Alert>
       )}
       <Card>
         <CardHeader className="pb-3">
@@ -107,12 +126,20 @@ function Geral({ organizationId, podeVerVersao }: { organizationId: string; pode
           <CardDescription>Valem para todas as oportunidades da organização.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <Label htmlFor="pc-exigir" className="text-sm font-medium">Exigir classificação para marcar como ganha</Label>
-              <p className="text-xs text-muted-foreground">Sem classificação, a oportunidade não pode ir para ganha (no Kanban, no detalhe e em lote).</p>
+          <div className="space-y-2">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Label htmlFor="pc-exigir" className="text-sm font-medium">Exigir classificação para marcar como ganha</Label>
+                <p className="text-xs text-muted-foreground">Entra nas regras de fechamento, como os documentos obrigatórios.</p>
+              </div>
+              <Switch id="pc-exigir" checked={exigir} onCheckedChange={setExigir} />
             </div>
-            <Switch id="pc-exigir" checked={exigir} onCheckedChange={setExigir} />
+            {exigir && (
+              <p className="rounded-md bg-muted p-2 text-xs">
+                {MODO[data.modo] ?? MODO.off}{' '}
+                <Link to="/settings/opportunity-close" className="text-primary hover:underline">Mudar o modo em Configurações de oportunidade</Link>
+              </p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="pc-limite" className="text-sm font-medium">Limite de classificações por vendedor (24 horas)</Label>
@@ -121,7 +148,7 @@ function Geral({ organizationId, podeVerVersao }: { organizationId: string; pode
               {limiteInvalido ? 'Use um número inteiro a partir de 1, ou deixe vazio.' : 'Evita que alguém classifique oportunidades de teste para descobrir a regra. Vazio = sem limite.'}
             </p>
           </div>
-          <Button onClick={salvar} disabled={!mudou || limiteInvalido || salvando}>Salvar</Button>
+          <Button onClick={salvar} disabled={!(mudouExigir || mudouLimite) || limiteInvalido || salvando}>Salvar</Button>
         </CardContent>
       </Card>
       {podeVerVersao && versao && (

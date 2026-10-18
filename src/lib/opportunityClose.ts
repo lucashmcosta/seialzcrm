@@ -13,18 +13,6 @@ export interface OpportunityCloseItem {
   fallback?: boolean;
 }
 
-/** Classificação de processos: item que bloqueia o ganho em qualquer modo e não aceita override. */
-export const CLASSIFICATION_ITEM = 'process_classification';
-export const CLASSIFICATION_REQUIRED_MSG = 'Classifique o processo antes de marcar como ganha.';
-export const classificationMissing = (e?: Pick<OpportunityCloseEvaluation, 'items'> | null) =>
-  !!e?.items.some((i) => i.code === CLASSIFICATION_ITEM && i.status === 'missing');
-/** Pendências que seguem a política de fechamento (monitor/enforce), sem a classificação. */
-export const policyMissingCount = (e: Pick<OpportunityCloseEvaluation, 'items'>) =>
-  e.items.filter((i) => i.status === 'missing' && i.code !== CLASSIFICATION_ITEM).length;
-/** Mensagem para erros de banco ao mover para ganha (trigger trg_guard_won_requires_classification). */
-export const isClassificationRequiredError = (err: { message?: string } | null | undefined) =>
-  !!err?.message?.includes('classification_required');
-
 export interface OpportunityCloseEvaluation {
   organization_id: string;
   opportunity_id: string;

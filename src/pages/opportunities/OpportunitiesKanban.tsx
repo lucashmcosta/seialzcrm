@@ -1,4 +1,3 @@
-import { CLASSIFICATION_REQUIRED_MSG, isClassificationRequiredError } from '@/lib/opportunityClose';
 import { SavedViewsDropdown } from '@/components/SavedViewsDropdown';
 import { useCommercialOrigins } from '@/hooks/useCommercialOrigins';
 import { CommercialFilters } from '@/components/commercial/CommercialFilters';
@@ -625,7 +624,7 @@ export default function OpportunitiesKanban() {
 
     if (error) {
       console.error('Error updating opportunity:', error);
-      toast.error(isClassificationRequiredError(error) ? CLASSIFICATION_REQUIRED_MSG : t('common.error'));
+      toast.error(t('common.error'));
       fetchData();
     } else {
       toast.success('Oportunidade movida com sucesso');

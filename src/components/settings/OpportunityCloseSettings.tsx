@@ -14,6 +14,7 @@ import type { ClosePolicyMode } from '@/lib/opportunityClose';
 import { defaultRequiredCodes, defaultGroups, conditionalSets, buildDocumentRules, type DocumentSet, type RequiredGroup } from '@/lib/documentRules';
 import { useDocumentCatalog, type CatalogType } from '@/hooks/documents/useDocumentCatalog';
 import { AdvancedDocumentRules, type EditorCustomField } from '@/components/settings/AdvancedDocumentRules';
+import { useProcessClassificationEnabled } from '@/components/process-classification/ProcessClassificationSlot';
 
 type Policy = {
   mode: ClosePolicyMode;
@@ -23,14 +24,16 @@ type Policy = {
   required_opportunity_fields: string[];
   required_contact_custom_field_ids: string[];
   required_opportunity_custom_field_ids: string[];
+  require_process_classification: boolean;
 };
 
-const empty: Policy = { mode: 'off', require_cpf_verified: false, require_complete_address: false, required_contact_fields: [], required_opportunity_fields: [], required_contact_custom_field_ids: [], required_opportunity_custom_field_ids: [] };
+const empty: Policy = { mode: 'off', require_cpf_verified: false, require_complete_address: false, required_contact_fields: [], required_opportunity_fields: [], required_contact_custom_field_ids: [], required_opportunity_custom_field_ids: [], require_process_classification: false };
 const contactFields = [{ id: 'email', label: 'E-mail' }, { id: 'phone', label: 'Telefone' }, { id: 'rg', label: 'RG' }, { id: 'nationality', label: 'Nacionalidade' }];
 const opportunityFields = [{ id: 'title', label: 'Título' }, { id: 'amount', label: 'Valor' }, { id: 'source', label: 'Origem' }, { id: 'owner_user_id', label: 'Responsável' }];
 
 export function OpportunityCloseSettings() {
   const { organization } = useOrganization();
+  const classificacaoLigada = useProcessClassificationEnabled();
   const { catalog, loading: catalogLoading } = useDocumentCatalog();
   const [policy, setPolicy] = useState<Policy>(empty);
   const [customFields, setCustomFields] = useState<EditorCustomField[]>([]);
@@ -106,6 +109,7 @@ export function OpportunityCloseSettings() {
         {policy.mode === 'enforce' && <Alert variant="destructive"><Info /><AlertTitle>Bloqueio ativo</AlertTitle><AlertDescription>Oportunidades incompletas não poderão ser ganhas nem gerar o evento para integrações.</AlertDescription></Alert>}
         {!isBrazil && <Alert><Info /><AlertTitle>Regras brasileiras indisponíveis</AlertTitle><AlertDescription>CPF e endereço BR só podem ser exigidos em organizações cujo país operacional seja Brasil.</AlertDescription></Alert>}
         <div className="flex items-center justify-between rounded-lg border p-4"><div><Label>CPF encontrado pela API</Label><p className="text-xs text-muted-foreground">A validação matemática isolada não atende esta regra.</p></div><Switch disabled={!isBrazil} checked={isBrazil && policy.require_cpf_verified} onCheckedChange={(value) => setPolicy({ ...policy, require_cpf_verified: value })} /></div>
+        {(classificacaoLigada || policy.require_process_classification) && <div className="flex items-center justify-between rounded-lg border p-4"><div><Label>Classificação do processo</Label><p className="text-xs text-muted-foreground">O vendedor precisa classificar o processo (widget Classificação do processo). Só é cobrada com o widget ligado e calibração publicada.</p></div><Switch checked={policy.require_process_classification} onCheckedChange={(value) => setPolicy({ ...policy, require_process_classification: value })} /></div>}
         <div className="flex items-center justify-between rounded-lg border p-4"><div><Label>Endereço BR completo</Label><p className="text-xs text-muted-foreground">CEP, logradouro, número, bairro, cidade e UF. Complemento é opcional.</p></div><Switch disabled={!isBrazil} checked={isBrazil && policy.require_complete_address} onCheckedChange={(value) => setPolicy({ ...policy, require_complete_address: value })} /></div>
       </CardContent></Card>
       <Card><CardHeader><CardTitle className="text-base">Campos nativos obrigatórios</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-2"><div className="space-y-2"><p className="text-sm font-medium">Contato</p>{contactFields.map((field) => renderField(field.id, field.label, 'required_contact_fields'))}</div><div className="space-y-2"><p className="text-sm font-medium">Oportunidade</p>{opportunityFields.map((field) => renderField(field.id, field.label, 'required_opportunity_fields'))}</div></CardContent></Card>

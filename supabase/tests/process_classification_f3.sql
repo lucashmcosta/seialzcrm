@@ -1,4 +1,4 @@
--- Fase 3: bloqueio de "ganha", configurações do widget e pedidos de correção.
+-- Fase 3: exigência para ganhar (pela política de fechamento), configurações do widget e pedidos de correção.
 -- psql -d BANCO_DESCARTAVEL -v ON_ERROR_STOP=1 -f supabase/tests/process_classification_fixture.sql -f supabase/tests/process_classification_f3.sql
 BEGIN;
 CREATE FUNCTION pg_temp.assert(ok boolean, message text) RETURNS void LANGUAGE plpgsql AS $$BEGIN IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL: %',message; END IF; END$$;
@@ -43,32 +43,33 @@ SELECT ('00000000-0000-0000-0000-0000000002' || lpad(n::text, 2, '0'))::uuid, '0
 INSERT INTO opportunities(id, organization_id, contact_id, owner_user_id, status, title, pipeline_stage_id) VALUES
   ('00000000-0000-0000-0000-000000000290','00000000-0000-0000-0000-0000000000b2','00000000-0000-0000-0000-00000000cc02',NULL,'open','Outra org','00000000-0000-0000-0000-00000000f003');
 
--- ===== Módulo desligado: nada muda =====
-SELECT pg_temp.assert(NOT pc_required_for_won('00000000-0000-0000-0000-0000000000c7'), 'sem módulo não exige');
-SELECT pg_temp.assert(pg_temp.item('00000000-0000-0000-0000-000000000201') IS NULL, 'avaliador sem o item com módulo desligado');
-UPDATE opportunities SET status = 'won' WHERE id = '00000000-0000-0000-0000-000000000209';
-SELECT pg_temp.assert((SELECT status = 'won' FROM opportunities WHERE id = '00000000-0000-0000-0000-000000000209'), 'ganha sem classificação com módulo desligado');
-
--- ===== Módulo ligado: bloqueia ganhar sem classificação (§5.1, §10.5) =====
-INSERT INTO organization_widgets VALUES ('00000000-0000-0000-0000-0000000000c7','process_classification',true);
-SELECT pg_temp.assert(pc_required_for_won('00000000-0000-0000-0000-0000000000c7'), 'módulo + exigir + calibração = exige');
-SELECT pg_temp.assert(pg_temp.item('00000000-0000-0000-0000-000000000201') = 'missing', 'avaliador mostra a pendência');
-SELECT pg_temp.assert((pg_temp.ev('00000000-0000-0000-0000-000000000201')->>'can_close')::boolean = false, 'sem política (off) também barra');
+-- ===== Sem a exigência marcada ou sem o módulo: avaliador igual ao de antes =====
 INSERT INTO opportunity_close_policies(organization_id, mode, version) VALUES ('00000000-0000-0000-0000-0000000000c7','monitor',1);
-SELECT pg_temp.assert((pg_temp.ev('00000000-0000-0000-0000-000000000201')->>'can_close')::boolean = false, 'modo monitor também barra (R6)');
+SELECT pg_temp.assert(NOT pc_required_for_won('00000000-0000-0000-0000-0000000000c7'), 'sem exigência marcada não exige');
+SELECT pg_temp.assert(pg_temp.item('00000000-0000-0000-0000-000000000201') IS NULL, 'avaliador sem o item');
+UPDATE opportunity_close_policies SET require_process_classification = true;
+SELECT pg_temp.assert(NOT pc_required_for_won('00000000-0000-0000-0000-0000000000c7'), 'exigência marcada mas widget desligado: não exige');
+INSERT INTO organization_widgets VALUES ('00000000-0000-0000-0000-0000000000c7','process_classification',true);
+SELECT pg_temp.assert(pc_required_for_won('00000000-0000-0000-0000-0000000000c7'), 'exigência + widget + calibração = exige');
+
+-- ===== Modo monitor: só avisa, igual aos documentos =====
+SELECT pg_temp.assert(pg_temp.item('00000000-0000-0000-0000-000000000201') = 'missing', 'avaliador mostra a pendência');
 SELECT pg_temp.assert(pg_temp.ev('00000000-0000-0000-0000-000000000201')->'missing_codes' ? 'process_classification', 'código na lista de pendências');
-SELECT pg_temp.expect_error($q$UPDATE opportunities SET status = 'won' WHERE id = '00000000-0000-0000-0000-000000000201'$q$, 'classification_required', 'status → ganha barrado');
-SELECT pg_temp.expect_error($q$UPDATE opportunities SET pipeline_stage_id = '00000000-0000-0000-0000-00000000f002' WHERE id = '00000000-0000-0000-0000-000000000201'$q$, 'classification_required', 'Kanban → etapa ganha barrado');
-SELECT set_config('app.opportunity_close_authorized', '00000000-0000-0000-0000-000000000201', true);
-SELECT pg_temp.expect_error($q$UPDATE opportunities SET status = 'won' WHERE id = '00000000-0000-0000-0000-000000000201'$q$, 'classification_required', 'override de admin da RPC não passa');
+SELECT pg_temp.assert((pg_temp.ev('00000000-0000-0000-0000-000000000201')->>'can_close')::boolean, 'monitor: pode fechar (só avisa)');
+UPDATE opportunities SET status = 'won', pipeline_stage_id = '00000000-0000-0000-0000-00000000f002' WHERE id = '00000000-0000-0000-0000-000000000209';
+SELECT pg_temp.assert((SELECT status = 'won' FROM opportunities WHERE id = '00000000-0000-0000-0000-000000000209'), 'monitor: ganha sem classificação');
+
+-- ===== Modo enforce: bloqueia pelo guard existente, com o override de sempre =====
+UPDATE opportunity_close_policies SET mode = 'enforce';
+SELECT pg_temp.assert((pg_temp.ev('00000000-0000-0000-0000-000000000201')->>'can_close')::boolean = false, 'enforce: não pode fechar');
+SELECT pg_temp.expect_error($q$UPDATE opportunities SET status = 'won' WHERE id = '00000000-0000-0000-0000-000000000201'$q$, 'closing_requirements_missing', 'enforce: status → ganha barrado');
+SELECT pg_temp.expect_error($q$UPDATE opportunities SET pipeline_stage_id = '00000000-0000-0000-0000-00000000f002' WHERE id = '00000000-0000-0000-0000-000000000201'$q$, 'closing_requirements_missing', 'enforce: Kanban → etapa ganha barrado');
+SELECT set_config('app.opportunity_close_authorized', '00000000-0000-0000-0000-000000000206', true);
+UPDATE opportunities SET status = 'won' WHERE id = '00000000-0000-0000-0000-000000000206';
+SELECT pg_temp.assert((SELECT status = 'won' FROM opportunities WHERE id = '00000000-0000-0000-0000-000000000206'), 'override autorizado pela RPC passa (igual documentos)');
 SELECT set_config('app.opportunity_close_authorized', '', true);
 UPDATE opportunities SET status = 'lost' WHERE id = '00000000-0000-0000-0000-000000000208';
 SELECT pg_temp.assert((SELECT status = 'lost' FROM opportunities WHERE id = '00000000-0000-0000-0000-000000000208'), 'perder não exige classificação');
-UPDATE opportunities SET title = 'renomeada' WHERE id = '00000000-0000-0000-0000-000000000209';
-SELECT pg_temp.assert(true, 'oportunidade já ganha continua editável');
-INSERT INTO opportunities(id, organization_id, owner_user_id, status, title, pipeline_stage_id) VALUES
-  ('00000000-0000-0000-0000-000000000299','00000000-0000-0000-0000-0000000000c7','00000000-0000-0000-0000-0000000000b1','won','Importada','00000000-0000-0000-0000-00000000f002');
-SELECT pg_temp.assert(true, 'importação já ganha não é barrada');
 
 -- Com classificação ativa: passa
 SELECT pg_temp.classify('00000000-0000-0000-0000-000000000202', 'chave-f3-0001');
@@ -80,20 +81,17 @@ SELECT pg_temp.assert((SELECT status = 'won' FROM opportunities WHERE id = '0000
 UPDATE opportunities SET status = 'won' WHERE id = '00000000-0000-0000-0000-000000000290';
 SELECT pg_temp.assert((SELECT status = 'won' FROM opportunities WHERE id = '00000000-0000-0000-0000-000000000290'), 'outra org ganha normalmente');
 
--- ===== Configurações do widget =====
+-- ===== Configurações do widget (limite diário) =====
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
-SELECT pg_temp.expect_error($q$SELECT pc_update_settings('00000000-0000-0000-0000-0000000000c7', false, NULL)$q$, 'pc:forbidden', 'vendedor não muda configurações');
+SELECT pg_temp.expect_error($q$SELECT pc_update_settings('00000000-0000-0000-0000-0000000000c7', 3)$q$, 'pc:forbidden', 'vendedor não muda configurações');
 SELECT pg_temp.assert((SELECT count(*) FROM process_classification_settings) = 0, 'vendedor não lê configurações');
 SELECT pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
-SELECT pg_temp.assert((pc_update_settings('00000000-0000-0000-0000-0000000000c7', false, 5)->>'daily_limit_per_seller')::int = 5, 'admin muda configurações');
-SELECT pg_temp.assert((SELECT NOT require_classification_for_won FROM process_classification_settings), 'admin lê configurações');
-SELECT pg_temp.expect_error($q$SELECT pc_update_settings('00000000-0000-0000-0000-0000000000c7', true, 0)$q$, 'pc:invalid_limit', 'limite precisa ser positivo');
+SELECT pg_temp.assert((pc_update_settings('00000000-0000-0000-0000-0000000000c7', 5)->>'daily_limit_per_seller')::int = 5, 'admin muda o limite');
+SELECT pg_temp.expect_error($q$SELECT pc_update_settings('00000000-0000-0000-0000-0000000000c7', 0)$q$, 'pc:invalid_limit', 'limite precisa ser positivo');
 RESET ROLE;
-SELECT pg_temp.assert(NOT pc_required_for_won('00000000-0000-0000-0000-0000000000c7'), '"exigir" = não desliga o bloqueio');
-UPDATE opportunities SET status = 'won' WHERE id = '00000000-0000-0000-0000-000000000207';
-SELECT pg_temp.assert((SELECT status = 'won' FROM opportunities WHERE id = '00000000-0000-0000-0000-000000000207'), 'ganha sem classificação com "exigir" = não');
-UPDATE process_classification_settings SET require_classification_for_won = true, daily_limit_per_seller = NULL;
+UPDATE process_classification_settings SET daily_limit_per_seller = NULL;
+UPDATE opportunity_close_policies SET mode = 'monitor';
 
 -- ===== Pedido de correção (§6) =====
 SELECT pg_temp.expect_error($q$SELECT pc_request_correction('00000000-0000-0000-0000-0000000000c7','00000000-0000-0000-0000-000000000203','00000000-0000-0000-0000-0000000000b1')$q$, 'pc:not_classified', 'sem classificação não pede correção');
@@ -131,11 +129,13 @@ SELECT pg_temp.expect_error($q$SELECT pc_request_correction(NULL,NULL,NULL)$q$, 
 SELECT pg_temp.expect_error($q$SELECT pc_decide_correction(NULL,NULL,NULL,NULL,NULL)$q$, '%permission denied%', 'navegador não decide direto');
 RESET ROLE;
 
--- ===== Sem calibração publicada, o bloqueio não vale (widget ligado por engano em outra org) =====
+-- ===== Sem calibração publicada, não há o que cobrar (widget ligado por engano em outra org) =====
+UPDATE opportunity_close_policies SET mode = 'enforce';
 UPDATE classification_calibration_versions SET status = 'archived' WHERE status = 'published';
 SELECT pg_temp.assert(NOT pc_required_for_won('00000000-0000-0000-0000-0000000000c7'), 'sem calibração publicada não exige');
+SELECT pg_temp.assert(pg_temp.item('00000000-0000-0000-0000-000000000205') IS NULL, 'sem calibração: sem o item');
 UPDATE opportunities SET status = 'won' WHERE id = '00000000-0000-0000-0000-000000000205';
-SELECT pg_temp.assert((SELECT status = 'won' FROM opportunities WHERE id = '00000000-0000-0000-0000-000000000205'), 'ganha normalmente sem calibração');
+SELECT pg_temp.assert((SELECT status = 'won' FROM opportunities WHERE id = '00000000-0000-0000-0000-000000000205'), 'ganha normalmente sem calibração (enforce)');
 
 SELECT 'process_classification_f3: OK' AS resultado;
 ROLLBACK;

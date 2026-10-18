@@ -58,4 +58,44 @@ END $$;
 INSERT INTO organizations VALUES('00000000-0000-0000-0000-0000000000c7','Central Trabalhista'),('00000000-0000-0000-0000-0000000000b2','Outra Org');
 \ir ../migrations/20260811210000_documents_module_e3d1.sql
 \ir ../migrations/20261018120000_process_classification_v1.sql
+-- guard real de fechamento (copiado de 20260731180000): bloqueia ganhar quando o modo é 'enforce'
+create or replace function public.fn_guard_opportunity_won_requirements_v1()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_target_type text;
+  v_old_type text;
+  v_mode text;
+  v_eval jsonb;
+begin
+  select type::text into v_target_type from public.pipeline_stages
+  where id = new.pipeline_stage_id and organization_id = new.organization_id;
+  if tg_op = 'UPDATE' then
+    select type::text into v_old_type from public.pipeline_stages where id = old.pipeline_stage_id;
+  end if;
+  if v_target_type <> 'won' and new.status::text <> 'won' then return new; end if;
+  if tg_op = 'UPDATE' and v_old_type = 'won' and old.status::text = 'won' then return new; end if;
+  if current_setting('app.opportunity_close_authorized', true) = new.id::text then return new; end if;
+
+  select mode into v_mode from public.opportunity_close_policies where organization_id = new.organization_id;
+  if coalesce(v_mode, 'off') <> 'enforce' then return new; end if;
+  if tg_op = 'INSERT' or new.contact_id is distinct from old.contact_id then
+    raise exception 'use_transition_opportunity_stage_v1' using errcode = '23514';
+  end if;
+  v_eval := public.evaluate_opportunity_close_internal_v1(new.organization_id, new.id);
+  if not coalesce((v_eval ->> 'can_close')::boolean, false) then
+    raise exception 'closing_requirements_missing'
+      using errcode = '23514', detail = v_eval::text;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_guard_opportunity_won_requirements_v1 on public.opportunities;
+create trigger trg_guard_opportunity_won_requirements_v1
+before insert or update of pipeline_stage_id, status, contact_id on public.opportunities
+for each row execute function public.fn_guard_opportunity_won_requirements_v1();
 \ir ../migrations/20261018150000_process_classification_f3.sql

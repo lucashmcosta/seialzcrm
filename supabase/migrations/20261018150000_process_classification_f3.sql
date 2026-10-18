@@ -1,22 +1,21 @@
--- Classificação de processos — Fase 3: correção pelo gestor, configurações do widget e bloqueio de "ganha".
+-- Classificação de processos — Fase 3: correção pelo gestor, configurações do widget e exigência para ganhar.
 -- Spec: docs/classificacao-v1/SPEC.md §5.1, §6. Rollback: supabase/rollback/20261018150000_process_classification_f3_DOWN.sql
 --
--- Bloqueio de "ganha" (R6), em duas camadas e só quando pc_required_for_won(org):
---   módulo ligado (organization_widgets) E "exigir classificação" = sim E calibração publicada.
---   1) item 'process_classification' no avaliador de fechamento: o diálogo/card mostram a pendência e a RPC
---      transition_opportunity_stage_v1 recusa, mesmo com a política em 'monitor';
---   2) trigger próprio em opportunities: barra Kanban, lote e update direto, inclusive com override de admin.
---   Só vale para MUDAR para ganha; oportunidade que já entra ganha (importação de histórico) não é barrada.
---   Orgs sem o módulo: o avaliador e o trigger saem sem fazer nada (mesmo resultado de antes).
+-- Exigência para ganhar = MESMO mecanismo dos documentos (decisão do Lucas, 18/10): a regra mora na política de
+-- fechamento (opportunity_close_policies.require_process_classification, fonte única), vira um item do avaliador
+-- e segue o modo da política: 'monitor' só avisa, 'enforce' bloqueia (RPC + trigger existente
+-- fn_guard_opportunity_won_requirements_v1), com o mesmo "forçar ganho" do admin. Sem trava própria.
+-- O item só aparece com: exigência marcada E widget ligado E calibração publicada (sem calibração não há como
+-- classificar, então não faz sentido cobrar). Orgs sem o módulo: avaliador idêntico ao de antes.
 
 -- ===== Configurações do widget =====
-ALTER TABLE public.process_classification_settings
-  ADD COLUMN require_classification_for_won boolean NOT NULL DEFAULT true;
+ALTER TABLE public.opportunity_close_policies
+  ADD COLUMN require_process_classification boolean NOT NULL DEFAULT false;
 
 CREATE OR REPLACE FUNCTION public.pc_required_for_won(_org uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT public.org_widget_enabled(_org, 'process_classification')
-     AND COALESCE((SELECT require_classification_for_won FROM public.process_classification_settings WHERE organization_id = _org), true)
+  SELECT COALESCE((SELECT require_process_classification FROM public.opportunity_close_policies WHERE organization_id = _org), false)
+     AND public.org_widget_enabled(_org, 'process_classification')
      AND EXISTS (SELECT 1 FROM public.classification_calibration_versions WHERE organization_id = _org AND status = 'published')
 $$;
 REVOKE EXECUTE ON FUNCTION public.pc_required_for_won(uuid) FROM PUBLIC, anon;
@@ -29,7 +28,7 @@ CREATE POLICY pcs_select ON public.process_classification_settings FOR SELECT TO
     public.user_has_org_permission(organization_id, 'can_manage_settings')
     OR public.pc_has_flag(organization_id, '{administracao,calibrar_classificacao}')));
 
-CREATE OR REPLACE FUNCTION public.pc_update_settings(_org uuid, _require_for_won boolean, _daily_limit integer)
+CREATE OR REPLACE FUNCTION public.pc_update_settings(_org uuid, _daily_limit integer)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE r public.process_classification_settings;
 BEGIN
@@ -37,62 +36,39 @@ BEGIN
     RAISE EXCEPTION 'pc:forbidden' USING ERRCODE = '42501';
   END IF;
   IF _daily_limit IS NOT NULL AND _daily_limit < 1 THEN RAISE EXCEPTION 'pc:invalid_limit'; END IF;
-  INSERT INTO public.process_classification_settings(organization_id, require_classification_for_won, daily_limit_per_seller, updated_at)
-  VALUES (_org, COALESCE(_require_for_won, true), _daily_limit, now())
-  ON CONFLICT (organization_id) DO UPDATE
-    SET require_classification_for_won = EXCLUDED.require_classification_for_won,
-        daily_limit_per_seller = EXCLUDED.daily_limit_per_seller, updated_at = now()
+  INSERT INTO public.process_classification_settings(organization_id, daily_limit_per_seller, updated_at)
+  VALUES (_org, _daily_limit, now())
+  ON CONFLICT (organization_id) DO UPDATE SET daily_limit_per_seller = EXCLUDED.daily_limit_per_seller, updated_at = now()
   RETURNING * INTO r;
   RETURN to_jsonb(r);
 END $$;
-REVOKE EXECUTE ON FUNCTION public.pc_update_settings(uuid, boolean, integer) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.pc_update_settings(uuid, boolean, integer) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.pc_update_settings(uuid, integer) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.pc_update_settings(uuid, integer) TO authenticated;
 
--- ===== Bloqueio de "ganha": camada 1 (avaliador de fechamento) =====
--- Mesmo padrão das migrações do RBAC v2: lê a definição atual, injeta o trecho e confere que entrou.
+-- ===== Exigência no avaliador de fechamento (mesmo padrão dos documentos) =====
+-- Mesmo método das migrações do RBAC v2: lê a definição atual, injeta o item e confere que entrou.
+-- can_close continua a fórmula da política (mode <> 'enforce' or nada faltando).
 DO $$ DECLARE d text; n text; BEGIN
   d := pg_get_functiondef('public.evaluate_opportunity_close_internal_v1(uuid,uuid)'::regprocedure);
-  n := replace(d, $a$v_items jsonb := '[]'::jsonb; v_missing text[] := '{}';$a$,
-                  $b$v_items jsonb := '[]'::jsonb; v_missing text[] := '{}'; v_pc_block boolean := false;$b$);
-  n := replace(n, $a$  return jsonb_build_object('organization_id',_organization_id,'opportunity_id',v_op.id,$a$,
-$b$  -- Classificação de processos (módulo por org): obrigatória para ganhar, inclusive em modo 'monitor'.
+  n := replace(d, $a$  return jsonb_build_object('organization_id',_organization_id,'opportunity_id',v_op.id,$a$,
+$b$  -- Classificação de processos (requisito da política, como os documentos).
   if public.pc_required_for_won(_organization_id) then
     v_ok := exists(select 1 from public.process_classifications where opportunity_id = v_op.id and status = 'active');
     v_items := v_items || jsonb_build_array(jsonb_build_object('code','process_classification','label','Classificação do processo',
       'status', case when v_ok then 'passed' else 'missing' end, 'action','classify'));
-    if not v_ok then v_missing := array_append(v_missing, 'process_classification'); v_pc_block := true; end if;
+    if not v_ok then v_missing := array_append(v_missing, 'process_classification'); end if;
   end if;
 
   return jsonb_build_object('organization_id',_organization_id,'opportunity_id',v_op.id,$b$);
-  n := replace(n, $a$'can_close',coalesce(v_policy.mode,'off')<>'enforce' or cardinality(v_missing)=0);$a$,
-                  $b$'can_close',(coalesce(v_policy.mode,'off')<>'enforce' or cardinality(v_missing)=0) and not v_pc_block);$b$);
-  IF position('v_pc_block boolean := false' in n) = 0 OR position('pc_required_for_won(_organization_id)' in n) = 0
-     OR position('and not v_pc_block)' in n) = 0 THEN
-    RAISE EXCEPTION 'F3: evaluate_opportunity_close_internal_v1 trechos não encontrados';
+  IF position('pc_required_for_won(_organization_id)' in n) = 0 THEN
+    RAISE EXCEPTION 'F3: evaluate_opportunity_close_internal_v1 trecho não encontrado';
   END IF;
   EXECUTE n;
 END $$;
 
--- ===== Bloqueio de "ganha": camada 2 (trigger próprio) =====
-CREATE OR REPLACE FUNCTION public.fn_guard_won_requires_classification()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-DECLARE v_new_won boolean; v_old_won boolean;
-BEGIN
-  v_new_won := NEW.status::text = 'won'
-    OR EXISTS (SELECT 1 FROM public.pipeline_stages WHERE id = NEW.pipeline_stage_id AND type::text = 'won');
-  IF NOT v_new_won THEN RETURN NEW; END IF;
-  v_old_won := OLD.status::text = 'won'
-    OR EXISTS (SELECT 1 FROM public.pipeline_stages WHERE id = OLD.pipeline_stage_id AND type::text = 'won');
-  IF v_old_won THEN RETURN NEW; END IF;
-  IF NOT public.pc_required_for_won(NEW.organization_id) THEN RETURN NEW; END IF;
-  IF EXISTS (SELECT 1 FROM public.process_classifications WHERE opportunity_id = NEW.id AND status = 'active') THEN RETURN NEW; END IF;
-  RAISE EXCEPTION 'classification_required'
-    USING ERRCODE = '23514', DETAIL = 'Classifique o processo antes de marcar como ganha.';
-END $$;
-REVOKE ALL ON FUNCTION public.fn_guard_won_requires_classification() FROM PUBLIC, anon, authenticated;
-CREATE TRIGGER trg_guard_won_requires_classification
-  BEFORE UPDATE OF status, pipeline_stage_id ON public.opportunities
-  FOR EACH ROW EXECUTE FUNCTION public.fn_guard_won_requires_classification();
+-- Central Trabalhista: a SPEC pede a exigência ligada. Segue o modo da política da org (monitor avisa, enforce bloqueia).
+UPDATE public.opportunity_close_policies p SET require_process_classification = true
+  FROM public.organizations o WHERE o.id = p.organization_id AND o.name = 'Central Trabalhista';
 
 -- ===== Pedido de correção (§6) — só service_role (edge process-classification) =====
 -- Avisa quem pode liberar: perfis com ferramentas.liberar_correcao e o Admin (perfil de sistema).

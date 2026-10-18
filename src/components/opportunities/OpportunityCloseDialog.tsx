@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useRegistryLookup } from '@/hooks/useRegistryLookup';
 import { supabase } from '@/integrations/supabase/client';
-import { evaluateOpportunityClose, transitionOpportunityStage, type OpportunityCloseEvaluation, classificationMissing, policyMissingCount } from '@/lib/opportunityClose';
+import { evaluateOpportunityClose, transitionOpportunityStage, type OpportunityCloseEvaluation } from '@/lib/opportunityClose';
 
 interface Props {
   open: boolean;
@@ -87,10 +87,8 @@ export function OpportunityCloseDialog(props: Props) {
     }
   };
 
-  const pcMissing = classificationMissing(evaluation);
-  // A classificação do processo bloqueia em qualquer modo e não aceita "forçar ganho" (o banco também barra).
-  const blocked = (evaluation?.mode === 'enforce' && !evaluation.can_close) || pcMissing;
-  const canOverride = blocked && !pcMissing && evaluation?.override_allowed;
+  const blocked = evaluation?.mode === 'enforce' && !evaluation.can_close;
+  const canOverride = blocked && evaluation?.override_allowed;
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
@@ -117,7 +115,7 @@ export function OpportunityCloseDialog(props: Props) {
             </div>
           )}
           {evaluation?.fallback_used && <Alert><WarningCircle /><AlertTitle>Contingência do provedor</AlertTitle><AlertDescription>O CPF é matematicamente válido e houve indisponibilidade real registrada há menos de 30 minutos. O ganho será auditado.</AlertDescription></Alert>}
-          {evaluation?.mode === 'monitor' && policyMissingCount(evaluation) > 0 && <Alert><WarningCircle /><AlertTitle>Modo monitor</AlertTitle><AlertDescription>Existem pendências, mas elas ainda não bloqueiam esta operação.</AlertDescription></Alert>}
+          {evaluation?.mode === 'monitor' && evaluation.missing_count > 0 && <Alert><WarningCircle /><AlertTitle>Modo monitor</AlertTitle><AlertDescription>Existem pendências, mas elas ainda não bloqueiam esta operação.</AlertDescription></Alert>}
           {canOverride && <div className="rounded-lg border border-amber-300 p-3 space-y-3"><label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} /> Forçar ganho como administrador</label>{override && <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Informe o motivo (mínimo de 5 caracteres)" />}</div>}
         </div>
         <DialogFooter><Button variant="outline" onClick={() => props.onOpenChange(false)} disabled={loading}>Cancelar</Button><Button onClick={confirm} disabled={loading || checkingCpf || !evaluation || (blocked && !(override && reason.trim().length >= 5))}>{loading && <SpinnerGap className="mr-2 animate-spin" />}Confirmar ganho</Button></DialogFooter>

@@ -84,27 +84,27 @@ bun test src/components/process-classification src/lib/permissions
 bun run build && node scripts/check-seller-bundle.mjs
 ```
 
-## Fase 3 — correção pelo gestor, configurações do widget e bloqueio de "ganha"
+## Fase 3 — correção pelo gestor, configurações do widget e exigência para ganhar
 
 | Peça | Onde |
 |---|---|
-| Migração (configuração "exigir", bloqueio, RPCs de correção) | `supabase/migrations/20261018150000_process_classification_f3.sql` |
+| Migração (exigência na política, RPCs de correção e de configuração) | `supabase/migrations/20261018150000_process_classification_f3.sql` |
 | Rollback (devolve o avaliador idêntico ao da e3d1) | `supabase/rollback/20261018150000_process_classification_f3_DOWN.sql` |
 | Edge: `request_correction`, `decide_correction`; `get_state` diz quem pode pedir/decidir | `supabase/functions/process-classification/index.ts` |
 | Botão do vendedor e painel Liberar/Recusar do gestor | `src/components/process-classification/ProcessClassificationCard.tsx`, `ResumoEntrada.tsx` |
 | Configurações do widget (Geral + Calibração) | `src/components/process-classification/settings/ProcessClassificationSettings.tsx` |
 | Página de configuração genérica de widgets | `src/pages/settings/WidgetSettingsPage.tsx` (`/settings/widgets/:key`) |
 
-**Quando o bloqueio de "ganha" vale** (`pc_required_for_won`): widget ligado **e** "Exigir classificação para marcar como ganha" = sim (padrão) **e** calibração publicada. Sem calibração, nada é bloqueado (protege orgs que liguem o widget por engano).
-
-**Duas camadas:**
-1. Item `process_classification` no avaliador de fechamento: aparece no diálogo de ganhar e no card de prontidão, e barra mesmo com a política em `monitor`. Não aceita "forçar ganho como administrador".
-2. Trigger `trg_guard_won_requires_classification`: barra Kanban, lote e update direto. Só vale para **mudar** para ganha; importar oportunidade já ganha não é barrado.
+**Exigir classificação para ganhar = mesmo mecanismo dos documentos** (decisão do Lucas):
+- A regra mora em `opportunity_close_policies.require_process_classification` (fonte única). Dá para marcar em Configurações de oportunidade (aparece com o widget ligado) ou na aba Geral do widget; os dois editam o mesmo campo.
+- Vira o item "Classificação do processo" no avaliador de fechamento e segue o **modo da política**: Monitorar só avisa; Aplicar e bloquear barra pelo guard que já existe (detalhe, Kanban, lote), com o mesmo "forçar ganho" do admin.
+- O item só aparece com a exigência marcada **e** o widget ligado **e** calibração publicada.
+- A migração marca a exigência na Central Trabalhista; se a política dela estiver em Monitorar, só avisa até mudar para Aplicar.
 
 **Correção (§6):** o vendedor pede → avisa (notificação) todos com `ferramentas.liberar_correcao` e o Admin → o gestor abre a oportunidade, vê as respostas, a faixa e a comissão → libera (a classificação atual continua valendo até a nova) ou recusa com motivo (o vendedor é avisado). Ninguém decide o próprio pedido. Com a oportunidade fechada, nada se mexe.
 
 **Configurações** (`/settings/widgets/process_classification`):
-- Aba **Geral** (quem gerencia Configurações): exigir classificação para ganhar (sim/não), limite de classificações por vendedor em 24 h, situação da calibração.
+- Aba **Geral** (quem gerencia Configurações): exigir classificação para ganhar (com o modo atual da política e link para mudá-lo), limite de classificações por vendedor em 24 h, situação da calibração.
 - Aba **Calibração** (`administracao.calibrar_classificacao` ou `publicar_calibracao`, por padrão só Admin): mostra a versão publicada; edição chega na Fase 4.
 
 ```
