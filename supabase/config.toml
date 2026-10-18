@@ -164,3 +164,7 @@ verify_jwt = false
 # JWT validado em código (getUser + user_organizations + permissão RBAC v2).
 [functions.process-classification]
 verify_jwt = false
+
+# Calibração da classificação (Fase 4). JWT validado em código + permissões RBAC v2.
+[functions.process-classification-admin]
+verify_jwt = false

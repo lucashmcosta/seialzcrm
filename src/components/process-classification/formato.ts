@@ -1,7 +1,9 @@
 import type { Faixa } from './api';
 
-const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 2 });
-export const formatarBRL = (v: number) => brl.format(v);
+const brlInteiro = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const brlCentavos = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** R$ 200 (inteiro) ou R$ 38.221,60 (com centavos sempre em duas casas). */
+export const formatarBRL = (v: number) => (Number.isInteger(Math.round(v * 100) / 100) ? brlInteiro : brlCentavos).format(v);
 
 /** "18/10/2026 às 14:05" */
 export function dataHora(iso: string): string {

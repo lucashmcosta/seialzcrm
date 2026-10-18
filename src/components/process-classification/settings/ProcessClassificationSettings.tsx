@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProcessClassificationEnabled } from '../useProcessClassificationEnabled';
 import { dataHora } from '../formato';
 import { tabelaClassificacao } from '../api';
+import { CalibracaoTab } from './calibracao/CalibracaoTab';
 
 interface VersaoPublicada { number: number; published_at: string; note: string | null }
 
@@ -40,7 +41,7 @@ export default function ProcessClassificationSettings({ organizationId }: { orga
         </TabsTrigger>
       </TabsList>
       {podeGeral && <TabsContent value="geral"><Geral organizationId={organizationId} podeVerVersao={podeCalibrar} /></TabsContent>}
-      {podeCalibrar && <TabsContent value="calibracao"><Calibracao organizationId={organizationId} /></TabsContent>}
+      {podeCalibrar && <TabsContent value="calibracao"><CalibracaoTab organizationId={organizationId} /></TabsContent>}
     </Tabs>
   );
 }
@@ -158,25 +159,5 @@ function Geral({ organizationId, podeVerVersao }: { organizationId: string; pode
         </p>
       )}
     </div>
-  );
-}
-
-/** Aba Calibração (só Admin por padrão). A edição com versões, simulador e prévia de impacto chega na Fase 4. */
-function Calibracao({ organizationId }: { organizationId: string }) {
-  const { data: versao, isLoading } = useVersaoPublicada(organizationId, true);
-  if (isLoading) return null;
-  return (
-    <Card className="mt-2">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Calibração</CardTitle>
-        <CardDescription>Chances, valores, faixas e comissões usados para classificar. Cada publicação vira uma versão que não muda mais.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2 text-sm">
-        {versao
-          ? <p>Versão publicada: <strong>v{versao.number}</strong> ({dataHora(versao.published_at)}){versao.note ? ` — ${versao.note}` : ''}.</p>
-          : <p>Nenhuma versão publicada.</p>}
-        <p className="text-muted-foreground">Em breve aqui: editar o rascunho, simular um caso, ver o impacto antes de publicar, histórico de versões, importar e exportar.</p>
-      </CardContent>
-    </Card>
   );
 }

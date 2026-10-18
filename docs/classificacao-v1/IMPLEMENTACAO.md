@@ -152,6 +152,32 @@ Para ligar: aceitar `classification.certified` no `nammux-webhook-ingest`, canon
 psql -d BANCO_DESCARTAVEL -v ON_ERROR_STOP=1 -f supabase/tests/process_classification_fixture.sql -f supabase/tests/process_classification_certification.sql
 ```
 
+## Fase 4 — calibração (aba Calibração do widget)
+
+`/settings/widgets/process_classification` → aba **Calibração** (`administracao.calibrar_classificacao` ou `publicar_calibracao`; por padrão só o Admin).
+
+| Peça | Onde |
+|---|---|
+| Edge da calibração (tudo que calcula roda aqui, com o mesmo `motor.mjs`) | `supabase/functions/process-classification-admin/index.ts` + `logic.ts` |
+| Migração (rascunho com concorrência, descartar, publicar transacional) | `supabase/migrations/20261018190000_process_classification_calibration.sql` |
+| Rollback | `supabase/rollback/20261018190000_process_classification_calibration_DOWN.sql` |
+| Tela | `src/components/process-classification/settings/calibracao/` |
+
+- **Editor:** Teses (as 13, com busca; cada número com o rótulo e o "porquê" do catálogo), Faixas e comissão (limites, comissões, peso do tamanho, base, 10 faixas de score e a **matriz faixa por valor × faixa de score**), Geral, Histórico. O que mudou em relação à publicada fica destacado com o valor antigo.
+- **Rascunho salvo sozinho** (~800 ms). Dois admins: quem salvar com uma versão velha recebe "outra pessoa alterou" em vez de sobrescrever.
+- **Simular:** o mesmo passo a passo do vendedor; resultado completo (chance, valor, detalhe e selo por tese; score, composto, faixa, comissão), calculado com o rascunho.
+- **Prévia de impacto:** recalcula com o rascunho as classificações ativas dos últimos N dias (padrão 90): sobem/descem/ficam, matriz atual × nova, comissão total, por vendedor e os casos que mais mudam. Não grava nada.
+- **Publicar:** o servidor confere de novo (`conferirCalibracao`), exige nota e que haja mudança; arquiva a atual e publica na mesma transação. Classificações antigas mantêm a versão e a comissão.
+- **Histórico, restaurar, importar e exportar:** restaurar (versão antiga ou padrão) e importar (JSON do protótipo; lista o que foi ignorado) viram rascunho e nunca publicam direto.
+- **Matriz:** o motor não exporta essa fórmula; ela é repetida no servidor e conferida contra o `calcularCaso` nos 400 casos-ouro (`logic.test.ts`).
+- O navegador do admin recebe números e resultados, mas **nunca o motor nem a semente**: a checagem do bundle procura valores da semente (`score_faixas:[…`, `selo_forte:…`) e o cálculo do motor, e falha se aparecerem.
+
+```
+deno test supabase/functions/process-classification-admin/logic.test.ts --allow-read
+psql -d BANCO_DESCARTAVEL -v ON_ERROR_STOP=1 -f supabase/tests/process_classification_fixture.sql -f supabase/tests/process_classification_calibration.sql
+bun test src/components/process-classification
+```
+
 ## Pontos para o jurídico (não alterados no motor)
 
 1. **"Recebeu a rescisão?" em "Sem registro".** A tela esconde a pergunta, mas o motor lê `resc` se ela vier na entrada (`motor.ts`, verbas rescisórias). Como a SPEC manda não enviar perguntas escondidas, o motor assume `nada` (verbas cheias) quando a saída é "Sem registro" e o 13º/férias eram pagos. Nos casos-ouro, 6 casos aleatórios divergem só por isso. Confirmar com o Renan se é o comportamento desejado.

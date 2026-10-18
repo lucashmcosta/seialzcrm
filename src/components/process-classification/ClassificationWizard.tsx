@@ -25,8 +25,14 @@ const rotuloDe = (p: Pergunta, r: Record<string, unknown>, c: ReturnType<typeof 
 const opcoesDe = (p: Pergunta, r: Record<string, unknown>, c: ReturnType<typeof contexto>) =>
   (typeof p.opcoes === 'function' ? p.opcoes(r as never, c, undefined as never) : p.opcoes) ?? [];
 
-/** Assistente do vendedor (§5.2) + "Analisando…" + revelação (§5.4). */
-export function ClassificationWizard({ opportunityId, onDone }: { opportunityId: string; onDone: () => void }) {
+/**
+ * Assistente do vendedor (§5.2) + "Analisando…" + revelação (§5.4).
+ * Com `onSimular` (tela de calibração do admin, §8.1): as mesmas perguntas, mas o fim chama a simulação no servidor
+ * em vez de gravar uma classificação.
+ */
+export function ClassificationWizard({ opportunityId, onDone, onSimular }: {
+  opportunityId: string; onDone: () => void; onSimular?: (entrada: Record<string, unknown>) => Promise<void>;
+}) {
   const [r, setR] = useState<Rascunho>(rascunhoInicial);
   const [i, setI] = useState(0);
   const [tentouAvancar, setTentouAvancar] = useState(false);
@@ -147,7 +153,7 @@ export function ClassificationWizard({ opportunityId, onDone }: { opportunityId:
       <div className="flex gap-2 border-t pt-4">
         <Button variant="outline" onClick={voltar} disabled={i === 0} className="flex-1">Voltar</Button>
         {ultimo
-          ? <Button onClick={finalizar} className="flex-1">Finalizar</Button>
+          ? <Button onClick={onSimular ? () => onSimular(montarEntrada(r)) : finalizar} className="flex-1">{onSimular ? 'Simular' : 'Finalizar'}</Button>
           : <Button onClick={avancar} className="flex-1" aria-disabled={!!bloqueio}>Próximo</Button>}
       </div>
     </div>
