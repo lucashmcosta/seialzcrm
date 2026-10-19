@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
     if (action === "get_state") {
       const liberador = podeLiberar(perms) && !isOwner;
       const certificador = podeCertificar(perms);
-      if (!isOwner && !podeVerTodas(perms) && !liberador && !certificador) return json(403, { error: "forbidden" });
+      if (!isOwner && !isSystemAdmin && !podeVerTodas(perms) && !liberador && !certificador) return json(403, { error: "forbidden" });
       const { data: ativa } = await db.from("process_classifications")
         .select("id, band, commission, in_review, created_at, input, seller_user_id").eq("opportunity_id", opportunityId).eq("status", "active").maybeSingle();
       let pedido: Pedido | null = null;
@@ -108,6 +108,8 @@ Deno.serve(async (req) => {
         pedido: pedido ? { status: pedido.status, criadoEm: pedido.created_at, motivo: pedido.reason } : null,
         // §6.2: para decidir, o gestor vê as respostas do vendedor (a Entrada não tem números calculados).
         respostas: podeDecidir || podeCertificarAgora ? (cert?.input ?? ativa?.input ?? null) : null,
+        // o que o vendedor preencheu, para quem pode ver esta classificação (só respostas, sem números calculados)
+        respostasVendedor: ativa?.input ?? null,
         podeCertificar: podeCertificarAgora,
         refazendoCertificacao: podeCertificarAgora && !!cert,
         certificacao: cert ? {
