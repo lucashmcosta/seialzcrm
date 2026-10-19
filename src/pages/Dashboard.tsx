@@ -20,6 +20,7 @@ import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useHomeDashboardStats } from '@/hooks/useHomeDashboardStats';
+import { DashboardCommissions } from '@/components/process-classification/DashboardCommissions';
 
 interface OppRow {
   id: string;
@@ -365,6 +366,8 @@ export default function Dashboard() {
             })}
           </div>
 
+          <DashboardCommissions fromDay={toDayStr(from)} toDay={toDayStr(to)}
+            sellerId={canViewAll && ownerId !== 'all' ? ownerId : null} />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 h-full">

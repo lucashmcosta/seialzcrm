@@ -4,6 +4,7 @@ import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { TrendUp, CheckCircle, ChartLineUp, ArrowUp, ArrowDown, Minus } from '@phosphor-icons/react';
+import { DashboardCommissions } from '@/components/process-classification/DashboardCommissions';
 
 const periods = [
   { value: '1', label: 'Hoje' },
@@ -188,6 +189,12 @@ export function MobileDashboard() {
           </div>
         ))}
       </div>
+
+      {userProfile && <DashboardCommissions fromDay={diaLocal(diasAtras(parseInt(period) - 1))} toDay={diaLocal(new Date())} sellerId={userProfile.id} />}
     </div>
   );
 }
+
+const diaLocal = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const diasAtras = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return d; };
