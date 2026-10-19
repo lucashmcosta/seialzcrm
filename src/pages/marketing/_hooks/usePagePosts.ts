@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -48,7 +49,7 @@ export function useDeletePost(orgId?: string) {
         body: { organization_id: orgId, action: 'delete', ...input },
       });
       if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || 'Falha ao apagar');
+      if (!data?.ok) throw new Error(data?.error || uiText("Falha ao apagar"));
       return true;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['page-posts', orgId] }); },

@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -18,11 +20,12 @@ import { toast } from 'sonner';
 function statusBadge(c: Campaign) {
   const active = c.status === 'ACTIVE';
   return active
-    ? <Badge variant="outline" className="gap-1 text-[10px] border-green-300 text-green-700"><Play className="h-3 w-3" weight="fill" />Ativa</Badge>
-    : <Badge variant="secondary" className="gap-1 text-[10px]"><Pause className="h-3 w-3" weight="fill" />Pausada</Badge>;
+    ? <Badge variant="outline" className="gap-1 text-[10px] border-green-300 text-green-700"><Play className="h-3 w-3" weight="fill" />{uiText("Ativa")}</Badge>
+    : <Badge variant="secondary" className="gap-1 text-[10px]"><Pause className="h-3 w-3" weight="fill" />{uiText("Pausada")}</Badge>;
 }
 
 export default function MarketingCampaigns() {
+  useUiLocale();
   const { organization } = useOrganization();
   const orgId = organization?.id;
   const { enabled, loading: flagLoading } = useMarketingPublishingFlag(orgId);
@@ -32,7 +35,7 @@ export default function MarketingCampaigns() {
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   if (!orgId || flagLoading) {
-    return <MarketingLayout title="Campanhas"><Skeleton className="h-40 w-full" /></MarketingLayout>;
+    return <MarketingLayout title={uiText("Campanhas")}><Skeleton className="h-40 w-full" /></MarketingLayout>;
   }
   if (!enabled) return <Navigate to="/marketing" replace />;
 
@@ -41,25 +44,25 @@ export default function MarketingCampaigns() {
     setPendingId(c.id); setConfirming(null);
     try {
       await setStatus.mutateAsync({ campaign_id: c.id, status: next });
-      toast.success(next === 'PAUSED' ? 'Campanha pausada' : 'Campanha ativada');
-    } catch (e) { toast.error((e as Error)?.message || 'Falha'); }
+      toast.success(next === 'PAUSED' ? uiText("Campanha pausada") : uiText("Campanha ativada"));
+    } catch (e) { toast.error(uiError((e as Error)?.message || uiText("Falha"))); }
     finally { setPendingId(null); }
   };
 
   const campaigns = list.data ?? [];
 
   return (
-    <MarketingLayout title="Campanhas">
+    <MarketingLayout title={uiText("Campanhas")}>
       <Card className="p-0 overflow-hidden max-w-3xl">
         <div className="p-3 border-b border-border flex items-center gap-2">
           <Megaphone size={18} className="text-primary" />
           <div>
-            <h2 className="text-sm font-semibold">Campanhas de anúncio</h2>
-            <p className="text-xs text-muted-foreground">Pause ou ative campanhas da conta de anúncios direto do CRM.</p>
+            <h2 className="text-sm font-semibold">{uiText("Campanhas de anúncio")}</h2>
+            <p className="text-xs text-muted-foreground">{uiText("Pause ou ative campanhas da conta de anúncios direto do CRM.")}</p>
           </div>
         </div>
         {list.isLoading ? <div className="p-3 space-y-2"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>
-          : campaigns.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Nenhuma campanha encontrada.</p>
+          : campaigns.length === 0 ? <p className="p-4 text-sm text-muted-foreground">{uiText("Nenhuma campanha encontrada.")}</p>
           : campaigns.map((c) => (
             <div key={c.id} className="flex items-center justify-between gap-3 p-3 border-b border-border last:border-0">
               <div className="min-w-0">
@@ -70,8 +73,8 @@ export default function MarketingCampaigns() {
                 {statusBadge(c)}
                 <Button variant="outline" size="sm" className="h-8" disabled={pendingId === c.id} onClick={() => setConfirming(c)}>
                   {pendingId === c.id ? <SpinnerGap className="h-4 w-4 animate-spin" />
-                    : c.status === 'ACTIVE' ? <><Pause className="h-3.5 w-3.5 mr-1" />Pausar</>
-                    : <><Play className="h-3.5 w-3.5 mr-1" />Ativar</>}
+                    : c.status === 'ACTIVE' ? <><Pause className="h-3.5 w-3.5 mr-1" />{uiText("Pausar")}</>
+                    : <><Play className="h-3.5 w-3.5 mr-1" />{uiText("Ativar")}</>}
                 </Button>
               </div>
             </div>
@@ -81,16 +84,16 @@ export default function MarketingCampaigns() {
       <AlertDialog open={!!confirming} onOpenChange={(o) => !o && setConfirming(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{confirming?.status === 'ACTIVE' ? 'Pausar campanha?' : 'Ativar campanha?'}</AlertDialogTitle>
+            <AlertDialogTitle>{confirming?.status === 'ACTIVE' ? uiText("Pausar campanha?") : uiText("Ativar campanha?")}</AlertDialogTitle>
             <AlertDialogDescription>
               {confirming?.status === 'ACTIVE'
-                ? `"${confirming?.name}" vai parar de ser entregue (sem novos gastos) até ser reativada.`
-                : `"${confirming?.name}" volta a ser entregue e pode gerar gastos.`}
+                ? uiText("\"{0}\" vai parar de ser entregue (sem novos gastos) até ser reativada.", {"0": confirming?.name})
+                : uiText("\"{0}\" volta a ser entregue e pode gerar gastos.", {"0": confirming?.name})}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => confirming && doToggle(confirming)}>Confirmar</AlertDialogAction>
+            <AlertDialogCancel>{uiText("Cancelar")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirming && doToggle(confirming)}>{uiText("Confirmar")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

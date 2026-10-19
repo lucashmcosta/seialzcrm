@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -32,7 +33,7 @@ export function useSetCampaignStatus(orgId?: string) {
         body: { organization_id: orgId, action: 'set_status', ...i },
       });
       if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || 'Falha');
+      if (!data?.ok) throw new Error(data?.error || uiText("Falha"));
       return data;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['ad-campaigns', orgId] }); },

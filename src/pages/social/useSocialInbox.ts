@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -69,7 +70,7 @@ export function useSocialMessages(
         },
       });
       if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || 'Falha ao carregar mensagens');
+      if (!data?.ok) throw new Error(data?.error || uiText("Falha ao carregar mensagens"));
       return (data?.messages ?? []) as SocialMessage[];
     },
   });
@@ -115,7 +116,7 @@ export function useSendSocialMessage(orgId?: string) {
         body: { organization_id: orgId, action: 'send', ...i },
       });
       if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || 'Falha ao enviar');
+      if (!data?.ok) throw new Error(data?.error || uiText("Falha ao enviar"));
       return data;
     },
     // Optimistic UI: a bolha aparece na hora e o request continua por trás.

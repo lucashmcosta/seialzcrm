@@ -1,14 +1,15 @@
+import { getUiLocale, uiDateLocale, uiDatePattern } from '@/lib/ui-locale';
 export const fmtBRL = (v: number | null | undefined) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 }).format(Number(v || 0));
+  new Intl.NumberFormat(getUiLocale(), { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 }).format(Number(v || 0));
 
 export const fmtInt = (v: number | null | undefined) =>
-  new Intl.NumberFormat('pt-BR').format(Math.round(Number(v || 0)));
+  new Intl.NumberFormat(getUiLocale()).format(Math.round(Number(v || 0)));
 
 export const fmtPct = (v: number | null | undefined, digits = 1) =>
-  `${(Number(v || 0)).toFixed(digits)}%`;
+  `${new Intl.NumberFormat(getUiLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(Number(v || 0))}%`;
 
 export const fmtRoas = (v: number | null | undefined) =>
-  v == null ? '—' : `${Number(v).toFixed(2)}x`;
+  v == null ? '—' : `${new Intl.NumberFormat(getUiLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v))}x`;
 
 export const fmtDateBR = (d: string | Date) => {
   let date: Date;
@@ -19,7 +20,7 @@ export const fmtDateBR = (d: string | Date) => {
   } else {
     date = d;
   }
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  return date.toLocaleDateString(getUiLocale(), { day: '2-digit', month: '2-digit', year: '2-digit' });
 };
 
 export const computeDelta = (current: number, previous: number): number | null => {

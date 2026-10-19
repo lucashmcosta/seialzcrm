@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 // Adiciona um endpoint adicional na MESMA WABA já conectada.
 // NÃO altera a integração existente nem o endpoint "principal".
 // Reaproveita o systemUserToken/appSecret/verifyToken já cifrados na integração.
@@ -38,6 +40,7 @@ export function AddMetaWhatsAppNumberDialog({
   wabaId,
   appId,
 }: Props) {
+  useUiLocale();
   const qc = useQueryClient();
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [phoneE164, setPhoneE164] = useState("");
@@ -78,7 +81,7 @@ export function AddMetaWhatsAppNumberDialog({
       });
     },
     onSuccess: () => {
-      toast.success("Novo número Meta adicionado");
+      toast.success(uiText("Novo número Meta adicionado"));
       qc.invalidateQueries({ queryKey: ["meta-additional-endpoints", organizationId] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       reset();
@@ -92,27 +95,27 @@ export function AddMetaWhatsAppNumberDialog({
           senderSid: e.info.existing_sender_sid,
         });
         setMigrateOpen(true);
-        toast.message("Número já existe nesta organização", {
-          description: `Provider atual: ${e.info.existing_provider}. Use o diálogo de migração para trocar o provider preservando o histórico.`,
+        toast.message(uiText("Número já existe nesta organização"), {
+          description: uiText("Provider atual: {0}. Use o diálogo de migração para trocar o provider preservando o histórico.", {"0": e.info.existing_provider}),
         });
         return;
       }
       if (e instanceof MetaWhatsAppValidationError) {
-        toast.error("A Meta recusou a validação", {
-          description: "Confira phone_number_id e WABA. Se necessário, use 'Salvar sem validar'.",
+        toast.error(uiText("A Meta recusou a validação"), {
+          description: uiText("Confira phone_number_id e WABA. Se necessário, use 'Salvar sem validar'."),
         });
         return;
       }
       const msg: string = e?.message ?? String(e);
       if (msg.includes("waba_mismatch")) {
-        toast.error("WABA divergente — número precisa pertencer à mesma WABA da integração.");
+        toast.error(uiText("WABA divergente — número precisa pertencer à mesma WABA da integração."));
         return;
       }
       if (msg.includes("integration_not_connected")) {
-        toast.error("Conecte a integração principal antes de adicionar números.");
+        toast.error(uiText("Conecte a integração principal antes de adicionar números."));
         return;
       }
-      toast.error(`Falha ao adicionar: ${msg}`);
+      toast.error(uiError(msg));
     },
   });
 
@@ -133,21 +136,19 @@ export function AddMetaWhatsAppNumberDialog({
     >
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Adicionar número desta WABA</DialogTitle>
+          <DialogTitle>{uiText("Adicionar número desta WABA")}</DialogTitle>
           <DialogDescription>
-            Cadastra um novo endpoint Meta Cloud reutilizando o App e a WABA já conectados.
-            O token e segredos da integração principal são reaproveitados — não precisa colá-los de novo.
-          </DialogDescription>
+            {uiText("Cadastra um novo endpoint Meta Cloud reutilizando o App e a WABA já conectados. O token e segredos da integração principal são reaproveitados — não precisa colá-los de novo.")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
-              <Label className="text-muted-foreground text-[11px]">WABA ID (reutilizado)</Label>
+              <Label className="text-muted-foreground text-[11px]">{uiText("WABA ID (reutilizado)")}</Label>
               <p className="font-mono break-all">{wabaId}</p>
             </div>
             <div>
-              <Label className="text-muted-foreground text-[11px]">App ID (reutilizado)</Label>
+              <Label className="text-muted-foreground text-[11px]">{uiText("App ID (reutilizado)")}</Label>
               <p className="font-mono break-all">{appId}</p>
             </div>
           </div>
@@ -163,7 +164,7 @@ export function AddMetaWhatsAppNumberDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="add-meta-phone-e164">Número (E.164) *</Label>
+            <Label htmlFor="add-meta-phone-e164">{uiText("Número (E.164) *")}</Label>
             <Input
               id="add-meta-phone-e164"
               value={phoneE164}
@@ -173,11 +174,11 @@ export function AddMetaWhatsAppNumberDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="add-meta-display-name">Apelido (opcional)</Label>
+            <Label htmlFor="add-meta-display-name">{uiText("Apelido (opcional)")}</Label>
             <Input
               id="add-meta-display-name"
               value={displayName}
-              placeholder="Ex.: Atendimento SP"
+              placeholder={uiText("Ex.: Atendimento SP")}
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={100}
             />
@@ -196,23 +197,20 @@ export function AddMetaWhatsAppNumberDialog({
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={addMutation.isPending}>
-            Cancelar
-          </Button>
+            {uiText("Cancelar")}</Button>
           <Button
             variant="outline"
             onClick={() => addMutation.mutate({ skipMetaValidation: true })}
             disabled={!canSubmit}
-            title="Salva sem chamar a Graph API da Meta."
+            title={uiText("Salva sem chamar a Graph API da Meta.")}
           >
-            Salvar sem validar
-          </Button>
+            {uiText("Salvar sem validar")}</Button>
           <Button
             onClick={() => addMutation.mutate({})}
             disabled={!canSubmit}
           >
             {addMutation.isPending && <ArrowsClockwise className="h-4 w-4 mr-2 animate-spin" />}
-            Validar na Meta e adicionar
-          </Button>
+            {uiText("Validar na Meta e adicionar")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

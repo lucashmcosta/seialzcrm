@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -34,7 +35,7 @@ async function invokeComment(orgId: string | undefined, body: Record<string, unk
     body: { organization_id: orgId, ...body },
   });
   if (error) throw error;
-  if (!data?.ok) throw new Error(data?.error || 'Falha');
+  if (!data?.ok) throw new Error(data?.error || uiText("Falha"));
   return data;
 }
 

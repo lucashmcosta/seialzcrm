@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { Link } from 'react-router-dom';
 import { useOrganization } from '@/hooks/useOrganization';
 import { MarketingLayout } from './_components/MarketingLayout';
@@ -16,6 +17,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function MarketingOverview() {
+  useUiLocale();
   const { organization } = useOrganization();
   const orgId = organization?.id;
   const { preset, setPreset, custom, setCustom, range } = useMarketingPeriod('last_30');
@@ -37,33 +39,33 @@ export default function MarketingOverview() {
 
       {/* KPI grid 3x2 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <MetricCard label="Investido" value={fmtBRL(k?.spend ?? 0)} current={k?.spend} previous={p?.spend} loading={loading} />
-        <MetricCard label="Impressões" value={fmtInt(k?.impressions ?? 0)} current={k?.impressions} previous={p?.impressions} loading={loading} mono />
-        <MetricCard label="Cliques" value={fmtInt(k?.clicks ?? 0)} current={k?.clicks} previous={p?.clicks} loading={loading} mono />
-        <MetricCard label="Contatos (CRM)" value={fmtInt(k?.leads ?? 0)} current={k?.leads} previous={p?.leads} loading={loading} accent="success" />
+        <MetricCard label={uiText("Investido")} value={fmtBRL(k?.spend ?? 0)} current={k?.spend} previous={p?.spend} loading={loading} />
+        <MetricCard label={uiText("Impressões")} value={fmtInt(k?.impressions ?? 0)} current={k?.impressions} previous={p?.impressions} loading={loading} mono />
+        <MetricCard label={uiText("Cliques")} value={fmtInt(k?.clicks ?? 0)} current={k?.clicks} previous={p?.clicks} loading={loading} mono />
+        <MetricCard label={uiText("Contatos (CRM)")} value={fmtInt(k?.leads ?? 0)} current={k?.leads} previous={p?.leads} loading={loading} accent="success" />
 
-        <MetricCard label="Oportunidades abertas" value={fmtInt(k?.opps_open ?? 0)} current={k?.opps_open} previous={p?.opps_open} loading={loading} />
+        <MetricCard label={uiText("Oportunidades abertas")} value={fmtInt(k?.opps_open ?? 0)} current={k?.opps_open} previous={p?.opps_open} loading={loading} />
         <MetricCard label="Wins" value={fmtInt(k?.wins ?? 0)} current={k?.wins} previous={p?.wins} loading={loading} accent="success" />
       </div>
 
       {/* Secondary metrics 4x1 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard label="CPL real" value={k?.cpl_real != null ? fmtBRL(k.cpl_real) : '—'} loading={loading} accent="warning" />
+        <MetricCard label={uiText("CPL real")} value={k?.cpl_real != null ? fmtBRL(k.cpl_real) : '—'} loading={loading} accent="warning" />
         <MetricCard label="CAC" value={k?.cac != null ? fmtBRL(k.cac) : '—'} loading={loading} accent="warning" />
         <MetricCard label="ROAS" value={fmtRoas(k?.roas)} loading={loading} accent={k?.roas && k.roas >= 1 ? 'success' : 'destructive'} />
-        <MetricCard label="Contato → Opp" value={k?.lead_to_opp_pct != null ? fmtPct(k.lead_to_opp_pct) : '—'} loading={loading} />
+        <MetricCard label={uiText("Contato → Opp")} value={k?.lead_to_opp_pct != null ? fmtPct(k.lead_to_opp_pct) : '—'} loading={loading} />
       </div>
 
       {/* Time series */}
       <div className="rounded-md border border-border bg-card p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">Investimento × Contatos por dia</h3>
-          <span className="text-xs text-muted-foreground">{ts.data?.length || 0} dias</span>
+          <h3 className="text-sm font-semibold">{uiText("Investimento × Contatos por dia")}</h3>
+          <span className="text-xs text-muted-foreground">{ts.data?.length || 0} {uiText("dias")}</span>
         </div>
         {ts.isLoading ? (
           <ChartSkeleton />
         ) : !ts.data || ts.data.length === 0 ? (
-          <EmptyState title="Sem dados no período" hint="O sync diário roda às 03:00 BRT — verifique se há ads ativos." />
+          <EmptyState title={uiText("Sem dados no período")} hint={uiText("O sync diário roda às 03:00 BRT — verifique se há ads ativos.")} />
         ) : (
           <div style={{ width: '100%', height: 300 }}>
             <ResponsiveContainer>
@@ -77,8 +79,8 @@ export default function MarketingOverview() {
                   formatter={(v: any, name: string) => name === 'spend' ? fmtBRL(v) : fmtInt(v)}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line yAxisId="left" type="monotone" dataKey="spend" name="Investido" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                <Line yAxisId="right" type="monotone" dataKey="leads" name="Contatos" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+                <Line yAxisId="left" type="monotone" dataKey="spend" name={uiText("Investido")} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="leads" name={uiText("Contatos")} stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -88,19 +90,19 @@ export default function MarketingOverview() {
       {/* Top 5 ads */}
       <div className="rounded-md border border-border bg-card p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">Top 5 ads por leads</h3>
-          <Link to="/marketing/ads" className="text-xs text-primary hover:underline">Ver todos →</Link>
+          <h3 className="text-sm font-semibold">{uiText("Top 5 ads por leads")}</h3>
+          <Link to="/marketing/ads" className="text-xs text-primary hover:underline">{uiText("Ver todos →")}</Link>
         </div>
         {topAds.isLoading ? <TableSkeleton rows={5} cols={4} /> : top5.length === 0 ? (
-          <EmptyState title="Nenhum ad com dados" />
+          <EmptyState title={uiText("Nenhum ad com dados")} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground border-b border-border">
                   <th className="py-2 pr-3 font-medium">Ad</th>
-                  <th className="py-2 px-3 font-medium text-right">Investido</th>
-                  <th className="py-2 px-3 font-medium text-right">Contatos</th>
+                  <th className="py-2 px-3 font-medium text-right">{uiText("Investido")}</th>
+                  <th className="py-2 px-3 font-medium text-right">{uiText("Contatos")}</th>
                   <th className="py-2 px-3 font-medium text-right">CPL</th>
                   <th className="py-2 px-3 font-medium text-right">Wins</th>
                   <th className="py-2 pl-3 font-medium text-right">ROAS</th>

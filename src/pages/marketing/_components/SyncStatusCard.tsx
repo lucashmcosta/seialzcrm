@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,26 +14,26 @@ interface Props {
 function formatRelative(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'agora';
-  if (mins < 60) return `há ${mins}min`;
+  if (mins < 1) return uiText("agora");
+  if (mins < 60) return uiText("há {0}min", {"0": mins});
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `há ${hours}h`;
+  if (hours < 24) return uiText("há {0}h", {"0": hours});
   const days = Math.floor(hours / 24);
-  return `há ${days}d`;
+  return uiText("há {0}d", {"0": days});
 }
 
 function normalizeSyncError(reason?: string | null): string {
   switch (reason) {
     case 'not_configured':
-      return 'Ads Manager não configurado.';
+      return uiText("Ads Manager não configurado.");
     case 'no_token':
-      return 'Token Meta ausente ou inválido.';
+      return uiText("Token Meta ausente ou inválido.");
     case 'decrypt_failed':
-      return 'Não foi possível ler o token Meta salvo.';
+      return uiText("Não foi possível ler o token Meta salvo.");
     case 'token_invalid':
-      return 'O token Meta expirou ou foi invalidado.';
+      return uiText("O token Meta expirou ou foi invalidado.");
     default:
-      return reason || 'A sincronização não retornou dados válidos.';
+      return reason || uiText("A sincronização não retornou dados válidos.");
   }
 }
 
@@ -66,13 +67,14 @@ function getSyncIssue(discoverData: any, insightsData: any): string | null {
   const noInsightWork = (insightsData?.ads_processed ?? 0) === 0 && (insightsData?.days_inserted ?? 0) === 0;
 
   if (noDiscoverWork && noInsightWork) {
-    return 'Nenhuma campanha elegível foi sincronizada.';
+    return uiText("Nenhuma campanha elegível foi sincronizada.");
   }
 
   return null;
 }
 
 export function SyncStatusCard({ orgId }: Props) {
+  useUiLocale();
   const qc = useQueryClient();
   const { permissions } = usePermissions();
   const [syncing, setSyncing] = useState(false);
@@ -128,12 +130,12 @@ export function SyncStatusCard({ orgId }: Props) {
       if (syncIssue) throw new Error(syncIssue);
 
       const details = [
-        (discoverData?.ads_created ?? 0) > 0 ? `${discoverData.ads_created} campanhas novas` : null,
-        (insightsData?.ads_processed ?? 0) > 0 ? `${insightsData.ads_processed} anúncios processados` : null,
-        (insightsData?.days_inserted ?? 0) > 0 ? `${insightsData.days_inserted} dias de insights` : null,
+        (discoverData?.ads_created ?? 0) > 0 ? uiText("{0} campanhas novas", {"0": discoverData.ads_created}) : null,
+        (insightsData?.ads_processed ?? 0) > 0 ? uiText("{0} anúncios processados", {"0": insightsData.ads_processed}) : null,
+        (insightsData?.days_inserted ?? 0) > 0 ? uiText("{0} dias de insights", {"0": insightsData.days_inserted}) : null,
       ].filter(Boolean).join(' • ');
 
-      toast.success('Sincronização concluída', {
+      toast.success(uiText("Sincronização concluída"), {
         description: details || undefined,
       });
       await qc.invalidateQueries({ queryKey: ['marketing-sync-status', orgId] });
@@ -141,7 +143,7 @@ export function SyncStatusCard({ orgId }: Props) {
       await qc.invalidateQueries({ queryKey: ['marketing-timeseries'] });
       await qc.invalidateQueries({ queryKey: ['marketing-ads'] });
     } catch (err: any) {
-      toast.error('Falha ao sincronizar', { description: err?.message ?? 'Tente novamente' });
+      toast.error(uiText("Falha ao sincronizar"), { description: err?.message ?? uiText("Tente novamente") });
     } finally {
       setSyncing(false);
     }
@@ -158,14 +160,13 @@ export function SyncStatusCard({ orgId }: Props) {
         <span className="text-muted-foreground">
           {lastSyncIso ? (
             <>
-              Última sincronização <span className="text-foreground">{formatRelative(lastSyncIso)}</span>
+              {uiText("Última sincronização")}<span className="text-foreground">{formatRelative(lastSyncIso)}</span>
               {' • '}
-              <span className="text-foreground font-mono">{status?.activeAds ?? 0}</span> ads ativos
-              {' • '}
-              <span className="text-xs">atualização automática diária</span>
+              <span className="text-foreground font-mono">{status?.activeAds ?? 0}</span> {uiText("ads ativos")}{' • '}
+              <span className="text-xs">{uiText("atualização automática diária")}</span>
             </>
           ) : (
-            'Sincronização automática diária — sem dados ainda'
+            uiText("Sincronização automática diária — sem dados ainda")
           )}
         </span>
       </div>
@@ -176,8 +177,8 @@ export function SyncStatusCard({ orgId }: Props) {
           variant="ghost"
           onClick={handleSync}
           disabled={syncing || !orgId}
-          title="Sincronizar agora (diagnóstico)"
-          aria-label="Sincronizar agora (diagnóstico)"
+          title={uiText("Sincronizar agora (diagnóstico)")}
+          aria-label={uiText("Sincronizar agora (diagnóstico)")}
         >
           <ArrowsClockwise size={14} weight={syncing ? 'bold' : 'regular'} className={syncing ? 'animate-spin' : ''} />
         </Button>

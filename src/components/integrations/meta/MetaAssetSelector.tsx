@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -25,6 +26,7 @@ const GROUPS: Array<[MetaAsset['asset_type'], string]> = [
 
 // Seleção explícita de quais ativos pertencem à organização (só 'selected' entra em sync).
 export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: string; onSaved?: () => void }) {
+  useUiLocale();
   const { organization } = useOrganization();
   const [assets, setAssets] = useState<MetaAsset[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -58,11 +60,11 @@ export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: str
         body: { organization_id: organization.id, connection_id: connectionId, selections },
       });
       if (error) throw error;
-      toast.success('Ativos da organização salvos.');
+      toast.success(uiText("Ativos da organização salvos."));
       onSaved?.();
       void load();
     } catch {
-      toast.error('Não foi possível salvar a seleção.');
+      toast.error(uiText("Não foi possível salvar a seleção."));
     } finally {
       setSaving(false);
     }
@@ -78,8 +80,7 @@ export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: str
   if (!assets.length) {
     return (
       <div className="rounded-md border border-dashed border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
-        Nenhum ativo descoberto ainda. Aguarde a descoberta ou reconecte.
-      </div>
+        {uiText("Nenhum ativo descoberto ainda. Aguarde a descoberta ou reconecte.")}</div>
     );
   }
 
@@ -90,7 +91,7 @@ export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: str
         if (!items.length) return null;
         return (
           <div key={type}>
-            <h4 className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</h4>
+            <h4 className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">{uiText(label)}</h4>
             <div className="space-y-1">
               {items.map((a) => (
                 <Label key={a.id} htmlFor={`asset-${a.id}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-normal hover:bg-muted/50">
@@ -109,7 +110,7 @@ export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: str
       })}
       <Button type="button" size="sm" disabled={saving} onClick={() => void save()}>
         {saving && <CircleNotch className="animate-spin" />}
-        {saving ? 'Salvando…' : 'Salvar seleção'}
+        {saving ? uiText("Salvando…") : uiText("Salvar seleção")}
       </Button>
     </div>
   );

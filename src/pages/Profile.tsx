@@ -1,3 +1,4 @@
+import { uiError } from '@/lib/ui-locale';
 import { profileName } from '@/lib/locale';
 import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
@@ -81,7 +82,7 @@ export default function Profile() {
     } catch (error: any) {
       toast({
         title: t('common.error'),
-        description: error.message,
+        description: uiError(error.message),
         variant: 'destructive',
       });
     } finally {
@@ -124,7 +125,7 @@ export default function Profile() {
     } catch (error: any) {
       toast({
         title: t('common.error'),
-        description: error.message,
+        description: uiError(error.message),
         variant: 'destructive',
       });
     } finally {
@@ -149,7 +150,7 @@ export default function Profile() {
       setConfirmPassword('');
       toast({ title: t('profile.passwordUpdated'), description: t('profile.passwordUpdatedDesc') });
     } catch (error: any) {
-      toast({ title: t('common.error'), description: error.message, variant: 'destructive' });
+      toast({ title: t('common.error'), description: uiError(error.message), variant: 'destructive' });
     } finally {
       setSavingPassword(false);
     }

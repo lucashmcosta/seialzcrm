@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -29,8 +31,8 @@ const DEFAULT_SETTINGS: InboundSettings = {
 const LIFECYCLE_OPTIONS = [
   { value: 'lead', label: 'Lead' },
   { value: 'subscriber', label: 'Subscriber' },
-  { value: 'opportunity', label: 'Oportunidade' },
-  { value: 'customer', label: 'Cliente' },
+  { value: 'opportunity', get label() { return uiText("Oportunidade"); } },
+  { value: 'customer', get label() { return uiText("Cliente"); } },
 ];
 
 interface Props {
@@ -39,6 +41,7 @@ interface Props {
 }
 
 export function EndpointInboundSettings({ endpointId, integrationFallback }: Props) {
+  useUiLocale();
   const { organization } = useOrganization();
   const queryClient = useQueryClient();
   const [useGeneral, setUseGeneral] = useState(true);
@@ -118,11 +121,11 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
         .update({ inbound_settings: payload })
         .eq('id', endpointId);
       if (error) throw error;
-      toast.success('Regras do número salvas!');
+      toast.success(uiText('Regras do número salvas!'));
       setHasChanges(false);
       queryClient.invalidateQueries({ queryKey: ['endpoint-inbound', endpointId] });
     } catch (err: any) {
-      toast.error('Erro ao salvar: ' + (err.message || 'Erro desconhecido'));
+      toast.error(uiError('Erro ao salvar: ' + (err.message || 'Erro desconhecido')));
     } finally {
       setSaving(false);
     }
@@ -142,9 +145,9 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
     <div className="space-y-4 border-t pt-4 mt-4">
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <Label className="text-sm font-semibold">Regras de Entrada deste número</Label>
+          <Label className="text-sm font-semibold">{uiText("Regras de Entrada deste número")}</Label>
           <p className="text-xs text-muted-foreground">
-            {useGeneral ? 'Herdando regras gerais da integração' : 'Usando regras personalizadas'}
+            {useGeneral ? uiText("Herdando regras gerais da integração") : uiText("Usando regras personalizadas")}
           </p>
         </div>
         <Switch checked={useGeneral} onCheckedChange={handleToggleGeneral} />
@@ -153,7 +156,7 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
       <div className={disabled ? 'opacity-60 pointer-events-none space-y-4' : 'space-y-4'}>
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
-            <Label className="text-sm">Criar contato automaticamente</Label>
+            <Label className="text-sm">{uiText("Criar contato automaticamente")}</Label>
           </div>
           <Switch
             checked={settings.auto_create_contact}
@@ -164,7 +167,7 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
 
         {settings.auto_create_contact && (
           <div className="space-y-2">
-            <Label className="text-sm">Estágio do ciclo de vida</Label>
+            <Label className="text-sm">{uiText("Estágio do ciclo de vida")}</Label>
             <select
               className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               value={settings.default_lifecycle_stage}
@@ -180,7 +183,7 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
 
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
-            <Label className="text-sm">Criar oportunidade automaticamente</Label>
+            <Label className="text-sm">{uiText("Criar oportunidade automaticamente")}</Label>
           </div>
           <Switch
             checked={settings.auto_create_opportunity}
@@ -191,7 +194,7 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
 
         {settings.auto_create_opportunity && (
           <div className="space-y-2 pl-4 border-l-2 border-primary/20">
-            <Label className="text-sm">Etapa inicial do pipeline</Label>
+            <Label className="text-sm">{uiText("Etapa inicial do pipeline")}</Label>
             {stages && stages.length > 0 ? (
               <select
                 className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -199,13 +202,13 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
                 onChange={(e) => update('default_stage_id', e.target.value || null)}
                 disabled={disabled}
               >
-                <option value="">Primeira etapa (padrão)</option>
+                <option value="">{uiText("Primeira etapa (padrão)")}</option>
                 {stages.map((s: any) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
             ) : (
-              <p className="text-xs text-muted-foreground">Nenhuma etapa cadastrada.</p>
+              <p className="text-xs text-muted-foreground">{uiText("Nenhuma etapa cadastrada.")}</p>
             )}
           </div>
         )}
@@ -214,8 +217,7 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
       {hasChanges && (
         <Button size="sm" className="w-full" onClick={handleSave} disabled={saving}>
           {saving ? <SpinnerGap className="h-4 w-4 mr-2 animate-spin" /> : <FloppyDisk className="h-4 w-4 mr-2" />}
-          Salvar Regras deste Número
-        </Button>
+          {uiText("Salvar Regras deste Número")}</Button>
       )}
     </div>
   );

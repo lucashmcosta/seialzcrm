@@ -1,3 +1,6 @@
+import { uiError } from '@/lib/ui-locale';
+import { getUiLocale, uiDateLocale, uiDatePattern } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { Fragment, useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -66,32 +69,33 @@ type TestResult = {
 };
 
 const DEFAULT_FIELDS: ConfigField[] = [
-  { key: "pixel_id", type: "text", label: "Pixel ID", required: true, group: "connection", placeholder: "123456789012345", help: "Events Manager → Configurações do dataset → ID do dataset" },
-  { key: "access_token", type: "password", label: "Access Token (CAPI)", required: true, group: "connection", placeholder: "EAAB...", help: "Events Manager → Configurações → Conversions API → Generate access token. Recomendado: System User token (não expira)." },
-  { key: "test_event_code", type: "text", label: "Test Event Code", required: false, group: "connection", placeholder: "TEST12345", help: "Use durante testes. Deixe vazio em produção." },
-  { key: "whatsapp_business_account_id", type: "text", label: "WhatsApp Business Account ID", required: false, group: "advanced", placeholder: "1234567890123456", help: "Necessário para CTWA (Click-to-WhatsApp Ads). business.facebook.com/wa/manage/home" },
-  { key: "page_id", type: "text", label: "Facebook Page ID", required: false, group: "advanced", placeholder: "1234567890123456", help: "Business Settings → Pages. Melhora atribuição de eventos vindos de Page Inbox." },
-  { key: "default_event_source_url", type: "url", label: "URL padrão da Landing Page", required: false, group: "advanced", placeholder: "https://lp.exemplo.com.br/", help: "Usada como fallback no event_source_url quando não vier do contato." },
+  { key: "pixel_id", type: "text", label: "Pixel ID", required: true, group: "connection", placeholder: "123456789012345", get help() { return uiText("Events Manager → Configurações do dataset → ID do dataset"); } },
+  { key: "access_token", type: "password", label: "Access Token (CAPI)", required: true, group: "connection", placeholder: "EAAB...", get help() { return uiText("Events Manager → Configurações → Conversions API → Generate access token. Recomendado: System User token (não expira)."); } },
+  { key: "test_event_code", type: "text", label: "Test Event Code", required: false, group: "connection", placeholder: "TEST12345", get help() { return uiText("Use durante testes. Deixe vazio em produção."); } },
+  { key: "whatsapp_business_account_id", type: "text", label: "WhatsApp Business Account ID", required: false, group: "advanced", placeholder: "1234567890123456", get help() { return uiText("Necessário para CTWA (Click-to-WhatsApp Ads). business.facebook.com/wa/manage/home"); } },
+  { key: "page_id", type: "text", label: "Facebook Page ID", required: false, group: "advanced", placeholder: "1234567890123456", get help() { return uiText("Business Settings → Pages. Melhora atribuição de eventos vindos de Page Inbox."); } },
+  { key: "default_event_source_url", type: "url", get label() { return uiText("URL padrão da Landing Page"); }, required: false, group: "advanced", placeholder: "https://lp.exemplo.com.br/", get help() { return uiText("Usada como fallback no event_source_url quando não vier do contato."); } },
 ];
 
 const DEFAULT_GROUPS: ConfigGroup[] = [
-  { key: "connection", label: "Conexão", description: "Credenciais obrigatórias para enviar eventos." },
-  { key: "advanced", label: "Avançado", description: "Campos opcionais para CTWA e melhor atribuição." },
+  { key: "connection", get label() { return uiText("Conexão"); }, get description() { return uiText("Credenciais obrigatórias para enviar eventos."); } },
+  { key: "advanced", get label() { return uiText("Avançado"); }, get description() { return uiText("Campos opcionais para CTWA e melhor atribuição."); } },
 ];
 
 const statusBadge = (s: string) => {
   const map: Record<string, { label: string; cls: string }> = {
-    sent: { label: "Enviado", cls: "bg-green-600 text-white" },
-    pending: { label: "Pendente", cls: "bg-muted text-foreground" },
-    retrying: { label: "Em retry", cls: "bg-amber-500 text-white" },
-    failed: { label: "Falhou", cls: "bg-destructive text-destructive-foreground" },
-    permanent_failure: { label: "Falha permanente", cls: "bg-destructive text-destructive-foreground" },
+    sent: { get label() { return uiText("Enviado"); }, cls: "bg-green-600 text-white" },
+    pending: { get label() { return uiText("Pendente"); }, cls: "bg-muted text-foreground" },
+    retrying: { label: uiText("Em retry"), cls: "bg-amber-500 text-white" },
+    failed: { get label() { return uiText("Falhou"); }, cls: "bg-destructive text-destructive-foreground" },
+    permanent_failure: { label: uiText("Falha permanente"), cls: "bg-destructive text-destructive-foreground" },
   };
   const m = map[s] || { label: s, cls: "bg-muted text-foreground" };
   return <Badge className={`text-[10px] ${m.cls}`}>{m.label}</Badge>;
 };
 
 export function MetaCapiDialog({ open = true, integration, orgIntegration: initialOrgIntegration, onManageConnection }: Props) {
+  useUiLocale();
   const { organization } = useOrganization();
   const qc = useQueryClient();
   const [tab, setTab] = useState("connection");
@@ -220,29 +224,29 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
   const validate = () => {
     const e: Record<string, string> = {};
     const pid = (formValues.pixel_id || "").trim();
-    if (!pid || !/^\d+$/.test(pid)) e.pixel_id = "Pixel ID deve conter apenas dígitos.";
+    if (!pid || !/^\d+$/.test(pid)) e.pixel_id = uiText("Pixel ID deve conter apenas dígitos.");
 
     const tok = (formValues.access_token || "").trim();
     if (mode === "manual" && !isConnected && tok.length < 20) {
-      e.access_token = "Token muito curto. Confira se copiou completo.";
+      e.access_token = uiText("Token muito curto. Confira se copiou completo.");
     }
     if (reconnectMode && tok.length > 0 && tok.length < 20) {
-      e.access_token = "Token muito curto. Confira se copiou completo.";
+      e.access_token = uiText("Token muito curto. Confira se copiou completo.");
     }
     // Atualizando integração já conectada sem token novo e sem fallback de Lead Ads.
     // Quando a credencial canônica está ativa, o token vem da Meta Connection — não exigir.
     if (isConnected && !reconnectMode && tok.length === 0 && !hasMetaLeadAds && !canonicalActive) {
-      e.access_token = "Informe o access token para atualizar (ou ative Meta Lead Ads para reusar).";
+      e.access_token = uiText("Informe o access token para atualizar (ou ative Meta Lead Ads para reusar).");
     }
 
     const waba = (formValues.whatsapp_business_account_id || "").trim();
-    if (waba && !/^\d+$/.test(waba)) e.whatsapp_business_account_id = "WABA ID deve conter apenas dígitos.";
+    if (waba && !/^\d+$/.test(waba)) e.whatsapp_business_account_id = uiText("WABA ID deve conter apenas dígitos.");
 
     const pageId = (formValues.page_id || "").trim();
-    if (pageId && !/^\d+$/.test(pageId)) e.page_id = "Page ID deve conter apenas dígitos.";
+    if (pageId && !/^\d+$/.test(pageId)) e.page_id = uiText("Page ID deve conter apenas dígitos.");
 
     const url = (formValues.default_event_source_url || "").trim();
-    if (url && !/^https?:\/\//.test(url)) e.default_event_source_url = "URL deve começar com http:// ou https://.";
+    if (url && !/^https?:\/\//.test(url)) e.default_event_source_url = uiText("URL deve começar com http:// ou https://.");
 
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -278,23 +282,23 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
 
       const { data, error } = await supabase.functions.invoke(fnName, { body });
       if (error) {
-        toast.error(error.message || "Falha ao conectar");
+        toast.error(uiError(error.message || uiText("Falha ao conectar")));
         return;
       }
       if (data?.error) {
         const code = data.meta_error_code;
-        if (code === 190) toast.error("Token inválido ou expirado. Reconecte Meta Lead Ads ou gere um novo no Events Manager.");
-        else if (code === 100) toast.error(data.error || "Pixel ID não encontrado. Confira o ID.");
-        else toast.error(data.error || "Meta rejeitou a conexão.");
+        if (code === 190) toast.error(uiText("Token inválido ou expirado. Reconecte Meta Lead Ads ou gere um novo no Events Manager."));
+        else if (code === 100) toast.error(uiError(data.error || uiText("Pixel ID não encontrado. Confira o ID.")));
+        else toast.error(uiError(data.error || uiText("Meta rejeitou a conexão.")));
         return;
       }
-      toast.success(isConnected ? "Meta CAPI atualizado!" : "Meta CAPI conectado e validado!");
+      toast.success(isConnected ? uiText("Meta CAPI atualizado!") : uiText("Meta CAPI conectado e validado!"));
       qc.invalidateQueries({ queryKey: ["org-integration-v2"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       setReconnectMode(false);
       setTab("events");
     } catch (err: any) {
-      toast.error(err.message || "Erro inesperado");
+      toast.error(uiError(err.message || uiText("Erro inesperado")));
     } finally {
       setSubmitting(false);
     }
@@ -310,12 +314,12 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Meta CAPI desconectado");
+      toast.success(uiText("Meta CAPI desconectado"));
       qc.invalidateQueries({ queryKey: ["org-integration-v2"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       setDisconnectOpen(false);
     },
-    onError: (e: any) => toast.error(e.message || "Erro ao desconectar"),
+    onError: (e: any) => toast.error(uiError(e.message || uiText("Erro ao desconectar"))),
   });
 
   const reprocess = async (eventId: string) => {
@@ -324,10 +328,10 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
         body: { capi_event_log_id: eventId },
       });
       if (error) throw error;
-      toast.success("Reprocessamento disparado");
+      toast.success(uiText("Reprocessamento disparado"));
       refetchEvents();
     } catch (e: any) {
-      toast.error(e.message || "Falha ao reprocessar");
+      toast.error(uiError(e.message || uiText("Falha ao reprocessar")));
     }
   };
 
@@ -341,7 +345,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
           });
 
           if (error) {
-            return { event_name, ok: false, message: error.message || "Falha ao enviar" };
+            return { event_name, ok: false, message: error.message || uiText("Falha ao enviar") };
           }
 
           if (data?.error) {
@@ -371,15 +375,15 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
       }
 
       if (failed.length > 0) {
-        toast.warning(`Teste parcial: ${failed.map((result) => result.event_name).join(", ")} falharam.`);
+        toast.warning(uiText("Teste parcial: {0} falharam.", {"0": failed.map((result) => result.event_name).join(", ")}));
       } else {
-        toast.success("3 eventos de teste enviados. Verifique 'Test events' no Events Manager.");
+        toast.success(uiText("3 eventos de teste enviados. Verifique 'Test events' no Events Manager."));
       }
 
       refetchEvents();
     } catch (e: any) {
       setTestResults([]);
-      toast.error(e.message || "Falha no teste");
+      toast.error(uiError(e.message || uiText("Falha no teste")));
     }
   };
 
@@ -390,9 +394,9 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
   const configQuality = useMemo(() => {
     const hasCtwaSupport = !!ca.whatsapp_business_account_id || !!ca.page_id;
     const hasUrl = !!ca.default_event_source_url;
-    if (hasCtwaSupport && hasUrl) return { label: "Cobertura completa", variant: "default" as const };
-    if (hasCtwaSupport || hasUrl) return { label: "Cobertura parcial", variant: "secondary" as const };
-    return { label: "Apenas Lead Ads form", variant: "outline" as const };
+    if (hasCtwaSupport && hasUrl) return { get label() { return uiText("Cobertura completa"); }, variant: "default" as const };
+    if (hasCtwaSupport || hasUrl) return { get label() { return uiText("Cobertura parcial"); }, variant: "secondary" as const };
+    return { get label() { return uiText("Apenas Lead Ads form"); }, variant: "outline" as const };
   }, [ca.whatsapp_business_account_id, ca.page_id, ca.default_event_source_url]);
 
   const renderField = (field: ConfigField) => {
@@ -411,7 +415,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
     return (
       <div key={field.key} className="space-y-1.5">
         <Label htmlFor={field.key}>
-          {field.label} {requiredLabel && "*"}
+          {uiText(field.label)} {requiredLabel && "*"}
         </Label>
         <div className="relative">
           <Input
@@ -420,10 +424,10 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
             value={value}
             onChange={(e) => setField(field.key, e.target.value)}
             placeholder={
-              field.placeholder ||
-              (isManualToken && isConnected && !reconnectMode ? "Deixe vazio para manter o token atual" : "")
+              (field.placeholder ? uiText(field.placeholder) : "") ||
+              (isManualToken && isConnected && !reconnectMode ? uiText("Deixe vazio para manter o token atual") : "")
             }
-            inputMode={field.type === "text" && /^\d+$/.test(field.placeholder || "") ? "numeric" : undefined}
+            inputMode={field.type === "text" && /^\d+$/.test((field.placeholder ? uiText(field.placeholder) : "") || "") ? "numeric" : undefined}
             className={isPassword ? "pr-10" : undefined}
           />
           {isPassword && (
@@ -436,10 +440,10 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
             </button>
           )}
         </div>
-        {field.help && <p className="text-xs text-muted-foreground">{field.help}</p>}
+        {field.help && <p className="text-xs text-muted-foreground">{uiText(field.help)}</p>}
         {err && <p className="text-xs text-destructive">{err}</p>}
         {field.key === "test_event_code" && (formValues.test_event_code || "").trim() && (
-          <Badge className="bg-amber-500 text-white text-[10px]">Modo teste — eventos não contam</Badge>
+          <Badge className="bg-amber-500 text-white text-[10px]">{uiText("Modo teste — eventos não contam")}</Badge>
         )}
       </div>
     );
@@ -467,15 +471,13 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                     {isConnected ? (
                       <Badge variant="outline" className="gap-1">
                         <CheckCircle className="h-3 w-3 text-green-500" />
-                        Conectado
-                      </Badge>
+                        {uiText("Conectado")}</Badge>
                     ) : (
-                      <Badge variant="secondary">Desconectado</Badge>
+                      <Badge variant="secondary">{uiText("Desconectado")}</Badge>
                     )}
                     {isTestMode && (
                       <Badge className="bg-amber-500 text-white text-[10px]">
-                        Modo teste — eventos não contam
-                      </Badge>
+                        {uiText("Modo teste — eventos não contam")}</Badge>
                     )}
                     {isConnected && (
                       <Badge variant={configQuality.variant} className="text-[10px]">
@@ -488,11 +490,9 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
               {isConnected && (
                 <div className="flex gap-2 shrink-0">
                   <Button variant="outline" size="sm" onClick={sendTest}>
-                    Testar agora
-                  </Button>
+                    {uiText("Testar agora")}</Button>
                   <Button variant="outline" size="sm" onClick={() => setDisconnectOpen(true)}>
-                    Desconectar
-                  </Button>
+                    {uiText("Desconectar")}</Button>
                 </div>
               )}
             </div>
@@ -504,10 +504,9 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
 
           <Tabs value={tab} onValueChange={setTab} className="w-full">
             <TabsList className="grid grid-cols-2 w-full">
-              <TabsTrigger value="connection">{canonicalActive ? "Pixel" : "Conexão"}</TabsTrigger>
+              <TabsTrigger value="connection">{canonicalActive ? "Pixel" : uiText("Conexão")}</TabsTrigger>
               <TabsTrigger value="events" disabled={!isConnected}>
-                Eventos enviados
-              </TabsTrigger>
+                {uiText("Eventos enviados")}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="connection" className="mt-4 space-y-4">
@@ -526,15 +525,13 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                       {ca.token_source === "meta-lead-ads" && (
                         <Badge variant="outline" className="gap-1 w-fit">
                           <LinkSimple className="h-3 w-3" />
-                          Reutilizando token de Meta Lead Ads
-                        </Badge>
+                          {uiText("Reutilizando token de Meta Lead Ads")}</Badge>
                       )}
                       {ca.token_source === "meta-lead-ads" && hasMetaLeadAds === false && (
                         <Alert variant="destructive">
                           <Warning className="h-4 w-4" />
                           <AlertDescription className="text-xs">
-                            Meta Lead Ads foi desconectado. Este Meta CAPI usa o token de lá e parou de funcionar. Use "Reconectar" com token manual.
-                          </AlertDescription>
+                            {uiText("Meta Lead Ads foi desconectado. Este Meta CAPI usa o token de lá e parou de funcionar. Use \"Reconectar\" com token manual.")}</AlertDescription>
                         </Alert>
                       )}
                     </>
@@ -559,14 +556,14 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                   )}
                   {ca.default_event_source_url && (
                     <div>
-                      <Label className="text-xs text-muted-foreground">URL padrão da Landing Page</Label>
+                      <Label className="text-xs text-muted-foreground">{uiText("URL padrão da Landing Page")}</Label>
                       <p className="font-mono text-sm break-all">{ca.default_event_source_url}</p>
                     </div>
                   )}
                   {ca.validated_at && (
                     <p className="text-xs text-muted-foreground">
-                      Validado em{" "}
-                      {format(new Date(ca.validated_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      {uiText("Validado em")}{" "}
+                      {format(new Date(ca.validated_at), uiDatePattern(true), { locale: uiDateLocale() })}
                     </p>
                   )}
                   <div className="pt-2">
@@ -580,37 +577,32 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                       }}
                     >
                       <ArrowsClockwise className="h-4 w-4 mr-1" />
-                      Reconectar / Editar
-                    </Button>
+                      {uiText("Reconectar / Editar")}</Button>
                   </div>
                 </Card>
               ) : (
                 <Card className="p-4 space-y-4">
                   {!isConnected && hasMetaLeadAds && !canonicalActive && (
                     <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">Modo de conexão</Label>
+                      <Label className="text-xs text-muted-foreground">{uiText("Modo de conexão")}</Label>
                       <RadioGroup value={mode} onValueChange={(v) => setMode(v as "reuse" | "manual")} className="gap-2">
                         <div className="flex items-start gap-2 p-3 border rounded-md">
                           <RadioGroupItem value="reuse" id="mode-reuse" className="mt-0.5" />
                           <div className="flex-1">
                             <Label htmlFor="mode-reuse" className="flex items-center gap-2 cursor-pointer">
-                              Reusar token Meta Lead Ads
-                              <Badge variant="secondary" className="text-[10px]">Recomendado</Badge>
+                              {uiText("Reusar token Meta Lead Ads")}<Badge variant="secondary" className="text-[10px]">{uiText("Recomendado")}</Badge>
                             </Label>
                             <p className="text-xs text-muted-foreground mt-1">
-                              💡 Reusa o System User Token já conectado em Meta Lead Ads. Mais rápido e sem precisar gerar token novo.
-                            </p>
+                              {uiText("💡 Reusa o System User Token já conectado em Meta Lead Ads. Mais rápido e sem precisar gerar token novo.")}</p>
                           </div>
                         </div>
                         <div className="flex items-start gap-2 p-3 border rounded-md">
                           <RadioGroupItem value="manual" id="mode-manual" className="mt-0.5" />
                           <div className="flex-1">
                             <Label htmlFor="mode-manual" className="cursor-pointer">
-                              Token CAPI manual (avançado)
-                            </Label>
+                              {uiText("Token CAPI manual (avançado)")}</Label>
                             <p className="text-xs text-muted-foreground mt-1">
-                              Cole um access token gerado no Events Manager.
-                            </p>
+                              {uiText("Cole um access token gerado no Events Manager.")}</p>
                           </div>
                         </div>
                       </RadioGroup>
@@ -621,7 +613,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                     <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${groups.length}, minmax(0, 1fr))` }}>
                       {groups.map((g) => (
                         <TabsTrigger key={g.key} value={g.key}>
-                          {g.label}
+                          {uiText(g.label)}
                         </TabsTrigger>
                       ))}
                     </TabsList>
@@ -629,7 +621,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                     {groups.map((g) => (
                       <TabsContent key={g.key} value={g.key} className="mt-4 space-y-4">
                         {g.description && (
-                          <p className="text-xs text-muted-foreground">{g.description}</p>
+                          <p className="text-xs text-muted-foreground">{uiText(g.description)}</p>
                         )}
                         {fields.filter((f) => f.group === g.key).map(renderField)}
                       </TabsContent>
@@ -639,18 +631,16 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                   <Alert>
                     <Warning className="h-4 w-4" />
                     <AlertDescription className="text-xs">
-                      O token é validado com a Meta antes de salvar e armazenado criptografado server-side.
-                    </AlertDescription>
+                      {uiText("O token é validado com a Meta antes de salvar e armazenado criptografado server-side.")}</AlertDescription>
                   </Alert>
 
                   <div className="flex justify-end gap-2">
                     {isConnected && reconnectMode && (
                       <Button variant="ghost" onClick={() => setReconnectMode(false)}>
-                        Cancelar
-                      </Button>
+                        {uiText("Cancelar")}</Button>
                     )}
                     <Button onClick={handleSubmit} disabled={submitting}>
-                      {submitting ? "Validando..." : isConnected ? "Salvar alterações" : "Conectar"}
+                      {submitting ? "Validando..." : isConnected ? uiText("Salvar alterações") : uiText("Conectar")}
                     </Button>
                   </div>
                 </Card>
@@ -662,12 +652,11 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                 <Card className="p-3 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium">Último teste manual</p>
-                      <p className="text-xs text-muted-foreground">Aqui você vê exatamente quais eventos foram disparados agora.</p>
+                      <p className="text-sm font-medium">{uiText("Último teste manual")}</p>
+                      <p className="text-xs text-muted-foreground">{uiText("Aqui você vê exatamente quais eventos foram disparados agora.")}</p>
                     </div>
                     <Button variant="ghost" size="sm" onClick={() => setTestResults([])}>
-                      Fechar
-                    </Button>
+                      {uiText("Fechar")}</Button>
                   </div>
                   <div className="grid gap-2 md:grid-cols-3">
                     {testResults.map((result) => (
@@ -677,7 +666,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                           {result.ok ? statusBadge("sent") : statusBadge("failed")}
                         </div>
                         <p className="mt-2 text-xs text-muted-foreground break-all">
-                          {result.message || "Enviado com sucesso."}
+                          {result.ok ? uiText("Enviado com sucesso.") : uiError(result.message)}
                         </p>
                         {result.capi_event_log_id && (
                           <p className="mt-2 text-[10px] text-muted-foreground break-all">
@@ -696,21 +685,21 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                   <p className="text-2xl font-semibold">{stats?.total ?? "—"}</p>
                 </Card>
                 <Card className="p-3">
-                  <p className="text-xs text-muted-foreground">Sucesso</p>
+                  <p className="text-xs text-muted-foreground">{uiText("Sucesso")}</p>
                   <p className="text-2xl font-semibold text-green-600">{stats?.sent ?? "—"}</p>
                 </Card>
                 <Card className="p-3">
-                  <p className="text-xs text-muted-foreground">Falhas</p>
+                  <p className="text-xs text-muted-foreground">{uiText("Falhas")}</p>
                   <p className="text-2xl font-semibold text-destructive">{stats?.failed ?? "—"}</p>
                 </Card>
                 <Card className="p-3">
-                  <p className="text-xs text-muted-foreground">Em retry</p>
+                  <p className="text-xs text-muted-foreground">{uiText("Em retry")}</p>
                   <p className="text-2xl font-semibold text-amber-600">{stats?.retrying ?? "—"}</p>
                 </Card>
               </div>
 
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground">Filtrar:</Label>
+                <Label className="text-xs text-muted-foreground">{uiText("Filtrar:")}</Label>
                 {["all", "Lead", "Purchase"].map((f) => (
                   <Button
                     key={f}
@@ -718,7 +707,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                     size="sm"
                     onClick={() => setFilter(f)}
                   >
-                    {f === "all" ? "Todos" : f}
+                    {f === "all" ? uiText("Todos") : f}
                   </Button>
                 ))}
                 <Button variant="ghost" size="sm" onClick={() => refetchEvents()} className="ml-auto">
@@ -728,11 +717,10 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
 
               <Card>
                 {loadingEvents ? (
-                  <div className="p-6 text-center text-sm text-muted-foreground">Carregando...</div>
+                  <div className="p-6 text-center text-sm text-muted-foreground">{uiText("Carregando...")}</div>
                 ) : !events || events.length === 0 ? (
                   <div className="p-6 text-center text-sm text-muted-foreground">
-                    Nenhum evento ainda. Eles aparecerão aqui automaticamente quando contatos chegarem via Meta ou oportunidades forem ganhas.
-                  </div>
+                    {uiText("Nenhum evento ainda. Eles aparecerão aqui automaticamente quando contatos chegarem via Meta ou oportunidades forem ganhas.")}</div>
                 ) : (
                   <div className="divide-y">
                     {events.map((ev) => (
@@ -749,16 +737,16 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                                 {statusBadge(ev.status)}
                                 {ev.attempt_count > 1 && (
                                   <span className="text-[10px] text-muted-foreground">
-                                    tentativa {ev.attempt_count}
+                                    {uiText("tentativa")}{ev.attempt_count}
                                   </span>
                                 )}
                               </div>
                               <p className="text-xs text-muted-foreground">
-                                {format(new Date(ev.event_time || ev.created_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}
+                                {format(new Date(ev.event_time || ev.created_at), uiDatePattern(true), { locale: uiDateLocale() })}
                               </p>
                               {ev.meta_error && (
-                                <p className="text-xs text-destructive mt-1 truncate" title={ev.meta_error}>
-                                  {ev.meta_error}
+                                <p className="text-xs text-destructive mt-1 truncate" title={uiError(ev.meta_error)}>
+                                  {uiError(ev.meta_error)}
                                 </p>
                               )}
                             </div>
@@ -772,8 +760,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                                     reprocess(ev.id);
                                   }}
                                 >
-                                  Reprocessar
-                                </Button>
+                                  {uiText("Reprocessar")}</Button>
                               )}
                               {expandedEventId === ev.id ? (
                                 <CaretUp className="h-4 w-4 text-muted-foreground" />
@@ -788,13 +775,13 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                           <div className="border-t border-border bg-muted/20 p-3 space-y-3">
                             <div className="grid gap-3 lg:grid-cols-2">
                               <div className="space-y-2 min-w-0">
-                                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Payload enviado</p>
+                                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{uiText("Payload enviado")}</p>
                                 <pre className="max-h-72 overflow-auto rounded-md border border-border bg-card p-3 text-[11px] leading-5 text-foreground whitespace-pre-wrap break-all">
                                   {prettyJson(ev.payload)}
                                 </pre>
                               </div>
                               <div className="space-y-2 min-w-0">
-                                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Resposta da Meta</p>
+                                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{uiText("Resposta da Meta")}</p>
                                 <pre className="max-h-72 overflow-auto rounded-md border border-border bg-card p-3 text-[11px] leading-5 text-foreground whitespace-pre-wrap break-all">
                                   {prettyJson(ev.meta_response)}
                                 </pre>
@@ -814,9 +801,9 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
       <ConfirmDialog
         open={disconnectOpen}
         onOpenChange={setDisconnectOpen}
-        title="Desconectar Meta CAPI"
-        description="Os eventos param de ser enviados pra Meta. Você pode reconectar depois usando os mesmos ou novos tokens."
-        confirmText="Desconectar"
+        title={uiText("Desconectar Meta CAPI")}
+        description={uiText("Os eventos param de ser enviados pra Meta. Você pode reconectar depois usando os mesmos ou novos tokens.")}
+        confirmText={uiText("Desconectar")}
         variant="destructive"
         onConfirm={() => disconnect.mutate()}
         loading={disconnect.isPending}

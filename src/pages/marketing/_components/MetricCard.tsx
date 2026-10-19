@@ -1,3 +1,5 @@
+import { getUiLocale } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { cn } from '@/lib/utils';
 import { ArrowUp, ArrowDown, Minus } from '@phosphor-icons/react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,6 +24,7 @@ const accentText = {
 };
 
 export function MetricCard({ label, value, sublabel, current, previous, loading, accent = 'primary', mono }: Props) {
+  useUiLocale();
   const delta = current != null && previous != null ? computeDelta(current, previous) : null;
   const renderDelta = () => {
     if (delta == null || !isFinite(delta)) return null;
@@ -32,7 +35,7 @@ export function MetricCard({ label, value, sublabel, current, previous, loading,
     return (
       <div className={cn('flex items-center gap-1 text-xs font-medium', color)}>
         <Arrow size={12} weight="bold" />
-        <span>{Math.abs(delta).toFixed(1)}% vs período anterior</span>
+        <span>{Math.abs(delta).toLocaleString(getUiLocale(),{minimumFractionDigits:1,maximumFractionDigits:1})}{uiText("% vs período anterior")}</span>
       </div>
     );
   };

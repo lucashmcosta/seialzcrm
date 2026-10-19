@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { Navigate } from 'react-router-dom';
 import { useOrganization } from '@/hooks/useOrganization';
 import { MarketingLayout } from '../_components/MarketingLayout';
@@ -16,6 +18,7 @@ const FIELD_LABEL: Record<string, string> = {
 };
 
 export default function MarketingWebhooks() {
+  useUiLocale();
   const { organization } = useOrganization();
   const orgId = organization?.id;
   const { enabled, loading: flagLoading } = useMarketingPublishingFlag(orgId);
@@ -28,8 +31,8 @@ export default function MarketingWebhooks() {
   if (!enabled) return <Navigate to="/marketing" replace />;
 
   const onSubscribe = async () => {
-    try { await subscribe.mutateAsync(); toast.success('Assinatura de webhooks atualizada'); }
-    catch (e) { toast.error((e as Error)?.message || 'Falha ao atualizar'); }
+    try { await subscribe.mutateAsync(); toast.success(uiText("Assinatura de webhooks atualizada")); }
+    catch (e) { toast.error(uiError((e as Error)?.message || uiText("Falha ao atualizar"))); }
   };
 
   const subscribed = status.data?.subscribed;
@@ -40,23 +43,21 @@ export default function MarketingWebhooks() {
       <Card className="p-5 space-y-4 max-w-xl">
         <div className="flex items-center gap-2">
           <BellRinging size={20} className="text-primary" />
-          <h2 className="text-base font-semibold">Eventos da Página em tempo real</h2>
+          <h2 className="text-base font-semibold">{uiText("Eventos da Página em tempo real")}</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          O Seialz assina os webhooks da Página conectada para receber, na hora, novas mensagens,
-          comentários e menções — que aparecem na caixa de entrada e nos relatórios.
-        </p>
+          {uiText("O Seialz assina os webhooks da Página conectada para receber, na hora, novas mensagens, comentários e menções — que aparecem na caixa de entrada e nos relatórios.")}</p>
 
         {status.isLoading ? <Skeleton className="h-20 w-full" /> : (
           <div className="rounded-lg border p-4 space-y-3">
             <div className="flex items-center gap-2">
               {subscribed
-                ? <Badge variant="outline" className="gap-1"><CheckCircle className="h-3.5 w-3.5 text-green-500" />Assinado</Badge>
-                : <Badge variant="secondary" className="gap-1"><Warning className="h-3.5 w-3.5" />Não assinado</Badge>}
+                ? <Badge variant="outline" className="gap-1"><CheckCircle className="h-3.5 w-3.5 text-green-500" />{uiText("Assinado")}</Badge>
+                : <Badge variant="secondary" className="gap-1"><Warning className="h-3.5 w-3.5" />{uiText("Não assinado")}</Badge>}
             </div>
             {fields.length > 0 && (
               <div className="flex flex-wrap gap-2">
-                {fields.map((f) => <Badge key={f} variant="secondary" className="text-[11px]">{FIELD_LABEL[f] ?? f}</Badge>)}
+                {fields.map((f) => <Badge key={f} variant="secondary" className="text-[11px]">{uiText(FIELD_LABEL[f] ?? f)}</Badge>)}
               </div>
             )}
           </div>
@@ -64,7 +65,7 @@ export default function MarketingWebhooks() {
 
         <Button onClick={onSubscribe} disabled={subscribe.isPending}>
           {subscribe.isPending ? <SpinnerGap className="h-4 w-4 mr-1 animate-spin" /> : <ArrowsClockwise className="h-4 w-4 mr-1" />}
-          {subscribed ? 'Atualizar assinatura' : 'Ativar webhooks'}
+          {subscribed ? uiText("Atualizar assinatura") : uiText("Ativar webhooks")}
         </Button>
       </Card>
     </MarketingLayout>

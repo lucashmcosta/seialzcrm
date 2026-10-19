@@ -1,3 +1,6 @@
+import { uiError } from '@/lib/ui-locale';
+import { getUiLocale, uiDateLocale, uiDatePattern } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -18,6 +21,7 @@ interface Props {
 }
 
 export function PagesAndFormsList({ organizationIntegrationId, onConfigureMapping, hideLegacyExpiredBadge }: Props) {
+  useUiLocale();
   const qc = useQueryClient();
 
   const { data: pages, isLoading } = useQuery({
@@ -56,15 +60,14 @@ export function PagesAndFormsList({ organizationIntegrationId, onConfigureMappin
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["lead-forms"] }),
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(uiError(e.message)),
   });
 
   if (isLoading) return <Skeleton className="h-32 w-full" />;
   if (!pages?.length) {
     return (
       <p className="text-sm text-muted-foreground">
-        Nenhuma página descoberta ainda. Clique em "Re-sincronizar" no topo.
-      </p>
+        {uiText("Nenhuma página descoberta ainda. Clique em \"Re-sincronizar\" no topo.")}</p>
     );
   }
 
@@ -82,12 +85,11 @@ export function PagesAndFormsList({ organizationIntegrationId, onConfigureMappin
               {!hideLegacyExpiredBadge && page.last_health_check_status === "expired" && (
                 <Badge variant="destructive" className="text-[11px] gap-1">
                   <Warning className="h-3 w-3" />
-                  Token expirado
-                </Badge>
+                  {uiText("Token expirado")}</Badge>
               )}
             </div>
             {pageForms.length === 0 ? (
-              <p className="text-xs text-muted-foreground pl-2">Sem formulários ativos.</p>
+              <p className="text-xs text-muted-foreground pl-2">{uiText("Sem formulários ativos.")}</p>
             ) : (
               <div className="border rounded-lg divide-y">
                 {pageForms.map((form) => (
@@ -100,29 +102,27 @@ export function PagesAndFormsList({ organizationIntegrationId, onConfigureMappin
                           {!form.is_mapping_configured && (
                             <Badge variant="outline" className="text-[10px] gap-1">
                               <Warning className="h-3 w-3" />
-                              Mapear campos
-                            </Badge>
+                              {uiText("Mapear campos")}</Badge>
                           )}
                           {form.last_sync_status === "error" && (
                             <Badge variant="destructive" className="text-[10px]">
-                              Erro ({form.consecutive_errors})
+                              {uiText("Erro (")}{form.consecutive_errors})
                             </Badge>
                           )}
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-0.5">
                           {form.total_synced_leads || 0} leads
                           {form.last_synced_at &&
-                            ` · última sync ${format(new Date(form.last_synced_at), "dd/MM HH:mm", {
-                              locale: ptBR,
-                            })}`}
+                            uiText(" · última sync {0}", {"0": format(new Date(form.last_synced_at), uiDatePattern(true), {
+                              locale: uiDateLocale(),
+                            })})}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Button variant="ghost" size="sm" onClick={() => onConfigureMapping(form.id)}>
                         <Gear className="h-4 w-4 mr-1" />
-                        Mapear
-                      </Button>
+                        {uiText("Mapear")}</Button>
                       <Switch
                         checked={form.is_monitored}
                         onCheckedChange={(v) => toggleMonitor.mutate({ id: form.id, value: v })}

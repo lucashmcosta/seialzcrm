@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { Fragment, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -56,6 +57,7 @@ const cacOf = (t: Totals) => t.opps_won > 0 ? t.spend_brl / t.opps_won : null;
 const roasOf = (t: Totals) => t.spend_brl > 0 ? t.revenue_won_brl / t.spend_brl : null;
 
 export default function MarketingAds() {
+  useUiLocale();
   const { organization } = useOrganization();
   const orgId = organization?.id;
   const [status, setStatus] = useState('all');
@@ -78,7 +80,7 @@ export default function MarketingAds() {
   const adsets = useMemo(() => {
     const map = new Map<string, string>();
     for (const r of ads.data || []) {
-      const name = r.adset_name || '(sem adset)';
+      const name = r.adset_name || uiText("(sem adset)");
       map.set(name, name);
     }
     return Array.from(map.keys()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -88,7 +90,7 @@ export default function MarketingAds() {
   const rows = useMemo(() => {
     const list = (ads.data || []).filter(r => {
       if (adset === 'all') return true;
-      return (r.adset_name || '(sem adset)') === adset;
+      return (r.adset_name || uiText("(sem adset)")) === adset;
     });
     list.sort((a, b) => {
       const av = Number(a[sort.key] || 0);
@@ -102,7 +104,7 @@ export default function MarketingAds() {
   const grouped = useMemo(() => {
     const groups = new Map<string, AdPerfRow[]>();
     for (const r of rows) {
-      const key = r.adset_name || '(sem adset)';
+      const key = r.adset_name || uiText("(sem adset)");
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(r);
     }
@@ -157,7 +159,7 @@ export default function MarketingAds() {
   };
 
   return (
-    <MarketingLayout title="Performance por Ad">
+    <MarketingLayout title={uiText("Performance por Ad")}>
       <div className="flex flex-wrap items-center gap-3">
         <PeriodFilter
           preset={period.preset}
@@ -168,17 +170,17 @@ export default function MarketingAds() {
         <Select value={status} onValueChange={setStatus}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos status</SelectItem>
-            <SelectItem value="active">Ativos</SelectItem>
-            <SelectItem value="paused">Pausados</SelectItem>
-            <SelectItem value="deleted">Deletados</SelectItem>
+            <SelectItem value="all">{uiText("Todos status")}</SelectItem>
+            <SelectItem value="active">{uiText("Anúncios ativos")}</SelectItem>
+            <SelectItem value="paused">{uiText("Pausados")}</SelectItem>
+            <SelectItem value="deleted">{uiText("Deletados")}</SelectItem>
           </SelectContent>
         </Select>
 
         <Select value={campaign} onValueChange={(v) => { setCampaign(v); setAdset('all'); }}>
-          <SelectTrigger className="w-64"><SelectValue placeholder="Campanha" /></SelectTrigger>
+          <SelectTrigger className="w-64"><SelectValue placeholder={uiText("Campanha")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todas campanhas</SelectItem>
+            <SelectItem value="all">{uiText("Todas campanhas")}</SelectItem>
             {(campaigns.data || []).map(c => (
               <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
             ))}
@@ -188,7 +190,7 @@ export default function MarketingAds() {
         <Select value={adset} onValueChange={setAdset}>
           <SelectTrigger className="w-56"><SelectValue placeholder="Adset" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos adsets</SelectItem>
+            <SelectItem value="all">{uiText("Todos adsets")}</SelectItem>
             {adsets.map(name => (
               <SelectItem key={name} value={name}>{name}</SelectItem>
             ))}
@@ -198,7 +200,7 @@ export default function MarketingAds() {
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar ad..."
+            placeholder={uiText("Buscar ad...")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -210,7 +212,7 @@ export default function MarketingAds() {
         {ads.isLoading ? (
           <div className="p-4"><TableSkeleton rows={8} cols={8} /></div>
         ) : rows.length === 0 ? (
-          <EmptyState title="Nenhum ad encontrado" hint="Ajuste os filtros ou aguarde o próximo sync." />
+          <EmptyState title={uiText("Nenhum ad encontrado")} hint={uiText("Ajuste os filtros ou aguarde o próximo sync.")} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -218,11 +220,11 @@ export default function MarketingAds() {
                 <tr className="text-left text-muted-foreground border-b border-border">
                   <th className="py-2 px-3 font-medium text-xs">Ad</th>
                   <th className="py-2 px-3 font-medium text-xs">Status</th>
-                  <SortHead k="spend_brl" label="Investido" />
+                  <SortHead k="spend_brl" label={uiText("Investido")} />
                   <SortHead k="impressions" label="Impr." />
-                  <SortHead k="clicks" label="Cliques" />
+                  <SortHead k="clicks" label={uiText("Cliques")} />
                   <th className="py-2 px-3 font-medium text-xs text-right">CTR</th>
-                  <SortHead k="leads_total" label="Contatos" />
+                  <SortHead k="leads_total" label={uiText("Contatos")} />
                   <SortHead k="cpl_real_brl" label="CPL" />
                   <SortHead k="opps_open" label="Opps" />
                   <SortHead k="opps_won" label="Wins" />
@@ -283,7 +285,7 @@ export default function MarketingAds() {
                     <TotalsRow key={`sub-${group.name}`} totals={group.totals} label={`Subtotal · ${group.name}`} variant="subtotal" />
                   </Fragment>
                 ))}
-                <TotalsRow totals={grouped.grand} label="Total geral" variant="grand" />
+                <TotalsRow totals={grouped.grand} label={uiText("Total geral")} variant="grand" />
               </tbody>
             </table>
           </div>

@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 // Lista todos os endpoints Meta Cloud da org (incluindo o principal),
 // permitindo alterar o "purpose" (destino de roteamento: /inbox ou /messages)
 // inline, direto na UI. Cada endpoint pode ser expandido para configurar
@@ -47,6 +49,7 @@ export function MetaAdditionalEndpointsSection({
   primaryPhoneNumberId,
   integrationFallback,
 }: Props) {
+  useUiLocale();
   const qc = useQueryClient();
   const { data: endpoints, isLoading } = useQuery({
     queryKey: ["meta-additional-endpoints", organizationId, organizationIntegrationId],
@@ -75,15 +78,15 @@ export function MetaAdditionalEndpointsSection({
     onSuccess: (_d, vars) => {
       toast.success(
         vars.purpose === "commercial"
-          ? "Número roteado para /messages"
+          ? uiText("Número roteado para /messages")
           : vars.purpose === "customer_service"
-          ? "Número roteado para /inbox"
-          : "Destino atualizado",
+          ? uiText("Número roteado para /inbox")
+          : uiText("Destino atualizado"),
       );
       qc.invalidateQueries({ queryKey: ["meta-additional-endpoints"] });
       qc.invalidateQueries({ queryKey: ["org-whatsapp-endpoints"] });
     },
-    onError: (e: any) => toast.error(`Falha ao atualizar: ${e?.message ?? e}`),
+    onError: (e: any) => toast.error(uiError(e?.message ?? e)),
   });
 
   if (isLoading) {
@@ -99,15 +102,14 @@ export function MetaAdditionalEndpointsSection({
   if (all.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        Nenhum número cadastrado nesta WABA.
-      </p>
+        {uiText("Nenhum número cadastrado nesta WABA.")}</p>
     );
   }
 
   return (
     <div className="space-y-2">
       <Label className="text-xs text-muted-foreground">
-        Números desta WABA ({all.length})
+        {uiText("Números desta WABA (")}{all.length})
       </Label>
       <Accordion type="multiple" className="space-y-2">
         {all.map((ep) => {
@@ -122,7 +124,7 @@ export function MetaAdditionalEndpointsSection({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium truncate">{formatted}</span>
                     {isPrimary && (
-                      <Badge variant="secondary" className="text-[10px]">principal</Badge>
+                      <Badge variant="secondary" className="text-[10px]">{uiText("principal")}</Badge>
                     )}
                     {ep.display_name && (
                       <span className="text-xs text-muted-foreground truncate">
@@ -131,7 +133,7 @@ export function MetaAdditionalEndpointsSection({
                     )}
                   </div>
                   <div className="text-[11px] text-muted-foreground font-mono">
-                    pid …{String(ep.sender_sid || "").slice(-8)} · destino {PURPOSE_ROUTE[currentPurpose]}
+                    pid …{String(ep.sender_sid || "").slice(-8)} {uiText("· destino")}{PURPOSE_ROUTE[currentPurpose]}
                   </div>
                 </div>
                 <Select
@@ -145,10 +147,10 @@ export function MetaAdditionalEndpointsSection({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="customer_service">Atendimento (/inbox)</SelectItem>
-                    <SelectItem value="commercial">Comercial (/messages)</SelectItem>
-                    <SelectItem value="vendor_personal">Pessoal (/messages)</SelectItem>
-                    <SelectItem value="other">Outro</SelectItem>
+                    <SelectItem value="customer_service">{uiText("Atendimento (/inbox)")}</SelectItem>
+                    <SelectItem value="commercial">{uiText("Comercial (/messages)")}</SelectItem>
+                    <SelectItem value="vendor_personal">{uiText("Pessoal (/messages)")}</SelectItem>
+                    <SelectItem value="other">{uiText("Outro")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Badge
@@ -159,8 +161,7 @@ export function MetaAdditionalEndpointsSection({
                 </Badge>
               </div>
               <AccordionTrigger className="hover:no-underline py-1 text-xs text-muted-foreground">
-                Regras deste número
-              </AccordionTrigger>
+                {uiText("Regras deste número")}</AccordionTrigger>
               <AccordionContent className="pb-3">
                 <EndpointInboundSettings
                   endpointId={ep.id}

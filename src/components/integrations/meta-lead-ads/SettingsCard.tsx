@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,6 +39,7 @@ const AVAILABLE_TOKENS = [
 ];
 
 export function SettingsCard({ orgIntegration, onUpdated }: Props) {
+  useUiLocale();
   const qc = useQueryClient();
   const initial = { ...DEFAULTS, ...((orgIntegration?.config_values as any)?.meta_lead_ads_settings || {}) };
   const [s, setS] = useState(initial);
@@ -91,10 +94,10 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
   const save = useMutation({
     mutationFn: async () => {
       if (!orgIntegration?.id) {
-        throw new Error("Integração não carregada. Recarregue a página.");
+        throw new Error(uiText("Integração não carregada. Recarregue a página."));
       }
       if (s.auto_send_whatsapp && !s.whatsapp_template_id) {
-        throw new Error("Selecione um template para o disparo automático.");
+        throw new Error(uiText("Selecione um template para o disparo automático."));
       }
       const config_values = {
         ...(orgIntegration.config_values || {}),
@@ -111,7 +114,7 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
       if (!data) {
         // RLS silently rejected — update returned 0 rows
         throw new Error(
-          "Não foi possível salvar: você não tem permissão para alterar esta integração nesta organização."
+          uiText("Não foi possível salvar: você não tem permissão para alterar esta integração nesta organização.")
         );
       }
 
@@ -121,18 +124,18 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
         (saved.whatsapp_template_id ?? null) !== (s.whatsapp_template_id ?? null)
       ) {
         throw new Error(
-          "O banco confirmou o save, mas os valores não bateram. Tente novamente."
+          uiText("O banco confirmou o save, mas os valores não bateram. Tente novamente.")
         );
       }
       return data;
     },
     onSuccess: () => {
-      toast.success("Configurações salvas");
+      toast.success(uiText("Configurações salvas"));
       qc.invalidateQueries({ queryKey: ["org-integration", "meta-lead-ads"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       onUpdated();
     },
-    onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
+    onError: (e: any) => toast.error(uiError(e.message || uiText("Erro ao salvar"))),
   });
 
   const Row = ({ label, hint, children }: any) => (
@@ -147,21 +150,21 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
 
   return (
     <Card className="p-6">
-      <h2 className="text-lg font-semibold mb-2">Configurações</h2>
+      <h2 className="text-lg font-semibold mb-2">{uiText("Configurações")}</h2>
       <div className="divide-y">
-        <Row label="Criar contato automaticamente" hint="Sempre que um novo lead chegar.">
+        <Row label={uiText("Criar contato automaticamente")} hint={uiText("Sempre que um novo lead chegar.")}>
           <Switch checked={s.auto_create_contact} onCheckedChange={(v) => setS({ ...s, auto_create_contact: v })} />
         </Row>
 
-        <Row label="Distribuir via Round-Robin" hint="Atribui leads automaticamente entre os usuários.">
+        <Row label={uiText("Distribuir via Round-Robin")} hint={uiText("Atribui leads automaticamente entre os usuários.")}>
           <Switch checked={s.use_round_robin} onCheckedChange={(v) => setS({ ...s, use_round_robin: v })} />
         </Row>
 
-        <Row label="Marcar nome como confirmado" hint="Evita que o agente de IA pergunte o nome novamente.">
+        <Row label={uiText("Marcar nome como confirmado")} hint={uiText("Evita que o agente de IA pergunte o nome novamente.")}>
           <Switch checked={s.set_name_confirmed} onCheckedChange={(v) => setS({ ...s, set_name_confirmed: v })} />
         </Row>
 
-        <Row label="Sempre criar oportunidade" hint="Fallback: cria uma oportunidade vazia mesmo quando nenhuma pergunta do form foi mapeada para a oportunidade.">
+        <Row label={uiText("Sempre criar oportunidade")} hint={uiText("Fallback: cria uma oportunidade vazia mesmo quando nenhuma pergunta do form foi mapeada para a oportunidade.")}>
           <Switch
             checked={s.auto_create_opportunity}
             onCheckedChange={(v) => setS({ ...s, auto_create_opportunity: v })}
@@ -170,12 +173,12 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
 
         {s.auto_create_opportunity && (
           <div className="py-3 space-y-1.5">
-            <Label className="text-xs">Etapa inicial do pipeline</Label>
+            <Label className="text-xs">{uiText("Etapa inicial do pipeline")}</Label>
             <Select
               value={s.default_pipeline_stage_id || ""}
               onValueChange={(v) => setS({ ...s, default_pipeline_stage_id: v })}
             >
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={uiText("Selecione")} /></SelectTrigger>
               <SelectContent>
                 {stages?.map((st: any) => (
                   <SelectItem key={st.id} value={st.id}>
@@ -187,7 +190,7 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
           </div>
         )}
 
-        <Row label="Enviar WhatsApp automático" hint="Dispara um template aprovado para o lead assim que ele chegar.">
+        <Row label={uiText("Enviar WhatsApp automático")} hint={uiText("Dispara um template aprovado para o lead assim que ele chegar.")}>
           <Switch
             checked={s.auto_send_whatsapp}
             onCheckedChange={(v) => setS({ ...s, auto_send_whatsapp: v, whatsapp_template_id: v ? s.whatsapp_template_id : null })}
@@ -197,13 +200,13 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
         {s.auto_send_whatsapp && (
           <div className="py-3 space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">Template aprovado</Label>
+              <Label className="text-xs">{uiText("Template aprovado")}</Label>
               <Select
                 value={s.whatsapp_template_id || ""}
                 onValueChange={(v) => setS({ ...s, whatsapp_template_id: v, whatsapp_template_variables: {} })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={templates?.length ? "Selecione um template" : "Nenhum template aprovado"} />
+                  <SelectValue placeholder={templates?.length ? uiText("Selecione um template") : uiText("Nenhum template aprovado")} />
                 </SelectTrigger>
                 <SelectContent>
                   {templates?.map((t: any) => (
@@ -215,14 +218,13 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
               </Select>
               {(!templates || templates.length === 0) && (
                 <p className="text-xs text-muted-foreground">
-                  Crie e aprove um template em Configurações → WhatsApp Templates.
-                </p>
+                  {uiText("Crie e aprove um template em Configurações → WhatsApp Templates.")}</p>
               )}
             </div>
 
             {selectedTemplate && (
               <div className="rounded-md border p-3 bg-muted/30 space-y-2">
-                <p className="text-xs text-muted-foreground">Prévia do template:</p>
+                <p className="text-xs text-muted-foreground">{uiText("Prévia do template:")}</p>
                 <p className="text-sm whitespace-pre-wrap">{selectedTemplate.body}</p>
               </div>
             )}
@@ -230,16 +232,15 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
             {templateVars.length > 0 && (
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Preencha cada variável. Você pode usar tokens dinâmicos:{" "}
+                  {uiText("Preencha cada variável. Você pode usar tokens dinâmicos:")}{" "}
                   <span className="font-mono">{AVAILABLE_TOKENS.join(" ")}</span>
-                  . Se deixar em branco, <span className="font-mono">{`{{1}}`}</span> usa automaticamente o primeiro nome do lead.
-                </p>
+                  {uiText(". Se deixar em branco,")}<span className="font-mono">{`{{1}}`}</span> {uiText("usa automaticamente o primeiro nome do lead.")}</p>
                 {templateVars.map((v) => (
                   <div key={v} className="space-y-1">
-                    <Label className="text-xs">Variável {`{{${v}}}`}</Label>
+                    <Label className="text-xs">{uiText("Variável")}{`{{${v}}}`}</Label>
                     <Input
                       value={s.whatsapp_template_variables?.[v] || ""}
-                      placeholder="Ex: Olá {first_name}!"
+                      placeholder={uiText("Ex: Olá {first_name}!")}
                       onChange={(e) =>
                         setS({
                           ...s,
@@ -260,7 +261,7 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
 
       <div className="flex justify-end mt-4">
         <Button onClick={() => save.mutate()} disabled={save.isPending}>
-          {save.isPending ? "Salvando..." : "Salvar configurações"}
+          {save.isPending ? "Salvando..." : uiText("Salvar configurações")}
         </Button>
       </div>
     </Card>

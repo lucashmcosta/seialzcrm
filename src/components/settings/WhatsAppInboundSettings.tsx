@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -29,8 +31,8 @@ const DEFAULT_SETTINGS: InboundSettings = {
 const LIFECYCLE_OPTIONS = [
   { value: 'lead', label: 'Lead' },
   { value: 'subscriber', label: 'Subscriber' },
-  { value: 'opportunity', label: 'Oportunidade' },
-  { value: 'customer', label: 'Cliente' },
+  { value: 'opportunity', get label() { return uiText("Oportunidade"); } },
+  { value: 'customer', get label() { return uiText("Cliente"); } },
 ];
 
 interface WhatsAppInboundSettingsProps {
@@ -38,6 +40,7 @@ interface WhatsAppInboundSettingsProps {
 }
 
 export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettingsProps) {
+  useUiLocale();
   const { organization } = useOrganization();
   const [settings, setSettings] = useState<InboundSettings>(DEFAULT_SETTINGS);
   const [saving, setSaving] = useState(false);
@@ -104,10 +107,10 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
         .eq('id', integrationId);
 
       if (error) throw error;
-      toast.success('Configurações de entrada salvas!');
+      toast.success(uiText('Configurações de entrada salvas!'));
       setHasChanges(false);
     } catch (err: any) {
-      toast.error('Erro ao salvar: ' + (err.message || 'Erro desconhecido'));
+      toast.error(uiError('Erro ao salvar: ' + (err.message || 'Erro desconhecido')));
     } finally {
       setSaving(false);
     }
@@ -123,15 +126,14 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
 
   return (
     <div className="space-y-4 border-t pt-4">
-      <h4 className="text-sm font-semibold">Regras de Entrada</h4>
+      <h4 className="text-sm font-semibold">{uiText("Regras de Entrada")}</h4>
 
       {/* Auto create contact */}
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <Label className="text-sm">Criar contato automaticamente</Label>
+          <Label className="text-sm">{uiText("Criar contato automaticamente")}</Label>
           <p className="text-xs text-muted-foreground">
-            Quando receber mensagem de número desconhecido
-          </p>
+            {uiText("Quando receber mensagem de número desconhecido")}</p>
         </div>
         <Switch
           checked={settings.auto_create_contact}
@@ -142,7 +144,7 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
       {/* Lifecycle stage */}
       {settings.auto_create_contact && (
         <div className="space-y-2">
-          <Label className="text-sm">Estágio do ciclo de vida</Label>
+          <Label className="text-sm">{uiText("Estágio do ciclo de vida")}</Label>
           <select
             className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             value={settings.default_lifecycle_stage}
@@ -158,10 +160,9 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
       {/* Auto create opportunity */}
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <Label className="text-sm">Criar oportunidade automaticamente</Label>
+          <Label className="text-sm">{uiText("Criar oportunidade automaticamente")}</Label>
           <p className="text-xs text-muted-foreground">
-            Ao criar um novo contato via WhatsApp
-          </p>
+            {uiText("Ao criar um novo contato via WhatsApp")}</p>
         </div>
         <Switch
           checked={settings.auto_create_opportunity}
@@ -173,22 +174,21 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
       {settings.auto_create_opportunity && (
         <div className="space-y-3 pl-4 border-l-2 border-primary/20">
           <div className="space-y-2">
-            <Label className="text-sm">Etapa inicial do pipeline</Label>
+            <Label className="text-sm">{uiText("Etapa inicial do pipeline")}</Label>
             {stages && stages.length > 0 ? (
               <select
                 className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 value={settings.default_stage_id || ''}
                 onChange={(e) => updateSetting('default_stage_id', e.target.value || null)}
               >
-                <option value="">Primeira etapa (padrão)</option>
+                <option value="">{uiText("Primeira etapa (padrão)")}</option>
                 {stages.map((s: any) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Nenhuma etapa cadastrada. Crie um pipeline em Configurações &gt; Pipeline.
-              </p>
+                {uiText("Nenhuma etapa cadastrada. Crie um pipeline em Configurações &gt; Pipeline.")}</p>
             )}
           </div>
         </div>
@@ -198,8 +198,7 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
       {hasChanges && (
         <Button size="sm" className="w-full" onClick={handleSave} disabled={saving}>
           {saving ? <SpinnerGap className="h-4 w-4 mr-2 animate-spin" /> : <FloppyDisk className="h-4 w-4 mr-2" />}
-          Salvar Regras
-        </Button>
+          {uiText("Salvar Regras")}</Button>
       )}
     </div>
   );

@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,6 +39,7 @@ export function MetaLeadAdsDialog({
   onManageConnection,
   variant = "modal",
 }: Props) {
+  useUiLocale();
   const { organization } = useOrganization();
   const qc = useQueryClient();
   const [tab, setTab] = useState("forms");
@@ -61,18 +64,18 @@ export function MetaLeadAdsDialog({
 
   const rediscover = useMutation({
     mutationFn: async () => {
-      if (!orgIntegration?.id) throw new Error("Não conectado");
+      if (!orgIntegration?.id) throw new Error(uiText("Não conectado"));
       const { error } = await supabase.functions.invoke("meta-lead-ads-discover", {
         body: { organization_integration_id: orgIntegration.id, organization_id: organization!.id },
       });
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Sincronização iniciada");
+      toast.success(uiText("Sincronização iniciada"));
       qc.invalidateQueries({ queryKey: ["meta-lead-pages"] });
       qc.invalidateQueries({ queryKey: ["lead-forms"] });
     },
-    onError: (e: any) => toast.error(e.message || "Erro ao sincronizar"),
+    onError: (e: any) => toast.error(uiError(e.message || uiText("Erro ao sincronizar"))),
   });
 
   const disconnect = useMutation({
@@ -85,7 +88,7 @@ export function MetaLeadAdsDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Integração desativada");
+      toast.success(uiText("Integração desativada"));
       qc.invalidateQueries({ queryKey: ["org-integration-v2"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
     },
@@ -110,10 +113,9 @@ export function MetaLeadAdsDialog({
       {isConnected ? (
         <Badge variant="outline" className="gap-1">
           <CheckCircle className="h-3 w-3 text-green-500" />
-          Conectado
-        </Badge>
+          {uiText("Conectado")}</Badge>
       ) : (
-        <Badge variant="secondary">Desconectado</Badge>
+        <Badge variant="secondary">{uiText("Desconectado")}</Badge>
       )}
       {ca.meta_user_name && (
         <span className="text-xs text-muted-foreground">{ca.meta_user_name}</span>
@@ -130,11 +132,9 @@ export function MetaLeadAdsDialog({
         disabled={rediscover.isPending}
       >
         <ArrowsClockwise className={`h-4 w-4 mr-1 ${rediscover.isPending ? "animate-spin" : ""}`} />
-        Re-sincronizar
-      </Button>
+        {uiText("Re-sincronizar")}</Button>
       <Button variant="outline" size="sm" onClick={() => disconnect.mutate()}>
-        Desconectar
-      </Button>
+        {uiText("Desconectar")}</Button>
     </div>
   ) : null;
 
@@ -143,13 +143,11 @@ export function MetaLeadAdsDialog({
   const tabsBlock = (
     <Tabs value={tab} onValueChange={setTab} className="w-full">
       <TabsList className={`grid w-full ${canonicalActive ? "grid-cols-3" : "grid-cols-4"}`}>
-        {!canonicalActive && <TabsTrigger value="connection">Conexão</TabsTrigger>}
+        {!canonicalActive && <TabsTrigger value="connection">{uiText("Conexão")}</TabsTrigger>}
         <TabsTrigger value="forms" disabled={!isConnected}>
-          Formulários
-        </TabsTrigger>
+          {uiText("Formulários")}</TabsTrigger>
         <TabsTrigger value="settings" disabled={!isConnected}>
-          Configurações
-        </TabsTrigger>
+          {uiText("Configurações")}</TabsTrigger>
         <TabsTrigger value="status" disabled={!isConnected}>
           Status
         </TabsTrigger>
@@ -168,7 +166,7 @@ export function MetaLeadAdsDialog({
       <TabsContent value="forms" className="mt-4">
         {isConnected && orgIntegration && (
           <Card className="p-4 sm:p-6">
-            <h3 className="text-base font-semibold mb-4">Páginas e Formulários</h3>
+            <h3 className="text-base font-semibold mb-4">{uiText("Páginas e Formulários")}</h3>
             <PagesAndFormsList
               organizationIntegrationId={orgIntegration.id}
               onConfigureMapping={(formId) => setMappingFormId(formId)}
