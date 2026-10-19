@@ -54,3 +54,20 @@ describe('permissões do módulo de classificação', () => {
     }
   });
 });
+
+describe('reabrir oportunidade ganha ou perdida', () => {
+  it('só o gestor comercial reabre entre os modelos', () => {
+    const reabrem = TEMPLATES.filter((t) => t.perms.ferramentas.reabrir_oportunidade).map((t) => t.key);
+    expect(reabrem).toEqual(['gestor']);
+  });
+
+  it('perfil salvo antes da permissão abre sem ela', () => {
+    const antigo = fromLegacy({ can_edit_opportunities: true }, true);
+    delete antigo.ferramentas.reabrir_oportunidade;
+    expect(normalize(antigo).ferramentas.reabrir_oportunidade).toBe(false);
+  });
+
+  it('aparece para todas as orgs (não depende de módulo)', () => {
+    expect(TOOLS.filter(visibleFor(new Set())).map((t) => t.key)).toContain('reabrir_oportunidade');
+  });
+});

@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
 import { OpportunityCloseDialog } from '@/components/opportunities/OpportunityCloseDialog';
+import { mensagemErroStatus } from '@/lib/opportunityClose';
 import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
 import { SeialzOpportunityCard } from '@/components/opportunities/SeialzOpportunityCard';
 import { SeialzTopbar } from '@/components/seialz/SeialzTopbar';
@@ -624,7 +625,7 @@ export default function OpportunitiesKanban() {
 
     if (error) {
       console.error('Error updating opportunity:', error);
-      toast.error(t('common.error'));
+      toast.error(mensagemErroStatus(error) ?? t('common.error'));
       fetchData();
     } else {
       toast.success('Oportunidade movida com sucesso');

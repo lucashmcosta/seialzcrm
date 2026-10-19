@@ -103,6 +103,8 @@ export const TOOLS: { key: ToolKey; label: string; hidden?: boolean; module?: Mo
   { key: 'classificar', label: 'Classificar processo', module: 'process_classification' },
   { key: 'liberar_correcao', label: 'Liberar correção de classificação', module: 'process_classification' },
   { key: 'certificar_classificacao', label: 'Certificar classificação (após a entrevista)', module: 'process_classification' },
+  // só vale com "Controlar reabertura" ligado em Configurações de oportunidade
+  { key: 'reabrir_oportunidade', label: 'Reabrir oportunidade ganha ou perdida' },
 ];
 
 export const ADMIN_ITEMS: { key: AdminKey; label: string; hidden?: boolean; module?: ModuleKey }[] = [
@@ -177,7 +179,7 @@ export const TEMPLATES: { key: string; label: string; description: string; perms
       chamadas: { ver: 'meus', exportar: 'nenhum' },
       tarefas: task('meus', true, 'meus', 'meus', 'meus'),
       classificacoes: { ver: 'nenhum' }, // o vendedor vê a própria classificação só no widget (faixa + comissão)
-    }, ferramentas: tools(['importar', 'marketing', 'relatorios', 'liberar_correcao', 'certificar_classificacao']), administracao: admin([]) },
+    }, ferramentas: tools(['importar', 'marketing', 'relatorios', 'liberar_correcao', 'certificar_classificacao', 'reabrir_oportunidade']), administracao: admin([]) },
   },
   {
     key: 'lider', label: 'Líder de equipe', description: 'Acompanha e redistribui o trabalho das suas equipes.',
@@ -189,7 +191,7 @@ export const TEMPLATES: { key: string; label: string; description: string; perms
       chamadas: { ver: 'equipe', exportar: 'equipe' },
       tarefas: task('equipe', true, 'equipe', 'equipe', 'equipe'),
       classificacoes: { ver: 'equipe' },
-    }, ferramentas: tools(['rodizio', 'importar', 'certificar_classificacao']), administracao: admin([]) },
+    }, ferramentas: tools(['rodizio', 'importar', 'certificar_classificacao', 'reabrir_oportunidade']), administracao: admin([]) },
   },
   {
     key: 'gestor', label: 'Gestor comercial', description: 'Vê e gerencia todo o comercial.',
@@ -213,7 +215,7 @@ export const TEMPLATES: { key: string; label: string; description: string; perms
       chamadas: { ver: 'meus', exportar: 'nenhum' },
       tarefas: task('meus', true, 'meus', 'meus', 'meus'),
       classificacoes: { ver: 'nenhum' },
-    }, ferramentas: tools(['rodizio', 'wa_ativa', 'importar', 'marketing', 'relatorios', 'classificar', 'liberar_correcao', 'certificar_classificacao']), administracao: admin([]) },
+    }, ferramentas: tools(['rodizio', 'wa_ativa', 'importar', 'marketing', 'relatorios', 'classificar', 'liberar_correcao', 'certificar_classificacao', 'reabrir_oportunidade']), administracao: admin([]) },
   },
   {
     key: 'supervisor', label: 'Supervisor de atendimento', description: 'Coordena toda a fila do Atendimento.',
@@ -225,7 +227,7 @@ export const TEMPLATES: { key: string; label: string; description: string; perms
       chamadas: { ver: 'todos', exportar: 'todos' },
       tarefas: task('todos', true, 'todos', 'todos', 'todos'),
       classificacoes: { ver: 'nenhum' },
-    }, ferramentas: tools(['rodizio', 'marketing', 'importar', 'classificar', 'liberar_correcao', 'certificar_classificacao']), administracao: admin(['config_atendimento']) },
+    }, ferramentas: tools(['rodizio', 'marketing', 'importar', 'classificar', 'liberar_correcao', 'certificar_classificacao', 'reabrir_oportunidade']), administracao: admin(['config_atendimento']) },
   },
   {
     key: 'leitura', label: 'Somente leitura', description: 'Consulta tudo, sem alterar nada.',

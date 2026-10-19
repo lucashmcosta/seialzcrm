@@ -32,7 +32,7 @@ import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromp
 import { OpportunityCloseDialog } from '@/components/opportunities/OpportunityCloseDialog';
 import { OpportunityReadinessCard } from '@/components/opportunities/OpportunityReadinessCard';
 import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
-import { transitionOpportunityStage } from '@/lib/opportunityClose';
+import { mensagemErroStatus, transitionOpportunityStage } from '@/lib/opportunityClose';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { ContractSignatureEntry, useSignatureV2Pilot } from '@/components/signature/ContractSignatureEntry';
@@ -204,7 +204,7 @@ export default function OpportunityDetail() {
       fetchOpportunity();
     } catch (error) {
       console.error(`Error marking as ${newStatus}:`, error);
-      toast({ title: t('common.error'), variant: 'destructive' });
+      toast({ title: t('common.error'), description: mensagemErroStatus(error) ?? undefined, variant: 'destructive' });
     }
   };
 
@@ -241,7 +241,7 @@ export default function OpportunityDetail() {
       fetchOpportunity();
     } catch (error) {
       console.error('Error reopening opportunity:', error);
-      toast({ title: t('common.error'), variant: 'destructive' });
+      toast({ title: t('common.error'), description: mensagemErroStatus(error) ?? undefined, variant: 'destructive' });
     }
   };
 
