@@ -188,7 +188,7 @@ export default function SocialInboxPage() {
         <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Lista de conversas */}
           <aside className="w-80 shrink-0 border-r border-border flex flex-col min-h-0">
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
               {igLoading && (
                 <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-muted-foreground border-b border-border/60">
                   <SpinnerGap className="h-3.5 w-3.5 animate-spin" /> {uiText("Carregando Instagram…")}</div>
@@ -226,7 +226,7 @@ export default function SocialInboxPage() {
           </aside>
 
           {/* Thread */}
-          <section className="flex-1 flex flex-col min-h-0">
+          <section className="flex-1 flex flex-col min-h-0 min-w-0">
             {!selected ? (
               <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
                 {uiText("Selecione uma conversa para ver as mensagens.")}</div>
