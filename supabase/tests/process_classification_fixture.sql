@@ -7,12 +7,12 @@ CREATE TABLE permission_profiles(id uuid PRIMARY KEY, organization_id uuid, is_s
 CREATE TABLE user_organizations(user_id uuid, organization_id uuid, is_active boolean, permission_profile_id uuid);
 CREATE TABLE team_members(organization_id uuid, team_id uuid, user_id uuid);
 CREATE TABLE pipeline_stages(id uuid PRIMARY KEY, organization_id uuid, name text, type text);
-CREATE TABLE opportunities(id uuid PRIMARY KEY, organization_id uuid, contact_id uuid, owner_user_id uuid, status text, deleted_at timestamptz, title text, pipeline_stage_id uuid);
+CREATE TABLE opportunities(id uuid PRIMARY KEY, organization_id uuid, contact_id uuid, owner_user_id uuid, status text, deleted_at timestamptz, title text, pipeline_stage_id uuid, close_date date, won_at timestamptz);
 CREATE TABLE notifications(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL, user_id uuid NOT NULL, type text NOT NULL, title text NOT NULL, body text, entity_type text, entity_id uuid, read_at timestamptz, created_at timestamptz DEFAULT now());
 -- tabelas que o avaliador real (e3d1) lê no caminho sem política
 CREATE TABLE opportunity_close_policies(organization_id uuid PRIMARY KEY, mode text, version integer, require_cpf_verified boolean, require_complete_address boolean,
   required_contact_fields text[], required_opportunity_fields text[], required_contact_custom_field_ids uuid[], required_opportunity_custom_field_ids uuid[], document_rules jsonb);
-CREATE TABLE contacts(id uuid PRIMARY KEY, organization_id uuid, deleted_at timestamptz);
+CREATE TABLE contacts(id uuid PRIMARY KEY, organization_id uuid, deleted_at timestamptz, full_name text);
 CREATE TABLE contact_identity_profiles(contact_id uuid, organization_id uuid, cpf_verification_status text);
 CREATE TABLE organization_widgets(organization_id uuid, widget_key text, is_enabled boolean, UNIQUE(organization_id, widget_key));
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
@@ -102,3 +102,4 @@ for each row execute function public.fn_guard_opportunity_won_requirements_v1();
 \ir ../migrations/20261018170000_process_classification_certification.sql
 \ir ../migrations/20261018190000_process_classification_calibration.sql
 \ir ../migrations/20261018210000_process_classification_reports.sql
+\ir ../migrations/20261019180000_process_classification_dashboard.sql
