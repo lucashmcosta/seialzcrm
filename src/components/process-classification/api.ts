@@ -24,6 +24,8 @@ export interface EstadoWidget {
   podeDecidir?: boolean;
   /** Respostas do vendedor (Entrada), só para quem decide o pedido de correção. */
   respostas?: Record<string, unknown> | null;
+  /** O que o vendedor preencheu (Entrada da classificação ativa), para quem pode ver a classificação. */
+  respostasVendedor?: Record<string, unknown> | null;
   /** Certificação pós-ganho, feita pelo Jurídico na tela do Nammux (via API); aqui só é exibida. */
   certificacao?: Certificacao | null;
 }

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Lock, Scales, SealCheck } from '@phosphor-icons/react';
+import { CaretDown, Lock, Scales, SealCheck } from '@phosphor-icons/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -81,6 +82,9 @@ function Corpo({ estado, opportunityId, onComecar }: { estado: EstadoWidget; opp
             </p>
           )}
           {estado.certificacao && <CertificacaoInfo c={estado.certificacao} />}
+          {estado.respostasVendedor && !estado.podeDecidir && (
+            <RespostasVendedor entrada={estado.respostasVendedor} minhas={estado.doVendedor === true} />
+          )}
           {estado.podePedirCorrecao && <PedirCorrecao opportunityId={opportunityId} />}
           {estado.podeDecidir && estado.respostas && estado.pedido && (
             <DecidirCorrecao opportunityId={opportunityId} respostas={estado.respostas} criadoEm={estado.pedido.criadoEm} />
@@ -111,6 +115,24 @@ function CertificacaoInfo({ c }: { c: Certificacao }) {
       <p className="mt-1 text-muted-foreground">{reduzida ? `Motivo: ${c.motivo}` : c.motivo}</p>
       <p className="mt-1 text-xs text-muted-foreground">Em {dataHora(c.certificadoEm)}{c.origem === 'nammux' ? ' · na entrevista (Nammux)' : ''}</p>
     </div>
+  );
+}
+
+/** O que o vendedor preencheu, recolhido por padrão (o pedido de correção já mostra as respostas aberto). */
+function RespostasVendedor({ entrada, minhas }: { entrada: Record<string, unknown>; minhas: boolean }) {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <Collapsible open={aberto} onOpenChange={setAberto}>
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" size="sm" className="w-full justify-between">
+          {minhas ? 'Ver suas respostas' : 'Ver respostas do vendedor'}
+          <CaretDown className={cn('h-4 w-4 transition-transform', aberto && 'rotate-180')} />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pt-2">
+        <ResumoEntrada entrada={entrada} detalhado />
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
