@@ -35,7 +35,7 @@ export interface PermissionsV2 {
   administracao: Record<AdminKey, boolean>;
 }
 
-export const TOOL_KEYS = ['tel_realizar', 'tel_receber', 'tel_transferir', 'rodizio', 'wa_enviar', 'wa_ativa', 'importar', 'marketing', 'relatorios', 'ia', 'classificar', 'liberar_correcao', 'certificar_classificacao'] as const;
+export const TOOL_KEYS = ['tel_realizar', 'tel_receber', 'tel_transferir', 'rodizio', 'wa_enviar', 'wa_ativa', 'importar', 'marketing', 'relatorios', 'ia', 'classificar', 'liberar_correcao', 'certificar_classificacao', 'reabrir_oportunidade'] as const;
 export type ToolKey = typeof TOOL_KEYS[number];
 export const ADMIN_KEYS = ['usuarios', 'config', 'distribuicao', 'config_atendimento', 'integracoes', 'telefonia', 'cobranca', 'auditoria', 'ver_numeros_classificacao', 'calibrar_classificacao', 'publicar_calibracao'] as const;
 export type AdminKey = typeof ADMIN_KEYS[number];

@@ -9493,6 +9493,7 @@ export type Database = {
       }
       opportunity_close_policies: {
         Row: {
+          control_reopen: boolean
           created_at: string
           created_by: string | null
           document_rules: Json
@@ -9510,6 +9511,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          control_reopen?: boolean
           created_at?: string
           created_by?: string | null
           document_rules?: Json
@@ -9527,6 +9529,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          control_reopen?: boolean
           created_at?: string
           created_by?: string | null
           document_rules?: Json

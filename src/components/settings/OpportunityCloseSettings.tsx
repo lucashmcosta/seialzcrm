@@ -25,9 +25,10 @@ type Policy = {
   required_contact_custom_field_ids: string[];
   required_opportunity_custom_field_ids: string[];
   require_process_classification: boolean;
+  control_reopen: boolean;
 };
 
-const empty: Policy = { mode: 'off', require_cpf_verified: false, require_complete_address: false, required_contact_fields: [], required_opportunity_fields: [], required_contact_custom_field_ids: [], required_opportunity_custom_field_ids: [], require_process_classification: false };
+const empty: Policy = { mode: 'off', require_cpf_verified: false, require_complete_address: false, required_contact_fields: [], required_opportunity_fields: [], required_contact_custom_field_ids: [], required_opportunity_custom_field_ids: [], require_process_classification: false, control_reopen: false };
 const contactFields = [{ id: 'email', label: 'E-mail' }, { id: 'phone', label: 'Telefone' }, { id: 'rg', label: 'RG' }, { id: 'nationality', label: 'Nacionalidade' }];
 const opportunityFields = [{ id: 'title', label: 'Título' }, { id: 'amount', label: 'Valor' }, { id: 'source', label: 'Origem' }, { id: 'owner_user_id', label: 'Responsável' }];
 
@@ -111,6 +112,9 @@ export function OpportunityCloseSettings() {
         <div className="flex items-center justify-between rounded-lg border p-4"><div><Label>CPF encontrado pela API</Label><p className="text-xs text-muted-foreground">A validação matemática isolada não atende esta regra.</p></div><Switch disabled={!isBrazil} checked={isBrazil && policy.require_cpf_verified} onCheckedChange={(value) => setPolicy({ ...policy, require_cpf_verified: value })} /></div>
         {(classificacaoLigada || policy.require_process_classification) && <div className="flex items-center justify-between rounded-lg border p-4"><div><Label>Classificação do processo</Label><p className="text-xs text-muted-foreground">O vendedor precisa classificar o processo (widget Classificação do processo). Só é cobrada com o widget ligado e calibração publicada.</p></div><Switch checked={policy.require_process_classification} onCheckedChange={(value) => setPolicy({ ...policy, require_process_classification: value })} /></div>}
         <div className="flex items-center justify-between rounded-lg border p-4"><div><Label>Endereço BR completo</Label><p className="text-xs text-muted-foreground">CEP, logradouro, número, bairro, cidade e UF. Complemento é opcional.</p></div><Switch disabled={!isBrazil} checked={isBrazil && policy.require_complete_address} onCheckedChange={(value) => setPolicy({ ...policy, require_complete_address: value })} /></div>
+      </CardContent></Card>
+      <Card><CardHeader><CardTitle className="text-base">Reabertura</CardTitle><CardDescription>Quem pode tirar uma oportunidade de Ganho ou Perdido (botão Reabrir, Kanban ou ação em lote).</CardDescription></CardHeader><CardContent className="space-y-3">
+        <div className="flex items-center justify-between rounded-lg border p-4"><div><Label>Controlar reabertura de vendas ganhas ou perdidas</Label><p className="text-xs text-muted-foreground">Ligado, só o Admin e os perfis com a permissão "Reabrir oportunidade ganha ou perdida" (Perfis de Permissão › Ferramentas) conseguem. Desligado, quem edita a oportunidade reabre.</p></div><Switch checked={policy.control_reopen} onCheckedChange={(value) => setPolicy({ ...policy, control_reopen: value })} /></div>
       </CardContent></Card>
       <Card><CardHeader><CardTitle className="text-base">Campos nativos obrigatórios</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-2"><div className="space-y-2"><p className="text-sm font-medium">Contato</p>{contactFields.map((field) => renderField(field.id, field.label, 'required_contact_fields'))}</div><div className="space-y-2"><p className="text-sm font-medium">Oportunidade</p>{opportunityFields.map((field) => renderField(field.id, field.label, 'required_opportunity_fields'))}</div></CardContent></Card>
       {customFields.length > 0 && <Card><CardHeader><CardTitle className="text-base">Campos personalizados obrigatórios</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-2">{customFields.map((field) => renderField(field.id, field.label, field.module === 'contacts' ? 'required_contact_custom_field_ids' : 'required_opportunity_custom_field_ids'))}</CardContent></Card>}

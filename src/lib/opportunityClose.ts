@@ -59,3 +59,12 @@ export async function transitionOpportunityStage(input: {
   if (error) throw error;
   return data as unknown as OpportunityCloseEvaluation & { ok: boolean; status?: string };
 }
+
+/** Erro do banco ao mudar o status da oportunidade, em texto para a pessoa; null = usar a mensagem genérica. */
+export function mensagemErroStatus(error: unknown): string | null {
+  const msg = (error as { message?: string } | null)?.message ?? '';
+  if (msg.includes('reopen_forbidden')) {
+    return 'Só quem tem a permissão "Reabrir oportunidade ganha ou perdida" pode tirar uma venda de Ganho ou Perdido. Fale com o administrador.';
+  }
+  return null;
+}

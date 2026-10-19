@@ -8,6 +8,7 @@ import { toast } from '@/hooks/use-toast';
 import { X, User, Prohibit, TrashSimple, Stack } from '@phosphor-icons/react';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
 import { useOrganization } from '@/hooks/useOrganization';
+import { mensagemErroStatus } from '@/lib/opportunityClose';
 
 interface User {
   id: string;
@@ -98,7 +99,7 @@ export function BulkActionsBar({
       onClear();
     } catch (error) {
       console.error('Error changing stage:', error);
-      toast({ title: t('common.error'), variant: 'destructive' });
+      toast({ title: t('common.error'), description: mensagemErroStatus(error) ?? undefined, variant: 'destructive' });
     } finally {
       setProcessing(false);
     }
@@ -130,7 +131,7 @@ export function BulkActionsBar({
       onClear();
     } catch (error) {
       console.error('Error changing stage in batch:', error);
-      toast({ title: t('common.error'), variant: 'destructive' });
+      toast({ title: t('common.error'), description: mensagemErroStatus(error) ?? undefined, variant: 'destructive' });
     } finally {
       setProcessing(false);
     }
