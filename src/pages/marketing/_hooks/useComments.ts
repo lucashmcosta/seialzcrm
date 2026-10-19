@@ -51,8 +51,8 @@ export function useCommentActions(orgId?: string) {
     onSuccess: refetch,
   });
   const hide = useMutation({
-    mutationFn: (i: { comment_id: string; hidden: boolean }) =>
-      invokeComment(orgId, { action: 'hide', platform: 'facebook', ...i }),
+    mutationFn: (i: { comment_id: string; platform: CommentPlatform; hidden: boolean }) =>
+      invokeComment(orgId, { action: 'hide', ...i }),
     onSuccess: refetch,
   });
   const remove = useMutation({

@@ -37,7 +37,7 @@ function CommentRow({ c, orgId }: { c: MetaComment; orgId?: string }) {
     } catch (e) { toast.error(uiError((e as Error)?.message || uiText("Falha ao responder"))); }
   };
   const onHide = async () => {
-    try { await hide.mutateAsync({ comment_id: c.id, hidden: !c.is_hidden }); toast.success(c.is_hidden ? uiText("Comentário exibido") : uiText("Comentário ocultado")); }
+    try { await hide.mutateAsync({ comment_id: c.id, platform: c.platform, hidden: !c.is_hidden }); toast.success(c.is_hidden ? uiText("Comentário exibido") : uiText("Comentário ocultado")); }
     catch (e) { toast.error(uiError((e as Error)?.message || uiText("Falha"))); }
   };
   const onDelete = async () => {
@@ -70,7 +70,7 @@ function CommentRow({ c, orgId }: { c: MetaComment; orgId?: string }) {
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button type="button" onClick={() => setReplying((v) => !v)} disabled={busy} className="text-muted-foreground hover:text-primary p-1" title={uiText("Responder")}><ArrowBendUpLeft size={16} /></button>
-          {c.platform === 'facebook' && (
+          {(
             <button type="button" onClick={onHide} disabled={busy} className="text-muted-foreground hover:text-foreground p-1" title={c.is_hidden ? uiText("Exibir") : uiText("Ocultar")}>
               {c.is_hidden ? <Eye size={16} /> : <EyeSlash size={16} />}
             </button>
