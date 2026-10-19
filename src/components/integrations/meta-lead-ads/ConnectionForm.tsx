@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,6 +24,7 @@ interface Props {
 // resolver a credencial. A config de conta de anúncio (Ads Manager) foi movida para a
 // seção Performance da integração Meta (Fase 0.5).
 export function ConnectionForm({ existing, onSuccess }: Props) {
+  useUiLocale();
   const { organization } = useOrganization();
   const ca = (existing?.connected_account || {}) as any;
   const [systemUserToken, setSystemUserToken] = useState("");
@@ -34,8 +37,8 @@ export function ConnectionForm({ existing, onSuccess }: Props) {
 
   const connect = useMutation({
     mutationFn: async () => {
-      if (!organization?.id) throw new Error("Organização não encontrada");
-      if (!systemUserToken) throw new Error("Preencha o System User Token");
+      if (!organization?.id) throw new Error(uiText("Organização não encontrada"));
+      if (!systemUserToken) throw new Error(uiText("Preencha o System User Token"));
       const body: any = {
         organization_id: organization.id,
         system_user_token: systemUserToken,
@@ -50,27 +53,24 @@ export function ConnectionForm({ existing, onSuccess }: Props) {
       return data;
     },
     onSuccess: () => {
-      toast.success("Conectado! Iniciamos a descoberta de páginas e formulários.");
+      toast.success(uiText("Conectado! Iniciamos a descoberta de páginas e formulários."));
       onSuccess();
     },
-    onError: (e: any) => toast.error(e.message || "Falha ao conectar"),
+    onError: (e: any) => toast.error(uiError(e.message || uiText("Falha ao conectar"))),
   });
 
   return (
     <div className="space-y-6">
       <Card className="p-6 space-y-6">
         <div>
-          <h2 className="text-lg font-semibold">Conectar conta Meta <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">Legado</span></h2>
+          <h2 className="text-lg font-semibold">{uiText("Conectar conta Meta")}<span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">{uiText("Legado")}</span></h2>
           <p className="mb-2 text-xs text-amber-700">
-            Método legado (token manual). Prefira <strong>“Continuar com Facebook”</strong> na seção
-            Conexão da integração Meta — mantido temporariamente para fallback/debug.
-          </p>
+            {uiText("Método legado (token manual). Prefira")}{' '}<strong>{uiText("“Continuar com Facebook”")}</strong> {uiText("na seção Conexão da integração Meta — mantido temporariamente para fallback/debug.")}</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Gere um System User Token no Business Manager → Configurações → System Users → Generate Token,
-            com permissões <code className="text-xs bg-muted px-1 rounded">leads_retrieval</code>,{" "}
+            {uiText("Gere um System User Token no Business Manager → Configurações → System Users → Generate Token, com permissões")}{' '}<code className="text-xs bg-muted px-1 rounded">leads_retrieval</code>,{" "}
             <code className="text-xs bg-muted px-1 rounded">pages_show_list</code>,{" "}
             <code className="text-xs bg-muted px-1 rounded">pages_read_engagement</code>,{" "}
-            <code className="text-xs bg-muted px-1 rounded">ads_read</code> e{" "}
+            <code className="text-xs bg-muted px-1 rounded">ads_read</code> {uiText("e")}{" "}
             <code className="text-xs bg-muted px-1 rounded">business_management</code>.
           </p>
         </div>
@@ -78,8 +78,7 @@ export function ConnectionForm({ existing, onSuccess }: Props) {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription className="text-xs">
-            As credenciais são criptografadas com AES-256-GCM antes de serem armazenadas.
-          </AlertDescription>
+            {uiText("As credenciais são criptografadas com AES-256-GCM antes de serem armazenadas.")}</AlertDescription>
         </Alert>
 
         <div className="space-y-4">
@@ -93,12 +92,11 @@ export function ConnectionForm({ existing, onSuccess }: Props) {
               placeholder="EAA..."
             />
             <p className="text-xs text-muted-foreground">
-              Recomendado: token de longa duração (60 dias) ou perpétuo do System User.
-            </p>
+              {uiText("Recomendado: token de longa duração (60 dias) ou perpétuo do System User.")}</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="business_id">Business ID (opcional)</Label>
+            <Label htmlFor="business_id">{uiText("Business ID (opcional)")}</Label>
             <Input
               id="business_id"
               value={businessId}
@@ -110,14 +108,13 @@ export function ConnectionForm({ existing, onSuccess }: Props) {
           <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
             <CollapsibleTrigger asChild>
               <Button variant="ghost" size="sm" className="w-full justify-between -ml-2">
-                <span className="text-sm font-medium">Avançado (opcional)</span>
+                <span className="text-sm font-medium">{uiText("Avançado (opcional)")}</span>
                 <CaretDown className={`h-4 w-4 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-4 pt-4">
               <p className="text-xs text-muted-foreground">
-                Para a maioria dos casos, basta o System User Token. App ID e Secret só são necessários
-                se o seu app do Meta exigir <code className="bg-muted px-1 rounded">appsecret_proof</code>.
+                {uiText("Para a maioria dos casos, basta o System User Token. App ID e Secret só são necessários se o seu app do Meta exigir")}{' '}<code className="bg-muted px-1 rounded">appsecret_proof</code>.
               </p>
               <div className="space-y-2">
                 <Label htmlFor="app_id">App ID</Label>
@@ -139,7 +136,7 @@ export function ConnectionForm({ existing, onSuccess }: Props) {
 
         <div className="flex justify-end">
           <Button onClick={() => connect.mutate()} disabled={connect.isPending}>
-            {connect.isPending ? "Validando..." : isConnected ? "Atualizar token" : "Conectar conta"}
+            {connect.isPending ? "Validando..." : isConnected ? uiText("Atualizar token") : uiText("Conectar conta")}
           </Button>
         </div>
       </Card>

@@ -1,3 +1,6 @@
+import { uiError } from '@/lib/ui-locale';
+import { getUiLocale, uiDateLocale, uiDatePattern } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -45,6 +48,7 @@ const empty = {
 };
 
 export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIntegration }: Props) {
+  useUiLocale();
   const { organization } = useOrganization();
   const multiWabaEnabled = useMetaMultiWabaFlag(organization?.id);
   const qc = useQueryClient();
@@ -85,7 +89,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
 
   const connectMutation = useMutation({
     mutationFn: async (opts: { skipMetaValidation?: boolean } = {}) => {
-      if (!organization?.id) throw new Error("Organização indisponível");
+      if (!organization?.id) throw new Error(uiText("Organização indisponível"));
       const { purpose, ...rest } = form;
       return await metaWhatsAppService.connect({
         organizationId: organization.id,
@@ -95,14 +99,14 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
       });
     },
     onSuccess: (_data, vars) => {
-      toast.success(vars?.skipMetaValidation ? "Dados salvos (sem validação Meta)" : "Meta WhatsApp Cloud conectado!");
+      toast.success(vars?.skipMetaValidation ? uiText("Dados salvos (sem validação Meta)") : uiText("Meta WhatsApp Cloud conectado!"));
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       onOpenChange(false);
     },
     onError: (e: any) => {
       if (e instanceof MetaWhatsAppValidationError) {
-        toast.error("A Meta recusou a validação", {
-          description: "Se você só quer trocar número/ID agora, use Salvar sem validar.",
+        toast.error(uiText("A Meta recusou a validação"), {
+          description: uiText("Se você só quer trocar número/ID agora, use Salvar sem validar."),
         });
         return;
       }
@@ -113,39 +117,39 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
           senderSid: e.info.existing_sender_sid,
         });
         setMigrateOpen(true);
-        toast.message("Número já existe nesta organização", {
-          description: `Provider atual: ${e.info.existing_provider}. Use o diálogo de migração para trocar o provider preservando o histórico.`,
+        toast.message(uiText("Número já existe nesta organização"), {
+          description: uiText("Provider atual: {0}. Use o diálogo de migração para trocar o provider preservando o histórico.", {"0": e.info.existing_provider}),
         });
         return;
       }
-      toast.error(`Falha ao salvar: ${e?.message ?? e}`);
+      toast.error(uiError(e?.message ?? e));
     },
   });
 
   const verifyMutation = useMutation({
     mutationFn: async () => {
-      if (!organization?.id) throw new Error("Organização indisponível");
+      if (!organization?.id) throw new Error(uiText("Organização indisponível"));
       return await metaWhatsAppService.verify(organization.id);
     },
     onSuccess: () => {
-      toast.success("Verificação concluída");
+      toast.success(uiText("Verificação concluída"));
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
     },
-    onError: (e: any) => toast.error(`Erro: ${e?.message ?? e}`),
+    onError: (e: any) => toast.error(uiError(e?.message ?? e)),
   });
 
   const disconnectMutation = useMutation({
     mutationFn: async () => {
-      if (!organization?.id) throw new Error("Organização indisponível");
+      if (!organization?.id) throw new Error(uiText("Organização indisponível"));
       await metaWhatsAppService.disconnect(organization.id);
     },
     onSuccess: () => {
-      toast.success("Integração desconectada");
+      toast.success(uiText("Integração desconectada"));
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       setConfirmDisconnectOpen(false);
       onOpenChange(false);
     },
-    onError: (e: any) => toast.error(`Erro: ${e?.message ?? e}`),
+    onError: (e: any) => toast.error(uiError(e?.message ?? e)),
   });
 
 
@@ -177,10 +181,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               {integration?.name ?? "Meta WhatsApp Cloud"}
             </DialogTitle>
             <DialogDescription>
-              Cada organização usa o próprio App Meta. Preencha todos os campos abaixo com os dados do App
-              da sua conta Meta (App ID, App Secret, Verify Token, WABA ID, Phone Number ID, número E.164
-              e System User Token permanente).
-            </DialogDescription>
+              {uiText("Cada organização usa o próprio App Meta. Preencha todos os campos abaixo com os dados do App da sua conta Meta (App ID, App Secret, Verify Token, WABA ID, Phone Number ID, número E.164 e System User Token permanente).")}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6">
@@ -190,7 +191,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <h4 className="font-medium flex items-center gap-2 min-w-0">
                     <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-                    <span className="truncate">Número conectado</span>
+                    <span className="truncate">{uiText("Número conectado")}</span>
                   </h4>
                   <div className="flex gap-2 flex-wrap">
 
@@ -201,29 +202,28 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                       disabled={verifyMutation.isPending}
                     >
                       <ArrowsClockwise className="h-4 w-4 mr-1" />
-                      {verifyMutation.isPending ? "Verificando..." : "Verificar"}
+                      {verifyMutation.isPending ? "Verificando..." : uiText("Verificar")}
                     </Button>
                     <Button
                       variant="destructive"
                       size="sm"
                       onClick={() => setConfirmDisconnectOpen(true)}
                     >
-                      Desconectar
-                    </Button>
+                      {uiText("Desconectar")}</Button>
                   </div>
                 </div>
                 <Separator />
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <Field label="Número" value={cv.display_phone_number ?? cv.phone_e164} />
-                  <Field label="Nome verificado" value={cv.verified_name} />
+                  <Field label={uiText("Número")} value={cv.display_phone_number ?? cv.phone_e164} />
+                  <Field label={uiText("Nome verificado")} value={cv.verified_name} />
                   <Field label="WABA ID" value={cv.waba_id} mono />
                   <Field label="Phone Number ID" value={cv.phone_number_id} mono />
                   <Field label="App ID" value={cv.app_id} mono />
-                  <Field label="Qualidade" value={cv.quality_rating} />
-                  <Field label="Tier de envio" value={cv.messaging_limit_tier} />
+                  <Field label={uiText("Qualidade")} value={cv.quality_rating} />
+                  <Field label={uiText("Tier de envio")} value={cv.messaging_limit_tier} />
                   <Field
-                    label="Última validação"
-                    value={cv.last_validated_at ? new Date(cv.last_validated_at).toLocaleString("pt-BR") : "—"}
+                    label={uiText("Última validação")}
+                    value={cv.last_validated_at ? new Date(cv.last_validated_at).toLocaleString(getUiLocale()) : "—"}
                   />
                 </div>
               </Card>
@@ -248,21 +248,18 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               <Card className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <h4 className="font-medium">Outros números desta WABA</h4>
+                    <h4 className="font-medium">{uiText("Outros números desta WABA")}</h4>
                     <p className="text-xs text-muted-foreground">
-                      Mesma WABA, App e tokens da integração principal. Use para roteamento por finalidade
-                      (Atendimento vs Comercial).
-                    </p>
+                      {uiText("Mesma WABA, App e tokens da integração principal. Use para roteamento por finalidade (Atendimento vs Comercial).")}</p>
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setAddNumberOpen(true)}
                     disabled={!cv.waba_id || !cv.app_id}
-                    title={!cv.waba_id ? "Conecte a integração principal primeiro" : ""}
+                    title={!cv.waba_id ? uiText("Conecte a integração principal primeiro") : ""}
                   >
-                    + Adicionar número desta WABA
-                  </Button>
+                    {uiText("+ Adicionar número desta WABA")}</Button>
                 </div>
                 <Separator />
                 <MetaAdditionalEndpointsSection
@@ -294,7 +291,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
             {/* ===== Form de conexão / edição ===== */}
             <Card className="p-4 space-y-4">
               <h4 className="font-medium">
-                {isConnected ? "Editar dados do número" : "Dados do número (organização)"}
+                {isConnected ? uiText("Editar dados do número") : uiText("Dados do número (organização)")}
               </h4>
 
               <div className="grid grid-cols-2 gap-3">
@@ -326,7 +323,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="meta-phone-e164">Número (E.164)</Label>
+                  <Label htmlFor="meta-phone-e164">{uiText("Número (E.164)")}</Label>
                   <Input
                     id="meta-phone-e164"
                     value={form.phoneE164}
@@ -337,7 +334,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="meta-token">System User Token (permanente)</Label>
+                <Label htmlFor="meta-token">{uiText("System User Token (permanente)")}</Label>
                 <div className="relative">
                   <Input
                     id="meta-token"
@@ -356,8 +353,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                   </button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Será criptografado antes de salvar. Não trafega de volta ao navegador.
-                  {isConnected && " Cole o token novamente para atualizar — ele não é exibido de volta."}
+                  {uiText("Será criptografado antes de salvar. Não trafega de volta ao navegador.")}{isConnected && uiText("Cole o token novamente para atualizar — ele não é exibido de volta.")}
                 </p>
               </div>
 
@@ -365,7 +361,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                 <Label htmlFor="meta-app-secret">
                   App Secret
                   {hasStoredAppSecret ? (
-                    <span className="ml-2 text-xs text-green-600 font-normal">••• já configurado</span>
+                    <span className="ml-2 text-xs text-green-600 font-normal">{uiText("••• já configurado")}</span>
                   ) : (
                     <span className="ml-1 text-destructive">*</span>
                   )}
@@ -375,7 +371,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                     id="meta-app-secret"
                     type={showAppSecret ? "text" : "password"}
                     value={form.appSecret}
-                    placeholder={hasStoredAppSecret ? "Deixe em branco para manter" : "App Secret do app Meta"}
+                    placeholder={hasStoredAppSecret ? uiText("Deixe em branco para manter") : uiText("App Secret do app Meta")}
                     onChange={(e) => setForm((f) => ({ ...f, appSecret: e.target.value }))}
                     className="pr-10"
                   />
@@ -388,16 +384,14 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                   </button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Usado para calcular appsecret_proof nas chamadas Graph e validar a assinatura dos webhooks.
-                  Criptografado antes de salvar.
-                </p>
+                  {uiText("Usado para calcular appsecret_proof nas chamadas Graph e validar a assinatura dos webhooks. Criptografado antes de salvar.")}</p>
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="meta-verify-token">
                   Verify Token
                   {hasStoredVerifyToken ? (
-                    <span className="ml-2 text-xs text-green-600 font-normal">••• já configurado</span>
+                    <span className="ml-2 text-xs text-green-600 font-normal">{uiText("••• já configurado")}</span>
                   ) : (
                     <span className="ml-1 text-destructive">*</span>
                   )}
@@ -407,7 +401,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                     id="meta-verify-token"
                     type={showVerifyToken ? "text" : "password"}
                     value={form.verifyToken}
-                    placeholder={hasStoredVerifyToken ? "Deixe em branco para manter" : "Token escolhido por você"}
+                    placeholder={hasStoredVerifyToken ? uiText("Deixe em branco para manter") : uiText("Token escolhido por você")}
                     onChange={(e) => setForm((f) => ({ ...f, verifyToken: e.target.value }))}
                     className="pr-10"
                   />
@@ -420,12 +414,11 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                   </button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Mesmo valor cadastrado no Webhook do app Meta (campo "Verify token"). Criptografado antes de salvar.
-                </p>
+                  {uiText("Mesmo valor cadastrado no Webhook do app Meta (campo \"Verify token\"). Criptografado antes de salvar.")}</p>
               </div>
 
               <div className="space-y-2">
-                <Label>Destino das conversas deste número</Label>
+                <Label>{uiText("Destino das conversas deste número")}</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -436,8 +429,8 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                         : "border-border hover:border-muted-foreground/40"
                     }`}
                   >
-                    <p className="text-sm font-medium">Atendimento / CS</p>
-                    <p className="text-xs text-muted-foreground">Roteia para <code>/inbox</code></p>
+                    <p className="text-sm font-medium">{uiText("Atendimento / CS")}</p>
+                    <p className="text-xs text-muted-foreground">{uiText("Roteia para")}{' '}<code>/inbox</code></p>
                   </button>
                   <button
                     type="button"
@@ -448,8 +441,8 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                         : "border-border hover:border-muted-foreground/40"
                     }`}
                   >
-                    <p className="text-sm font-medium">Comercial</p>
-                    <p className="text-xs text-muted-foreground">Roteia para <code>/messages</code></p>
+                    <p className="text-sm font-medium">{uiText("Comercial")}</p>
+                    <p className="text-xs text-muted-foreground">{uiText("Roteia para")}{' '}<code>/messages</code></p>
                   </button>
                 </div>
               </div>
@@ -461,23 +454,22 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                   target="_blank" rel="noreferrer"
                   className="text-xs text-primary inline-flex items-center gap-1"
                 >
-                  <LinkSimple className="h-3 w-3" /> Documentação Meta Cloud
-                </a>
+                  <LinkSimple className="h-3 w-3" /> {uiText("Documentação Meta Cloud")}</a>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
                     onClick={() => connectMutation.mutate({})}
                     disabled={!canSubmit || connectMutation.isPending}
-                    title="Confere os dados na Graph API da Meta antes de salvar."
+                    title={uiText("Confere os dados na Graph API da Meta antes de salvar.")}
                   >
-                    {connectMutation.isPending ? "Validando..." : "Validar na Meta"}
+                    {connectMutation.isPending ? "Validando..." : uiText("Validar na Meta")}
                   </Button>
                   <Button
                     onClick={() => connectMutation.mutate({ skipMetaValidation: true })}
                     disabled={!canSubmit || connectMutation.isPending}
-                    title="Salva os dados sem chamar a Graph API da Meta. Use quando souber que os IDs estão corretos mas a Meta está recusando."
+                    title={uiText("Salva os dados sem chamar a Graph API da Meta. Use quando souber que os IDs estão corretos mas a Meta está recusando.")}
                   >
-                    {connectMutation.isPending ? "Salvando..." : "Salvar sem validar"}
+                    {connectMutation.isPending ? "Salvando..." : uiText("Salvar sem validar")}
                   </Button>
                 </div>
               </div>
@@ -489,9 +481,9 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
       <ConfirmDialog
         open={confirmDisconnectOpen}
         onOpenChange={setConfirmDisconnectOpen}
-        title="Desconectar Meta WhatsApp Cloud"
-        description="O número será desativado para envio e recebimento. Configurações Twilio e demais integrações Meta não são afetadas."
-        confirmText="Desconectar"
+        title={uiText("Desconectar Meta WhatsApp Cloud")}
+        description={uiText("O número será desativado para envio e recebimento. Configurações Twilio e demais integrações Meta não são afetadas.")}
+        confirmText={uiText("Desconectar")}
         variant="destructive"
         onConfirm={() => disconnectMutation.mutate()}
         loading={disconnectMutation.isPending}
@@ -537,6 +529,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
 }
 
 function Field({ label, value, mono }: { label: string; value: any; mono?: boolean }) {
+  useUiLocale();
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>

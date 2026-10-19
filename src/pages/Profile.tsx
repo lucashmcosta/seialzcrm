@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { profileName } from '@/lib/locale';
 import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -15,7 +17,7 @@ import { toast } from '@/hooks/use-toast';
 import { SpinnerGap, UploadSimple } from '@phosphor-icons/react';
 
 export default function Profile() {
-  const { locale: orgLocale, userProfile, organization } = useOrganization();
+  const { locale: orgLocale, userProfile, organization, refetch, loading: profileLoading } = useOrganization();
   const { user } = useAuth();
   const { t } = useTranslation(orgLocale as any);
 
@@ -33,7 +35,7 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState('');
   
   // Preferences
-  const [userLocale, setUserLocale] = useState(orgLocale);
+  const [userLocale, setUserLocale] = useState('inherit');
   const [timezone, setTimezone] = useState('');
 
   useEffect(() => {
@@ -43,7 +45,7 @@ export default function Profile() {
       setLastName(userProfile.last_name || '');
       setEmail(userProfile.email || '');
       setAvatarUrl(userProfile.avatar_url || '');
-      setUserLocale(userProfile.locale || organization?.default_locale || 'pt-BR');
+      setUserLocale(userProfile.locale || 'inherit');
       setTimezone(userProfile.timezone || organization?.timezone || 'America/Sao_Paulo');
     }
   }, [userProfile, organization]);
@@ -80,7 +82,7 @@ export default function Profile() {
     } catch (error: any) {
       toast({
         title: t('common.error'),
-        description: error.message,
+        description: uiError(error.message),
         variant: 'destructive',
       });
     } finally {
@@ -92,46 +94,38 @@ export default function Profile() {
     try {
       setLoading(true);
 
-      if (!userProfile?.id) return;
+      if (!userProfile?.id || !user?.id) throw new Error(t('profile.unavailable'));
 
       // Prepare data based on locale
       const updateData: any = {
-        email,
         avatar_url: avatarUrl || null,
-        locale: userLocale,
+        locale: userLocale === 'inherit' ? null : userLocale,
         timezone,
       };
 
-      if (userLocale === 'pt-BR') {
-        updateData.full_name = fullName;
-        // Derive first/last from full name
-        const parts = fullName.trim().split(' ');
-        updateData.first_name = parts[0] || null;
-        updateData.last_name = parts.slice(1).join(' ') || null;
-      } else {
-        updateData.first_name = firstName;
-        updateData.last_name = lastName;
-        updateData.full_name = `${firstName} ${lastName}`.trim();
-      }
+      Object.assign(updateData, profileName(fullName, firstName, lastName));
 
-      const { error } = await supabase
+      const { data: saved, error } = await supabase
         .from('users')
         .update(updateData)
-        .eq('id', userProfile.id);
+        .eq('id', userProfile.id)
+        .eq('auth_user_id', user.id)
+        .select('id,locale')
+        .single();
 
-      if (error) throw error;
+      if (error || !saved) throw new Error(t('profile.saveFailed'));
+      await refetch();
 
       toast({
         title: t('profile.saved'),
         description: t('profile.savedDesc'),
       });
 
-      // Reload page to refresh data
-      window.location.reload();
+
     } catch (error: any) {
       toast({
         title: t('common.error'),
-        description: error.message,
+        description: uiError(error.message),
         variant: 'destructive',
       });
     } finally {
@@ -156,7 +150,7 @@ export default function Profile() {
       setConfirmPassword('');
       toast({ title: t('profile.passwordUpdated'), description: t('profile.passwordUpdatedDesc') });
     } catch (error: any) {
-      toast({ title: t('common.error'), description: error.message, variant: 'destructive' });
+      toast({ title: t('common.error'), description: uiError(error.message), variant: 'destructive' });
     } finally {
       setSavingPassword(false);
     }
@@ -219,7 +213,8 @@ export default function Profile() {
 
                 {/* Name Input */}
                 <NameInput
-                  locale={userLocale as any}
+                  locale={orgLocale as 'pt-BR' | 'en-US'}
+                  countryCode="BR"
                   fullName={fullName}
                   firstName={firstName}
                   lastName={lastName}
@@ -258,7 +253,8 @@ export default function Profile() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pt-BR">Português (Brasil)</SelectItem>
+                      <SelectItem value="inherit">{t('profile.inheritLocale')}</SelectItem>
+                      <SelectItem value="pt-BR">{t('profile.portuguese')}</SelectItem>
                       <SelectItem value="en-US">English (US)</SelectItem>
                     </SelectContent>
                   </Select>
@@ -343,7 +339,7 @@ export default function Profile() {
 
             {/* Save Button */}
             <div className="flex justify-end">
-              <Button onClick={handleSaveProfile} disabled={loading}>
+              <Button onClick={handleSaveProfile} disabled={loading || profileLoading || !userProfile?.id}>
                 {loading && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
                 {t('common.save')}
               </Button>

@@ -135,11 +135,15 @@ serve(async (req) => {
       .eq("id", connection_id).eq("organization_id", organization_id).maybeSingle();
     if (!conn) return json({ error: "connection_not_found" }, 404);
 
-    const { data: assets } = await admin.from("meta_assets")
+    const { data: selectedAssets } = await admin.from("meta_assets")
       .select("id, external_id, asset_type, metadata")
       .eq("connection_id", connection_id).eq("selection_state", "selected")
       .in("asset_type", ["page", "instagram_account"]);
-    if (!assets?.length) return json({ success: true, message: "no_selected_organic_assets" });
+    const {data: owners, error: ownersError} = await admin.rpc('rpc_meta_effective_sync_assets',{p_org:organization_id});
+    if (ownersError) throw new Error('sync_owner_lookup_failed');
+    const owned = new Set((owners ?? []).map((a: any) => a.id));
+    const assets = (selectedAssets ?? []).filter((a: any) => owned.has(a.id));
+    if (!assets.length) return json({ success: true, message: "no_selected_organic_assets" });
 
     const accessToken = await resolveConnectionToken(admin, connection_id);
     const appSecret = facebookAppSecret();

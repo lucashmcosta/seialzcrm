@@ -1,3 +1,5 @@
+import { useMetaSocialPublishingFlag } from '@/hooks/useMetaSocialPublishingFlag';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
@@ -10,23 +12,23 @@ import { useMarketingPublishingFlag } from '@/hooks/useMarketingPublishingFlag';
 const BASE_TABS = [
   { href: '/marketing', label: 'Overview', icon: House, exact: true },
   { href: '/marketing/ads', label: 'Ads', icon: Megaphone },
-  { href: '/marketing/organic', label: 'Orgânico', icon: InstagramLogo },
-  { href: '/marketing/funnel', label: 'Funil', icon: Funnel },
-  { href: '/marketing/timeline', label: 'Histórico', icon: ChartLine },
+  { href: '/marketing/organic', get label() { return uiText("Orgânico"); }, icon: InstagramLogo },
+  { href: '/marketing/funnel', get label() { return uiText("Funil"); }, icon: Funnel },
+  { href: '/marketing/timeline', get label() { return uiText("Histórico"); }, icon: ChartLine },
 ];
 
 export function MarketingLayout({ children, title }: { children: ReactNode; title?: string }) {
+  useUiLocale();
   const { pathname } = useLocation();
   const { organization } = useOrganization();
   const { enabled: publishingEnabled } = useMarketingPublishingFlag(organization?.id);
 
-  const TABS = publishingEnabled
-    ? [...BASE_TABS,
-        { href: '/marketing/posts', label: 'Publicações', icon: PaperPlaneTilt },
-        { href: '/marketing/comments', label: 'Comentários', icon: ChatCircle },
-        { href: '/marketing/campaigns', label: 'Campanhas', icon: Megaphone },
-        { href: '/marketing/webhooks', label: 'Webhooks', icon: BellRinging }]
-    : BASE_TABS;
+  const { enabled: socialPublishingEnabled } = useMetaSocialPublishingFlag(organization?.id);
+  const TABS = [...BASE_TABS, ...(socialPublishingEnabled ? [
+        { href: '/marketing/posts', label: uiText("Publicações"), icon: PaperPlaneTilt },
+        { href: '/marketing/comments', label: uiText("Comentários"), icon: ChatCircle }] : []), ...(publishingEnabled ? [
+        { href: '/marketing/campaigns', label: uiText("Campanhas"), icon: Megaphone },
+        { href: '/marketing/webhooks', label: 'Webhooks', icon: BellRinging }] : [])];
   return (
     <Layout>
       <div className="space-y-6 p-6">

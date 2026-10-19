@@ -1,3 +1,4 @@
+import { profileCacheFresh, normalizeSocialProfile } from "../_shared/meta/social-profile.ts";
 // social-inbox — caixa de entrada de DMs do Instagram e Messenger do Facebook, pelo Seialz.
 // Escopos: instagram_manage_messages (IG) e pages_messaging (Messenger — pode não estar
 // concedido ainda). Independente da caixa Comercial (WhatsApp). Escrita real (responder).
@@ -5,7 +6,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { facebookAppSecret, resolveConnectionToken } from "../_shared/meta/connection.ts";
+import { facebookAppSecret, resolveConnectionToken, resolveConnectionWithAsset } from "../_shared/meta/connection.ts";
 import { metaGraphGet, metaGraphPost, MetaGraphError } from "../_shared/meta-graph.ts";
 
 function json(body: unknown, status = 200): Response {
@@ -60,26 +61,14 @@ serve(async (req) => {
       const { data: user } = await admin.from("users").select("id").eq("auth_user_id", claims.claims.sub).maybeSingle();
       if (!user) return json({ error: "user_not_found" }, 403);
       const { data: m } = await admin.from("user_organizations").select("id")
-        .eq("user_id", user.id).eq("organization_id", organization_id).maybeSingle();
+        .eq("user_id", user.id).eq("organization_id", organization_id).eq("is_active",true).maybeSingle();
       if (!m) return json({ error: "forbidden_org" }, 403);
     }
 
-    // Pode haver mais de uma conexão 'connected' (ex.: re-auth incompleta sem
-    // assets). Escolhemos a conexão mais recente que TENHA uma página selecionada
-    // — não a mais recente em absoluto — para não cair numa conexão vazia.
-    const { data: conns } = await admin.from("meta_connections").select("id")
-      .eq("organization_id", organization_id).eq("status", "connected")
-      .order("created_at", { ascending: false });
-    if (!conns?.length) return json({ error: "no_connected_connection" }, 404);
-    let connection_id: string | undefined;
-    let pageId: string | undefined;
-    for (const cand of conns) {
-      const { data: a } = await admin.from("meta_assets")
-        .select("external_id").eq("connection_id", cand.id).eq("selection_state", "selected")
-        .eq("asset_type", "page").limit(1).maybeSingle();
-      if (a?.external_id) { connection_id = cand.id; pageId = a.external_id; break; }
-    }
-    if (!connection_id || !pageId) return json({ error: "no_page" }, 404);
+    const resolved = await resolveConnectionWithAsset(admin, organization_id, 'page');
+    if (!resolved) return json({error:'no_page'},404);
+    const connection_id = resolved.connection_id;
+    const pageId = resolved.assets.page;
 
     // Nas conversas do Instagram, "nós" somos identificados pelo id da CONTA do
     // Instagram (não pelo id da Página do Facebook). Precisamos dele para (a) não
@@ -93,17 +82,43 @@ serve(async (req) => {
     const appSecret = facebookAppSecret();
     // Cache do page token por isolate (evita 1 chamada Graph por request — vale p/
     // todas as actions). O token de página derivado do system user é estável.
-    let pageToken: string | undefined = pageTokenCache.get(pageId)?.token;
-    if (pageToken && (pageTokenCache.get(pageId)!.exp < Date.now())) pageToken = undefined;
+    let pageToken: string | undefined = pageTokenCache.get(`${organization_id}:${connection_id}:${pageId}`)?.token;
+    if (pageToken && (pageTokenCache.get(`${organization_id}:${connection_id}:${pageId}`)!.exp < Date.now())) pageToken = undefined;
     if (!pageToken) {
       const accessToken = await resolveConnectionToken(admin, connection_id);
       try {
         const r = await metaGraphGet(`/${pageId}`, { fields: "access_token" }, { accessToken, appSecret });
         pageToken = r?.access_token;
-        if (pageToken) pageTokenCache.set(pageId, { token: pageToken, exp: Date.now() + 10 * 60_000 });
+        if (pageToken) pageTokenCache.set(`${organization_id}:${connection_id}:${pageId}`, { token: pageToken, exp: Date.now() + 10 * 60_000 });
       } catch { /* segue */ }
     }
     if (!pageToken) return json({ error: "no_page_token" }, 400);
+
+    async function cachedProfile(participant: string, platform: string) {
+      const {data: cached} = await admin.from('social_conversations')
+        .select('profile_page_id,profile_refresh_after,profile_data,name,avatar_url')
+        .eq('organization_id',organization_id).eq('platform',platform).eq('participant_id',participant).maybeSingle();
+      const previous = cached?.profile_page_id === pageId ? cached.profile_data : null;
+      if (profileCacheFresh(cached,pageId)) return previous;
+      let profile = previous;
+      let ttl = 15 * 60_000;
+      try {
+        const fields = platform === 'messenger' ? 'first_name,last_name,profile_pic'
+          : 'name,username,profile_pic,follower_count,is_verified_user,is_user_follow_business,is_business_follow_user';
+        const raw = await metaGraphGet(`/${participant}`,{fields},{accessToken:pageToken!,appSecret});
+        profile = normalizeSocialProfile(platform,raw);
+        ttl = 24 * 60 * 60_000;
+      } catch { /* Lack of profile access must not break messaging or erase cached identity. */ }
+      const identity = profile ? {
+        ...(profile.name ? {name:profile.name} : {}),
+        ...(profile.avatar_url ? {avatar_url:profile.avatar_url} : {}),
+      } : {};
+      await admin.from('social_conversations').upsert({
+        organization_id, platform, participant_id:participant, ...identity,
+        profile_page_id:pageId, profile_refresh_after:new Date(Date.now()+ttl).toISOString(), profile_data:profile,
+      },{onConflict:'organization_id,platform,participant_id'});
+      return profile;
+    }
 
     // Lista conversas de um canal (instagram|messenger); erros por canal não derrubam o outro.
     // O endpoint platform=instagram é bem mais sensível ao volume de dados que o
@@ -123,7 +138,7 @@ serve(async (req) => {
         return {
           id: cv.id, platform,
           participant_id: other.id ?? "",
-          name: other.name || username || "Contato",
+          name: other.name || username || "",
           username: username ?? null,
           avatar_url: null as string | null,
           // Instagram expõe link público por username; Facebook/Messenger não expõe
@@ -148,22 +163,23 @@ serve(async (req) => {
       }));
       const out = perChannel.flat();
       out.sort((a, b) => String(b.updated_time).localeCompare(String(a.updated_time)));
-      const igToEnrich = out.filter((c) => c.platform === "instagram" && c.participant_id).slice(0, 20);
-      await Promise.all(igToEnrich.map(async (c) => {
-        try {
-          const p = await metaGraphGet(`/${c.participant_id}`, { fields: "name,username,profile_pic" }, { accessToken: pageToken, appSecret });
-          if (p?.profile_pic) c.avatar_url = p.profile_pic;
-          if (p?.name) c.name = p.name;
-          if (p?.username) c.username = p.username;
-        } catch { /* mantém fallback */ }
-      }));
+      // Limit concurrent profile calls. Positive and negative results are persisted.
+      for (let i=0;i<out.length;i+=4) {
+        await Promise.all(out.slice(i,i+4).filter(c=>c.participant_id).map(async c => {
+          const profile = await cachedProfile(c.participant_id,c.platform);
+          if (profile?.name) c.name=profile.name;
+          if (profile?.avatar_url) c.avatar_url=profile.avatar_url;
+          if (profile?.username) c.username=profile.username;
+        }));
+      }
       return { out, channels };
     }
     async function upsertConversations(convs: any[]) {
       const rows = convs.filter((c) => c.participant_id).map((c) => ({
         organization_id, platform: c.platform, participant_id: String(c.participant_id),
-        conversation_id: c.id ?? null, name: c.name ?? null, username: c.username ?? null,
-        avatar_url: c.avatar_url ?? null, profile_link: c.profile_link ?? null,
+        conversation_id: c.id ?? null,
+        ...(c.name ? {name:c.name} : {}), ...(c.username ? {username:c.username} : {}),
+        ...(c.avatar_url ? {avatar_url:c.avatar_url} : {}), ...(c.profile_link ? {profile_link:c.profile_link} : {}),
         last_message: c.last_message ?? "", updated_time: c.updated_time ?? null,
         refreshed_at: new Date().toISOString(),
       }));
@@ -172,7 +188,7 @@ serve(async (req) => {
     async function liveFetchMessages(conversation_id: string) {
       const r = await metaGraphGet(`/${conversation_id}`,
         { fields: "messages.limit(30){id,message,from,created_time,attachments{id,mime_type,name,image_data,video_data,file_url},shares{link,name}}" },
-        { accessToken: pageToken, appSecret });
+        { accessToken: pageToken!, appSecret });
       return (r?.messages?.data ?? []).map((m: any) => ({
         id: m.id, text: m.message ?? "", from_page: selfIds.has(String(m.from?.id)),
         from_name: m.from?.name || m.from?.username || "", created_time: m.created_time,
@@ -196,29 +212,11 @@ serve(async (req) => {
       const participant_id = String(body.participant_id ?? "");
       const platform = String(body.platform ?? "");
       if (!participant_id) return json({ error: "missing_participant_id" }, 400);
-      try {
-        if (platform === "instagram") {
-          const r = await metaGraphGet(`/${participant_id}`,
-            { fields: "name,username,profile_pic,follower_count,is_verified_user,is_user_follow_business,is_business_follow_user" },
-            { accessToken: pageToken, appSecret });
-          return json({ ok: true, profile: {
-            name: r?.name ?? null, username: r?.username ?? null, avatar_url: r?.profile_pic ?? null,
-            follower_count: r?.follower_count ?? null, is_verified: !!r?.is_verified_user,
-            follows_us: !!r?.is_user_follow_business, we_follow: !!r?.is_business_follow_user,
-            profile_link: r?.username ? `https://instagram.com/${r.username}` : null,
-          } });
-        }
-        // messenger
-        const r = await metaGraphGet(`/${participant_id}`,
-          { fields: "first_name,last_name,name,profile_pic" }, { accessToken: pageToken, appSecret });
-        return json({ ok: true, profile: {
-          name: r?.name || [r?.first_name, r?.last_name].filter(Boolean).join(" ") || null,
-          avatar_url: r?.profile_pic ?? null, profile_link: null,
-        } });
-      } catch (e) {
-        // perfil indisponível (ex.: feature não aprovada) não é erro fatal
-        return json({ ok: true, profile: null, note: errMsg(e) });
-      }
+      if (!['instagram','messenger'].includes(platform)) return json({error:'invalid_platform'},400);
+      const {data: known} = await admin.from('social_conversations').select('participant_id,profile_page_id')
+        .eq('organization_id',organization_id).eq('platform',platform).eq('participant_id',participant_id).maybeSingle();
+      if (!known || (known.profile_page_id && known.profile_page_id !== pageId)) return json({error:'conversation_not_found'},404);
+      return json({ok:true,profile:await cachedProfile(participant_id,platform)});
     }
 
     if (action === "conversations") {
@@ -232,7 +230,7 @@ serve(async (req) => {
       const { data: rows } = await q.order("updated_time", { ascending: false }).limit(60);
       const fromDb = (rows ?? []).map((r: any) => ({
         id: r.conversation_id || r.participant_id, platform: r.platform, participant_id: r.participant_id,
-        name: r.name || "Contato", username: r.username, avatar_url: r.avatar_url, profile_link: r.profile_link,
+        name: r.name || "", username: r.username, avatar_url: r.avatar_url, profile_link: r.profile_link,
         updated_time: r.updated_time, last_message: r.last_message ?? "",
       }));
       if (fromDb.length > 0) {
@@ -290,7 +288,7 @@ serve(async (req) => {
           message: JSON.stringify(message),
           messaging_type: "RESPONSE",
         };
-        const r = await metaGraphPost(`/${pageId}/messages`, payload, { accessToken: pageToken, appSecret });
+        const r = await metaGraphPost(`/${pageId}/messages`, payload, { accessToken: pageToken!, appSecret });
         return r?.message_id as string | undefined;
       };
       try {

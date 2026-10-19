@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState, useEffect } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
@@ -30,6 +31,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export function GeneralSettings() {
+  useUiLocale();
   const { organization, locale, refetch } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
@@ -48,10 +50,10 @@ export function GeneralSettings() {
     try {
       await navigator.clipboard.writeText(organization.id);
       setCopiedOrgId(true);
-      toast({ title: 'Organization ID copiado' });
+      toast({ title: uiText("Organization ID copiado") });
       setTimeout(() => setCopiedOrgId(false), 2000);
     } catch {
-      toast({ variant: 'destructive', title: 'Falha ao copiar' });
+      toast({ variant: 'destructive', title: uiText("Falha ao copiar") });
     }
   };
   const [formData, setFormData] = useState({
@@ -118,7 +120,7 @@ export function GeneralSettings() {
     setLoading(true);
     try {
       if (!formData.operating_country_code) {
-        throw new Error('Escolha o país operacional da organização.');
+        throw new Error(uiText("Escolha o país operacional da organização."));
       }
       let backfillJobId: string | null = null;
       if (formData.operating_country_code !== organization.operating_country_code) {
@@ -153,7 +155,7 @@ export function GeneralSettings() {
       toast({
         title: t('common.success'),
         description: backfillJobId
-          ? 'Configuração salva. A revisão dos CPFs existentes foi colocada na fila segura.'
+          ? uiText("Configuração salva. A revisão dos CPFs existentes foi colocada na fila segura.")
           : t('settings.orgUpdated'),
       });
       if (formData.operating_country_code === 'BR' && cpfLookupEnabled) {
@@ -191,7 +193,7 @@ export function GeneralSettings() {
           {/* Identidade da Organização */}
           <div className="space-y-2 rounded-lg border p-4">
             <div className="flex items-center justify-between">
-              <Label className="text-base font-semibold">Identidade da Organização</Label>
+              <Label className="text-base font-semibold">{uiText("Identidade da Organização")}</Label>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="org-id" className="text-xs text-muted-foreground">Organization ID</Label>
@@ -210,8 +212,7 @@ export function GeneralSettings() {
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      Use este identificador para conectar esta organização a sistemas externos.
-                    </TooltipContent>
+                      {uiText("Use este identificador para conectar esta organização a sistemas externos.")}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>
@@ -228,7 +229,7 @@ export function GeneralSettings() {
               {logoUrl ? (
                 <img
                   src={logoUrl}
-                  alt="Logo da organização"
+                  alt={uiText("Logo da organização")}
                   style={{ height: logoSize }}
                   className="object-contain bg-background rounded p-1"
                 />
@@ -260,11 +261,9 @@ export function GeneralSettings() {
             <div className="space-y-4 rounded-lg border p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <Label htmlFor="cpf-registry-enabled">Consulta automática de CPF</Label>
+                  <Label htmlFor="cpf-registry-enabled">{uiText("Consulta automática de CPF")}</Label>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Usa a cpf-brasil.org somente pelo backend. A ativação exige finalidade legítima
-                    documentada e política de privacidade atualizada.
-                  </p>
+                    {uiText("Usa a cpf-brasil.org somente pelo backend. A ativação exige finalidade legítima documentada e política de privacidade atualizada.")}</p>
                 </div>
                 <Switch
                   id="cpf-registry-enabled"
@@ -273,20 +272,19 @@ export function GeneralSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cpf-purpose">Finalidade documentada</Label>
+                <Label htmlFor="cpf-purpose">{uiText("Finalidade documentada")}</Label>
                 <Input
                   id="cpf-purpose"
                   value={cpfPurpose}
                   onChange={(event) => setCpfPurpose(event.target.value)}
-                  placeholder="Ex.: validação cadastral de clientes antes da contratação"
+                  placeholder={uiText("Ex.: validação cadastral de clientes antes da contratação")}
                   disabled={!cpfLookupEnabled}
                 />
-                <p className="text-xs text-muted-foreground">Mínimo de 20 caracteres.</p>
+                <p className="text-xs text-muted-foreground">{uiText("Mínimo de 20 caracteres.")}</p>
               </div>
               <div className="flex items-center justify-between gap-4 rounded-md bg-muted/50 p-3">
                 <Label htmlFor="privacy-confirmed" className="font-normal">
-                  Confirmo que a política de privacidade informa esta consulta e sua finalidade.
-                </Label>
+                  {uiText("Confirmo que a política de privacidade informa esta consulta e sua finalidade.")}</Label>
                 <Switch
                   id="privacy-confirmed"
                   checked={privacyNoticeConfirmed}
@@ -334,7 +332,7 @@ export function GeneralSettings() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="pt-BR">Português (Brasil)</SelectItem>
+                <SelectItem value="pt-BR">{uiText("Português (Brasil)")}</SelectItem>
                 <SelectItem value="en-US">English (US)</SelectItem>
               </SelectContent>
             </Select>
@@ -342,10 +340,9 @@ export function GeneralSettings() {
 
           <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-4">
             <div>
-              <Label htmlFor="operating-country">País operacional *</Label>
+              <Label htmlFor="operating-country">{uiText("País operacional *")}</Label>
               <p className="mt-1 text-sm text-muted-foreground">
-                Define o formato de nomes, endereços e documentos. Não altera o idioma da interface.
-              </p>
+                {uiText("Define o formato de nomes, endereços e documentos. Não altera o idioma da interface.")}</p>
             </div>
             <Select
               value={formData.operating_country_code}
@@ -354,18 +351,17 @@ export function GeneralSettings() {
               }
             >
               <SelectTrigger id="operating-country">
-                <SelectValue placeholder="Escolha Brasil ou Estados Unidos" />
+                <SelectValue placeholder={uiText("Escolha Brasil ou Estados Unidos")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="BR">Brasil — Nome completo, CPF, CNPJ e CEP</SelectItem>
-                <SelectItem value="US">Estados Unidos — First Name, Last Name e ZIP</SelectItem>
+                <SelectItem value="BR">{uiText("Brasil — Nome completo, CPF, CNPJ e CEP")}</SelectItem>
+                <SelectItem value="US">{uiText("Estados Unidos — First Name, Last Name e ZIP")}</SelectItem>
               </SelectContent>
             </Select>
             {organization?.operating_country_code &&
               organization.operating_country_code !== formData.operating_country_code && (
                 <p className="text-sm text-amber-700">
-                  A alteração será auditada e poderá colocar cadastros incompatíveis em revisão.
-                </p>
+                  {uiText("A alteração será auditada e poderá colocar cadastros incompatíveis em revisão.")}</p>
               )}
           </div>
 

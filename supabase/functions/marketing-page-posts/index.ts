@@ -135,20 +135,32 @@ serve(async (req) => {
       return json({ ok: anyOk, result }, anyOk ? 200 : 502);
     }
 
+    if (action === 'edit') {
+      const platform = String(body.platform ?? '');
+      const post_id = String(body.post_id ?? '');
+      const message = typeof body.message === 'string' ? body.message.trim() : '';
+      if (platform !== 'facebook') return json({error:'edit_only_facebook'},400);
+      if (!post_id || !message) return json({error:'missing_fields'},400);
+      if (!pageToken) return json({error:'no_page_token'},400);
+      if (!post_id.startsWith(`${pageId}_`) || !/^[0-9_]+$/.test(post_id)) return json({error:'forbidden_post'},403);
+      try {
+        const post = await metaGraphGet(`/${post_id}`,{fields:'id,from'},{accessToken:pageToken,appSecret});
+        if (String(post?.from?.id) !== pageId) return json({error:'forbidden_post'},403);
+        await metaGraphPost(`/${post_id}`,{message},{accessToken:pageToken,appSecret});
+        return json({ok:true,id:post_id});
+      } catch { return json({ok:false,error:'post_edit_failed'},502); }
+    }
+
     if (action === "delete") {
       const post_id = String(body.post_id ?? "");
       const platform = String(body.platform ?? "facebook");
       if (!post_id) return json({ error: "missing_post_id" }, 400);
       try {
-        if (platform === "instagram") {
-          // IG Media Delete API (nov/2025): DELETE /{ig_media_id} no graph.facebook.com,
-          // com o token de usuário/sistema (escopos instagram_basic + instagram_manage_contents).
-          if (!igId) return json({ error: "Instagram não conectado" }, 400);
-          await metaGraphDelete(`/${post_id}`, { accessToken, appSecret });
-        } else {
-          if (!pageToken) return json({ error: "Página não conectada" }, 400);
-          await metaGraphDelete(`/${post_id}`, { accessToken: pageToken, appSecret });
-        }
+        // Instagram media deletion is not offered until support is verified for this API/app.
+        if (platform !== "facebook") return json({error:"instagram_delete_unsupported"},400);
+        if (!pageToken) return json({ error: "no_page_token" }, 400);
+        if (!post_id.startsWith(`${pageId}_`) || !/^[0-9_]+$/.test(post_id)) return json({error:"forbidden_post"},403);
+        await metaGraphDelete(`/${post_id}`, { accessToken: pageToken, appSecret });
         return json({ ok: true });
       } catch (e) {
         return json({ ok: false, error: errMsg(e) }, 502);

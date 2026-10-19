@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,7 @@ interface SeialzSidebarProps {
 }
 
 export function SeialzSidebar({ groups, userProfile, onSignOut, locale = 'pt-BR' }: SeialzSidebarProps) {
+  useUiLocale();
   const [collapsed, setCollapsed] = useState(true);
   const [tooltip, setTooltip] = useState<{ text: string; top: number; left: number } | null>(null);
   const location = useLocation();
@@ -159,7 +161,7 @@ export function SeialzSidebar({ groups, userProfile, onSignOut, locale = 'pt-BR'
               <>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium text-foreground truncate">
-                    {userProfile?.full_name || 'Usuário'}
+                    {userProfile?.full_name || uiText("Usuário")}
                   </div>
                   <div className="font-data text-[9px] text-[hsl(var(--sz-t3))] uppercase tracking-wider">
                     ADMIN
@@ -168,7 +170,7 @@ export function SeialzSidebar({ groups, userProfile, onSignOut, locale = 'pt-BR'
                 <button
                   onClick={onSignOut}
                   className="w-10 h-10 flex items-center justify-center mr-1 rounded-md text-[hsl(var(--sz-t3))] hover:text-foreground hover:bg-[hsl(var(--sz-bg3))] transition-colors"
-                  title="Sair"
+                  title={uiText("Sair")}
                 >
                   <SignOut size={18} weight="light" />
                 </button>
@@ -181,7 +183,7 @@ export function SeialzSidebar({ groups, userProfile, onSignOut, locale = 'pt-BR'
               className="w-[60px] h-10 flex items-center justify-center text-[hsl(var(--sz-t3))] hover:text-foreground hover:bg-[hsl(var(--sz-bg3))] transition-colors"
               onMouseEnter={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
-                setTooltip({ text: 'Sair', top: rect.top + rect.height / 2, left: rect.right + 12 });
+                setTooltip({ text: uiText("Sair"), top: rect.top + rect.height / 2, left: rect.right + 12 });
               }}
               onMouseLeave={handleMouseLeave}
             >

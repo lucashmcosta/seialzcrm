@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { Outlet, Navigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
@@ -39,6 +40,7 @@ const flagProtectedRoutes: Record<string, 'hasWhatsApp' | 'showAIFeatures'> = {
 };
 
 export function SettingsLayout() {
+  useUiLocale();
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const { hasWhatsApp } = useWhatsAppIntegration();
@@ -81,11 +83,11 @@ export function SettingsLayout() {
                 items={
                   childSlug && sectionLabel
                     ? [
-                        { label: 'Configurações', href: '/settings' },
+                        { label: uiText("Configurações"), href: '/settings' },
                         { label: sectionLabel },
                       ]
                     : [
-                        { label: 'Configurações' },
+                        { label: uiText("Configurações") },
                       ]
                 }
               />

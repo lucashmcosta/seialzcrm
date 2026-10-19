@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -40,6 +41,8 @@ export function useSocialConversations(orgId?: string, platform?: SocialPlatform
     queryKey: ['social-conversations', orgId, platform ?? 'all'],
     enabled: !!orgId,
     staleTime: 20_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
     queryFn: async (): Promise<{ conversations: SocialConversation[]; channels: Record<string, string | null> }> => {
       const { data, error } = await supabase.functions.invoke('social-inbox', {
         body: { organization_id: orgId, action: 'conversations', ...(platform ? { platform } : {}) },
@@ -69,7 +72,7 @@ export function useSocialMessages(
         },
       });
       if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || 'Falha ao carregar mensagens');
+      if (!data?.ok) throw new Error(data?.error || uiText("Falha ao carregar mensagens"));
       return (data?.messages ?? []) as SocialMessage[];
     },
   });
@@ -87,8 +90,9 @@ export type SocialProfile = {
 };
 
 export function useSocialProfile(orgId?: string, participantId?: string | null, platform?: SocialPlatform) {
+  const qc = useQueryClient();
   return useQuery({
-    queryKey: ['social-profile', orgId, participantId],
+    queryKey: ['social-profile', orgId, platform, participantId],
     enabled: !!orgId && !!participantId,
     staleTime: 5 * 60_000,
     retry: false,
@@ -97,7 +101,9 @@ export function useSocialProfile(orgId?: string, participantId?: string | null, 
         body: { organization_id: orgId, action: 'profile', participant_id: participantId, platform },
       });
       if (error) throw error;
-      return (data?.profile ?? null) as SocialProfile | null;
+      const profile = (data?.profile ?? null) as SocialProfile | null;
+      if (profile) qc.setQueriesData<{conversations: SocialConversation[]; channels: Record<string,string|null>}>({queryKey:['social-conversations',orgId]}, old => old ? ({...old,conversations:old.conversations.map(c => c.participant_id === participantId && c.platform === platform ? {...c,name:profile.name || c.name,avatar_url:profile.avatar_url || c.avatar_url} : c)}) : old);
+      return profile;
     },
   });
 }
@@ -115,7 +121,7 @@ export function useSendSocialMessage(orgId?: string) {
         body: { organization_id: orgId, action: 'send', ...i },
       });
       if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || 'Falha ao enviar');
+      if (!data?.ok) throw new Error(data?.error || uiText("Falha ao enviar"));
       return data;
     },
     // Optimistic UI: a bolha aparece na hora e o request continua por trás.

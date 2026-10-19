@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMemo, useState } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { MarketingLayout } from '../_components/MarketingLayout';
@@ -30,8 +31,9 @@ import { InstagramLogo, ArrowSquareOut } from '@phosphor-icons/react';
 
 // Célula de métrica por mídia: sem insight → "—"; coluna NULL → "n/d"; senão o número.
 function MetricCell({ value, hasInsights }: { value: number | null; hasInsights: boolean | null }) {
-  if (!hasInsights) return <span className="text-muted-foreground/60" title="Sem insights coletados para este conteúdo">—</span>;
-  if (value == null) return <span className="text-muted-foreground/60" title="Métrica não disponibilizada pela API">n/d</span>;
+  useUiLocale();
+  if (!hasInsights) return <span className="text-muted-foreground/60" title={uiText("Sem insights coletados para este conteúdo")}>—</span>;
+  if (value == null) return <span className="text-muted-foreground/60" title={uiText("Métrica não disponibilizada pela API")}>{uiText("n/d")}</span>;
   return <>{fmtInt(value)}</>;
 }
 
@@ -42,14 +44,14 @@ function overviewCard(label: string, total: number, avail: Availability, accent?
   }
   return {
     label,
-    value: avail === 'unavailable' ? 'n/d' : '—',
-    sublabel: avail === 'unavailable' ? 'Não disponibilizado pela API' : 'Sem insights coletados',
+    value: avail === 'unavailable' ? uiText("n/d") : '—',
+    sublabel: avail === 'unavailable' ? uiText("Não disponibilizado pela API") : uiText("Sem insights coletados"),
     accent,
   } as const;
 }
 
 const MEDIA_TYPE_LABEL: Record<string, string> = {
-  reel: 'Reel', video: 'Vídeo', image: 'Imagem', carousel_album: 'Carrossel', post: 'Post',
+  reel: 'Reel', get video() { return uiText('Vídeo'); }, get image() { return uiText("Imagem"); }, get carousel_album() { return uiText("Carrossel"); }, post: 'Post',
 };
 function mediaTypeLabel(t: string | null): string {
   if (!t) return '—';
@@ -58,15 +60,16 @@ function mediaTypeLabel(t: string | null): string {
 
 const TOP_METRICS: { key: OrganicMetric; label: string }[] = [
   { key: 'views', label: 'Views' },
-  { key: 'reach', label: 'Alcance' },
-  { key: 'likes', label: 'Curtidas' },
-  { key: 'comments', label: 'Comentários' },
-  { key: 'shares', label: 'Compart.' },
-  { key: 'saves', label: 'Salvos' },
+  { key: 'reach', get label() { return uiText("Alcance"); } },
+  { key: 'likes', get label() { return uiText("Curtidas"); } },
+  { key: 'comments', get label() { return uiText("Comentários"); } },
+  { key: 'shares', get label() { return uiText("Compart."); } },
+  { key: 'saves', get label() { return uiText("Salvos"); } },
 ];
 
 // Segmented control de origem: Instagram / Facebook / Todos (primitive ui/toggle-group).
 function PlatformToggle({ value, onChange }: { value: PlatformFilter; onChange: (v: PlatformFilter) => void }) {
+  useUiLocale();
   return (
     <ToggleGroup
       type="single"
@@ -77,12 +80,13 @@ function PlatformToggle({ value, onChange }: { value: PlatformFilter; onChange: 
     >
       <ToggleGroupItem value="instagram">Instagram</ToggleGroupItem>
       <ToggleGroupItem value="facebook">Facebook</ToggleGroupItem>
-      <ToggleGroupItem value="all">Todos</ToggleGroupItem>
+      <ToggleGroupItem value="all">{uiText("Todos")}</ToggleGroupItem>
     </ToggleGroup>
   );
 }
 
 export default function MarketingOrganic() {
+  useUiLocale();
   const { organization } = useOrganization();
   const orgId = organization?.id;
   const { preset, setPreset, custom, setCustom, range } = useMarketingPeriod('last_30', 'organic');
@@ -102,7 +106,7 @@ export default function MarketingOrganic() {
   const isEmpty = !loading && rows.length === 0;
 
   return (
-    <MarketingLayout title="Orgânico">
+    <MarketingLayout title={uiText("Orgânico")}>
       <div className="flex flex-wrap items-center gap-3">
         <PeriodFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
         <PlatformToggle value={platform} onChange={setPlatform} />
@@ -110,18 +114,18 @@ export default function MarketingOrganic() {
 
       {isEmpty ? (
         <EmptyState
-          title="Sem conteúdo orgânico no período"
-          hint="Selecione uma Página/Instagram na conexão Meta e rode o sync orgânico."
+          title={uiText("Sem conteúdo orgânico no período")}
+          hint={uiText("Selecione uma Página/Instagram na conexão Meta e rode o sync orgânico.")}
           icon={<InstagramLogo size={20} weight="light" />}
         />
       ) : (
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="flex-wrap h-auto">
-            <TabsTrigger value="overview">Visão geral</TabsTrigger>
-            <TabsTrigger value="content">Conteúdo</TabsTrigger>
-            <TabsTrigger value="top">Top conteúdos</TabsTrigger>
-            <TabsTrigger value="history">Histórico</TabsTrigger>
-            <TabsTrigger value="weekly">Resumo semanal</TabsTrigger>
+            <TabsTrigger value="overview">{uiText("Visão geral")}</TabsTrigger>
+            <TabsTrigger value="content">{uiText("Conteúdo")}</TabsTrigger>
+            <TabsTrigger value="top">{uiText("Top conteúdos")}</TabsTrigger>
+            <TabsTrigger value="history">{uiText("Histórico")}</TabsTrigger>
+            <TabsTrigger value="weekly">{uiText("Resumo semanal")}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-4 space-y-4">
@@ -151,6 +155,7 @@ function OverviewTab({ agg, aggPrev, loading, platform, account, accountLoading,
   agg: ReturnType<typeof aggregate>; aggPrev: ReturnType<typeof aggregate>; loading: boolean;
   platform: PlatformFilter; account: AccountInsights | null; accountLoading: boolean; rangeDays: number;
 }) {
+  useUiLocale();
   if (loading) return <CardSkeleton count={6} />;
 
   const t = agg.totals, a = agg.availability, tp = aggPrev.totals;
@@ -160,26 +165,26 @@ function OverviewTab({ agg, aggPrev, loading, platform, account, accountLoading,
   const ig = account?.instagram, fb = account?.facebook;
   let accViews: number | null = null, accReach: number | null = null, viewsSrc = '', reachSrc = '';
   if (platform === 'instagram') {
-    accViews = ig?.available ? ig.views : null; viewsSrc = 'views · nível de conta (Instagram)';
+    accViews = ig?.available ? ig.views : null; viewsSrc = uiText("views · nível de conta (Instagram)");
     accReach = ig?.available ? ig.reach : null;
-    reachSrc = accReach != null ? 'contas únicas (reach dedup) · conta' : rangeDays > 30 ? 'reach de conta só p/ janela ≤30 dias' : 'indisponível';
+    reachSrc = accReach != null ? uiText("contas únicas (reach dedup) · conta") : rangeDays > 30 ? uiText("reach de conta só p/ janela ≤30 dias") : uiText("indisponível");
   } else if (platform === 'facebook') {
-    accViews = fb?.available ? fb.views : null; viewsSrc = fb?.available ? 'media views · nível de página (Facebook)' : 'media views · soma por conteúdo';
+    accViews = fb?.available ? fb.views : null; viewsSrc = fb?.available ? uiText("media views · nível de página (Facebook)") : uiText("media views · soma por conteúdo");
     accReach = fb?.available ? fb.reach : null;
-    reachSrc = accReach != null ? 'contas únicas (reach dedup) · página' : rangeDays > 30 ? 'reach de página só p/ janela ≤30 dias' : 'indisponível';
+    reachSrc = accReach != null ? uiText("contas únicas (reach dedup) · página") : rangeDays > 30 ? uiText("reach de página só p/ janela ≤30 dias") : uiText("indisponível");
   } else {
-    accViews = account?.combined.views_available ? account.combined.views : null; viewsSrc = 'views/media views · nível de conta (Instagram + Facebook)';
+    accViews = account?.combined.views_available ? account.combined.views : null; viewsSrc = uiText("views/media views · nível de conta (Instagram + Facebook)");
     // Reach não é somável entre redes: mostramos IG (dedup) e o FB fica na nota.
     accReach = account?.combined.reach_instagram ?? null;
-    reachSrc = accReach != null ? 'Instagram (reach dedup) · Facebook na nota abaixo' : rangeDays > 30 ? 'reach de conta só p/ janela ≤30 dias' : 'indisponível';
+    reachSrc = accReach != null ? uiText("Instagram (reach dedup) · Facebook na nota abaixo") : rangeDays > 30 ? uiText("reach de conta só p/ janela ≤30 dias") : uiText("indisponível");
   }
 
   const viewsCard = accViews != null
     ? { label: 'Views', value: fmtInt(accViews), sublabel: viewsSrc, accent: 'primary' as const }
     : overviewCard('Views', t.views, a.views, 'primary', t.views, tp.views);
   const reachCard = accReach != null
-    ? { label: 'Alcance', value: fmtInt(accReach), sublabel: reachSrc, accent: 'primary' as const }
-    : { label: 'Alcance', value: accountLoading ? '…' : 'n/d', sublabel: reachSrc, accent: 'primary' as const };
+    ? { label: uiText("Alcance"), value: fmtInt(accReach), sublabel: reachSrc, accent: 'primary' as const }
+    : { label: uiText("Alcance"), value: accountLoading ? '…' : uiText("n/d"), sublabel: reachSrc, accent: 'primary' as const };
 
   // Interações e curtidas/etc. seguem por conteúdo (media-level). Taxa usa reach de conta quando houver.
   const interactions = t.likes + t.comments + t.shares + t.saves;
@@ -190,47 +195,44 @@ function OverviewTab({ agg, aggPrev, loading, platform, account, accountLoading,
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <MetricCard {...viewsCard} />
         <MetricCard {...reachCard} />
-        <MetricCard {...overviewCard('Curtidas', t.likes, a.likes, 'success', t.likes, tp.likes)} />
-        <MetricCard {...overviewCard('Comentários', t.comments, a.comments, 'success', t.comments, tp.comments)} />
-        <MetricCard {...overviewCard('Compartilhamentos', t.shares, a.shares, 'success', t.shares, tp.shares)} />
-        <MetricCard {...overviewCard('Salvos', t.saves, a.saves, 'success', t.saves, tp.saves)} />
+        <MetricCard {...overviewCard(uiText("Curtidas"), t.likes, a.likes, 'success', t.likes, tp.likes)} />
+        <MetricCard {...overviewCard(uiText("Comentários"), t.comments, a.comments, 'success', t.comments, tp.comments)} />
+        <MetricCard {...overviewCard(uiText("Compartilhamentos"), t.shares, a.shares, 'success', t.shares, tp.shares)} />
+        <MetricCard {...overviewCard(uiText("Salvos"), t.saves, a.saves, 'success', t.saves, tp.saves)} />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard label="Conteúdos publicados" value={fmtInt(agg.content_count)} current={agg.content_count} previous={aggPrev.content_count} mono />
+        <MetricCard label={uiText("Conteúdos publicados")} value={fmtInt(agg.content_count)} current={agg.content_count} previous={aggPrev.content_count} mono />
         <MetricCard
-          label="Interações"
-          value={a.likes === 'available' ? fmtInt(interactions) : 'n/d'}
-          sublabel="Curtidas + coment. + compart. + salvos"
+          label={uiText("Interações")}
+          value={a.likes === 'available' ? fmtInt(interactions) : uiText("n/d")}
+          sublabel={uiText("Curtidas + coment. + compart. + salvos")}
           accent="success"
         />
         <MetricCard
-          label="Taxa de engajamento"
+          label={uiText("Taxa de engajamento")}
           value={engRate != null ? fmtPct(engRate * 100, 2) : '—'}
-          sublabel={engRate != null ? (accReach ? 'Interações / alcance de conta' : 'Interações / alcance') : 'Requer alcance + interações'}
+          sublabel={engRate != null ? (accReach ? uiText("Interações / alcance de conta") : uiText("Interações / alcance")) : uiText("Requer alcance + interações")}
           accent="warning"
         />
         <MetricCard
-          label="Views/conteúdo"
-          value={a.views === 'available' && agg.counts.views > 0 ? fmtInt(t.views / agg.counts.views) : 'n/d'}
-          sublabel={agg.counts.views > 0 ? `Base: ${fmtInt(agg.counts.views)} conteúdos c/ views` : undefined}
+          label={uiText("Views/conteúdo")}
+          value={a.views === 'available' && agg.counts.views > 0 ? fmtInt(t.views / agg.counts.views) : uiText("n/d")}
+          sublabel={agg.counts.views > 0 ? uiText("Base: {0} conteúdos c/ views", {"0": fmtInt(agg.counts.views)}) : undefined}
           mono
         />
       </div>
       <p className="text-xs text-muted-foreground">
-        Views e Alcance usam <strong>insights de nível de conta/página</strong> (mesma fonte do Business Suite):
-        Views = reproduções/exibições no período; Alcance = <strong>contas únicas (deduplicado)</strong>, nunca soma de reach por conteúdo.
-        {' '}No Facebook, "views" é <strong>media view</strong> (conteúdo renderizado) — semântica mais restrita que a "impression" antiga, então tende a ser menor; não é comparável 1:1 com métricas de impressão de outras fontes.
-        {rangeDays > 30 && <> O Alcance deduplicado só é fornecido pela Meta em janelas de até 30 dias — selecione ≤30 dias para vê-lo.</>}
-        {platform !== 'facebook' && account?.combined.reach_facebook != null && <> Alcance do Facebook (dedup, página): {fmtInt(account.combined.reach_facebook)}.</>}
-        {fb?.followers != null && (platform === 'facebook' || platform === 'all') && <> Seguidores da página (Facebook): {fmtInt(fb.followers)}.</>}
-        {' '}Curtidas/reações, comentários, compartilhamentos e salvos são somados por conteúdo publicado no período.
-      </p>
+        {uiText("Views e Alcance usam")}{' '}<strong>{uiText("insights de nível de conta/página")}</strong> {uiText("(mesma fonte do Business Suite): Views = reproduções/exibições no período; Alcance =")}{' '}<strong>{uiText("contas únicas (deduplicado)")}</strong>{uiText(", nunca soma de reach por conteúdo.")}{' '}{uiText("No Facebook, \"views\" é")}<strong>media view</strong> {uiText("(conteúdo renderizado) — semântica mais restrita que a \"impression\" antiga, então tende a ser menor; não é comparável 1:1 com métricas de impressão de outras fontes.")}{rangeDays > 30 && <> {uiText("O Alcance deduplicado só é fornecido pela Meta em janelas de até 30 dias — selecione ≤30 dias para vê-lo.")}</>}
+        {platform !== 'facebook' && account?.combined.reach_facebook != null && <> {uiText("Alcance do Facebook (dedup, página):")}{fmtInt(account.combined.reach_facebook)}.</>}
+        {fb?.followers != null && (platform === 'facebook' || platform === 'all') && <> {uiText("Seguidores da página (Facebook):")}{fmtInt(fb.followers)}.</>}
+        {' '}{uiText("Curtidas/reações, comentários, compartilhamentos e salvos são somados por conteúdo publicado no período.")}</p>
     </>
   );
 }
 
 // ---------------- Conteúdo (tabela) ----------------
 function ContentTab({ rows, loading }: { rows: OrganicMediaRow[]; loading: boolean }) {
+  useUiLocale();
   const [type, setType] = useState('all');
   const types = useMemo(() => Array.from(new Set(rows.map((r) => r.media_type).filter(Boolean))) as string[], [rows]);
   const filtered = useMemo(
@@ -244,13 +246,13 @@ function ContentTab({ rows, loading }: { rows: OrganicMediaRow[]; loading: boole
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <Select value={type} onValueChange={setType}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="Tipo" /></SelectTrigger>
+          <SelectTrigger className="w-48"><SelectValue placeholder={uiText("Tipo")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os tipos</SelectItem>
+            <SelectItem value="all">{uiText("Todos os tipos")}</SelectItem>
             {types.map((t) => <SelectItem key={t} value={t}>{mediaTypeLabel(t)}</SelectItem>)}
           </SelectContent>
         </Select>
-        <span className="text-xs text-muted-foreground">{filtered.length} conteúdo{filtered.length !== 1 ? 's' : ''}</span>
+        <span className="text-xs text-muted-foreground">{filtered.length} {uiText("conteúdo")}{filtered.length !== 1 ? 's' : ''}</span>
       </div>
       <ContentTable rows={filtered} />
     </div>
@@ -258,22 +260,23 @@ function ContentTab({ rows, loading }: { rows: OrganicMediaRow[]; loading: boole
 }
 
 function ContentTable({ rows }: { rows: OrganicMediaRow[] }) {
-  if (rows.length === 0) return <EmptyState title="Nenhum conteúdo" hint="Ajuste o filtro de tipo." />;
+  useUiLocale();
+  if (rows.length === 0) return <EmptyState title={uiText("Nenhum conteúdo")} hint={uiText("Ajuste o filtro de tipo.")} />;
   return (
     <div className="rounded-md border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/30">
             <tr className="text-left text-muted-foreground border-b border-border">
-              <th className="py-2 px-3 font-medium text-xs">Conteúdo</th>
-              <th className="py-2 px-3 font-medium text-xs">Tipo</th>
-              <th className="py-2 px-3 font-medium text-xs">Publicado</th>
+              <th className="py-2 px-3 font-medium text-xs">{uiText("Conteúdo")}</th>
+              <th className="py-2 px-3 font-medium text-xs">{uiText("Tipo")}</th>
+              <th className="py-2 px-3 font-medium text-xs">{uiText("Publicado")}</th>
               <th className="py-2 px-3 font-medium text-xs text-right">Views</th>
-              <th className="py-2 px-3 font-medium text-xs text-right">Alcance</th>
-              <th className="py-2 px-3 font-medium text-xs text-right">Curtidas</th>
-              <th className="py-2 px-3 font-medium text-xs text-right">Coment.</th>
-              <th className="py-2 px-3 font-medium text-xs text-right">Compart.</th>
-              <th className="py-2 px-3 font-medium text-xs text-right">Salvos</th>
+              <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Alcance")}</th>
+              <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Curtidas")}</th>
+              <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Coment.")}</th>
+              <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Compart.")}</th>
+              <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Salvos")}</th>
               <th className="py-2 px-3 font-medium text-xs text-right">Eng.</th>
             </tr>
           </thead>
@@ -290,10 +293,10 @@ function ContentTable({ rows }: { rows: OrganicMediaRow[] }) {
                         <div className="w-10 h-10 rounded bg-muted flex-shrink-0" />
                       )}
                       <div className="min-w-0">
-                        <p className="text-foreground truncate">{r.caption?.trim() || <span className="text-muted-foreground italic">(sem legenda)</span>}</p>
+                        <p className="text-foreground truncate">{r.caption?.trim() || <span className="text-muted-foreground italic">{uiText("(sem legenda)")}</span>}</p>
                         {r.permalink && (
                           <a href={r.permalink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                            Abrir <ArrowSquareOut size={11} />
+                            {uiText("Abrir")}<ArrowSquareOut size={11} />
                           </a>
                         )}
                       </div>
@@ -309,7 +312,7 @@ function ContentTable({ rows }: { rows: OrganicMediaRow[] }) {
                   <td className="py-2 px-3 text-right font-mono text-xs"><MetricCell value={r.comments} hasInsights={r.has_insights} /></td>
                   <td className="py-2 px-3 text-right font-mono text-xs"><MetricCell value={r.shares} hasInsights={r.has_insights} /></td>
                   <td className="py-2 px-3 text-right font-mono text-xs"><MetricCell value={r.saves} hasInsights={r.has_insights} /></td>
-                  <td className="py-2 px-3 text-right font-mono text-xs">{er != null ? fmtPct(er * 100, 1) : <span className="text-muted-foreground/60" title="Requer alcance + interações">—</span>}</td>
+                  <td className="py-2 px-3 text-right font-mono text-xs">{er != null ? fmtPct(er * 100, 1) : <span className="text-muted-foreground/60" title={uiText("Requer alcance + interações")}>—</span>}</td>
                 </tr>
               );
             })}
@@ -322,6 +325,7 @@ function ContentTable({ rows }: { rows: OrganicMediaRow[] }) {
 
 // ---------------- Top conteúdos ----------------
 function TopTab({ rows, loading }: { rows: OrganicMediaRow[]; loading: boolean }) {
+  useUiLocale();
   const [metric, setMetric] = useState<OrganicMetric>('views');
   const [type, setType] = useState('all');
   const types = useMemo(() => Array.from(new Set(rows.map((r) => r.media_type).filter(Boolean))) as string[], [rows]);
@@ -339,19 +343,19 @@ function TopTab({ rows, loading }: { rows: OrganicMediaRow[]; loading: boolean }
         <Select value={metric} onValueChange={(v) => setMetric(v as OrganicMetric)}>
           <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {TOP_METRICS.map((m) => <SelectItem key={m.key} value={m.key}>Por {m.label.toLowerCase()}</SelectItem>)}
+            {TOP_METRICS.map((m) => <SelectItem key={m.key} value={m.key}>{uiText("Por")}{' '}{m.label.toLowerCase()}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={type} onValueChange={setType}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="Tipo" /></SelectTrigger>
+          <SelectTrigger className="w-48"><SelectValue placeholder={uiText("Tipo")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os tipos</SelectItem>
+            <SelectItem value="all">{uiText("Todos os tipos")}</SelectItem>
             {types.map((t) => <SelectItem key={t} value={t}>{mediaTypeLabel(t)}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
       {ranked.length === 0 ? (
-        <EmptyState title="Sem ranking" hint={`Nenhum conteúdo com "${TOP_METRICS.find((m) => m.key === metric)?.label}" disponível no período.`} />
+        <EmptyState title={uiText("Sem ranking")} hint={uiText("Nenhum conteúdo com \"{0}\" disponível no período.", {"0": TOP_METRICS.find((m) => m.key === metric)?.label})} />
       ) : (
         <ContentTable rows={ranked} />
       )}
@@ -361,6 +365,7 @@ function TopTab({ rows, loading }: { rows: OrganicMediaRow[]; loading: boolean }
 
 // ---------------- Histórico ----------------
 function HistoryTab({ rows, loading, range }: { rows: OrganicMediaRow[]; loading: boolean; range: { from: Date; to: Date } }) {
+  useUiLocale();
   const days = Math.round((range.to.getTime() - range.from.getTime()) / 86400000);
   const [gran, setGran] = useState<'day' | 'week'>(days > 45 ? 'week' : 'day');
   const data = useMemo(() => timeseries(rows, gran === 'week'), [rows, gran]);
@@ -373,15 +378,15 @@ function HistoryTab({ rows, loading, range }: { rows: OrganicMediaRow[]; loading
         <Select value={gran} onValueChange={(v) => setGran(v as 'day' | 'week')}>
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="day">Por dia</SelectItem>
-            <SelectItem value="week">Por semana</SelectItem>
+            <SelectItem value="day">{uiText("Por dia")}</SelectItem>
+            <SelectItem value="week">{uiText("Por semana")}</SelectItem>
           </SelectContent>
         </Select>
-        <span className="text-xs text-muted-foreground">{data.length} {gran === 'week' ? 'semanas' : 'dias'}</span>
+        <span className="text-xs text-muted-foreground">{data.length} {gran === 'week' ? 'semanas' : uiText("dias")}</span>
       </div>
       <div className="rounded-md border border-border bg-card p-4">
         {data.length === 0 ? (
-          <EmptyState title="Sem série no período" />
+          <EmptyState title={uiText("Sem série no período")} />
         ) : (
           <div style={{ width: '100%', height: 320 }}>
             <ResponsiveContainer>
@@ -395,9 +400,9 @@ function HistoryTab({ rows, loading, range }: { rows: OrganicMediaRow[]; loading
                   formatter={(val) => fmtInt(Number(val))}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="reach" name="Alcance" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="reach" name={uiText("Alcance")} stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="views" name="Views" stroke="hsl(var(--warning))" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="engagement" name="Interações" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="engagement" name={uiText("Interações")} stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -409,9 +414,10 @@ function HistoryTab({ rows, loading, range }: { rows: OrganicMediaRow[]; loading
 
 // ---------------- Resumo semanal ----------------
 function WeeklyTab({ rows, loading }: { rows: OrganicMediaRow[]; loading: boolean }) {
+  useUiLocale();
   const weeks = useMemo(() => weeklySummary(rows), [rows]);
   if (loading) return <TableSkeleton rows={6} cols={8} />;
-  if (weeks.length === 0) return <EmptyState title="Sem semanas no período" />;
+  if (weeks.length === 0) return <EmptyState title={uiText("Sem semanas no período")} />;
 
   return (
     <div className="rounded-md border border-border bg-card overflow-hidden">
@@ -419,15 +425,15 @@ function WeeklyTab({ rows, loading }: { rows: OrganicMediaRow[]; loading: boolea
         <table className="w-full text-sm">
           <thead className="bg-muted/30">
             <tr className="text-left text-muted-foreground border-b border-border">
-              <th className="py-2 px-3 font-medium text-xs">Semana (início)</th>
-              <th className="py-2 px-3 font-medium text-xs text-right">Conteúdos</th>
+              <th className="py-2 px-3 font-medium text-xs">{uiText("Semana (início)")}</th>
+              <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Conteúdos")}</th>
               <th className="py-2 px-3 font-medium text-xs text-right">Views</th>
-              <th className="py-2 px-3 font-medium text-xs text-right">Alcance</th>
-              <th className="py-2 px-3 font-medium text-xs text-right">Curtidas</th>
-              <th className="py-2 px-3 font-medium text-xs text-right">Coment.</th>
-              <th className="py-2 px-3 font-medium text-xs text-right">Compart.</th>
-              <th className="py-2 px-3 font-medium text-xs text-right">Salvos</th>
-              <th className="py-2 px-3 font-medium text-xs text-right">Interações</th>
+              <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Alcance")}</th>
+              <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Curtidas")}</th>
+              <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Coment.")}</th>
+              <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Compart.")}</th>
+              <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Salvos")}</th>
+              <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Interações")}</th>
             </tr>
           </thead>
           <tbody>

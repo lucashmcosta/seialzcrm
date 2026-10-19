@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 // Sub-diálogo de "Migrar número existente para Meta Cloud".
 // Disparado quando o connect retorna 409 endpoint_address_already_registered.
 // Permite simular (dry-run) e aplicar a migração in-place do endpoint existente.
@@ -42,6 +44,7 @@ export function MigrateEndpointDialog({
   payload,
   onMigrated,
 }: Props) {
+  useUiLocale();
   const [dryRun, setDryRun] = useState<MigrateResult | null>(null);
 
   const buildInput = (): MigrateInput | null => {
@@ -57,9 +60,9 @@ export function MigrateEndpointDialog({
     },
     onSuccess: (data) => {
       setDryRun(data);
-      toast.success("Simulação concluída — nenhum dado foi alterado.");
+      toast.success(uiText("Simulação concluída — nenhum dado foi alterado."));
     },
-    onError: (e: any) => toast.error(`Falha na simulação: ${e?.message ?? e}`),
+    onError: (e: any) => toast.error(uiError(e?.message ?? e)),
   });
 
   const migrateMutation = useMutation({
@@ -69,12 +72,12 @@ export function MigrateEndpointDialog({
       return await metaWhatsAppService.migrate(input);
     },
     onSuccess: () => {
-      toast.success("Endpoint migrado para Meta Cloud com sucesso.");
+      toast.success(uiText("Endpoint migrado para Meta Cloud com sucesso."));
       setDryRun(null);
       onOpenChange(false);
       onMigrated();
     },
-    onError: (e: any) => toast.error(`Falha ao migrar: ${e?.message ?? e}`),
+    onError: (e: any) => toast.error(uiError(e?.message ?? e)),
   });
 
   const busy = dryRunMutation.isPending || migrateMutation.isPending;
@@ -83,30 +86,26 @@ export function MigrateEndpointDialog({
     <Dialog open={open} onOpenChange={(o) => { if (!busy) { setDryRun(null); onOpenChange(o); } }}>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Migrar número existente para Meta Cloud</DialogTitle>
+          <DialogTitle>{uiText("Migrar número existente para Meta Cloud")}</DialogTitle>
           <DialogDescription>
-            Este número já existe nesta organização como endpoint do provider{" "}
-            <strong>{existing?.provider ?? "—"}</strong>. A migração troca o provider para Meta Cloud
-            <strong> preservando a mesma identidade do endpoint</strong> (mesmo ID, mesmas threads,
-            mesmas mensagens, mesmos contatos). Uma nota de sistema aparecerá automaticamente em cada
-            conversa na primeira resposta enviada após a migração.
-          </DialogDescription>
+            {uiText("Este número já existe nesta organização como endpoint do provider")}{" "}
+            <strong>{existing?.provider ?? "—"}</strong>{uiText(". A migração troca o provider para Meta Cloud")}{' '}<strong> {uiText("preservando a mesma identidade do endpoint")}</strong> {uiText("(mesmo ID, mesmas threads, mesmas mensagens, mesmos contatos). Uma nota de sistema aparecerá automaticamente em cada conversa na primeira resposta enviada após a migração.")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="rounded-md border border-border p-3 text-sm space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Endpoint existente</span>
+              <span className="text-muted-foreground">{uiText("Endpoint existente")}</span>
               <Badge variant="secondary">{existing?.provider ?? "—"}</Badge>
             </div>
             <div className="font-mono text-xs break-all">{existing?.endpointId ?? "—"}</div>
             <div className="text-xs text-muted-foreground">
-              Sender SID atual: <span className="font-mono">{existing?.senderSid ?? "—"}</span>
+              {uiText("Sender SID atual:")}<span className="font-mono">{existing?.senderSid ?? "—"}</span>
             </div>
           </div>
 
           <div className="rounded-md border border-border p-3 text-sm space-y-1">
-            <p className="text-muted-foreground">Destino Meta Cloud</p>
+            <p className="text-muted-foreground">{uiText("Destino Meta Cloud")}</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="text-muted-foreground">WABA ID</span>
@@ -126,7 +125,7 @@ export function MigrateEndpointDialog({
           {dryRun && (
             <div className="rounded-md border border-border p-3 text-xs space-y-2">
               <div className="flex items-center justify-between">
-                <p className="font-medium text-sm">Diff da simulação</p>
+                <p className="font-medium text-sm">{uiText("Diff da simulação")}</p>
                 <Badge variant="outline">dry-run</Badge>
               </div>
               <Separator />
@@ -156,9 +155,7 @@ export function MigrateEndpointDialog({
                 after={(dryRun.after as any).status}
               />
               <p className="text-[11px] text-muted-foreground pt-1">
-                external_address, display_name, purpose, id, organization_id e channel permanecem
-                inalterados.
-              </p>
+                {uiText("external_address, display_name, purpose, id, organization_id e channel permanecem inalterados.")}</p>
             </div>
           )}
         </div>
@@ -169,13 +166,13 @@ export function MigrateEndpointDialog({
             disabled={busy || !existing}
             onClick={() => dryRunMutation.mutate()}
           >
-            {dryRunMutation.isPending ? "Simulando..." : "Simular (dry-run)"}
+            {dryRunMutation.isPending ? "Simulando..." : uiText("Simular (dry-run)")}
           </Button>
           <Button
             disabled={busy || !existing}
             onClick={() => migrateMutation.mutate()}
           >
-            {migrateMutation.isPending ? "Migrando..." : "Migrar agora"}
+            {migrateMutation.isPending ? "Migrando..." : uiText("Migrar agora")}
           </Button>
         </div>
       </DialogContent>
@@ -184,6 +181,7 @@ export function MigrateEndpointDialog({
 }
 
 function DiffRow({ label, before, after }: { label: string; before: unknown; after: unknown }) {
+  useUiLocale();
   const eq = JSON.stringify(before) === JSON.stringify(after);
   return (
     <div className="grid grid-cols-[140px_1fr_1fr] gap-2 items-start">

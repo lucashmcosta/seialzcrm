@@ -1,5 +1,9 @@
 export const translations = {
   'pt-BR': {
+    'profile.inheritLocale': 'Usar padrão da organização',
+    'profile.portuguese': 'Português (Brasil)',
+    'profile.unavailable': 'Perfil indisponível. Recarregue a página.',
+    'profile.saveFailed': 'Não foi possível salvar o perfil.',
     // Common
     'common.save': 'Salvar',
     'common.cancel': 'Cancelar',
@@ -506,6 +510,10 @@ export const translations = {
     'status.lost': 'Perdido',
   },
   'en-US': {
+    'profile.inheritLocale': 'Use organization default',
+    'profile.portuguese': 'Portuguese (Brazil)',
+    'profile.unavailable': 'Profile unavailable. Reload the page.',
+    'profile.saveFailed': 'Could not save your profile.',
     // Common
     'common.save': 'Save',
     'common.cancel': 'Cancel',

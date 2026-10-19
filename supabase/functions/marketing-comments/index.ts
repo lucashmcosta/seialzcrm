@@ -1,6 +1,7 @@
+import { facebookCommentAuthor } from "../_shared/meta/comment-author.ts";
 // marketing-comments — lista e MODERA comentários dos posts orgânicos da Página/Instagram
 // pelo Seialz. Escopos: pages_read_user_content + pages_manage_engagement (Facebook),
-// instagram_manage_comments + instagram_manage_engagement (Instagram). Escrita real.
+// instagram_manage_comments (Instagram). Escrita real.
 // Auth: x-sync-token OU JWT + membership.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -57,42 +58,47 @@ serve(async (req) => {
 
     if (action === "list") {
       const comments: any[] = [];
+      const channels: Record<string,string> = {};
       // Facebook: posts recentes + comentários aninhados.
       if (pageId && pageToken) {
         try {
-          const r = await metaGraphGet(`/${pageId}/feed`,
-            { fields: "message,permalink_url,comments.limit(15){id,message,from,created_time,is_hidden}", limit: 10 },
-            { accessToken: pageToken, appSecret });
+          const read = (authorFields: string) => metaGraphGet(`/${pageId}/feed`,
+            {fields:`message,permalink_url,comments.limit(15){id,message,from{${authorFields}},created_time,is_hidden}`,limit:10},
+            {accessToken:pageToken!,appSecret});
+          // Picture is optional: an unsupported expansion must never hide available names.
+          let r;
+          try { r = await read('id,name,picture'); }
+          catch { r = await read('id,name'); }
           for (const post of r?.data ?? []) {
             for (const cm of post?.comments?.data ?? []) {
               comments.push({
                 id: cm.id, platform: "facebook", text: cm.message ?? "",
-                author: cm.from?.name ?? "", created_time: cm.created_time, is_hidden: !!cm.is_hidden,
+                ...facebookCommentAuthor(cm.from), created_time: cm.created_time, is_hidden: !!cm.is_hidden,
                 post_id: post.id, post_excerpt: (post.message ?? "").slice(0, 80), permalink: post.permalink_url,
               });
             }
           }
-        } catch { /* ignora */ }
+        } catch { channels.facebook = "comments_unavailable"; }
       }
       // Instagram: mídias recentes + comentários aninhados.
       if (igId) {
         try {
           const r = await metaGraphGet(`/${igId}/media`,
-            { fields: "caption,permalink,comments.limit(15){id,text,username,timestamp}", limit: 10 },
+            { fields: "caption,permalink,comments.limit(15){id,text,username,timestamp,hidden}", limit: 10 },
             { accessToken, appSecret });
           for (const media of r?.data ?? []) {
             for (const cm of media?.comments?.data ?? []) {
               comments.push({
                 id: cm.id, platform: "instagram", text: cm.text ?? "",
-                author: cm.username ?? "", created_time: cm.timestamp, is_hidden: false,
+                author: cm.username ?? "", created_time: cm.timestamp, is_hidden: !!cm.hidden,
                 post_id: media.id, post_excerpt: (media.caption ?? "").slice(0, 80), permalink: media.permalink,
               });
             }
           }
-        } catch { /* ignora */ }
+        } catch { channels.instagram = "comments_unavailable"; }
       }
       comments.sort((a, b) => String(b.created_time).localeCompare(String(a.created_time)));
-      return json({ ok: true, comments });
+      return json({ ok: true, comments, channels });
     }
 
     const comment_id = String(body.comment_id ?? "");
@@ -112,11 +118,22 @@ serve(async (req) => {
       } catch (e) { return json({ ok: false, error: errMsg(e) }, 502); }
     }
 
-    if (action === "hide") { // Facebook only
-      if (platform !== "facebook") return json({ error: "hide_only_facebook" }, 400);
+    if (action === "hide") {
+      if (!["facebook", "instagram"].includes(platform)) return json({ error: "invalid_platform" }, 400);
       const hidden = body.hidden !== false;
       try {
-        await metaGraphPost(`/${comment_id}`, { is_hidden: hidden }, { accessToken: fbToken!, appSecret });
+        if (platform === "instagram") {
+          if (!igId || !/^\d+$/.test(comment_id)) return json({error:"invalid_comment"},400);
+          const comment = await metaGraphGet(`/${comment_id}`, {fields:"media"}, {accessToken:igToken,appSecret});
+          const mediaId = comment?.media?.id;
+          if (!mediaId) return json({error:"forbidden_comment"},403);
+          const media = await metaGraphGet(`/${mediaId}`, {fields:"owner"}, {accessToken:igToken,appSecret});
+          if (String(media?.owner?.id) !== igId) return json({error:"forbidden_comment"},403);
+          await metaGraphPost(`/${comment_id}`, {hide:hidden}, {accessToken:igToken,appSecret});
+        } else {
+          if (!fbToken) return json({error:"no_page_token"},400);
+          await metaGraphPost(`/${comment_id}`, {is_hidden:hidden}, {accessToken:fbToken,appSecret});
+        }
         return json({ ok: true });
       } catch (e) { return json({ ok: false, error: errMsg(e) }, 502); }
     }

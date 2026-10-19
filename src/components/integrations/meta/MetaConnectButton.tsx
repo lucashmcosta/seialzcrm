@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { CircleNotch, FacebookLogo } from '@phosphor-icons/react';
@@ -22,6 +24,7 @@ async function readInvokeError(error: unknown): Promise<string | null> {
 // Botão canônico "Continuar com Facebook" (Login for Business).
 // Fluxo: meta-connect-intent -> FB.login(config_id, code) -> meta-connect.
 export function MetaConnectButton({ onConnected }: { onConnected?: (connectionId: string) => void }) {
+  useUiLocale();
   const { organization } = useOrganization();
   const { ensureSdk, login } = useFacebookSdk();
   const [loading, setLoading] = useState(false);
@@ -37,13 +40,13 @@ export function MetaConnectButton({ onConnected }: { onConnected?: (connectionId
       );
       if (intentErr) {
         const code = await readInvokeError(intentErr);
-        toast.error(code === 'facebook_not_configured'
-          ? 'Integração Meta ainda não configurada no servidor.'
-          : 'Não foi possível iniciar a conexão.');
+        toast.error(uiError(code === 'facebook_not_configured'
+          ? uiText("Integração Meta ainda não configurada no servidor.")
+          : uiText("Não foi possível iniciar a conexão.")));
         return;
       }
       if (!intent?.intent_id || !intent?.app_id || !intent?.config_id) {
-        toast.error('Integração Meta incompleta (app_id/config_id ausente).');
+        toast.error(uiText("Integração Meta incompleta (app_id/config_id ausente)."));
         return;
       }
 
@@ -51,7 +54,7 @@ export function MetaConnectButton({ onConnected }: { onConnected?: (connectionId
       await ensureSdk(intent.app_id, intent.graph_version || 'v25.0');
       const res = await login(intent.config_id);
       if (!res.code) {
-        if (res.status !== 'connected') toast.message('Login do Facebook cancelado.');
+        if (res.status !== 'connected') toast.message(uiText("Login do Facebook cancelado."));
         return;
       }
 
@@ -61,13 +64,13 @@ export function MetaConnectButton({ onConnected }: { onConnected?: (connectionId
         { body: { organization_id: organization.id, code: res.code, intent_id: intent.intent_id } },
       );
       if (connErr || !conn?.success) {
-        toast.error('Falha ao confirmar a conexão com a Meta.');
+        toast.error(uiText("Falha ao confirmar a conexão com a Meta."));
         return;
       }
-      toast.success('Conta Meta conectada. Agora selecione os ativos da organização.');
+      toast.success(uiText("Conta Meta conectada. Agora selecione os ativos da organização."));
       onConnected?.(conn.connection_id);
     } catch {
-      toast.error('Não foi possível conectar com o Facebook agora.');
+      toast.error(uiText("Não foi possível conectar com o Facebook agora."));
     } finally {
       setLoading(false);
     }
@@ -76,7 +79,7 @@ export function MetaConnectButton({ onConnected }: { onConnected?: (connectionId
   return (
     <Button type="button" disabled={loading} onClick={() => void handleConnect()}>
       {loading ? <CircleNotch className="animate-spin" /> : <FacebookLogo weight="fill" />}
-      {loading ? 'Conectando…' : 'Continuar com Facebook'}
+      {loading ? uiText("Conectando…") : uiText("Continuar com Facebook")}
     </Button>
   );
 }

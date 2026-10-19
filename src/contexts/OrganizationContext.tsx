@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { reloadForFacebookLocale } from '@/lib/facebook-sdk';
+import { setUiLocale } from '@/lib/ui-locale';
+import React, { useLayoutEffect, createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { resolveLocale } from '@/lib/locale';
 import { useAuth } from '@/hooks/useAuth';
 
 export interface Organization {
@@ -31,7 +34,7 @@ export interface UserProfile {
   last_name?: string;
   email: string;
   avatar_url?: string;
-  locale: string;
+  locale: string | null;
   timezone: string;
   is_platform_admin?: boolean;
 }
@@ -140,7 +143,8 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     fetchData();
   }, [user, authLoading, lastUserId, organization, userProfile, fetchData]);
 
-  const locale = userProfile?.locale || organization?.default_locale || 'pt-BR';
+  const locale = resolveLocale(userProfile?.locale, organization?.default_locale);
+  useLayoutEffect(() => { setUiLocale(locale); document.documentElement.lang = locale; reloadForFacebookLocale(locale); }, [locale]);
 
   const value: OrganizationContextType = {
     organization,

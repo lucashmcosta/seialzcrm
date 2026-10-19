@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMemo, useState } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { MarketingLayout } from './_components/MarketingLayout';
@@ -17,14 +18,15 @@ import {
 } from 'recharts';
 
 const METRICS = [
-  { key: 'spend', label: 'Investido', color: 'hsl(var(--primary))', currency: true },
-  { key: 'leads', label: 'Contatos', color: 'hsl(var(--success))' },
-  { key: 'cpl', label: 'CPL real', color: 'hsl(40 90% 55%)', currency: true },
-  { key: 'impressions', label: 'Impressões', color: 'hsl(220 70% 55%)' },
-  { key: 'clicks', label: 'Cliques', color: 'hsl(180 60% 45%)' },
+  { key: 'spend', get label() { return uiText("Investido"); }, color: 'hsl(var(--primary))', currency: true },
+  { key: 'leads', get label() { return uiText("Contatos"); }, color: 'hsl(var(--success))' },
+  { key: 'cpl', get label() { return uiText("CPL real"); }, color: 'hsl(40 90% 55%)', currency: true },
+  { key: 'impressions', get label() { return uiText("Impressões"); }, color: 'hsl(220 70% 55%)' },
+  { key: 'clicks', get label() { return uiText("Cliques"); }, color: 'hsl(180 60% 45%)' },
 ] as const;
 
 export default function MarketingTimeline() {
+  useUiLocale();
   const { organization } = useOrganization();
   const orgId = organization?.id;
   const { preset, setPreset, custom, setCustom, range } = useMarketingPeriod('last_30');
@@ -52,13 +54,13 @@ export default function MarketingTimeline() {
   }, [data]);
 
   return (
-    <MarketingLayout title="Histórico Diário">
+    <MarketingLayout title={uiText("Histórico Diário")}>
       <div className="flex flex-wrap items-center gap-3">
         <PeriodFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
         <Select value={filterId} onValueChange={setFilterId}>
           <SelectTrigger className="w-72"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os ads</SelectItem>
+            <SelectItem value="all">{uiText("Todos os ads")}</SelectItem>
             {(ads.data || []).map(a => (
               <SelectItem key={a.marketing_campaign_id} value={a.marketing_campaign_id}>
                 {a.ad_name || a.ad_id}
@@ -81,7 +83,7 @@ export default function MarketingTimeline() {
         {ts.isLoading ? (
           <ChartSkeleton />
         ) : data.length === 0 ? (
-          <EmptyState title="Sem dados no período" hint="O sync diário roda às 03:00 BRT." />
+          <EmptyState title={uiText("Sem dados no período")} hint={uiText("O sync diário roda às 03:00 BRT.")} />
         ) : (
           <div style={{ width: '100%', height: 320 }}>
             <ResponsiveContainer>
@@ -102,23 +104,23 @@ export default function MarketingTimeline() {
 
       <div className="rounded-md border border-border bg-card overflow-hidden">
         <div className="px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-semibold">Detalhes por dia</h3>
+          <h3 className="text-sm font-semibold">{uiText("Detalhes por dia")}</h3>
         </div>
         {ts.isLoading ? (
           <div className="p-4"><TableSkeleton rows={6} cols={6} /></div>
         ) : dataWithDelta.length === 0 ? (
-          <EmptyState title="Sem dados" />
+          <EmptyState title={uiText("Sem dados")} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/30">
                 <tr className="text-muted-foreground border-b border-border">
-                  <th className="py-2 px-3 font-medium text-xs text-left">Data</th>
-                  <th className="py-2 px-3 font-medium text-xs text-right">Investido</th>
-                  <th className="py-2 px-3 font-medium text-xs text-right">Δ vs dia anterior</th>
-                  <th className="py-2 px-3 font-medium text-xs text-right">Impressões</th>
-                  <th className="py-2 px-3 font-medium text-xs text-right">Cliques</th>
-                  <th className="py-2 px-3 font-medium text-xs text-right">Contatos</th>
+                  <th className="py-2 px-3 font-medium text-xs text-left">{uiText("Data")}</th>
+                  <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Investido")}</th>
+                  <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Δ vs dia anterior")}</th>
+                  <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Impressões")}</th>
+                  <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Cliques")}</th>
+                  <th className="py-2 px-3 font-medium text-xs text-right">{uiText("Contatos")}</th>
                   <th className="py-2 px-3 font-medium text-xs text-right">Δ leads</th>
                   <th className="py-2 px-3 font-medium text-xs text-right">CPL</th>
                 </tr>

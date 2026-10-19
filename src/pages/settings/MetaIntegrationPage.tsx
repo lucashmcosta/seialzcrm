@@ -1,3 +1,6 @@
+import { useMetaCapabilities } from '@/hooks/useMetaCapabilities';
+import { useMetaSocialPublishingFlag } from '@/hooks/useMetaSocialPublishingFlag';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { Fragment, useState, type ReactNode, type ElementType } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -32,11 +35,14 @@ type SectionId =
 // Configurar aqui; analisar Performance/Orgânico no módulo Marketing.
 // ---------------------------------------------------------------------------
 export default function MetaIntegrationPage() {
+  useUiLocale();
   const { organization } = useOrganization();
   const { permissions } = usePermissions();
   const navigate = useNavigate();
   const orgId = organization?.id;
   const isAdmin = permissions.canManageSettings;
+  const { enabled: socialPublishingEnabled } = useMetaSocialPublishingFlag(orgId);
+  const capabilities = useMetaCapabilities(orgId, socialPublishingEnabled);
   const [section, setSection] = useState<SectionId>('overview');
 
   // Lead Generation e CAPI renderizam inline (seções); WhatsApp segue modal.
@@ -49,7 +55,7 @@ export default function MetaIntegrationPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from('meta_connections')
-        .select('id,status,token_type,authorizing_meta_user_name,granted_scopes,config_id,app_id,last_health,last_token_check_at,created_at')
+        .select('id,status,token_type,authorizing_meta_user_name,granted_scopes,config_id,app_id,last_health,last_token_check_at,created_at,activation_state')
         .eq('organization_id', orgId!)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -78,6 +84,15 @@ export default function MetaIntegrationPage() {
         .select('kind,last_synced_at,sync_status')
         .eq('connection_id', conn!.id);
       return (data ?? []) as Array<{ kind: string; last_synced_at: string | null; sync_status: string }>;
+    },
+  });
+
+  const {data: operationalRoutes = []} = useQuery({
+    queryKey:['meta-operational-routes',orgId], enabled:!!orgId,
+    queryFn:async()=>{
+      const {data,error} = await supabase.from('meta_operational_routes').select('route,source,connection_id').eq('organization_id',orgId!);
+      if (error) throw error;
+      return data ?? [];
     },
   });
 
@@ -112,17 +127,17 @@ export default function MetaIntegrationPage() {
   const lastSync = (kind: string) => syncState.find((s) => s.kind === kind)?.last_synced_at ?? null;
 
   const NAV: Array<{ id: SectionId; label: string; icon: ElementType; group?: string; adminOnly?: boolean }> = [
-    { id: 'overview', label: 'Visão geral', icon: House },
-    { id: 'conexao', label: 'Conexão', icon: PlugsConnected },
-    { id: 'assets', label: 'Ativos', icon: Stack },
+    { id: 'overview', label: uiText("Visão geral"), icon: House },
+    { id: 'conexao', label: uiText("Conexão"), icon: PlugsConnected },
+    { id: 'assets', label: uiText("Ativos"), icon: Stack },
     { id: 'capabilities', label: 'Capabilities', icon: SquaresFour },
-    { id: 'performance', label: 'Performance', icon: Megaphone, group: 'Módulos' },
-    { id: 'organico', label: 'Orgânico', icon: InstagramLogo, group: 'Módulos' },
-    { id: 'lead-generation', label: 'Lead Generation', icon: UserPlus, group: 'Módulos' },
-    { id: 'capi', label: 'Conversions API', icon: Target, group: 'Módulos' },
-    { id: 'whatsapp', label: 'WhatsApp', icon: WhatsappLogo, group: 'Módulos' },
-    { id: 'logs', label: 'Logs', icon: ListChecks, group: 'Técnico', adminOnly: true },
-    { id: 'developer', label: 'Developer', icon: Code, group: 'Técnico', adminOnly: true },
+    { id: 'performance', label: 'Performance', icon: Megaphone, group: uiText("Módulos") },
+    { id: 'organico', label: uiText("Orgânico"), icon: InstagramLogo, group: uiText("Módulos") },
+    { id: 'lead-generation', label: 'Lead Generation', icon: UserPlus, group: uiText("Módulos") },
+    { id: 'capi', label: 'Conversions API', icon: Target, group: uiText("Módulos") },
+    { id: 'whatsapp', label: 'WhatsApp', icon: WhatsappLogo, group: uiText("Módulos") },
+    { id: 'logs', label: 'Logs', icon: ListChecks, group: uiText("Técnico"), adminOnly: true },
+    { id: 'developer', label: 'Developer', icon: Code, group: uiText("Técnico"), adminOnly: true },
   ];
   const visibleNav = NAV.filter((n) => !n.adminOnly || isAdmin);
 
@@ -131,7 +146,7 @@ export default function MetaIntegrationPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon-sm" onClick={() => navigate('/settings/integrations')} aria-label="Voltar">
+          <Button variant="ghost" size="icon-sm" onClick={() => navigate('/settings/integrations')} aria-label={uiText("Voltar")}>
             <ArrowLeft />
           </Button>
           <div>
@@ -141,11 +156,11 @@ export default function MetaIntegrationPage() {
                 <CircleNotch className="animate-spin text-muted-foreground" />
               ) : (
                 <Badge variant={connected ? 'default' : 'secondary'}>
-                  {connected ? 'Conectado' : conn ? conn.status : 'Não conectado'}
+                  {connected ? uiText("Conectado") : conn ? conn.status : uiText("Não conectado")}
                 </Badge>
               )}
             </div>
-            <p className="text-sm text-muted-foreground">Ads, Orgânico, Lead Generation, Conversions API e WhatsApp — um ecossistema.</p>
+            <p className="text-sm text-muted-foreground">{uiText("Ads, Orgânico, Lead Generation, Conversions API e WhatsApp — um ecossistema.")}</p>
           </div>
         </div>
       </div>
@@ -184,17 +199,17 @@ export default function MetaIntegrationPage() {
           {section === 'overview' && (
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <StatCard label="Status" value={connected ? 'Conectado' : (conn?.status ?? 'Não conectado')} accent={connected ? 'success' : 'muted'} />
-                <StatCard label="Health" value={conn?.last_health ?? '—'} sub={conn?.last_token_check_at ? `verificado ${fmtDateBR(conn.last_token_check_at)}` : undefined} />
-                <StatCard label="Autorizado por" value={conn?.authorizing_meta_user_name ?? '—'} sub={conn ? `token: ${conn.token_type}` : undefined} />
-                <StatCard label="Business / Ativos" value={`${selCount('business')} negócio(s)`} sub={`${selCount('ad_account')} contas · ${selCount('page')} páginas · ${selCount('instagram_account')} IG`} />
-                <StatCard label="Último sync — Orgânico" value={lastSync('organic') ? fmtDateBR(lastSync('organic')!) : '—'} />
-                <StatCard label="Último sync — Performance" value={lastSync('performance') ? fmtDateBR(lastSync('performance')!) : '—'} />
+                <StatCard label="Status" value={connected ? uiText("Conectado") : (conn?.status ?? uiText("Não conectado"))} accent={connected ? 'success' : 'muted'} />
+                <StatCard label="Health" value={conn?.last_health ?? '—'} sub={conn?.last_token_check_at ? uiText("verificado {0}", {"0": fmtDateBR(conn.last_token_check_at)}) : undefined} />
+                <StatCard label={uiText("Autorizado por")} value={conn?.authorizing_meta_user_name ?? '—'} sub={conn ? `token: ${conn.token_type}` : undefined} />
+                <StatCard label={uiText("Business / Ativos")} value={uiText("{0} negócio(s)", {"0": selCount('business')})} sub={uiText("{0} contas · {1} páginas · {2} IG", {"0": selCount('ad_account'),"1": selCount('page'),"2": selCount('instagram_account')})} />
+                <StatCard label={uiText("Último sync — Orgânico")} value={lastSync('organic') ? fmtDateBR(lastSync('organic')!) : '—'} />
+                <StatCard label={uiText("Último sync — Performance")} value={lastSync('performance') ? fmtDateBR(lastSync('performance')!) : '—'} />
               </div>
               <Card className="p-4">
-                <h3 className="mb-2 text-sm font-semibold">Módulos ativos</h3>
+                <h3 className="mb-2 text-sm font-semibold">{uiText("Módulos ativos")}</h3>
                 <div className="flex flex-wrap gap-2">
-                  <ModuleChip label="Orgânico" on={!!lastSync('organic')} />
+                  <ModuleChip label={uiText("Orgânico")} on={!!lastSync('organic')} />
                   <ModuleChip label="Performance" on={!!lastSync('performance')} />
                   <ModuleChip label="Lead Generation" on={enabledSlug('meta-lead-ads')} />
                   <ModuleChip label="Conversions API" on={enabledSlug('meta-capi')} />
@@ -206,14 +221,16 @@ export default function MetaIntegrationPage() {
 
           {section === 'conexao' && (
             <Card className="p-4">
-              <h3 className="text-base font-semibold">Conexão (Login for Business)</h3>
-              <p className="mt-1 text-sm text-muted-foreground">A conexão OAuth é a fundação de todos os módulos Meta.</p>
+              <h3 className="text-base font-semibold">{uiText("Conexão (Login for Business)")}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{uiText('Uma nova autorização mantém as conexões dos módulos em uso.')}</p>
               <div className="mt-3"><MetaConnectButton onConnected={() => window.location.reload()} /></div>
+              {conn?.activation_state === 'pending' && <p className="mt-3 text-sm">{uiText('Autorização recebida. Selecione os ativos na aba Ativos.')}</p>}
+              {operationalRoutes.some(route=>route.connection_id !== conn?.id) && <p className="mt-3 text-sm text-muted-foreground">{uiText('Os módulos existentes continuam usando suas credenciais anteriores. As autorizações coexistem.')}</p>}
               {conn && (
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4 text-xs text-muted-foreground">
-                  <Badge variant={connected ? 'default' : 'secondary'}>{connected ? 'Conectado' : conn.status}</Badge>
+                  <Badge variant={connected ? 'default' : 'secondary'}>{connected ? uiText("Conectado") : conn.status}</Badge>
                   <span>token: {conn.token_type}</span>
-                  {Array.isArray(conn.granted_scopes) && <span>· {conn.granted_scopes.length} permissões</span>}
+                  {Array.isArray(conn.granted_scopes) && <span>· {conn.granted_scopes.length} {uiText("permissões")}</span>}
                 </div>
               )}
             </Card>
@@ -221,10 +238,10 @@ export default function MetaIntegrationPage() {
 
           {section === 'assets' && (
             <Card className="p-4">
-              <h3 className="text-base font-semibold">Ativos</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Selecione quais Businesses, contas de anúncio, Páginas e Instagram pertencem à organização. Só os selecionados entram em sync.</p>
+              <h3 className="text-base font-semibold">{uiText("Ativos")}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{uiText("Selecione quais Businesses, contas de anúncio, Páginas e Instagram pertencem à organização. Só os selecionados entram em sync.")}</p>
               <div className="mt-3">
-                {conn ? <MetaAssetSelector connectionId={conn.id} /> : <EmptyHint>Conecte a Meta primeiro (aba Conexão).</EmptyHint>}
+                {conn ? <MetaAssetSelector connectionId={conn.id} /> : <EmptyHint>{uiText("Conecte a Meta primeiro (aba Conexão).")}</EmptyHint>}
               </div>
             </Card>
           )}
@@ -232,14 +249,14 @@ export default function MetaIntegrationPage() {
           {section === 'capabilities' && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <CapabilityCard icon={Megaphone} title="Performance (Ads)" state={lastSync('performance') ? 'ativo' : 'disponível'} onClick={() => setSection('performance')} />
-              <CapabilityCard icon={InstagramLogo} title="Orgânico" state={lastSync('organic') ? 'ativo' : 'disponível'} onClick={() => setSection('organico')} />
+              <CapabilityCard icon={InstagramLogo} title={uiText("Orgânico")} state={lastSync('organic') ? 'ativo' : 'disponível'} onClick={() => setSection('organico')} />
               <CapabilityCard icon={UserPlus} title="Lead Generation" state={enabledSlug('meta-lead-ads') ? 'ativo' : 'disponível'} onClick={() => setSection('lead-generation')} />
               <CapabilityCard icon={Target} title="Conversions API" state={enabledSlug('meta-capi') ? 'ativo' : 'disponível'} onClick={() => setSection('capi')} />
               <CapabilityCard icon={WhatsappLogo} title="WhatsApp" state={enabledSlug('meta-whatsapp-cloud') ? 'ativo' : 'disponível'} onClick={() => setSection('whatsapp')} />
-              <CapabilityCard icon={CalendarBlank} title="Calendário editorial" state="em breve" />
-              <CapabilityCard icon={PaperPlaneTilt} title="Publishing" state="em breve" />
-              <CapabilityCard icon={ChatCircleDots} title="Comments" state="em breve" />
-              <CapabilityCard icon={ChatsCircle} title="DM" state="em breve" />
+              <CapabilityCard icon={CalendarBlank} title={uiText("Calendário editorial")} state="em breve" />
+              <OperationalCapabilityCard icon={PaperPlaneTilt} title="Publishing" channels={capabilities.data?.publishing} failed={capabilities.isError} onClick={() => navigate('/marketing/posts')} />
+              <OperationalCapabilityCard icon={ChatCircleDots} title="Comments" channels={capabilities.data?.comments} failed={capabilities.isError} onClick={() => navigate('/marketing/comments')} />
+              <OperationalCapabilityCard icon={ChatsCircle} title="DM" channels={capabilities.data?.dm} failed={capabilities.isError} onClick={() => navigate('/social')} />
             </div>
           )}
 
@@ -247,19 +264,19 @@ export default function MetaIntegrationPage() {
             <div className="space-y-4">
               <ConfigLinkCard
                 icon={Megaphone} title="Performance (Ads)"
-                desc="Configuração e status. Sincronização automática diária; a análise (gráficos, tabelas) vive no módulo Marketing."
-                status={lastSync('performance') ? `Último sync: ${fmtDateBR(lastSync('performance')!)}` : 'Sync automático diário'}
-                to="/marketing" toLabel="Ver no Marketing"
+                desc={uiText("Configuração e status. Sincronização automática diária; a análise (gráficos, tabelas) vive no módulo Marketing.")}
+                status={lastSync('performance') ? uiText("Último sync: {0}", {"0": fmtDateBR(lastSync('performance')!)}) : uiText("Sync automático diário")}
+                to="/marketing" toLabel={uiText("Ver no Marketing")}
               />
               <AdsManagerConfig enabled={enabledSlug('meta-lead-ads')} />
             </div>
           )}
           {section === 'organico' && (
             <ConfigLinkCard
-              icon={InstagramLogo} title="Orgânico"
-              desc="Sincroniza mídias e insights de Páginas e Instagram. A análise vive no módulo Marketing."
-              status={lastSync('organic') ? `Último sync: ${fmtDateBR(lastSync('organic')!)}` : 'Sem sync ainda'}
-              to="/marketing/organic" toLabel="Ver no Marketing"
+              icon={InstagramLogo} title={uiText("Orgânico")}
+              desc={uiText("Sincroniza mídias e insights de Páginas e Instagram. A análise vive no módulo Marketing.")}
+              status={lastSync('organic') ? uiText("Último sync: {0}", {"0": fmtDateBR(lastSync('organic')!)}) : uiText("Sem sync ainda")}
+              to="/marketing/organic" toLabel={uiText("Ver no Marketing")}
             />
           )}
 
@@ -285,19 +302,19 @@ export default function MetaIntegrationPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base font-semibold">WhatsApp (Cloud API)</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">Conta WhatsApp Business e envio de mensagens/templates.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{uiText("Conta WhatsApp Business e envio de mensagens/templates.")}</p>
                 </div>
-                <Button size="sm" onClick={() => setWaOpen(true)}>Configurar</Button>
+                <Button size="sm" onClick={() => setWaOpen(true)}>{uiText("Configurar")}</Button>
               </div>
-              <div className="mt-3"><Badge variant={enabledSlug('meta-whatsapp-cloud') ? 'default' : 'secondary'}>{enabledSlug('meta-whatsapp-cloud') ? 'Ativo' : 'Não configurado'}</Badge></div>
+              <div className="mt-3"><Badge variant={enabledSlug('meta-whatsapp-cloud') ? 'default' : 'secondary'}>{enabledSlug('meta-whatsapp-cloud') ? uiText("Ativo") : uiText("Não configurado")}</Badge></div>
             </Card>
           )}
 
           {section === 'logs' && isAdmin && <LogsSection connectionId={conn?.id} orgId={orgId} />}
           {section === 'developer' && isAdmin && (
             <Card className="p-4">
-              <h3 className="text-base font-semibold">Developer <Badge variant="outline" className="ml-1 text-[10px]">interno</Badge></h3>
-              <p className="mt-1 text-sm text-muted-foreground">Metadados técnicos da conexão. Restrito a administradores.</p>
+              <h3 className="text-base font-semibold">Developer <Badge variant="outline" className="ml-1 text-[10px]">{uiText("interno")}</Badge></h3>
+              <p className="mt-1 text-sm text-muted-foreground">{uiText("Metadados técnicos da conexão. Restrito a administradores.")}</p>
               <dl className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
                 <Meta k="connection_id" v={conn?.id ?? '—'} />
                 <Meta k="app_id" v={conn?.app_id ?? '—'} />
@@ -321,6 +338,7 @@ export default function MetaIntegrationPage() {
 
 // ---- helpers de apresentação (locais, sem lógica de dados) ----
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: 'success' | 'muted' }) {
+  useUiLocale();
   return (
     <Card className="p-4">
       <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
@@ -330,19 +348,22 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
   );
 }
 function ModuleChip({ label, on }: { label: string; on: boolean }) {
+  useUiLocale();
   return <Badge variant={on ? 'default' : 'outline'} className={cn(!on && 'text-muted-foreground')}>{label}{on ? '' : ' · off'}</Badge>;
 }
 function CapabilityCard({ icon: Icon, title, state, onClick }: { icon: ElementType; title: string; state: 'ativo' | 'disponível' | 'em breve'; onClick?: () => void }) {
+  useUiLocale();
   const variant = state === 'ativo' ? 'default' : state === 'em breve' ? 'outline' : 'secondary';
   return (
     <button type="button" onClick={onClick} disabled={!onClick}
       className={cn('rounded-lg border border-border bg-card p-4 text-left transition-colors', onClick ? 'hover:border-primary/40 hover:bg-muted/40' : 'opacity-70')}>
       <div className="flex items-center gap-2"><Icon size={18} className="text-muted-foreground" /><span className="font-medium">{title}</span></div>
-      <Badge variant={variant} className="mt-2 capitalize">{state}</Badge>
+      <Badge variant={variant} className="mt-2 capitalize">{uiText(state)}</Badge>
     </button>
   );
 }
 function ConfigLinkCard({ icon: Icon, title, desc, status, to, toLabel }: { icon: ElementType; title: string; desc: string; status: string; to: string; toLabel: string }) {
+  useUiLocale();
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2"><Icon size={20} className="text-muted-foreground" /><h3 className="text-base font-semibold">{title}</h3></div>
@@ -357,14 +378,17 @@ function ConfigLinkCard({ icon: Icon, title, desc, status, to, toLabel }: { icon
   );
 }
 function EmptyHint({ children }: { children: ReactNode }) {
+  useUiLocale();
   return <div className="rounded-md border border-dashed border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground">{children}</div>;
 }
 function Meta({ k, v }: { k: string; v: string }) {
+  useUiLocale();
   return <div className="flex items-center justify-between gap-2 rounded border border-border px-2 py-1.5"><span className="text-muted-foreground">{k}</span><span className="truncate font-mono">{v}</span></div>;
 }
 
 // Logs (read-only): sync runs recentes + falhas de ingestão. Restrito a admin.
 function LogsSection({ connectionId, orgId }: { connectionId?: string; orgId?: string }) {
+  useUiLocale();
   const { data: runs = [] } = useQuery({
     queryKey: ['meta-logs-runs', connectionId],
     enabled: !!connectionId,
@@ -394,11 +418,11 @@ function LogsSection({ connectionId, orgId }: { connectionId?: string; orgId?: s
   return (
     <div className="space-y-4">
       <Card className="p-4">
-        <h3 className="mb-2 text-sm font-semibold">Execuções de sync (20 últimas)</h3>
+        <h3 className="mb-2 text-sm font-semibold">{uiText("Execuções de sync (20 últimas)")}</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
-              <th className="py-2 pr-3 font-medium">Tipo</th><th className="py-2 px-3 font-medium">Modo</th><th className="py-2 px-3 font-medium">Status</th><th className="py-2 px-3 font-medium">Início</th><th className="py-2 pl-3 font-medium">Erro</th>
+              <th className="py-2 pr-3 font-medium">{uiText("Tipo")}</th><th className="py-2 px-3 font-medium">{uiText("Modo")}</th><th className="py-2 px-3 font-medium">Status</th><th className="py-2 px-3 font-medium">{uiText("Início")}</th><th className="py-2 pl-3 font-medium">{uiText("Erro")}</th>
             </tr></thead>
             <tbody>
               {runs.map((r, i) => (
@@ -410,13 +434,13 @@ function LogsSection({ connectionId, orgId }: { connectionId?: string; orgId?: s
                   <td className="py-1.5 pl-3 text-xs text-muted-foreground">{r.error_class ?? '—'}</td>
                 </tr>
               ))}
-              {!runs.length && <tr><td colSpan={5} className="py-4 text-center text-xs text-muted-foreground">Sem execuções.</td></tr>}
+              {!runs.length && <tr><td colSpan={5} className="py-4 text-center text-xs text-muted-foreground">{uiText("Sem execuções.")}</td></tr>}
             </tbody>
           </table>
         </div>
       </Card>
       <Card className="p-4">
-        <h3 className="mb-2 text-sm font-semibold">Falhas de ingestão (Lead Generation)</h3>
+        <h3 className="mb-2 text-sm font-semibold">{uiText("Falhas de ingestão (Lead Generation)")}</h3>
         {failures.length ? (
           <ul className="space-y-1 text-sm">
             {failures.map((f, i) => (
@@ -426,8 +450,23 @@ function LogsSection({ connectionId, orgId }: { connectionId?: string; orgId?: s
               </li>
             ))}
           </ul>
-        ) : <p className="text-xs text-muted-foreground">Nenhuma falha registrada.</p>}
+        ) : <p className="text-xs text-muted-foreground">{uiText("Nenhuma falha registrada.")}</p>}
       </Card>
     </div>
   );
+}
+
+const CAPABILITY_LABELS = {active:'ativo',disabled:'Desativado',connection_required:'Conexão necessária',asset_required:'Selecione um ativo',permission_required:'Permissão necessária'} as const;
+function OperationalCapabilityCard({icon:Icon,title,channels,failed,onClick}: {
+  icon:ElementType; title:string; channels?: {facebook:{state:keyof typeof CAPABILITY_LABELS;missing:string[]};instagram:{state:keyof typeof CAPABILITY_LABELS;missing:string[]}};
+  failed:boolean; onClick:()=>void;
+}) {
+  useUiLocale();
+  return <button type="button" onClick={onClick} className="rounded-lg border border-border bg-card p-4 text-left hover:border-primary/40">
+    <div className="flex items-center gap-2"><Icon size={18}/><span className="font-medium">{title}</span></div>
+    {!channels ? <p className="text-xs mt-2">{uiText(failed?'Não foi possível verificar o status.':'Carregando…')}</p> : (['facebook','instagram'] as const).map(channel=><div key={channel} className="mt-2 text-xs">
+      {channel==='facebook'?'Facebook':'Instagram'} <Badge variant={channels[channel].state==='active'?'default':'secondary'}>{uiText(CAPABILITY_LABELS[channels[channel].state])}</Badge>
+      {channels[channel].state==='permission_required' && <p className="mt-1 break-words text-muted-foreground">{channels[channel].missing.join(', ')}</p>}
+    </div>)}
+  </button>;
 }

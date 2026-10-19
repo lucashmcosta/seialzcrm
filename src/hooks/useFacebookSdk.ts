@@ -1,3 +1,5 @@
+import { loadFacebookSdk } from '@/lib/facebook-sdk';
+import { getUiLocale } from '@/lib/ui-locale';
 import { useCallback } from 'react';
 
 // Carrega o Facebook JS SDK (pt_BR) sob demanda e faz FB.init uma única vez.
@@ -9,40 +11,6 @@ declare global {
   }
 }
 
-let sdkPromise: Promise<void> | null = null;
-
-function loadSdk(appId: string, version: string): Promise<void> {
-  if (window.FB) return Promise.resolve();
-  if (sdkPromise) return sdkPromise;
-
-  sdkPromise = new Promise<void>((resolve, reject) => {
-    // #fb-root exigido pelo SDK.
-    if (!document.getElementById('fb-root')) {
-      const root = document.createElement('div');
-      root.id = 'fb-root';
-      document.body.appendChild(root);
-    }
-    window.fbAsyncInit = () => {
-      try {
-        window.FB.init({ appId, cookie: true, xfbml: false, version });
-        resolve();
-      } catch (e) {
-        reject(e);
-      }
-    };
-    const id = 'facebook-jssdk';
-    if (document.getElementById(id)) return; // script já injetado
-    const js = document.createElement('script');
-    js.id = id;
-    js.async = true;
-    js.defer = true;
-    js.src = 'https://connect.facebook.net/pt_BR/sdk.js';
-    js.onerror = () => reject(new Error('facebook_sdk_load_failed'));
-    document.body.appendChild(js);
-  });
-  return sdkPromise;
-}
-
 export interface FbLoginResult {
   code?: string;
   status?: string;
@@ -50,7 +18,7 @@ export interface FbLoginResult {
 }
 
 export function useFacebookSdk() {
-  const ensureSdk = useCallback((appId: string, version: string) => loadSdk(appId, version), []);
+  const ensureSdk = useCallback((appId: string, version: string) => loadFacebookSdk(appId, version, getUiLocale()), []);
 
   // Login for Business: usa config_id (não scope) e response_type=code.
   const login = useCallback((configId: string): Promise<FbLoginResult> => {

@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMemo } from 'react';
 import {
   Select,
@@ -20,17 +21,17 @@ export type PeriodValue = {
 };
 
 const PRESET_LABELS: { value: PeriodPreset; label: string }[] = [
-  { value: 'today', label: 'Hoje' },
-  { value: 'yesterday', label: 'Ontem' },
-  { value: 'this_week', label: 'Esta semana' },
-  { value: 'last_week', label: 'Semana passada' },
-  { value: 'this_month', label: 'Este mês' },
-  { value: 'last_month', label: 'Mês passado' },
-  { value: 'last_7', label: 'Últimos 7 dias' },
-  { value: 'last_30', label: 'Últimos 30 dias' },
-  { value: 'last_90', label: 'Últimos 90 dias' },
-  { value: 'last_365', label: 'Últimos 12 meses' },
-  { value: 'custom', label: 'Período personalizado' },
+  { value: 'today', get label() { return uiText("Hoje"); } },
+  { value: 'yesterday', get label() { return uiText("Ontem"); } },
+  { value: 'this_week', get label() { return uiText("Esta semana"); } },
+  { value: 'last_week', get label() { return uiText("Semana passada"); } },
+  { value: 'this_month', get label() { return uiText("Este mês"); } },
+  { value: 'last_month', get label() { return uiText("Mês passado"); } },
+  { value: 'last_7', get label() { return uiText("Últimos 7 dias"); } },
+  { value: 'last_30', get label() { return uiText("Últimos 30 dias"); } },
+  { value: 'last_90', get label() { return uiText("Últimos 90 dias"); } },
+  { value: 'last_365', get label() { return uiText("Últimos 12 meses"); } },
+  { value: 'custom', get label() { return uiText("Período personalizado"); } },
 ];
 
 function toDateInputValue(d?: Date) {
@@ -69,6 +70,7 @@ export function ReportFilters({
   users = [],
   showOwner = true,
 }: Props) {
+  useUiLocale();
   const fromValue = useMemo(() => toDateInputValue(customRange?.from), [customRange?.from]);
   const toValue = useMemo(() => toDateInputValue(customRange?.to), [customRange?.to]);
 
@@ -100,7 +102,7 @@ export function ReportFilters({
             }
             className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
-          <span className="text-sm text-muted-foreground">até</span>
+          <span className="text-sm text-muted-foreground">{uiText("até")}</span>
           <input
             type="date"
             value={toValue}
@@ -121,7 +123,7 @@ export function ReportFilters({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os vendedores</SelectItem>
+            <SelectItem value="all">{uiText("Todos os vendedores")}</SelectItem>
             {users.map((u) => (
               <SelectItem key={u.id} value={u.id}>
                 {u.full_name}

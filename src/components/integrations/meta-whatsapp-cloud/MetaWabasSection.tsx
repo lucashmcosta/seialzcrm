@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 // PR1-B: Lista de todas as WABAs conectadas à organização.
 // Cada WABA mostra display_name + waba_id + números (endpoints) aninhados,
 // reutilizando MetaAdditionalEndpointsSection para a lista de números.
@@ -36,6 +37,7 @@ interface WabaRow {
 
 
 export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
+  useUiLocale();
   const [addOpen, setAddOpen] = useState(false);
   /** WABA alvo do fluxo "Adicionar número" — cada WABA é primeira classe (sem WABA "principal"). */
   const [addNumberFor, setAddNumberFor] = useState<{ wabaId: string; appId: string } | null>(null);
@@ -66,8 +68,8 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
         organizationIntegrationId: oiId,
       });
       toast({
-        title: "Webhook reinscrito",
-        description: `App(s) inscrito(s): ${res.subscribed_app_ids.join(", ") || "—"}`,
+        get title() { return uiText("Webhook reinscrito"); },
+        description: uiText("App(s) inscrito(s): {0}", {"0": res.subscribed_app_ids.join(", ") || "—"}),
       });
       await queryClient.invalidateQueries({
         queryKey: ["meta-wabas", organizationId, metaIntegrationId],
@@ -76,10 +78,10 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
       const err = e as Error & { code?: string; details?: unknown };
       toast({
         variant: "destructive",
-        title: "Falha ao reinscrever webhook",
+        title: uiText("Falha ao reinscrever webhook"),
         description:
           err.code === "waba_subscribe_failed"
-            ? "A Meta recusou a inscrição do app. Verifique permissões do token."
+            ? uiText("A Meta recusou a inscrição do app. Verifique permissões do token.")
             : err.message,
       });
     } finally {
@@ -95,15 +97,15 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
         organizationIntegrationId: oiId,
       });
       toast({
-        title: "Templates sincronizados",
-        description: `${res.synced}/${res.total} templates (aprovados: ${res.approved ?? 0}).`,
+        get title() { return uiText("Templates sincronizados"); },
+        description: uiText("{0}/{1} templates (aprovados: {2}).", {"0": res.synced,"1": res.total,"2": res.approved ?? 0}),
       });
       await queryClient.invalidateQueries({ queryKey: ["whatsapp-templates"] });
     } catch (e) {
       const err = e as Error & { code?: string };
       toast({
         variant: "destructive",
-        title: "Falha ao sincronizar templates",
+        title: uiText("Falha ao sincronizar templates"),
         description: err.message,
       });
     } finally {
@@ -118,18 +120,15 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
           <div className="min-w-0">
             <h4 className="font-medium flex items-center gap-2">
               <Buildings className="h-4 w-4 shrink-0" />
-              <span className="truncate">WABAs conectadas</span>
+              <span className="truncate">{uiText("WABAs conectadas")}</span>
             </h4>
             <p className="text-xs text-muted-foreground">
-              Uma organização pode ter múltiplas WABAs compartilhando as mesmas credenciais Meta
-              (app_id, token, app_secret).
-            </p>
+              {uiText("Uma organização pode ter múltiplas WABAs compartilhando as mesmas credenciais Meta (app_id, token, app_secret).")}</p>
           </div>
 
           <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4 mr-1" />
-            Adicionar WABA
-          </Button>
+            {uiText("Adicionar WABA")}</Button>
         </div>
 
         <Separator />
@@ -139,7 +138,7 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
             <SpinnerGap className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         ) : (wabas ?? []).length === 0 ? (
-          <p className="text-xs text-muted-foreground">Nenhuma WABA cadastrada ainda.</p>
+          <p className="text-xs text-muted-foreground">{uiText("Nenhuma WABA cadastrada ainda.")}</p>
         ) : (
           <div className="space-y-3">
             {(wabas ?? []).map((w) => {
@@ -147,7 +146,7 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
               const cv = (w.config_values ?? {}) as Record<string, unknown>;
               const primaryPnid = (ca.phone_number_id as string | undefined) ?? null;
               const wabaAppId = (ca.app_id as string | undefined) ?? (cv.app_id as string | undefined) ?? null;
-              const wabaLabel = w.display_name || (w.meta_waba_id ? `WABA ${w.meta_waba_id}` : "WABA (sem ID)");
+              const wabaLabel = w.display_name || (w.meta_waba_id ? `WABA ${w.meta_waba_id}` : uiText("WABA (sem ID)"));
               const subscribed = cv.webhook_subscribed === true;
               const subscribedAt = typeof cv.webhook_subscribed_at === "string" ? cv.webhook_subscribed_at : null;
               const busy = resubscribingId === w.id;
@@ -159,18 +158,16 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium truncate">{wabaLabel}</span>
                         {w.meta_credentials_id ? (
-                          <Badge variant="secondary" className="text-[10px]">creds compartilhadas</Badge>
+                          <Badge variant="secondary" className="text-[10px]">{uiText("creds compartilhadas")}</Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[10px]">legado</Badge>
+                          <Badge variant="outline" className="text-[10px]">{uiText("legado")}</Badge>
                         )}
                         {subscribed ? (
                           <Badge variant="secondary" className="text-[10px] flex items-center gap-1">
-                            <CheckCircle className="h-3 w-3" /> webhook inscrito
-                          </Badge>
+                            <CheckCircle className="h-3 w-3" /> {uiText("webhook inscrito")}</Badge>
                         ) : (
                           <Badge variant="outline" className="text-[10px] flex items-center gap-1 text-amber-600 border-amber-400">
-                            <Warning className="h-3 w-3" /> webhook não inscrito
-                          </Badge>
+                            <Warning className="h-3 w-3" /> {uiText("webhook não inscrito")}</Badge>
                         )}
                       </div>
                       {w.meta_waba_id && (
@@ -180,7 +177,7 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
                       )}
                       {subscribedAt && (
                         <div className="text-[10px] text-muted-foreground">
-                          inscrito em {new Date(subscribedAt).toLocaleString()}
+                          {uiText("inscrito em")}{new Date(subscribedAt).toLocaleString()}
                         </div>
                       )}
                     </div>
@@ -191,10 +188,10 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
                         disabled={!w.meta_waba_id || !wabaAppId}
                         title={
                           !w.meta_waba_id
-                            ? "WABA sem waba_id"
+                            ? uiText("WABA sem waba_id")
                             : !wabaAppId
-                              ? "WABA sem app_id registrado"
-                              : "Adicionar número nesta WABA"
+                              ? uiText("WABA sem app_id registrado")
+                              : uiText("Adicionar número nesta WABA")
                         }
                         onClick={() =>
                           setAddNumberFor({
@@ -204,8 +201,7 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
                         }
                       >
                         <Plus className="h-3.5 w-3.5 mr-1" />
-                        Adicionar número
-                      </Button>
+                        {uiText("Adicionar número")}</Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -217,8 +213,7 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
                         ) : (
                           <ArrowsClockwise className="h-3.5 w-3.5 mr-1" />
                         )}
-                        Sincronizar templates
-                      </Button>
+                        {uiText("Sincronizar templates")}</Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -230,8 +225,7 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
                         ) : (
                           <ArrowClockwise className="h-3.5 w-3.5 mr-1" />
                         )}
-                        Reinscrever webhook
-                      </Button>
+                        {uiText("Reinscrever webhook")}</Button>
                     </div>
                   </div>
                   <MetaAdditionalEndpointsSection

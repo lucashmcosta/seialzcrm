@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +17,7 @@ interface Props {
 }
 
 export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Props) {
+  useUiLocale();
   const qc = useQueryClient();
   const [drafts, setDrafts] = useState<Record<string, any>>({});
 
@@ -114,22 +117,21 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
       }
     },
     onSuccess: () => {
-      toast.success("Mapeamento salvo");
+      toast.success(uiText("Mapeamento salvo"));
       qc.invalidateQueries({ queryKey: ["lead-forms"] });
       qc.invalidateQueries({ queryKey: ["lead-form-questions"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
+    onError: (e: any) => toast.error(uiError(e.message || uiText("Erro ao salvar"))),
   });
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Mapeamento de campos</SheetTitle>
+          <SheetTitle>{uiText("Mapeamento de campos")}</SheetTitle>
           <SheetDescription>
-            Defina como cada pergunta do formulário será gravada no contato.
-          </SheetDescription>
+            {uiText("Defina como cada pergunta do formulário será gravada no contato.")}</SheetDescription>
         </SheetHeader>
 
         <div className="mt-6 space-y-3">
@@ -137,8 +139,7 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
             <Skeleton className="h-40 w-full" />
           ) : questions.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nenhuma pergunta sincronizada. Re-sincronize a integração.
-            </p>
+              {uiText("Nenhuma pergunta sincronizada. Re-sincronize a integração.")}</p>
           ) : (
             questions.map((q) => {
               const draft = drafts[q.id] || q;
@@ -161,10 +162,9 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
 
         <div className="flex justify-end gap-2 mt-6 sticky bottom-0 bg-background py-3">
           <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
+            {uiText("Cancelar")}</Button>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Salvando..." : "Salvar mapeamento"}
+            {save.isPending ? "Salvando..." : uiText("Salvar mapeamento")}
           </Button>
         </div>
       </SheetContent>

@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +34,7 @@ export function SimpleLogoUploader({
   onSave,
   organizationSlug,
 }: SimpleLogoUploaderProps) {
+  useUiLocale();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -68,8 +70,8 @@ export function SimpleLogoUploader({
     if (!file.type.startsWith('image/')) {
       toast({
         variant: 'destructive',
-        title: 'Erro',
-        description: 'Por favor, selecione uma imagem válida.',
+        title: uiText("Erro"),
+        description: uiText("Por favor, selecione uma imagem válida."),
       });
       return;
     }
@@ -78,8 +80,8 @@ export function SimpleLogoUploader({
     if (file.size > 2 * 1024 * 1024) {
       toast({
         variant: 'destructive',
-        title: 'Erro',
-        description: 'A imagem deve ter no máximo 2MB.',
+        title: uiText("Erro"),
+        description: uiText("A imagem deve ter no máximo 2MB."),
       });
       return;
     }
@@ -102,15 +104,15 @@ export function SimpleLogoUploader({
 
       setPreviewUrl(publicUrl);
       toast({
-        title: 'Upload concluído',
-        description: 'Imagem carregada com sucesso.',
+        title: uiText("Upload concluído"),
+        description: uiText("Imagem carregada com sucesso."),
       });
     } catch (error) {
       console.error('Upload error:', error);
       toast({
         variant: 'destructive',
-        title: 'Erro no upload',
-        description: 'Não foi possível fazer o upload da imagem.',
+        title: uiText("Erro no upload"),
+        description: uiText("Não foi possível fazer o upload da imagem."),
       });
     } finally {
       setUploading(false);
@@ -127,8 +129,8 @@ export function SimpleLogoUploader({
     } catch {
       toast({
         variant: 'destructive',
-        title: 'URL inválida',
-        description: 'Por favor, insira uma URL válida.',
+        title: uiText("URL inválida"),
+        description: uiText("Por favor, insira uma URL válida."),
       });
     }
   };
@@ -153,10 +155,9 @@ export function SimpleLogoUploader({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Logo da Organização</DialogTitle>
+          <DialogTitle>{uiText("Logo da Organização")}</DialogTitle>
           <DialogDescription>
-            Faça upload de uma imagem ou cole uma URL. Ajuste o tamanho para a sidebar.
-          </DialogDescription>
+            {uiText("Faça upload de uma imagem ou cole uma URL. Ajuste o tamanho para a sidebar.")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -190,13 +191,11 @@ export function SimpleLogoUploader({
                 {uploading ? (
                   <>
                      <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
-                    Enviando...
-                  </>
+                    {uiText("Enviando...")}</>
                 ) : (
                   <>
                     <UploadSimple className="w-4 h-4 mr-2" />
-                    Clique para selecionar uma imagem
-                  </>
+                    {uiText("Clique para selecionar uma imagem")}</>
                 )}
               </Button>
             </TabsContent>
@@ -210,27 +209,26 @@ export function SimpleLogoUploader({
                   onKeyDown={(e) => e.key === 'Enter' && handleUrlSubmit()}
                 />
                 <Button type="button" onClick={handleUrlSubmit}>
-                  Aplicar
-                </Button>
+                  {uiText("Aplicar")}</Button>
               </div>
             </TabsContent>
           </Tabs>
 
           {/* Preview */}
           <div className="space-y-2">
-            <Label>Preview na Sidebar</Label>
+            <Label>{uiText("Preview na Sidebar")}</Label>
             <div className="flex items-center gap-4 p-4 bg-muted rounded-lg min-h-[80px]">
               {previewUrl ? (
                 <img
                   src={previewUrl}
-                  alt="Preview do logo"
+                  alt={uiText("Preview do logo")}
                   style={{ height: logoSize }}
                   className="object-contain"
                   onError={() => {
                     toast({
                       variant: 'destructive',
-                      title: 'Erro ao carregar imagem',
-                      description: 'A URL da imagem não é válida.',
+                      title: uiText("Erro ao carregar imagem"),
+                      description: uiText("A URL da imagem não é válida."),
                     });
                     setPreviewUrl('');
                   }}
@@ -244,15 +242,14 @@ export function SimpleLogoUploader({
                 </div>
               )}
               <span className="text-sm text-muted-foreground">
-                {logoSize}px de altura
-              </span>
+                {logoSize}{uiText("px de altura")}</span>
             </div>
           </div>
 
           {/* Size Slider */}
           <div className="space-y-3">
             <div className="flex justify-between">
-              <Label>Tamanho na Sidebar</Label>
+              <Label>{uiText("Tamanho na Sidebar")}</Label>
               <span className="text-sm text-muted-foreground">{logoSize}px</span>
             </div>
             <Slider
@@ -278,19 +275,16 @@ export function SimpleLogoUploader({
               className="text-destructive hover:text-destructive"
             >
               <TrashSimple className="w-4 h-4 mr-2" />
-              Remover logo
-            </Button>
+              {uiText("Remover logo")}</Button>
           )}
         </div>
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
+            {uiText("Cancelar")}</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />}
-            Salvar
-          </Button>
+            {uiText("Salvar")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

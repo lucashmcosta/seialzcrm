@@ -1,3 +1,5 @@
+import { uiError } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 /* eslint-disable @typescript-eslint/no-explicit-any -- extração verbatim do Card B legado (ConnectionForm); tipos das respostas de edge/RPC preservados como no original para não alterar comportamento. */
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,11 +20,11 @@ import { toast } from 'sonner';
 
 function normalizeSyncError(reason?: string | null): string {
   switch (reason) {
-    case 'not_configured': return 'Ads Manager não configurado.';
-    case 'no_token': return 'Token Meta ausente ou inválido.';
-    case 'decrypt_failed': return 'Não foi possível ler o token Meta salvo.';
-    case 'token_invalid': return 'O token Meta expirou ou foi invalidado.';
-    default: return reason || 'A sincronização não retornou dados válidos.';
+    case 'not_configured': return uiText("Ads Manager não configurado.");
+    case 'no_token': return uiText("Token Meta ausente ou inválido.");
+    case 'decrypt_failed': return uiText("Não foi possível ler o token Meta salvo.");
+    case 'token_invalid': return uiText("O token Meta expirou ou foi invalidado.");
+    default: return reason || uiText("A sincronização não retornou dados válidos.");
   }
 }
 function getSyncIssue(discoverData: any, insightsData: any): string | null {
@@ -46,11 +48,12 @@ function getSyncIssue(discoverData: any, insightsData: any): string | null {
   if (insightFailure) return normalizeSyncError(insightsData?.errors?.[0]?.error || insightsData?.error);
   const noDiscoverWork = (discoverData?.ads_discovered ?? 0) === 0 && (discoverData?.ads_created ?? 0) === 0;
   const noInsightWork = (insightsData?.ads_processed ?? 0) === 0 && (insightsData?.days_inserted ?? 0) === 0;
-  if (noDiscoverWork && noInsightWork) return 'Nenhuma campanha elegível foi sincronizada.';
+  if (noDiscoverWork && noInsightWork) return uiText("Nenhuma campanha elegível foi sincronizada.");
   return null;
 }
 
 export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
+  useUiLocale();
   const { organization } = useOrganization();
   const qc = useQueryClient();
 
@@ -77,16 +80,16 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
         body: { organization_id: organization!.id },
       });
       if (error) throw error;
-      if ((data as any)?.success === false) throw new Error((data as any).error_message || 'Falha ao listar contas');
+      if ((data as any)?.success === false) throw new Error((data as any).error_message || uiText("Falha ao listar contas"));
       return (data as any)?.ad_accounts || [];
     },
   });
 
   const saveAdsManager = useMutation({
     mutationFn: async () => {
-      if (!organization?.id) throw new Error('Organização não encontrada');
+      if (!organization?.id) throw new Error(uiText("Organização não encontrada"));
       const accountId = selectedAdAccount || currentAdAccountId;
-      if (!accountId) throw new Error('Selecione uma Ad Account');
+      if (!accountId) throw new Error(uiText("Selecione uma Ad Account"));
       const account = (adAccountsQuery.data || []).find(
         (a: any) => a.id === accountId || a.account_id === accountId.replace('act_', ''),
       );
@@ -100,20 +103,20 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
         },
       });
       if (error) throw error;
-      if ((data as any)?.success === false) throw new Error((data as any).error || 'Falha ao salvar');
+      if ((data as any)?.success === false) throw new Error((data as any).error || uiText("Falha ao salvar"));
       return data;
     },
     onSuccess: () => {
-      toast.success('Ads Manager configurado');
+      toast.success(uiText("Ads Manager configurado"));
       qc.invalidateQueries({ queryKey: ['meta-cred'] });
       qc.invalidateQueries({ queryKey: ['org-integration'] });
     },
-    onError: (e: any) => toast.error(e.message || 'Falha ao salvar'),
+    onError: (e: any) => toast.error(uiError(e.message || uiText("Falha ao salvar"))),
   });
 
   const syncNow = useMutation({
     mutationFn: async () => {
-      if (!organization?.id) throw new Error('Organização não encontrada');
+      if (!organization?.id) throw new Error(uiText("Organização não encontrada"));
       const discover = await supabase.functions.invoke('meta-discover-ads-cron', {
         body: { organization_id: organization.id },
       });
@@ -128,13 +131,13 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
     },
     onSuccess: ({ discover, insights }) => {
       const details = [
-        (discover?.ads_created ?? 0) > 0 ? `${discover.ads_created} campanhas novas` : null,
-        (insights?.ads_processed ?? 0) > 0 ? `${insights.ads_processed} anúncios processados` : null,
-        (insights?.days_inserted ?? 0) > 0 ? `${insights.days_inserted} dias de insights` : null,
+        (discover?.ads_created ?? 0) > 0 ? uiText("{0} campanhas novas", {"0": discover.ads_created}) : null,
+        (insights?.ads_processed ?? 0) > 0 ? uiText("{0} anúncios processados", {"0": insights.ads_processed}) : null,
+        (insights?.days_inserted ?? 0) > 0 ? uiText("{0} dias de insights", {"0": insights.days_inserted}) : null,
       ].filter(Boolean).join(' • ');
-      toast.success('Sincronização concluída', { description: details || undefined });
+      toast.success(uiText("Sincronização concluída"), { description: details || undefined });
     },
-    onError: (e: any) => toast.error(e.message || 'Falha ao sincronizar'),
+    onError: (e: any) => toast.error(uiError(e.message || uiText("Falha ao sincronizar"))),
   });
 
   const effectiveSyncEnabled =
@@ -145,9 +148,9 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
   return (
     <Card className="p-4 space-y-4">
       <div>
-        <h3 className="text-base font-semibold">Conta de anúncio (Ads Manager)</h3>
+        <h3 className="text-base font-semibold">{uiText("Conta de anúncio (Ads Manager)")}</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Escolha a Ad Account que alimenta campanhas, criativos e insights. A análise fica em <code className="text-xs bg-muted px-1 rounded">/marketing</code>.
+          {uiText("Escolha a Ad Account que alimenta campanhas, criativos e insights. A análise fica em")}{' '}<code className="text-xs bg-muted px-1 rounded">/marketing</code>.
         </p>
       </div>
 
@@ -155,7 +158,7 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
         <Alert>
           <CheckCircle className="h-4 w-4" />
           <AlertDescription className="text-xs">
-            Atual: <code>{currentAdAccountId}</code>{currentSyncEnabled ? ' · sync ativo' : ' · sync desativado'}
+            {uiText("Atual:")}{' '}<code>{currentAdAccountId}</code>{currentSyncEnabled ? uiText(" · sync ativo") : uiText(" · sync desativado")}
           </AlertDescription>
         </Alert>
       )}
@@ -164,7 +167,7 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
         <Label>Ad Account</Label>
         <Select value={selectedAdAccount || currentAdAccountId || ''} onValueChange={setSelectedAdAccount} disabled={adAccountsQuery.isLoading}>
           <SelectTrigger>
-            <SelectValue placeholder={adAccountsQuery.isLoading ? 'Carregando contas...' : 'Selecione uma Ad Account'} />
+            <SelectValue placeholder={adAccountsQuery.isLoading ? uiText("Carregando contas...") : uiText("Selecione uma Ad Account")} />
           </SelectTrigger>
           <SelectContent>
             {(adAccountsQuery.data || []).map((acc: any) => (
@@ -173,28 +176,27 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
           </SelectContent>
         </Select>
         {adAccountsQuery.isError && (
-          <p className="text-xs text-destructive">{(adAccountsQuery.error as any)?.message || 'Falha ao listar contas'}</p>
+          <p className="text-xs text-destructive">{(adAccountsQuery.error as any)?.message || uiText("Falha ao listar contas")}</p>
         )}
         {!adAccountsQuery.isLoading && !adAccountsQuery.isError && (adAccountsQuery.data || []).length === 0 && (
-          <p className="text-xs text-muted-foreground">Nenhuma Ad Account acessível por esse token. Verifique permissões <code>ads_read</code> e <code>business_management</code>.</p>
+          <p className="text-xs text-muted-foreground">{uiText("Nenhuma Ad Account acessível por esse token. Verifique permissões")}{' '}<code>ads_read</code> {uiText("e")}{' '}<code>business_management</code>.</p>
         )}
       </div>
 
       <div className="flex items-center justify-between rounded-md border p-3">
         <div>
-          <p className="text-sm font-medium">Sincronizar campanhas e insights</p>
-          <p className="text-xs text-muted-foreground">Liga o sync automático diário que popula <code>/marketing</code>.</p>
+          <p className="text-sm font-medium">{uiText("Sincronizar campanhas e insights")}</p>
+          <p className="text-xs text-muted-foreground">{uiText("Liga o sync automático diário que popula")}{' '}<code>/marketing</code>.</p>
         </div>
         <Switch checked={effectiveSyncEnabled} onCheckedChange={setEnableAdsSync} />
       </div>
 
       <div className="flex flex-wrap gap-2 justify-end">
-        <Button variant="ghost" size="sm" onClick={() => syncNow.mutate()} disabled={syncNow.isPending || !currentAdAccountId} title="Sincronizar agora (diagnóstico)">
+        <Button variant="ghost" size="sm" onClick={() => syncNow.mutate()} disabled={syncNow.isPending || !currentAdAccountId} title={uiText("Sincronizar agora (diagnóstico)")}>
           <ArrowsClockwise className={`h-4 w-4 mr-1 ${syncNow.isPending ? 'animate-spin' : ''}`} />
-          Sincronizar agora
-        </Button>
+          {uiText("Sincronizar agora")}</Button>
         <Button onClick={() => saveAdsManager.mutate()} disabled={saveAdsManager.isPending || (!selectedAdAccount && !currentAdAccountId)}>
-          {saveAdsManager.isPending ? 'Salvando...' : 'Salvar conta de anúncio'}
+          {saveAdsManager.isPending ? 'Salvando...' : uiText("Salvar conta de anúncio")}
         </Button>
       </div>
     </Card>

@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { ReactNode } from 'react';
 import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
 import { Link, useNavigate } from 'react-router-dom';
@@ -33,7 +34,7 @@ import { SidebarNavigationSimple } from '@/components/application/app-navigation
 import { FeaturedCardProgressBar } from '@/components/application/app-navigation/base-components/featured-cards';
 import type { NavItemType } from '@/components/application/app-navigation/config';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
-import { useMarketingPublishingFlag } from '@/hooks/useMarketingPublishingFlag';
+import { useMetaSocialPublishingFlag } from '@/hooks/useMetaSocialPublishingFlag';
 import { useTheme } from '@/contexts/ThemeContext';
 import { SeialzSidebar, type SeialzNavGroup } from '@/components/seialz/SeialzSidebar';
 
@@ -42,6 +43,7 @@ interface LayoutProps {
 }
 
 export function Layout({ children }: LayoutProps) {
+  useUiLocale();
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const { organization, userProfile, locale, loading } = useOrganization();
@@ -49,7 +51,7 @@ export function Layout({ children }: LayoutProps) {
   const { permissions } = usePermissions();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { hasWhatsApp } = useWhatsAppIntegration();
-  const { enabled: socialEnabled } = useMarketingPublishingFlag(organization?.id);
+  const { enabled: socialEnabled } = useMetaSocialPublishingFlag(organization?.id);
   const { themePreset } = useTheme();
 
   // ═══════════════════════════════════════
@@ -69,7 +71,7 @@ export function Layout({ children }: LayoutProps) {
       { label: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
     );
     const groups: SeialzNavGroup[] = [
-      { label: 'PRINCIPAL', items: principalItems },
+      { label: uiText("PRINCIPAL"), items: principalItems },
     ];
 
     // Add Companies if enabled (insert before Tasks)
@@ -92,13 +94,13 @@ export function Layout({ children }: LayoutProps) {
       commItems.push({ label: 'Social', href: '/social', icon: ChatsCircle });
     }
     if (commItems.length > 0) {
-      groups.push({ label: 'COMUNICAÇÃO', items: commItems });
+      groups.push({ label: uiText("COMUNICAÇÃO"), items: commItems });
     }
 
     // Atendimento group (módulo independente — pós-venda / jurídico)
     groups.push({
-      label: 'ATENDIMENTO',
-      items: [{ label: 'Atendimento', href: '/inbox', icon: Headset }],
+      label: uiText("ATENDIMENTO"),
+      items: [{ label: uiText("Atendimento"), href: '/inbox', icon: Headset }],
     });
 
     // System group
@@ -110,7 +112,7 @@ export function Layout({ children }: LayoutProps) {
       sysItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: ShieldCheck });
     }
     sysItems.push({ label: 'Widgets', href: '/widgets', icon: PuzzlePiece });
-    groups.push({ label: 'SISTEMA', items: sysItems });
+    groups.push({ label: uiText("SISTEMA"), items: sysItems });
     // RBAC v2: some do menu o que o perfil não permite (sem efeito com o interruptor desligado)
     for (const g of groups) g.items = g.items.filter((i) => areaAllowed(permissions, i.href));
     groups.splice(0, groups.length, ...groups.filter((g) => g.items.length > 0));
@@ -179,7 +181,7 @@ export function Layout({ children }: LayoutProps) {
 
   // Atendimento (módulo independente — pós-venda / jurídico)
   navItems.push({
-    label: 'Atendimento',
+    label: uiText("Atendimento"),
     href: '/inbox',
     icon: Headset,
   });
@@ -256,7 +258,7 @@ export function Layout({ children }: LayoutProps) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate text-foreground">
-              {userProfile?.full_name || user?.email || 'Usuário'}
+              {userProfile?.full_name || user?.email || uiText("Usuário")}
             </p>
             <p className="text-xs text-muted-foreground truncate">
               {userProfile?.email || user?.email || ''}

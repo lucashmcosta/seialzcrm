@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export function StatusDashboard({ organizationId }: Props) {
+  useUiLocale();
   const { data } = useQuery({
     queryKey: ["meta-lead-ads-stats", organizationId],
     queryFn: async () => {
@@ -57,9 +59,9 @@ export function StatusDashboard({ organizationId }: Props) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       <Stat label="Leads 24h" value={data?.leads24h} tone="success" />
-      <Stat label="Total sincronizado" value={data?.totalLeads} />
-      <Stat label="Formulários monitorados" value={data?.monitored} />
-      <Stat label="Formulários com erro" value={data?.errorForms} tone={data?.errorForms ? "danger" : "default"} />
+      <Stat label={uiText("Total sincronizado")} value={data?.totalLeads} />
+      <Stat label={uiText("Formulários monitorados")} value={data?.monitored} />
+      <Stat label={uiText("Formulários com erro")} value={data?.errorForms} tone={data?.errorForms ? "danger" : "default"} />
     </div>
   );
 }

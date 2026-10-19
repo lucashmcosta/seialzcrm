@@ -1,3 +1,4 @@
+import { operationallyReady } from '../../supabase/functions/_shared/meta/operational';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -15,6 +16,9 @@ export interface MetaConnectionInfo {
   authorizing_meta_user_name: string | null;
   granted_scopes: string[] | null;
   last_health: string | null;
+  activation_state: string;
+  expires_at: string | null;
+  data_access_expires_at: string | null;
   last_token_check_at: string | null;
 }
 
@@ -30,29 +34,24 @@ export interface MetaConnectionState {
 
 const CANONICAL_FLAG = "meta_canonical_credential";
 
-export function useMetaConnection(orgId?: string | null): MetaConnectionState {
+export function useMetaConnection(orgId?: string | null, capability = 'lead-generation'): MetaConnectionState {
   const { data, isLoading } = useQuery({
-    queryKey: ["meta-connection-state", orgId],
+    queryKey: ["meta-connection-state", orgId, capability],
     enabled: !!orgId,
     queryFn: async () => {
-      const [connRes, flagRes] = await Promise.all([
-        supabase
-          .from("meta_connections")
-          .select(
-            "id,status,token_type,authorizing_meta_user_name,granted_scopes,last_health,last_token_check_at",
-          )
-          .eq("organization_id", orgId!)
-          .eq("status", "connected")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        // RPC SECURITY DEFINER, exposta a `authenticated`: mesma fonte de verdade do backend.
-        supabase.rpc("fn_feature_flag_enabled", {
-          _flag_key: CANONICAL_FLAG,
-          _organization_id: orgId!,
-        }),
+      const { data: route, error: routeError } = await supabase.from('meta_operational_routes')
+        .select('source,connection_id').eq('organization_id',orgId!).eq('route',capability).maybeSingle();
+      if (routeError) throw routeError;
+      let q = supabase.from('meta_connections')
+        .select('id,status,token_type,authorizing_meta_user_name,granted_scopes,last_health,last_token_check_at,activation_state,expires_at,data_access_expires_at')
+        .eq('organization_id',orgId!).eq('status','connected').eq('activation_state','ready')
+        .order('created_at',{ascending:false}).limit(1);
+      if (route?.connection_id) q = q.eq('id',route.connection_id);
+      const [connRes,flagRes] = await Promise.all([
+        route?.source === 'legacy' ? Promise.resolve({data:null,error:null}) : q.maybeSingle(),
+        supabase.rpc('fn_feature_flag_enabled',{_flag_key:CANONICAL_FLAG,_organization_id:orgId!}),
       ]);
-
+      if (connRes.error) throw connRes.error;
       const connection = (connRes.data as MetaConnectionInfo | null) ?? null;
       const flagOn = flagRes.data === true;
       return { connection, flagOn };
@@ -63,11 +62,7 @@ export function useMetaConnection(orgId?: string | null): MetaConnectionState {
   const flagOn = data?.flagOn ?? false;
   // A query já filtra status='connected'; consideramos saudável salvo estado de saúde
   // explicitamente ruim (expired/error). Conexão ausente => não saudável => legado.
-  const healthy =
-    !!connection &&
-    connection.status === "connected" &&
-    connection.last_health !== "expired" &&
-    connection.last_health !== "error";
+  const healthy = !!connection && operationallyReady(connection,capability === 'lead-generation' ? ['leads_retrieval'] : []);
   const canonicalActive = flagOn && healthy;
 
   return { connection, flagOn, healthy, canonicalActive, isLoading };

@@ -1,3 +1,5 @@
+import { getUiLocale, uiDateLocale, uiDatePattern } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, LinkSimple } from "@phosphor-icons/react";
@@ -16,38 +18,37 @@ export function CanonicalCredentialPanel({
   connection: MetaConnectionInfo | null;
   note?: string;
 }) {
+  useUiLocale();
   return (
     <Card className="p-4 space-y-3">
       <div className="flex items-center gap-2">
         <Badge variant="outline" className="gap-1 w-fit">
           <LinkSimple className="h-3 w-3" />
-          Credencial: Meta Connection (canônica)
-        </Badge>
+          {uiText("Credencial: Meta Connection (canônica)")}</Badge>
         <Badge variant="outline" className="gap-1 w-fit">
           <CheckCircle className="h-3 w-3 text-green-500" />
-          Conectado
-        </Badge>
+          {uiText("Conectado")}</Badge>
       </div>
 
       <div className="grid gap-2 text-sm">
         {connection?.authorizing_meta_user_name && (
           <div>
-            <span className="text-xs text-muted-foreground">Autorizado por</span>
+            <span className="text-xs text-muted-foreground">{uiText("Autorizado por")}</span>
             <p className="font-medium">{connection.authorizing_meta_user_name}</p>
           </div>
         )}
         {connection?.token_type && (
           <div>
-            <span className="text-xs text-muted-foreground">Tipo de token</span>
+            <span className="text-xs text-muted-foreground">{uiText("Tipo de token")}</span>
             <p className="font-mono text-xs">{connection.token_type}</p>
           </div>
         )}
         {connection?.last_token_check_at && (
           <div>
-            <span className="text-xs text-muted-foreground">Última verificação de saúde</span>
+            <span className="text-xs text-muted-foreground">{uiText("Última verificação de saúde")}</span>
             <p className="text-xs">
-              {format(new Date(connection.last_token_check_at), "dd/MM/yyyy 'às' HH:mm", {
-                locale: ptBR,
+              {format(new Date(connection.last_token_check_at), uiDatePattern(true), {
+                locale: uiDateLocale(),
               })}
               {connection.last_health ? ` · ${connection.last_health}` : ""}
             </p>
@@ -57,7 +58,7 @@ export function CanonicalCredentialPanel({
 
       <p className="text-xs text-muted-foreground">
         {note ??
-          "Esta integração usa a credencial da Meta Connection. Para conectar, reconectar ou gerenciar ativos, use a aba “Conexão” da integração Meta."}
+          uiText("Esta integração usa a credencial da Meta Connection. Para conectar, reconectar ou gerenciar ativos, use a aba “Conexão” da integração Meta.")}
       </p>
     </Card>
   );

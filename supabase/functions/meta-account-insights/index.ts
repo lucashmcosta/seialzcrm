@@ -7,7 +7,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { facebookAppSecret, resolveConnectionToken } from "../_shared/meta/connection.ts";
+import { facebookAppSecret, resolveConnectionToken, resolveConnectionWithAsset } from "../_shared/meta/connection.ts";
 import { metaGraphGet } from "../_shared/meta-graph.ts";
 
 function json(body: unknown, status = 200): Response {
@@ -45,11 +45,9 @@ serve(async (req) => {
     }
     // Resolve a conexão conectada da org quando não vier explícita.
     if (!connection_id) {
-      const { data: c } = await admin.from("meta_connections").select("id")
-        .eq("organization_id", organization_id).eq("status", "connected")
-        .order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (!c) return json({ error: "no_connected_connection" }, 404);
-      connection_id = c.id;
+      const c = await resolveConnectionWithAsset(admin, organization_id, 'page');
+      if (!c) return json({error:'no_connected_connection'},404);
+      connection_id = c.connection_id;
     } else {
       const { data: conn } = await admin.from("meta_connections").select("id")
         .eq("id", connection_id).eq("organization_id", organization_id).maybeSingle();

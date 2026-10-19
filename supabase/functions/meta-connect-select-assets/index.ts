@@ -3,7 +3,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { audit } from "../_shared/meta/connection.ts";
+import { metaGraphGet } from "../_shared/meta-graph.ts";
+import { audit, resolveConnectionToken, facebookAppSecret } from "../_shared/meta/connection.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -48,19 +49,26 @@ serve(async (req) => {
     if (!user) return json({ error: "user_not_found" }, 403);
     const { data: membership } = await admin
       .from("user_organizations").select("id")
-      .eq("user_id", user.id).eq("organization_id", organization_id).maybeSingle();
+      .eq("user_id", user.id).eq("organization_id", organization_id).eq("is_active", true).maybeSingle();
     if (!membership) return json({ error: "forbidden_org" }, 403);
 
-    let updated = 0;
-    for (const s of selections) {
-      const { data, error } = await admin.from("meta_assets")
-        .update({ selection_state: s.selection_state })
-        .eq("id", s.asset_id)
-        .eq("organization_id", organization_id)
-        .eq("connection_id", connection_id)
-        .select("id");
-      if (!error && data?.length) updated += data.length;
+    // Check access with the candidate credential before activation. Existing routes remain pinned.
+    const { data: candidate } = await admin.from('meta_connections').select('id')
+      .eq('id', connection_id).eq('organization_id', organization_id).eq('status','connected').maybeSingle();
+    if (!candidate) return json({ error: 'connection_not_found' }, 404);
+    const tokenValue = await resolveConnectionToken(admin, connection_id);
+    const { data: selectedAssets } = await admin.from('meta_assets').select('id,external_id')
+      .eq('connection_id',connection_id).eq('organization_id',organization_id);
+    for (const selection of selections.filter((s: any) => s.selection_state === 'selected')) {
+      const asset = selectedAssets?.find((a: any) => a.id === selection.asset_id);
+      if (!asset) return json({error:'invalid_assets'},400);
+      try { await metaGraphGet(`/${asset.external_id}`, {fields:'id'}, {accessToken:tokenValue,appSecret:facebookAppSecret()}); }
+      catch { return json({error:'asset_access_not_confirmed'},400); }
     }
+    const { data: updated, error: selectionError } = await admin.rpc('rpc_select_meta_assets', {
+      p_org: organization_id, p_connection: connection_id, p_selections: selections,
+    });
+    if (selectionError) return json({ error: 'asset_selection_failed' }, 400);
 
     await audit(admin, {
       organization_id, connection_id, actor_user_id: user.id,

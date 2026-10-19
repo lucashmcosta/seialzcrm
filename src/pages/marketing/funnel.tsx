@@ -1,3 +1,5 @@
+import { getUiLocale } from '@/lib/ui-locale';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { MarketingLayout } from './_components/MarketingLayout';
@@ -12,15 +14,16 @@ import {
 import { cn } from '@/lib/utils';
 
 const STAGES = [
-  { key: 'impressions', label: 'Impressões', color: 'hsl(var(--primary))' },
-  { key: 'clicks', label: 'Cliques', color: 'hsl(220 70% 55%)' },
-  { key: 'conversations', label: 'Conversas', color: 'hsl(180 60% 45%)' },
-  { key: 'leads', label: 'Contatos (CRM)', color: 'hsl(var(--success))' },
-  { key: 'opps', label: 'Oportunidades', color: 'hsl(40 90% 55%)' },
+  { key: 'impressions', get label() { return uiText("Impressões"); }, color: 'hsl(var(--primary))' },
+  { key: 'clicks', get label() { return uiText("Cliques"); }, color: 'hsl(220 70% 55%)' },
+  { key: 'conversations', get label() { return uiText("Conversas"); }, color: 'hsl(180 60% 45%)' },
+  { key: 'leads', get label() { return uiText("Contatos (CRM)"); }, color: 'hsl(var(--success))' },
+  { key: 'opps', get label() { return uiText("Oportunidades"); }, color: 'hsl(40 90% 55%)' },
   { key: 'won', label: 'Wins', color: 'hsl(140 70% 40%)' },
 ] as const;
 
 export default function MarketingFunnel() {
+  useUiLocale();
   const { organization } = useOrganization();
   const orgId = organization?.id;
   const [filterId, setFilterId] = useState('all');
@@ -41,12 +44,12 @@ export default function MarketingFunnel() {
   ] : [];
 
   return (
-    <MarketingLayout title="Funil de Conversão">
+    <MarketingLayout title={uiText("Funil de Conversão")}>
       <div className="flex flex-wrap items-center gap-3">
         <Select value={filterId} onValueChange={setFilterId}>
           <SelectTrigger className="w-80"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os ads</SelectItem>
+            <SelectItem value="all">{uiText("Todos os ads")}</SelectItem>
             {(ads.data || []).map(a => (
               <SelectItem key={a.marketing_campaign_id} value={a.marketing_campaign_id}>
                 {a.ad_name || a.ad_id}
@@ -57,11 +60,11 @@ export default function MarketingFunnel() {
       </div>
 
       <div className="rounded-md border border-border bg-card p-6">
-        <h3 className="text-sm font-semibold mb-5">Etapas do funil</h3>
+        <h3 className="text-sm font-semibold mb-5">{uiText("Etapas do funil")}</h3>
         {funnel.isLoading ? (
           <ChartSkeleton height={400} />
         ) : !data || data.impressions === 0 ? (
-          <EmptyState title="Sem dados de funil" hint="Selecione outro ad ou aguarde o próximo sync." />
+          <EmptyState title={uiText("Sem dados de funil")} hint={uiText("Selecione outro ad ou aguarde o próximo sync.")} />
         ) : (
           <div className="space-y-3">
             {STAGES.map((stage, idx) => {
@@ -77,10 +80,10 @@ export default function MarketingFunnel() {
                     <span className="font-medium text-foreground">{stage.label}</span>
                     <div className="flex items-center gap-3 text-muted-foreground">
                       <span className="font-mono">{fmtInt(value)}</span>
-                      <span className="font-mono text-[11px]">{totalPct.toFixed(1)}% total</span>
+                      <span className="font-mono text-[11px]">{totalPct.toLocaleString(getUiLocale(),{minimumFractionDigits:1,maximumFractionDigits:1})}% total</span>
                       {stepConv != null && (
                         <span className={cn('font-mono text-[11px]', stepConv < 50 ? 'text-warning' : 'text-success')}>
-                          {stepConv.toFixed(1)}% ↓
+                          {stepConv.toLocaleString(getUiLocale(),{minimumFractionDigits:1,maximumFractionDigits:1})}% ↓
                         </span>
                       )}
                     </div>
@@ -99,7 +102,7 @@ export default function MarketingFunnel() {
       </div>
 
       <div className="rounded-md border border-border bg-card p-4">
-        <h3 className="text-sm font-semibold mb-3">Taxas de conversão</h3>
+        <h3 className="text-sm font-semibold mb-3">{uiText("Taxas de conversão")}</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {conversionRates.map(r => (
             <div key={`${r.from}-${r.to}`} className="rounded border border-border p-3 bg-background/50">

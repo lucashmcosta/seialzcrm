@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -48,7 +49,7 @@ export function useDeletePost(orgId?: string) {
         body: { organization_id: orgId, action: 'delete', ...input },
       });
       if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || 'Falha ao apagar');
+      if (!data?.ok) throw new Error(data?.error || uiText("Falha ao apagar"));
       return true;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['page-posts', orgId] }); },
@@ -67,5 +68,19 @@ export function usePublishPost(orgId?: string) {
       return (data?.result ?? {}) as PublishResult;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['page-posts', orgId] }); },
+  });
+}
+
+export function useEditPost(orgId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {post_id: string; message: string}) => {
+      const {data,error} = await supabase.functions.invoke('marketing-page-posts', {
+        body: {organization_id:orgId,action:'edit',platform:'facebook',...input},
+      });
+      if (error || !data?.ok) throw new Error('post_edit_failed');
+      return data;
+    },
+    onSuccess: () => { qc.invalidateQueries({queryKey:['page-posts',orgId]}); },
   });
 }

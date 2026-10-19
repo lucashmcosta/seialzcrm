@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,14 +26,15 @@ interface ConfirmDialogProps {
 export function ConfirmDialog({
   open,
   onOpenChange,
-  title = 'Confirmar',
-  description = 'Tem certeza que deseja continuar?',
-  confirmText = 'Confirmar',
-  cancelText = 'Cancelar',
+  title = uiText("Confirmar"),
+  description = uiText("Tem certeza que deseja continuar?"),
+  confirmText = uiText("Confirmar"),
+  cancelText = uiText("Cancelar"),
   variant = 'default',
   onConfirm,
   loading = false,
 }: ConfirmDialogProps) {
+  useUiLocale();
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -52,7 +54,7 @@ export function ConfirmDialog({
             )}
             disabled={loading}
           >
-            {loading ? 'Aguarde...' : confirmText}
+            {loading ? uiText("Aguarde...") : confirmText}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
