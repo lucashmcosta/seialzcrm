@@ -98,6 +98,8 @@ Deno.serve(async (req) => {
       return json(200, {
         estado,
         podeClassificar: isOwner && podeClassificar(perms),
+        // só o responsável classifica: a tela explica isso para quem não é (gestor, outro vendedor)
+        souResponsavel: isOwner,
         podePedirCorrecao: aberta && !!ativa && ativa.seller_user_id === me.id && (estado === "classificada" || estado === "pedido_recusado" || estado === "em_revisao"),
         podeDecidir,
         // o resultado é do vendedor que classificou; para os outros a tela não diz "sua comissão"

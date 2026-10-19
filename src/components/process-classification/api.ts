@@ -12,6 +12,8 @@ export interface Classificacao { id: string; faixa: Faixa | null; comissao: numb
 export interface EstadoWidget {
   estado: EstadoClassificacao;
   podeClassificar: boolean;
+  /** Quem está vendo é o responsável pela oportunidade (só ele classifica). */
+  souResponsavel?: boolean;
   classificacao: Classificacao | null;
   pedido: { status: 'pending' | 'released' | 'refused'; criadoEm: string; motivo: string | null } | null;
   /** Vendedor que classificou pode pedir correção agora. */

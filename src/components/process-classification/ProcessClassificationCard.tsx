@@ -16,7 +16,22 @@ import { NOME_FAIXA, dataHora, formatarBRL } from './formato';
 import { useProcessClassificationEnabled } from './useProcessClassificationEnabled';
 
 
-function Entrada({ podeClassificar, onComecar }: { podeClassificar: boolean; onComecar: () => void }) {
+function Entrada({ podeClassificar, souResponsavel, onComecar }: { podeClassificar: boolean; souResponsavel?: boolean; onComecar: () => void }) {
+  // Quem não é o responsável (gestor, outro vendedor) não classifica: explica em vez de mostrar o texto do vendedor.
+  if (souResponsavel === false) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Ainda não classificada. Quem classifica é o responsável pela oportunidade, pelo card dele.
+      </p>
+    );
+  }
+  if (souResponsavel && !podeClassificar) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Ainda não classificada. Seu perfil não tem a permissão "Classificar processo"; fale com o administrador.
+      </p>
+    );
+  }
   return (
     <div className="space-y-3">
       <p className="text-sm">Responda algumas perguntas sobre o caso. No final você vê a classificação e a sua comissão desta venda.</p>
@@ -33,7 +48,7 @@ function Corpo({ estado, opportunityId, onComecar }: { estado: EstadoWidget; opp
   switch (estado.estado) {
     case 'sem_classificacao':
     case 'correcao_liberada':
-      return <Entrada podeClassificar={estado.podeClassificar} onComecar={onComecar} />;
+      return <Entrada podeClassificar={estado.podeClassificar} souResponsavel={estado.souResponsavel} onComecar={onComecar} />;
     case 'fechada_sem_classificacao':
       return (
         <div className="space-y-1">
