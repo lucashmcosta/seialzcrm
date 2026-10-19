@@ -1652,7 +1652,7 @@ async function handleRecording(
     !context ||
     !await verifySignature(req, params, context.call.organization_id)
   ) return empty(403);
-  await admin.from("call_recordings").upsert({
+  const { data: saved } = await admin.from("call_recordings").upsert({
     organization_id: context.call.organization_id,
     call_id: callId,
     call_attempt_id: attemptId || null,
@@ -1661,7 +1661,29 @@ async function handleRecording(
     recording_sid: params.RecordingSid,
     recording_url: voiceAdapter.recordingMediaUrl(params.RecordingUrl),
     duration_seconds: Number(params.RecordingDuration || 0) || null,
-  }, { onConflict: "recording_sid" });
+  }, { onConflict: "recording_sid" }).select("id").maybeSingle();
+
+  // Traz o áudio para o nosso Storage e apaga do Twilio (lá o armazenamento é
+  // mensal e cumulativo). O arquivamento é que enfileira a transcrição depois,
+  // porque ela lê do bucket -- e só para ligação acima de 1 minuto.
+  //
+  // Falha aqui NUNCA desfaz a gravação: o upsert acima já aconteceu, e o áudio
+  // continua no Twilio até o job rodar. A chave idempotente evita duplicar na
+  // reentrega do callback pelo Twilio.
+  if (saved?.id) {
+    const { error } = await admin.from("intelligence_jobs").insert({
+      organization_id: context.call.organization_id,
+      target_action: "intelligence.archive_recording",
+      payload: { recording_id: saved.id },
+      idempotency_key: `archive_recording:${params.RecordingSid}`,
+    });
+    if (error && !String(error.message).includes("duplicate")) {
+      console.error("[telephony-webhook] archive_enqueue_failed", {
+        recordingSid: params.RecordingSid,
+        error: error.message,
+      });
+    }
+  }
   return empty();
 }
 
