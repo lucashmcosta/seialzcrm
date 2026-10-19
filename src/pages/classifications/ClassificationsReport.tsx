@@ -46,7 +46,10 @@ function argumentos(org: string, f: Filtros) {
 /** Relatório de classificações (SPEC §8.4): filtros, detalhe por permissão e CSV (por tese, com números). */
 export default function ClassificationsReport() {
   const { permissions, loading } = usePermissions();
-  if (loading) return null;
+  const { organization, userProfile } = useOrganization();
+  // Enquanto a org não carregou, a consulta de permissões está desligada (loading=false com as permissões padrão):
+  // redirecionar aí mandaria até o Admin embora num carregamento direto da URL.
+  if (loading || !organization?.id || !userProfile?.id) return null;
   // O vendedor nunca vê o relatório (escada de faixas, versões, números): só a própria classificação, no widget.
   if (!podeVerRelatorioClassificacoes(permissions)) return <Navigate to="/dashboard" replace />;
   return <Relatorio />;

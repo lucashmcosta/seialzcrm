@@ -84,7 +84,7 @@ export const DATA_OBJECTS: ObjectDef[] = [
   {
     key: 'classificacoes', label: 'Classificações de processos', subtitle: 'Faixa, comissão e respostas', module: 'process_classification',
     actions: [
-      { key: 'ver', label: 'Ver', kind: 'scope', hint: 'Relatório de classificações: só Equipe ou Todos. "Meus" não dá acesso (o vendedor vê a dele só no widget). Chances e valores só com "Ver números".' },
+      { key: 'ver', label: 'Ver', kind: 'scope', hint: 'Relatório: Equipe ou Todos' },
     ],
   },
 ];
