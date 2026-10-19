@@ -44,7 +44,7 @@ function PostRow({ p, platform, onDelete, deleting, onEdit }: { p: PagePost; pla
           </a>
         )}
         {onEdit && <Button size="sm" variant="ghost" onClick={onEdit}>{uiText('Editar legenda')}</Button>}
-        {onDelete && (
+        {platform === 'facebook' && onDelete && (
           <button type="button" onClick={onDelete} disabled={deleting} className="text-muted-foreground hover:text-destructive p-1 disabled:opacity-50" title={uiText("Apagar")}>
             {deleting ? <SpinnerGap size={16} className="animate-spin" /> : <TrashSimple size={16} />}
           </button>
