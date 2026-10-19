@@ -1,3 +1,5 @@
+import { useMetaCapabilities } from '@/hooks/useMetaCapabilities';
+import { useMetaSocialPublishingFlag } from '@/hooks/useMetaSocialPublishingFlag';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { Fragment, useState, type ReactNode, type ElementType } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -39,6 +41,8 @@ export default function MetaIntegrationPage() {
   const navigate = useNavigate();
   const orgId = organization?.id;
   const isAdmin = permissions.canManageSettings;
+  const { enabled: socialPublishingEnabled } = useMetaSocialPublishingFlag(orgId);
+  const capabilities = useMetaCapabilities(orgId, socialPublishingEnabled);
   const [section, setSection] = useState<SectionId>('overview');
 
   // Lead Generation e CAPI renderizam inline (seções); WhatsApp segue modal.
@@ -250,9 +254,9 @@ export default function MetaIntegrationPage() {
               <CapabilityCard icon={Target} title="Conversions API" state={enabledSlug('meta-capi') ? 'ativo' : 'disponível'} onClick={() => setSection('capi')} />
               <CapabilityCard icon={WhatsappLogo} title="WhatsApp" state={enabledSlug('meta-whatsapp-cloud') ? 'ativo' : 'disponível'} onClick={() => setSection('whatsapp')} />
               <CapabilityCard icon={CalendarBlank} title={uiText("Calendário editorial")} state="em breve" />
-              <CapabilityCard icon={PaperPlaneTilt} title="Publishing" state="em breve" />
-              <CapabilityCard icon={ChatCircleDots} title="Comments" state="em breve" />
-              <CapabilityCard icon={ChatsCircle} title="DM" state="em breve" />
+              <OperationalCapabilityCard icon={PaperPlaneTilt} title="Publishing" channels={capabilities.data?.publishing} failed={capabilities.isError} onClick={() => navigate('/marketing/posts')} />
+              <OperationalCapabilityCard icon={ChatCircleDots} title="Comments" channels={capabilities.data?.comments} failed={capabilities.isError} onClick={() => navigate('/marketing/comments')} />
+              <OperationalCapabilityCard icon={ChatsCircle} title="DM" channels={capabilities.data?.dm} failed={capabilities.isError} onClick={() => navigate('/social')} />
             </div>
           )}
 
@@ -450,4 +454,19 @@ function LogsSection({ connectionId, orgId }: { connectionId?: string; orgId?: s
       </Card>
     </div>
   );
+}
+
+const CAPABILITY_LABELS = {active:'ativo',disabled:'Desativado',connection_required:'Conexão necessária',asset_required:'Selecione um ativo',permission_required:'Permissão necessária'} as const;
+function OperationalCapabilityCard({icon:Icon,title,channels,failed,onClick}: {
+  icon:ElementType; title:string; channels?: {facebook:{state:keyof typeof CAPABILITY_LABELS;missing:string[]};instagram:{state:keyof typeof CAPABILITY_LABELS;missing:string[]}};
+  failed:boolean; onClick:()=>void;
+}) {
+  useUiLocale();
+  return <button type="button" onClick={onClick} className="rounded-lg border border-border bg-card p-4 text-left hover:border-primary/40">
+    <div className="flex items-center gap-2"><Icon size={18}/><span className="font-medium">{title}</span></div>
+    {!channels ? <p className="text-xs mt-2">{uiText(failed?'Não foi possível verificar o status.':'Carregando…')}</p> : (['facebook','instagram'] as const).map(channel=><div key={channel} className="mt-2 text-xs">
+      {channel==='facebook'?'Facebook':'Instagram'} <Badge variant={channels[channel].state==='active'?'default':'secondary'}>{uiText(CAPABILITY_LABELS[channels[channel].state])}</Badge>
+      {channels[channel].state==='permission_required' && <p className="mt-1 break-words text-muted-foreground">{channels[channel].missing.join(', ')}</p>}
+    </div>)}
+  </button>;
 }

@@ -5,7 +5,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
-import { useMarketingPublishingFlag } from '@/hooks/useMarketingPublishingFlag';
+import { useMetaSocialPublishingFlag } from '@/hooks/useMetaSocialPublishingFlag';
 import {
   useSocialConversations, useSocialMessages, useSendSocialMessage, useSocialProfile, uploadSocialMedia,
   type SocialConversation, type SocialPlatform, type SocialAttachment, type SocialMessage, type SocialSendAttachment,
@@ -94,7 +94,7 @@ export default function SocialInboxPage() {
   useUiLocale();
   const { organization } = useOrganization();
   const orgId = organization?.id;
-  const { enabled, loading: flagLoading } = useMarketingPublishingFlag(orgId);
+  const { enabled, loading: flagLoading } = useMetaSocialPublishingFlag(orgId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState<(SocialSendAttachment & { name: string }) | null>(null);

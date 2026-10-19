@@ -740,3 +740,5 @@ Object.assign(uiEnglish, {
 uiEnglish['Não foi possível carregar todos os comentários.'] = 'Could not load all comments.';
 
 Object.assign(uiEnglish, {'Editar legenda':'Edit caption','Legenda atualizada':'Caption updated','post_edit_failed':'Could not update the caption.'});
+
+Object.assign(uiEnglish, { 'Desativado':'Disabled', 'Conexão necessária':'Connection required', 'Selecione um ativo':'Select an asset', 'Permissão necessária':'Permission required', 'Não foi possível verificar o status.':'Unable to verify status.' });

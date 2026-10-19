@@ -34,7 +34,7 @@ import { SidebarNavigationSimple } from '@/components/application/app-navigation
 import { FeaturedCardProgressBar } from '@/components/application/app-navigation/base-components/featured-cards';
 import type { NavItemType } from '@/components/application/app-navigation/config';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
-import { useMarketingPublishingFlag } from '@/hooks/useMarketingPublishingFlag';
+import { useMetaSocialPublishingFlag } from '@/hooks/useMetaSocialPublishingFlag';
 import { useTheme } from '@/contexts/ThemeContext';
 import { SeialzSidebar, type SeialzNavGroup } from '@/components/seialz/SeialzSidebar';
 
@@ -51,7 +51,7 @@ export function Layout({ children }: LayoutProps) {
   const { permissions } = usePermissions();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { hasWhatsApp } = useWhatsAppIntegration();
-  const { enabled: socialEnabled } = useMarketingPublishingFlag(organization?.id);
+  const { enabled: socialEnabled } = useMetaSocialPublishingFlag(organization?.id);
   const { themePreset } = useTheme();
 
   // ═══════════════════════════════════════

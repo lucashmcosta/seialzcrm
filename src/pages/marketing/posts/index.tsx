@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useOrganization } from '@/hooks/useOrganization';
 import { MarketingLayout } from '../_components/MarketingLayout';
-import { useMarketingPublishingFlag } from '@/hooks/useMarketingPublishingFlag';
+import { useMetaSocialPublishingFlag } from '@/hooks/useMetaSocialPublishingFlag';
 import { usePagePostsList, usePublishPost, useDeletePost, useEditPost, uploadMarketingImage, type PagePost, type PublishTarget } from '../_hooks/usePagePosts';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,7 @@ export default function MarketingPosts() {
   useUiLocale();
   const { organization } = useOrganization();
   const orgId = organization?.id;
-  const { enabled, loading: flagLoading } = useMarketingPublishingFlag(orgId);
+  const { enabled, loading: flagLoading } = useMetaSocialPublishingFlag(orgId);
 
   const [message, setMessage] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
