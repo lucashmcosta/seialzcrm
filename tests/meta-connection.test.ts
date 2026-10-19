@@ -29,6 +29,7 @@ Deno.test("introspectToken mapeia tipo/scopes/expiração SEM heurística", asyn
     if (url.includes("/debug_token")) {
       return Promise.resolve(new Response(JSON.stringify({
         data: {
+          is_valid:true,
           type: "SYSTEM_USER",
           scopes: ["ads_read", "leads_retrieval"],
           expires_at: 0,               // perene -> null (mas não afirmamos system-user por isso)
@@ -50,7 +51,7 @@ Deno.test("introspectToken mapeia tipo/scopes/expiração SEM heurística", asyn
     globalThis.fetch = ((input: Request | URL | string) => {
       const url = String(input instanceof Request ? input.url : input);
       if (url.includes("/debug_token")) {
-        return Promise.resolve(new Response(JSON.stringify({ data: { type: "WHATEVER", scopes: [] } }), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify({ data: { is_valid:true, app_id:"app", type: "WHATEVER", scopes: [] } }), { status: 200 }));
       }
       return Promise.resolve(new Response("{}", { status: 200 }));
     }) as typeof fetch;

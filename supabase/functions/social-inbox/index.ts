@@ -5,7 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { facebookAppSecret, resolveConnectionToken } from "../_shared/meta/connection.ts";
+import { facebookAppSecret, resolveConnectionToken, resolveConnectionWithAsset } from "../_shared/meta/connection.ts";
 import { metaGraphGet, metaGraphPost, MetaGraphError } from "../_shared/meta-graph.ts";
 
 function json(body: unknown, status = 200): Response {
@@ -64,22 +64,10 @@ serve(async (req) => {
       if (!m) return json({ error: "forbidden_org" }, 403);
     }
 
-    // Pode haver mais de uma conexão 'connected' (ex.: re-auth incompleta sem
-    // assets). Escolhemos a conexão mais recente que TENHA uma página selecionada
-    // — não a mais recente em absoluto — para não cair numa conexão vazia.
-    const { data: conns } = await admin.from("meta_connections").select("id")
-      .eq("organization_id", organization_id).eq("status", "connected")
-      .order("created_at", { ascending: false });
-    if (!conns?.length) return json({ error: "no_connected_connection" }, 404);
-    let connection_id: string | undefined;
-    let pageId: string | undefined;
-    for (const cand of conns) {
-      const { data: a } = await admin.from("meta_assets")
-        .select("external_id").eq("connection_id", cand.id).eq("selection_state", "selected")
-        .eq("asset_type", "page").limit(1).maybeSingle();
-      if (a?.external_id) { connection_id = cand.id; pageId = a.external_id; break; }
-    }
-    if (!connection_id || !pageId) return json({ error: "no_page" }, 404);
+    const resolved = await resolveConnectionWithAsset(admin, organization_id, 'page');
+    if (!resolved) return json({error:'no_page'},404);
+    const connection_id = resolved.connection_id;
+    const pageId = resolved.assets.page;
 
     // Nas conversas do Instagram, "nós" somos identificados pelo id da CONTA do
     // Instagram (não pelo id da Página do Facebook). Precisamos dele para (a) não
@@ -93,14 +81,14 @@ serve(async (req) => {
     const appSecret = facebookAppSecret();
     // Cache do page token por isolate (evita 1 chamada Graph por request — vale p/
     // todas as actions). O token de página derivado do system user é estável.
-    let pageToken: string | undefined = pageTokenCache.get(pageId)?.token;
-    if (pageToken && (pageTokenCache.get(pageId)!.exp < Date.now())) pageToken = undefined;
+    let pageToken: string | undefined = pageTokenCache.get(`${organization_id}:${connection_id}:${pageId}`)?.token;
+    if (pageToken && (pageTokenCache.get(`${organization_id}:${connection_id}:${pageId}`)!.exp < Date.now())) pageToken = undefined;
     if (!pageToken) {
       const accessToken = await resolveConnectionToken(admin, connection_id);
       try {
         const r = await metaGraphGet(`/${pageId}`, { fields: "access_token" }, { accessToken, appSecret });
         pageToken = r?.access_token;
-        if (pageToken) pageTokenCache.set(pageId, { token: pageToken, exp: Date.now() + 10 * 60_000 });
+        if (pageToken) pageTokenCache.set(`${organization_id}:${connection_id}:${pageId}`, { token: pageToken, exp: Date.now() + 10 * 60_000 });
       } catch { /* segue */ }
     }
     if (!pageToken) return json({ error: "no_page_token" }, 400);
@@ -151,7 +139,7 @@ serve(async (req) => {
       const igToEnrich = out.filter((c) => c.platform === "instagram" && c.participant_id).slice(0, 20);
       await Promise.all(igToEnrich.map(async (c) => {
         try {
-          const p = await metaGraphGet(`/${c.participant_id}`, { fields: "name,username,profile_pic" }, { accessToken: pageToken, appSecret });
+          const p = await metaGraphGet(`/${c.participant_id}`, { fields: "name,username,profile_pic" }, { accessToken: pageToken!, appSecret });
           if (p?.profile_pic) c.avatar_url = p.profile_pic;
           if (p?.name) c.name = p.name;
           if (p?.username) c.username = p.username;
@@ -172,7 +160,7 @@ serve(async (req) => {
     async function liveFetchMessages(conversation_id: string) {
       const r = await metaGraphGet(`/${conversation_id}`,
         { fields: "messages.limit(30){id,message,from,created_time,attachments{id,mime_type,name,image_data,video_data,file_url},shares{link,name}}" },
-        { accessToken: pageToken, appSecret });
+        { accessToken: pageToken!, appSecret });
       return (r?.messages?.data ?? []).map((m: any) => ({
         id: m.id, text: m.message ?? "", from_page: selfIds.has(String(m.from?.id)),
         from_name: m.from?.name || m.from?.username || "", created_time: m.created_time,
@@ -200,7 +188,7 @@ serve(async (req) => {
         if (platform === "instagram") {
           const r = await metaGraphGet(`/${participant_id}`,
             { fields: "name,username,profile_pic,follower_count,is_verified_user,is_user_follow_business,is_business_follow_user" },
-            { accessToken: pageToken, appSecret });
+            { accessToken: pageToken!, appSecret });
           return json({ ok: true, profile: {
             name: r?.name ?? null, username: r?.username ?? null, avatar_url: r?.profile_pic ?? null,
             follower_count: r?.follower_count ?? null, is_verified: !!r?.is_verified_user,
@@ -210,7 +198,7 @@ serve(async (req) => {
         }
         // messenger
         const r = await metaGraphGet(`/${participant_id}`,
-          { fields: "first_name,last_name,name,profile_pic" }, { accessToken: pageToken, appSecret });
+          { fields: "first_name,last_name,name,profile_pic" }, { accessToken: pageToken!, appSecret });
         return json({ ok: true, profile: {
           name: r?.name || [r?.first_name, r?.last_name].filter(Boolean).join(" ") || null,
           avatar_url: r?.profile_pic ?? null, profile_link: null,
@@ -290,7 +278,7 @@ serve(async (req) => {
           message: JSON.stringify(message),
           messaging_type: "RESPONSE",
         };
-        const r = await metaGraphPost(`/${pageId}/messages`, payload, { accessToken: pageToken, appSecret });
+        const r = await metaGraphPost(`/${pageId}/messages`, payload, { accessToken: pageToken!, appSecret });
         return r?.message_id as string | undefined;
       };
       try {

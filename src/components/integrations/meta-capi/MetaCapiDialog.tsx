@@ -145,7 +145,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
 
   // Espelha a decisão do backend (resolveOrgMetaToken): quando a credencial canônica
   // está ativa, o token de envio vem da Meta Connection — a capability não gerencia auth.
-  const { canonicalActive } = useMetaConnection(organization?.id);
+  const { canonicalActive } = useMetaConnection(organization?.id, "capi");
   const ca = (orgIntegration?.connected_account || {}) as any;
   const isConnected = canonicalActive || !!orgIntegration?.is_enabled;
   const isTestMode = !!ca.test_event_code;

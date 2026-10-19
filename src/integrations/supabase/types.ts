@@ -14,6 +14,13 @@ export type Database = {
   }
   public: {
     Tables: {
+      meta_operational_routes: {
+        Row: { organization_id: string; route: string; connection_id: string | null; source: string; created_at: string }
+        Insert: { organization_id: string; route: string; connection_id?: string | null; source: string; created_at?: string }
+        Update: { connection_id?: string | null; source?: string }
+        Relationships: []
+      }
+
       _backup_ct_inbox_cleanup_2026_07: {
         Row: {
           id: string | null
@@ -8257,6 +8264,7 @@ export type Database = {
       }
       meta_connections: {
         Row: {
+          activation_state: string
           app_id: string | null
           authorizing_meta_user_id: string | null
           authorizing_meta_user_name: string | null
@@ -8277,6 +8285,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          activation_state?: string
           app_id?: string | null
           authorizing_meta_user_id?: string | null
           authorizing_meta_user_name?: string | null
@@ -8297,6 +8306,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          activation_state?: string
           app_id?: string | null
           authorizing_meta_user_id?: string | null
           authorizing_meta_user_name?: string | null

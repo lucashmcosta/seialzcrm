@@ -51,7 +51,7 @@ export default function MetaIntegrationPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from('meta_connections')
-        .select('id,status,token_type,authorizing_meta_user_name,granted_scopes,config_id,app_id,last_health,last_token_check_at,created_at')
+        .select('id,status,token_type,authorizing_meta_user_name,granted_scopes,config_id,app_id,last_health,last_token_check_at,created_at,activation_state')
         .eq('organization_id', orgId!)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -80,6 +80,15 @@ export default function MetaIntegrationPage() {
         .select('kind,last_synced_at,sync_status')
         .eq('connection_id', conn!.id);
       return (data ?? []) as Array<{ kind: string; last_synced_at: string | null; sync_status: string }>;
+    },
+  });
+
+  const {data: operationalRoutes = []} = useQuery({
+    queryKey:['meta-operational-routes',orgId], enabled:!!orgId,
+    queryFn:async()=>{
+      const {data,error} = await supabase.from('meta_operational_routes').select('route,source,connection_id').eq('organization_id',orgId!);
+      if (error) throw error;
+      return data ?? [];
     },
   });
 
@@ -209,8 +218,10 @@ export default function MetaIntegrationPage() {
           {section === 'conexao' && (
             <Card className="p-4">
               <h3 className="text-base font-semibold">{uiText("Conexão (Login for Business)")}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{uiText("A conexão OAuth é a fundação de todos os módulos Meta.")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{uiText('Uma nova autorização mantém as conexões dos módulos em uso.')}</p>
               <div className="mt-3"><MetaConnectButton onConnected={() => window.location.reload()} /></div>
+              {conn?.activation_state === 'pending' && <p className="mt-3 text-sm">{uiText('Autorização recebida. Selecione os ativos na aba Ativos.')}</p>}
+              {operationalRoutes.some(route=>route.connection_id !== conn?.id) && <p className="mt-3 text-sm text-muted-foreground">{uiText('Os módulos existentes continuam usando suas credenciais anteriores. As autorizações coexistem.')}</p>}
               {conn && (
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4 text-xs text-muted-foreground">
                   <Badge variant={connected ? 'default' : 'secondary'}>{connected ? uiText("Conectado") : conn.status}</Badge>

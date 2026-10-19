@@ -731,3 +731,8 @@ Object.assign(uiEnglish, {
 
 uiEnglish['Anúncios ativos'] = 'Active ads';
 
+Object.assign(uiEnglish, {
+  'Uma nova autorização mantém as conexões dos módulos em uso.':'A new authorization preserves the connections used by existing modules.',
+  'Autorização recebida. Selecione os ativos na aba Ativos.':'Authorization received. Select assets in the Assets tab.',
+  'Os módulos existentes continuam usando suas credenciais anteriores. As autorizações coexistem.':'Existing modules continue using their previous credentials. The authorizations coexist.',
+});

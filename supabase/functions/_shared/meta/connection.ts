@@ -1,5 +1,6 @@
 // Helpers compartilhados da camada Meta Connection (OAuth Login for Business).
 // Segurança: nunca logar token/code; App Secret só via env; appsecret_proof no Graph.
+import { routedCandidates } from "./operational.ts";
 import { metaGraphGet, MetaGraphError } from "../meta-graph.ts";
 import { decryptSecret } from "../crypto.ts";
 
@@ -56,6 +57,7 @@ export async function introspectToken(token: string): Promise<TokenDebug> {
   const appToken = `${id}|${secret}`; // app access token para o debug_token
   const res = await metaGraphGet("/debug_token", { input_token: token }, { accessToken: appToken });
   const d = (res?.data ?? {}) as Record<string, any>;
+  if (d.is_valid !== true || String(d.app_id) !== id) throw new Error('invalid_meta_token');
   // Tipo vem SOMENTE do que a Meta retorna. Sem inventar "long_lived".
   const token_type = d.type === "SYSTEM_USER"
     ? "system_user"
@@ -104,14 +106,16 @@ export async function resolveOrgMetaToken(
   } catch (_) { canonicalOn = false; }
 
   if (canonicalOn) {
-    const { data: conn } = await admin
-      .from("meta_connections")
-      .select("id")
-      .eq("organization_id", orgId)
-      .eq("status", "connected")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const routeKey = cap.startsWith('lead-generation') ? 'lead-generation' : cap;
+    const { data: route, error: routeError } = await admin.from('meta_operational_routes').select('source,connection_id')
+      .eq('organization_id',orgId).eq('route',routeKey).maybeSingle();
+    if (routeError) throw new Error('route_lookup_failed');
+    const { data: connections, error: connectionsError } = await admin.from('meta_connections')
+      .select('id,status,activation_state,last_health,expires_at,data_access_expires_at,granted_scopes')
+      .eq('organization_id',orgId).eq('status','connected').order('created_at',{ascending:false});
+    if (connectionsError) throw new Error('connection_lookup_failed');
+    const scopes = routeKey === 'lead-generation' ? ['leads_retrieval'] : [];
+    const conn = routedCandidates(connections ?? [], route, scopes)[0];
     if (conn?.id) {
       try {
         const token = await resolveConnectionToken(admin, conn.id);
@@ -119,9 +123,11 @@ export async function resolveOrgMetaToken(
         return { token, appSecret: facebookAppSecret(), source: "canonical", connection_id: conn.id };
       } catch (e) {
         console.warn(`[meta-token] cap=${cap} org=${orgId} source=canonical result=fail reason=${(e as Error).message} fallback=legacy`);
+        if (route?.source === 'canonical') throw new Error('operational_credentials_unavailable');
       }
     } else {
       console.log(`[meta-token] cap=${cap} org=${orgId} source=canonical result=no_connection fallback=legacy`);
+      if (route?.source === 'canonical') return null;
     }
   }
 
@@ -159,18 +165,22 @@ export async function resolveConnectionWithAsset(
   organizationId: string,
   requiredAssetType: "page" | "ad_account" | "instagram_account" | "business",
 ): Promise<{ connection_id: string; assets: Record<string, string> } | null> {
-  const { data: conns } = await admin
-    .from("meta_connections")
-    .select("id")
-    .eq("organization_id", organizationId)
-    .eq("status", "connected")
-    .order("created_at", { ascending: false });
-  for (const c of conns ?? []) {
-    const { data: rows } = await admin
+  const { data: route, error: routeError } = await admin.from('meta_operational_routes')
+    .select('source,connection_id').eq('organization_id',organizationId).eq('route','asset:'+requiredAssetType).maybeSingle();
+  if (routeError) throw new Error('route_lookup_failed');
+  const { data: conns, error: connError } = await admin.from('meta_connections')
+    .select('id,status,activation_state,last_health,expires_at,data_access_expires_at,granted_scopes')
+    .eq('organization_id',organizationId).eq('status','connected').order('created_at',{ascending:false});
+  if (connError) throw new Error('connection_lookup_failed');
+  for (const c of routedCandidates(conns ?? [], route)) {
+    const { data: rows, error: assetsError } = await admin
       .from("meta_assets")
       .select("external_id, asset_type")
       .eq("connection_id", c.id)
-      .eq("selection_state", "selected");
+      .eq("organization_id", organizationId)
+      .eq("selection_state", "selected")
+      .order("created_at", {ascending:true}).order("id", {ascending:true});
+    if (assetsError) throw new Error("asset_lookup_failed");
     const assets: Record<string, string> = {};
     for (const r of rows ?? []) {
       if (!assets[r.asset_type]) assets[r.asset_type] = r.external_id;

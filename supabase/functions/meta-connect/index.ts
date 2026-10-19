@@ -11,6 +11,7 @@ import {
   audit,
   exchangeCodeForToken,
   facebookAppSecret,
+  facebookAppId,
   facebookConfigured,
   introspectToken,
 } from "../_shared/meta/connection.ts";
@@ -94,46 +95,20 @@ serve(async (req) => {
 
     const enc = await encryptSecret(accessToken);
 
-    // Persiste metadados da conexão (sem credencial).
-    const { data: conn, error: connErr } = await admin
-      .from("meta_connections")
-      .insert({
-        organization_id,
-        status: "connected",
+    // Atomic persistence snapshots working routes before creating a pending authorization.
+    const { data: connectionId, error: connErr } = await admin.rpc('rpc_create_meta_oauth_connection', {
+      p_org: organization_id, p_user: user.id, p_ciphertext: enc,
+      p_meta: {
         authorizing_meta_user_id: me.id ?? debug.meta_user_id ?? null,
-        authorizing_meta_user_name: me.name ?? null,
-        granted_scopes: debug.scopes,
-        granular_scopes: debug.granular_scopes,
-        token_type: debug.token_type,
-        expires_at: debug.expires_at,
-        data_access_expires_at: debug.data_access_expires_at,
-        config_id: Deno.env.get("FACEBOOK_CONFIG_ID")?.trim() || null,
-        app_id: debug.app_id ?? (Deno.env.get("FACEBOOK_APP_ID")?.trim() || null),
-        last_token_check_at: new Date().toISOString(),
-        last_health: "ok",
-        source: "oauth",
-        created_by_user_id: user.id,
-      })
-      .select("id").single();
-    if (connErr) throw connErr;
-
-    // Credencial em tabela separada (só service_role).
-    const { error: credErr } = await admin
-      .from("meta_connection_credentials")
-      .insert({ connection_id: conn.id, token_encrypted: enc });
-    if (credErr) throw credErr;
-
-    // Compat Lead Ads: vincula a conexão canônica se a org tem a integração (sem copiar token).
-    if (debug.scopes.includes("leads_retrieval")) {
-      const { data: leadInteg } = await admin
-        .from("admin_integrations").select("id").eq("slug", "meta-lead-ads").maybeSingle();
-      if (leadInteg) {
-        await admin.from("organization_integrations")
-          .update({ meta_connection_id: conn.id })
-          .eq("organization_id", organization_id)
-          .eq("integration_id", leadInteg.id);
-      }
-    }
+        authorizing_meta_user_name: me.name ?? null, granted_scopes: debug.scopes,
+        granular_scopes: debug.granular_scopes, token_type: debug.token_type,
+        expires_at: debug.expires_at, data_access_expires_at: debug.data_access_expires_at,
+        config_id: Deno.env.get('FACEBOOK_CONFIG_ID')?.trim() || null,
+        app_id: debug.app_id ?? facebookAppId(),
+      },
+    });
+    if (connErr || !connectionId) throw new Error('connection_persistence_failed');
+    const conn = { id: connectionId };
 
     await audit(admin, {
       organization_id,
@@ -144,15 +119,16 @@ serve(async (req) => {
     });
 
     // Dispara discovery em background.
-    fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/meta-connect-discover`, {
+    const discovery = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/meta-connect-discover`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: authHeader },
       body: JSON.stringify({ organization_id, connection_id: conn.id }),
-    }).catch(() => {});
+    }).then(r => r.ok).catch(() => false);
 
     return json({
       success: true,
       connection_id: conn.id,
+      activation_state: "pending", discovery_complete: discovery,
       token_type: debug.token_type,
       scopes: debug.scopes,
       meta_user: { id: me.id ?? null, name: me.name ?? null },
