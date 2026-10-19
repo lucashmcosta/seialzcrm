@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { uiError } from '@/lib/ui-locale';
 import { getUiLocale, uiDateLocale, uiDatePattern } from '@/lib/ui-locale';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
@@ -6,7 +7,7 @@ import { Navigate } from 'react-router-dom';
 import { useOrganization } from '@/hooks/useOrganization';
 import { MarketingLayout } from '../_components/MarketingLayout';
 import { useMarketingPublishingFlag } from '@/hooks/useMarketingPublishingFlag';
-import { usePagePostsList, usePublishPost, useDeletePost, uploadMarketingImage, type PagePost, type PublishTarget } from '../_hooks/usePagePosts';
+import { usePagePostsList, usePublishPost, useDeletePost, useEditPost, uploadMarketingImage, type PagePost, type PublishTarget } from '../_hooks/usePagePosts';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -22,7 +23,7 @@ function fmtDate(s?: string) {
   catch { return s; }
 }
 
-function PostRow({ p, platform, onDelete, deleting }: { p: PagePost; platform: 'facebook' | 'instagram'; onDelete?: () => void; deleting?: boolean }) {
+function PostRow({ p, platform, onDelete, deleting, onEdit }: { p: PagePost; platform: 'facebook' | 'instagram'; onDelete?: () => void; deleting?: boolean; onEdit?: () => void }) {
   useUiLocale();
   const Icon = platform === 'facebook' ? FacebookLogo : InstagramLogo;
   return (
@@ -42,6 +43,7 @@ function PostRow({ p, platform, onDelete, deleting }: { p: PagePost; platform: '
             <ArrowSquareOut size={16} />
           </a>
         )}
+        {onEdit && <Button size="sm" variant="ghost" onClick={onEdit}>{uiText('Editar legenda')}</Button>}
         {onDelete && (
           <button type="button" onClick={onDelete} disabled={deleting} className="text-muted-foreground hover:text-destructive p-1 disabled:opacity-50" title={uiText("Apagar")}>
             {deleting ? <SpinnerGap size={16} className="animate-spin" /> : <TrashSimple size={16} />}
@@ -68,6 +70,16 @@ export default function MarketingPosts() {
   const list = usePagePostsList(enabled ? orgId : undefined);
   const publish = usePublishPost(orgId);
   const del = useDeletePost(orgId);
+  const edit = useEditPost(orgId);
+  const [editing, setEditing] = useState<PagePost | null>(null);
+  const [editText, setEditText] = useState('');
+  const saveEdit = async () => {
+    if (!editing || !editText.trim()) return;
+    try {
+      await edit.mutateAsync({post_id:editing.id,message:editText});
+      toast.success(uiText('Legenda atualizada')); setEditing(null);
+    } catch (e) { toast.error(uiError(e)); }
+  };
 
   // Não redireciona enquanto a org/flag ainda carregam (evita corrida no acesso direto).
   if (!orgId || flagLoading) {
@@ -116,6 +128,16 @@ export default function MarketingPosts() {
 
   return (
     <MarketingLayout title={uiText("Publicações")}>
+      <Dialog open={!!editing} onOpenChange={open => {if(!open && !edit.isPending)setEditing(null);}}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{uiText('Editar legenda')}</DialogTitle></DialogHeader>
+          <Textarea aria-label={uiText('Texto')} value={editText} onChange={e=>setEditText(e.target.value)} rows={5} />
+          <DialogFooter>
+            <Button variant="outline" disabled={edit.isPending} onClick={()=>setEditing(null)}>{uiText('Cancelar')}</Button>
+            <Button disabled={edit.isPending || !editText.trim() || editText.trim()===editing?.message} onClick={()=>void saveEdit()}>{uiText('Salvar')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_1fr]">
         {/* Compositor */}
         <Card className="p-4 sm:p-5 space-y-4 h-fit">
@@ -167,7 +189,7 @@ export default function MarketingPosts() {
             </div>
             {list.isLoading ? <div className="p-3"><Skeleton className="h-16 w-full" /></div>
               : (list.data?.facebook.length ?? 0) === 0 ? <p className="p-4 text-sm text-muted-foreground">{uiText("Nenhum post recente.")}</p>
-              : list.data!.facebook.map((p) => <PostRow key={p.id} p={p} platform="facebook" onDelete={() => onDeletePost(p, 'facebook')} deleting={deletingId === p.id} />)}
+              : list.data!.facebook.map((p) => <PostRow key={p.id} p={p} platform="facebook" onEdit={() => {setEditing(p); setEditText(p.message);}} onDelete={() => onDeletePost(p, 'facebook')} deleting={deletingId === p.id} />)}
           </Card>
           <Card className="p-0 overflow-hidden">
             <div className="flex items-center gap-2 p-3 border-b border-border">

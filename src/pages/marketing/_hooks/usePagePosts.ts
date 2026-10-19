@@ -70,3 +70,17 @@ export function usePublishPost(orgId?: string) {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['page-posts', orgId] }); },
   });
 }
+
+export function useEditPost(orgId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {post_id: string; message: string}) => {
+      const {data,error} = await supabase.functions.invoke('marketing-page-posts', {
+        body: {organization_id:orgId,action:'edit',platform:'facebook',...input},
+      });
+      if (error || !data?.ok) throw new Error('post_edit_failed');
+      return data;
+    },
+    onSuccess: () => { qc.invalidateQueries({queryKey:['page-posts',orgId]}); },
+  });
+}
