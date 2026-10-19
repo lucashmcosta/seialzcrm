@@ -3,7 +3,7 @@ import { useMetaSocialPublishingFlag } from '@/hooks/useMetaSocialPublishingFlag
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { Fragment, useState, type ReactNode, type ElementType } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -39,6 +39,7 @@ export default function MetaIntegrationPage() {
   const { organization } = useOrganization();
   const { permissions } = usePermissions();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const orgId = organization?.id;
   const isAdmin = permissions.canManageSettings;
   const { enabled: socialPublishingEnabled } = useMetaSocialPublishingFlag(orgId);
@@ -75,22 +76,28 @@ export default function MetaIntegrationPage() {
     },
   });
 
-  const { data: syncState = [] } = useQuery({
-    queryKey: ['meta-sync-state', conn?.id],
-    enabled: !!conn?.id,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('meta_sync_state')
-        .select('kind,last_synced_at,sync_status')
-        .eq('connection_id', conn!.id);
-      return (data ?? []) as Array<{ kind: string; last_synced_at: string | null; sync_status: string }>;
-    },
-  });
-
   const {data: operationalRoutes = []} = useQuery({
     queryKey:['meta-operational-routes',orgId], enabled:!!orgId,
     queryFn:async()=>{
       const {data,error} = await supabase.from('meta_operational_routes').select('route,source,connection_id').eq('organization_id',orgId!);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  // Operational data belongs to the routed connection, not the latest authorization.
+  const organicConnectionId = operationalRoutes.find(r => r.route === 'asset:instagram_account')?.connection_id
+    ?? operationalRoutes.find(r => r.route === 'asset:page')?.connection_id ?? conn?.id;
+  const performanceConnectionId = operationalRoutes.find(r => r.route === 'asset:ad_account')?.connection_id ?? conn?.id;
+  const syncConnectionIds = [...new Set([organicConnectionId, performanceConnectionId].filter(Boolean))] as string[];
+  const { data: syncState = [] } = useQuery({
+    queryKey: ['meta-sync-state', orgId, syncConnectionIds],
+    enabled: !!orgId && syncConnectionIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('meta_sync_state')
+        .select('connection_id,kind,last_synced_at,sync_status')
+        .eq('organization_id', orgId!).in('connection_id', syncConnectionIds)
+        .order('last_synced_at', { ascending: false, nullsFirst: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -124,7 +131,7 @@ export default function MetaIntegrationPage() {
 
   const connected = conn?.status === 'connected';
   const selCount = (t: string) => assets.filter((a) => a.asset_type === t && a.selection_state === 'selected').length;
-  const lastSync = (kind: string) => syncState.find((s) => s.kind === kind)?.last_synced_at ?? null;
+  const lastSync = (kind: string) => syncState.find((s) => s.kind === kind && s.connection_id === (kind === 'organic' ? organicConnectionId : performanceConnectionId))?.last_synced_at ?? null;
 
   const NAV: Array<{ id: SectionId; label: string; icon: ElementType; group?: string; adminOnly?: boolean }> = [
     { id: 'overview', label: uiText("Visão geral"), icon: House },
@@ -241,7 +248,10 @@ export default function MetaIntegrationPage() {
               <h3 className="text-base font-semibold">{uiText("Ativos")}</h3>
               <p className="mt-1 text-sm text-muted-foreground">{uiText("Selecione quais Businesses, contas de anúncio, Páginas e Instagram pertencem à organização. Só os selecionados entram em sync.")}</p>
               <div className="mt-3">
-                {conn ? <MetaAssetSelector connectionId={conn.id} /> : <EmptyHint>{uiText("Conecte a Meta primeiro (aba Conexão).")}</EmptyHint>}
+                {conn ? <MetaAssetSelector connectionId={conn.id} onSaved={() => {
+                  for (const key of ['meta-conn', 'meta-assets-summary', 'meta-operational-routes', 'meta-capabilities'])
+                    void queryClient.invalidateQueries({ queryKey: [key] });
+                }} /> : <EmptyHint>{uiText("Conecte a Meta primeiro (aba Conexão).")}</EmptyHint>}
               </div>
             </Card>
           )}

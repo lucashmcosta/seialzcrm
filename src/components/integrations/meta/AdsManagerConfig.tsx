@@ -196,7 +196,7 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
           <ArrowsClockwise className={`h-4 w-4 mr-1 ${syncNow.isPending ? 'animate-spin' : ''}`} />
           {uiText("Sincronizar agora")}</Button>
         <Button onClick={() => saveAdsManager.mutate()} disabled={saveAdsManager.isPending || (!selectedAdAccount && !currentAdAccountId)}>
-          {saveAdsManager.isPending ? 'Salvando...' : uiText("Salvar conta de anúncio")}
+          {saveAdsManager.isPending ? uiText("Salvando...") : uiText("Salvar conta de anúncio")}
         </Button>
       </div>
     </Card>

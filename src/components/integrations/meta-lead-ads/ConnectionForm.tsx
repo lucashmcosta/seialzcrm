@@ -136,7 +136,7 @@ export function ConnectionForm({ existing, onSuccess }: Props) {
 
         <div className="flex justify-end">
           <Button onClick={() => connect.mutate()} disabled={connect.isPending}>
-            {connect.isPending ? "Validando..." : isConnected ? uiText("Atualizar token") : uiText("Conectar conta")}
+            {connect.isPending ? uiText("Validando...") : isConnected ? uiText("Atualizar token") : uiText("Conectar conta")}
           </Button>
         </div>
       </Card>

@@ -202,7 +202,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                       disabled={verifyMutation.isPending}
                     >
                       <ArrowsClockwise className="h-4 w-4 mr-1" />
-                      {verifyMutation.isPending ? "Verificando..." : uiText("Verificar")}
+                      {verifyMutation.isPending ? uiText("Verificando...") : uiText("Verificar")}
                     </Button>
                     <Button
                       variant="destructive"
@@ -462,14 +462,14 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                     disabled={!canSubmit || connectMutation.isPending}
                     title={uiText("Confere os dados na Graph API da Meta antes de salvar.")}
                   >
-                    {connectMutation.isPending ? "Validando..." : uiText("Validar na Meta")}
+                    {connectMutation.isPending ? uiText("Validando...") : uiText("Validar na Meta")}
                   </Button>
                   <Button
                     onClick={() => connectMutation.mutate({ skipMetaValidation: true })}
                     disabled={!canSubmit || connectMutation.isPending}
                     title={uiText("Salva os dados sem chamar a Graph API da Meta. Use quando souber que os IDs estão corretos mas a Meta está recusando.")}
                   >
-                    {connectMutation.isPending ? "Salvando..." : uiText("Salvar sem validar")}
+                    {connectMutation.isPending ? uiText("Salvando...") : uiText("Salvar sem validar")}
                   </Button>
                 </div>
               </div>

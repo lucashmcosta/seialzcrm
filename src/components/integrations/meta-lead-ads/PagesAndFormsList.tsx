@@ -111,7 +111,7 @@ export function PagesAndFormsList({ organizationIntegrationId, onConfigureMappin
                           )}
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-0.5">
-                          {form.total_synced_leads || 0} leads
+                          {Number(form.total_synced_leads || 0).toLocaleString(getUiLocale())} leads
                           {form.last_synced_at &&
                             uiText(" · última sync {0}", {"0": format(new Date(form.last_synced_at), uiDatePattern(true), {
                               locale: uiDateLocale(),

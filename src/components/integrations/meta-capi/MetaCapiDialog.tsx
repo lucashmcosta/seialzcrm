@@ -640,7 +640,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                         {uiText("Cancelar")}</Button>
                     )}
                     <Button onClick={handleSubmit} disabled={submitting}>
-                      {submitting ? "Validando..." : isConnected ? uiText("Salvar alterações") : uiText("Conectar")}
+                      {submitting ? uiText("Validando...") : isConnected ? uiText("Salvar alterações") : uiText("Conectar")}
                     </Button>
                   </div>
                 </Card>

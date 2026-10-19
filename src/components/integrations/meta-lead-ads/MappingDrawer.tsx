@@ -164,7 +164,7 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
           <Button variant="outline" onClick={onClose}>
             {uiText("Cancelar")}</Button>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Salvando..." : uiText("Salvar mapeamento")}
+            {save.isPending ? uiText("Salvando...") : uiText("Salvar mapeamento")}
           </Button>
         </div>
       </SheetContent>

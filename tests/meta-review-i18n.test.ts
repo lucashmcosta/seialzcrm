@@ -19,6 +19,10 @@ test('review routes have English translations for literal UI keys and no frozen 
         while(parent&&!ts.isFunctionLike(parent))parent=parent.parent;
         if(!parent) issues.push(`${file}: locale translated during module initialization`);
       }
+      if(ts.isStringLiteral(node) && /^(Salvando|Validando|Verificando|Conectando|Carregando)\.{3}$/.test(node.text)) {
+        if(!ts.isCallExpression(node.parent) || node.parent.expression.getText(sf)!=='uiText')
+          issues.push(`${file}: untranslated loading state ${node.text}`);
+      }
       ts.forEachChild(node,visit);
     }
     visit(sf);
