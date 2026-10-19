@@ -84,7 +84,7 @@ export function SettingsLayout() {
                   childSlug && sectionLabel
                     ? [
                         { label: uiText("Configurações"), href: '/settings' },
-                        { label: sectionLabel },
+                        { label: uiText(sectionLabel) },
                       ]
                     : [
                         { label: uiText("Configurações") },
