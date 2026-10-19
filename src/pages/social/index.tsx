@@ -208,14 +208,14 @@ export default function SocialInboxPage() {
                 >
                   <div className="relative shrink-0">
                     <Avatar className="h-9 w-9">
-                      {c.avatar_url && <AvatarImage src={c.avatar_url} alt={c.name} />}
-                      <AvatarFallback className="text-xs">{initials(c.name)}</AvatarFallback>
+                      {c.avatar_url && <AvatarImage src={c.avatar_url} alt={c.name || uiText('Contato')} />}
+                      <AvatarFallback className="text-xs">{initials(c.name || uiText('Contato'))}</AvatarFallback>
                     </Avatar>
                     <PlatformIcon platform={c.platform} className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-background p-[1px]" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium truncate">{c.name}</p>
+                      <p className="text-sm font-medium truncate">{c.name || uiText('Contato')}</p>
                       <span className="text-[10px] text-muted-foreground shrink-0">{fmtTime(c.updated_time)}</span>
                     </div>
                     <p className="text-xs text-muted-foreground truncate">{c.last_message || '—'}</p>
@@ -235,14 +235,14 @@ export default function SocialInboxPage() {
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
                   <div className="relative shrink-0">
                     <Avatar className="h-9 w-9">
-                      {profile?.avatar_url && <AvatarImage src={profile.avatar_url} alt={selected.name} />}
-                      <AvatarFallback className="text-xs">{initials(selected.name)}</AvatarFallback>
+                      {(profile?.avatar_url || selected.avatar_url) && <AvatarImage src={profile?.avatar_url || selected.avatar_url} alt={profile?.name || selected.name} />}
+                      <AvatarFallback className="text-xs">{initials(profile?.name || selected.name || uiText('Contato'))}</AvatarFallback>
                     </Avatar>
                     <PlatformIcon platform={selected.platform} className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-background p-[1px]" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-semibold truncate">{selected.name}</p>
+                      <p className="text-sm font-semibold truncate">{profile?.name || selected.name || uiText('Contato')}</p>
                       {profile?.is_verified && <SealCheck className="h-4 w-4 text-blue-500 shrink-0" weight="fill" />}
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground">

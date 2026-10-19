@@ -41,6 +41,8 @@ export function useSocialConversations(orgId?: string, platform?: SocialPlatform
     queryKey: ['social-conversations', orgId, platform ?? 'all'],
     enabled: !!orgId,
     staleTime: 20_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
     queryFn: async (): Promise<{ conversations: SocialConversation[]; channels: Record<string, string | null> }> => {
       const { data, error } = await supabase.functions.invoke('social-inbox', {
         body: { organization_id: orgId, action: 'conversations', ...(platform ? { platform } : {}) },
@@ -88,8 +90,9 @@ export type SocialProfile = {
 };
 
 export function useSocialProfile(orgId?: string, participantId?: string | null, platform?: SocialPlatform) {
+  const qc = useQueryClient();
   return useQuery({
-    queryKey: ['social-profile', orgId, participantId],
+    queryKey: ['social-profile', orgId, platform, participantId],
     enabled: !!orgId && !!participantId,
     staleTime: 5 * 60_000,
     retry: false,
@@ -98,7 +101,9 @@ export function useSocialProfile(orgId?: string, participantId?: string | null, 
         body: { organization_id: orgId, action: 'profile', participant_id: participantId, platform },
       });
       if (error) throw error;
-      return (data?.profile ?? null) as SocialProfile | null;
+      const profile = (data?.profile ?? null) as SocialProfile | null;
+      if (profile) qc.setQueriesData<{conversations: SocialConversation[]; channels: Record<string,string|null>}>({queryKey:['social-conversations',orgId]}, old => old ? ({...old,conversations:old.conversations.map(c => c.participant_id === participantId && c.platform === platform ? {...c,name:profile.name || c.name,avatar_url:profile.avatar_url || c.avatar_url} : c)}) : old);
+      return profile;
     },
   });
 }
