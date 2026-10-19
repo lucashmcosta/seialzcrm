@@ -48,20 +48,20 @@ function AttachmentView({ att, fromPage }: { att: SocialAttachment; fromPage: bo
   if (att.type === 'image') {
     return (
       <a href={att.url} target="_blank" rel="noreferrer" className="block">
-        <img src={att.url} alt={att.name || uiText("imagem")} className="max-w-[220px] max-h-60 rounded-lg object-cover" />
+        <img src={att.url} alt={att.name || uiText("imagem")} className="w-auto max-w-full max-h-60 rounded-lg object-cover" />
       </a>
     );
   }
   if (att.type === 'video') {
-    return <video src={att.url} controls className="max-w-[240px] max-h-64 rounded-lg" />;
+    return <video src={att.url} controls className="w-full max-w-[240px] max-h-64 rounded-lg" />;
   }
   if (att.type === 'audio') {
-    return <audio src={att.url} controls className="max-w-[240px]" />;
+    return <audio src={att.url} controls className="w-full max-w-[240px]" />;
   }
   // file / share → link
   return (
     <a href={att.url} target="_blank" rel="noreferrer"
-      className={cn('inline-flex items-center gap-1.5 text-xs underline underline-offset-2', fromPage ? 'text-primary-foreground' : 'text-foreground')}>
+      className={cn('inline-flex min-w-0 max-w-full items-center gap-1.5 [overflow-wrap:anywhere] text-xs underline underline-offset-2', fromPage ? 'text-primary-foreground' : 'text-foreground')}>
       {att.type === 'share' ? <ArrowSquareOut className="h-3.5 w-3.5" /> : <Paperclip className="h-3.5 w-3.5" />}
       {att.name || (att.type === 'share' ? uiText("Ver publicação") : uiText("Abrir anexo"))}
     </a>
@@ -73,14 +73,14 @@ function MessageBubble({ m }: { m: SocialMessage }) {
   const atts = m.attachments ?? [];
   const empty = !m.text && atts.length === 0;
   return (
-    <div className={cn('flex', m.from_page ? 'justify-end' : 'justify-start')}>
+    <div className={cn('flex min-w-0 w-full', m.from_page ? 'justify-end' : 'justify-start')}>
       <div className={cn(
-        'max-w-[75%] rounded-2xl px-3 py-2 text-sm space-y-1.5',
+        'min-w-0 max-w-[75%] [overflow-wrap:anywhere] rounded-2xl px-3 py-2 text-sm space-y-1.5',
         m.from_page ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted rounded-bl-sm',
         m.pending && 'opacity-70',
       )}>
         {atts.map((a, i) => <AttachmentView key={i} att={a} fromPage={m.from_page} />)}
-        {m.text && <div className="whitespace-pre-wrap break-words">{m.text}</div>}
+        {m.text && <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.text}</div>}
         {empty && <span className="italic opacity-70">{uiText("(sem texto)")}</span>}
         <div className={cn('text-[10px] flex items-center gap-1', m.from_page ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
           {m.pending ? uiText("enviando…") : fmtTime(m.created_time)}
