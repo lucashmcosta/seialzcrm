@@ -1,4 +1,4 @@
-import { uiText, useUiLocale } from '@/lib/ui-locale';
+import { uiText, getUiLocale, useUiLocale } from '@/lib/ui-locale';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -51,7 +51,7 @@ export function StatusDashboard({ organizationId }: Props) {
           tone === "danger" ? "text-destructive" : tone === "success" ? "text-green-600" : ""
         }`}
       >
-        {value ?? "—"}
+        {typeof value === "number" ? value.toLocaleString(getUiLocale()) : (value ?? "—")}
       </p>
     </Card>
   );

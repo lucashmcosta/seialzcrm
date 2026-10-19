@@ -581,6 +581,7 @@ export const translations = {
     'auth.signOut': 'Sign out',
     'auth.email': 'Email',
     'auth.password': 'Password',
+    'auth.fullName': 'Full name',
     'auth.firstName': 'First name',
     'auth.lastName': 'Last name',
     'auth.organizationName': 'Organization name',
