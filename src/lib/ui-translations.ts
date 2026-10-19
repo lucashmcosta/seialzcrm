@@ -736,3 +736,5 @@ Object.assign(uiEnglish, {
   'Autorização recebida. Selecione os ativos na aba Ativos.':'Authorization received. Select assets in the Assets tab.',
   'Os módulos existentes continuam usando suas credenciais anteriores. As autorizações coexistem.':'Existing modules continue using their previous credentials. The authorizations coexist.',
 });
+
+uiEnglish['Não foi possível carregar todos os comentários.'] = 'Could not load all comments.';

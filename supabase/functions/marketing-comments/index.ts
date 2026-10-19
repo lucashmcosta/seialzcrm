@@ -1,3 +1,4 @@
+import { facebookCommentAuthor } from "../_shared/meta/comment-author.ts";
 // marketing-comments — lista e MODERA comentários dos posts orgânicos da Página/Instagram
 // pelo Seialz. Escopos: pages_read_user_content + pages_manage_engagement (Facebook),
 // instagram_manage_comments + instagram_manage_engagement (Instagram). Escrita real.
@@ -57,22 +58,27 @@ serve(async (req) => {
 
     if (action === "list") {
       const comments: any[] = [];
+      const channels: Record<string,string> = {};
       // Facebook: posts recentes + comentários aninhados.
       if (pageId && pageToken) {
         try {
-          const r = await metaGraphGet(`/${pageId}/feed`,
-            { fields: "message,permalink_url,comments.limit(15){id,message,from,created_time,is_hidden}", limit: 10 },
-            { accessToken: pageToken, appSecret });
+          const read = (authorFields: string) => metaGraphGet(`/${pageId}/feed`,
+            {fields:`message,permalink_url,comments.limit(15){id,message,from{${authorFields}},created_time,is_hidden}`,limit:10},
+            {accessToken:pageToken!,appSecret});
+          // Picture is optional: an unsupported expansion must never hide available names.
+          let r;
+          try { r = await read('id,name,picture'); }
+          catch { r = await read('id,name'); }
           for (const post of r?.data ?? []) {
             for (const cm of post?.comments?.data ?? []) {
               comments.push({
                 id: cm.id, platform: "facebook", text: cm.message ?? "",
-                author: cm.from?.name ?? "", created_time: cm.created_time, is_hidden: !!cm.is_hidden,
+                ...facebookCommentAuthor(cm.from), created_time: cm.created_time, is_hidden: !!cm.is_hidden,
                 post_id: post.id, post_excerpt: (post.message ?? "").slice(0, 80), permalink: post.permalink_url,
               });
             }
           }
-        } catch { /* ignora */ }
+        } catch { channels.facebook = "comments_unavailable"; }
       }
       // Instagram: mídias recentes + comentários aninhados.
       if (igId) {
@@ -89,10 +95,10 @@ serve(async (req) => {
               });
             }
           }
-        } catch { /* ignora */ }
+        } catch { channels.instagram = "comments_unavailable"; }
       }
       comments.sort((a, b) => String(b.created_time).localeCompare(String(a.created_time)));
-      return json({ ok: true, comments });
+      return json({ ok: true, comments, channels });
     }
 
     const comment_id = String(body.comment_id ?? "");

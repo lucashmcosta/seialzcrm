@@ -1,3 +1,4 @@
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { uiError } from '@/lib/ui-locale';
 import { getUiLocale, uiDateLocale, uiDatePattern } from '@/lib/ui-locale';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
@@ -48,7 +49,10 @@ function CommentRow({ c, orgId }: { c: MetaComment; orgId?: string }) {
   return (
     <div className="p-3 border-b border-border last:border-0">
       <div className="flex items-start gap-3">
-        <Icon size={18} className={`${color} shrink-0 mt-0.5`} />
+        <Avatar className="h-8 w-8 shrink-0">
+          <AvatarImage src={c.author_avatar_url || undefined} alt={c.author} />
+          <AvatarFallback>{c.author ? c.author.split(' ').slice(0,2).map(n=>n[0]).join('') : <Icon size={18} className={color} />}</AvatarFallback>
+        </Avatar>
         <div className="min-w-0 flex-1">
           <p className="text-sm">
             <span className="font-medium">{c.author || uiText("Alguém")}</span>{' '}
@@ -96,7 +100,7 @@ export default function MarketingComments() {
   }
   if (!enabled) return <Navigate to="/marketing" replace />;
 
-  const comments = list.data ?? [];
+  const comments = list.data?.comments ?? [];
 
   return (
     <MarketingLayout title={uiText("Comentários")}>
@@ -105,6 +109,7 @@ export default function MarketingComments() {
           <h2 className="text-sm font-semibold">{uiText("Comentários recentes (Facebook + Instagram)")}</h2>
           <p className="text-xs text-muted-foreground">{uiText("Responda, oculte ou apague comentários dos posts do negócio.")}</p>
         </div>
+        {(list.error || Object.keys(list.data?.channels ?? {}).length > 0) && <p role="alert" className="p-4 text-sm text-destructive">{uiText('Não foi possível carregar todos os comentários.')}</p>}
         {list.isLoading ? <div className="p-3 space-y-2"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>
           : comments.length === 0 ? <p className="p-4 text-sm text-muted-foreground">{uiText("Nenhum comentário recente nos posts.")}</p>
           : comments.map((c) => <CommentRow key={`${c.platform}-${c.id}`} c={c} orgId={orgId} />)}

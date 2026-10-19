@@ -8,6 +8,8 @@ export type MetaComment = {
   platform: CommentPlatform;
   text: string;
   author: string;
+  author_id?: string | null;
+  author_avatar_url?: string | null;
   created_time?: string;
   is_hidden?: boolean;
   post_id: string;
@@ -20,12 +22,12 @@ export function useCommentsList(orgId?: string) {
     queryKey: ['meta-comments', orgId],
     enabled: !!orgId,
     staleTime: 30_000,
-    queryFn: async (): Promise<MetaComment[]> => {
+    queryFn: async (): Promise<{comments: MetaComment[]; channels: Record<string,string>}> => {
       const { data, error } = await supabase.functions.invoke('marketing-comments', {
         body: { organization_id: orgId, action: 'list' },
       });
       if (error) throw error;
-      return (data?.comments ?? []) as MetaComment[];
+      return {comments:(data?.comments ?? []) as MetaComment[], channels:data?.channels ?? {}};
     },
   });
 }
