@@ -35,7 +35,7 @@ import { toast } from 'sonner';
 // ---------------------------------------------------------------------------
 // Provider catalog
 // ---------------------------------------------------------------------------
-type ProviderId = 'openai' | 'anthropic' | 'gemini' | 'elevenlabs';
+type ProviderId = 'openai' | 'anthropic' | 'gemini' | 'elevenlabs' | 'deepgram';
 
 interface ProviderMeta {
   id: ProviderId;
@@ -72,6 +72,13 @@ const PROVIDERS: ProviderMeta[] = [
     name: 'ElevenLabs',
     description: 'Scribe v2 · STT premium',
     docsUrl: 'https://elevenlabs.io/app/settings/api-keys',
+    capability: 'Transcrição',
+  },
+  {
+    id: 'deepgram',
+    name: 'Deepgram',
+    description: 'Nova-2 · STT de telefonia, separa por canal',
+    docsUrl: 'https://console.deepgram.com/',
     capability: 'Transcrição',
   },
 ];

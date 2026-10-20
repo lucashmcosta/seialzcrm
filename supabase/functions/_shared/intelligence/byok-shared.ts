@@ -3,7 +3,7 @@
 type SupabaseClient = any; // see resolve-provider.ts for rationale
 import { encryptSecret } from "../crypto.ts";
 
-export const SUPPORTED_PROVIDERS = ["openai", "anthropic", "gemini", "elevenlabs"] as const;
+export const SUPPORTED_PROVIDERS = ["openai", "anthropic", "gemini", "elevenlabs", "deepgram"] as const;
 export type SupportedProvider = typeof SUPPORTED_PROVIDERS[number];
 
 export const corsHeaders = {
@@ -81,6 +81,13 @@ export async function testProviderKey(
         headers: { "xi-api-key": apiKey },
       });
       return { ok: r.ok, status: r.status };
+    }
+    if (provider === "deepgram") {
+      // `Token <chave>` é o esquema do Deepgram, não Bearer.
+      const r = await fetch("https://api.deepgram.com/v1/projects", {
+        headers: { Authorization: `Token ${apiKey}` },
+      });
+      return { ok: r.ok, status: r.status, verified_model: "nova-2" };
     }
   } catch {
     return { ok: false, status: 0 };
