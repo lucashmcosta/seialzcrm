@@ -32,7 +32,7 @@ interface Call {
   notes: string | null;
   to_number: string | null;
   created_at: string;
-  call_recordings?: { id: string; recording_url: string; duration_seconds: number | null }[];
+  call_recordings?: { id: string; recording_url: string; duration_seconds: number | null; storage_path: string | null }[];
   user?: { full_name: string } | null;
 }
 
@@ -110,7 +110,7 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
         .from('calls')
         .select(`
           *,
-          call_recordings(id, recording_url, duration_seconds),
+          call_recordings(id, recording_url, duration_seconds, storage_path),
           user:users!user_id(full_name)
         `)
         .eq('organization_id', organization.id)
@@ -387,6 +387,8 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
                         <CallRecordingPlayer 
                           key={rec.id} 
                           recordingUrl={rec.recording_url} 
+                          storagePath={rec.storage_path}
+                          organizationId={organization?.id}
                           duration={rec.duration_seconds || undefined} 
                         />
                       ))}

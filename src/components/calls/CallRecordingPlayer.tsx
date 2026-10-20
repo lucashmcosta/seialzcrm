@@ -2,19 +2,61 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Play, Pause, DownloadSimple, SpeakerHigh, WarningCircle } from '@phosphor-icons/react';
 import { reportAudioFailure, isValidHttpUrl } from '@/lib/audioErrorReport';
+import { getProxiedMediaUrlAsync } from '@/lib/mediaProxy';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CallRecordingPlayerProps {
   recordingUrl: string;
   duration?: number;
+  /** Caminho no bucket `call-recordings`. Quando existe, é daqui que o áudio toca. */
+  storagePath?: string | null;
+  organizationId?: string;
 }
 
-export function CallRecordingPlayer({ recordingUrl, duration }: CallRecordingPlayerProps) {
+export function CallRecordingPlayer({ recordingUrl, duration, storagePath, organizationId }: CallRecordingPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [hasError, setHasError] = useState(false);
+  const [playUrl, setPlayUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const srcOk = isValidHttpUrl(recordingUrl);
+  // De onde o áudio toca, em ordem:
+  //   1. nosso bucket, por URL assinada -- é onde o áudio vive desde que o
+  //      arquivamento passou a trazê-lo do Twilio (e a apagá-lo de lá);
+  //   2. gravações antigas, que seguem no Twilio: pelo twilio-media-proxy,
+  //      porque api.twilio.com pede Basic Auth e o navegador abre uma caixa
+  //      de login no meio da tela.
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      if (storagePath) {
+        const { data } = await supabase.storage
+          .from('call-recordings')
+          .createSignedUrl(storagePath, 3600);
+        if (cancelado) return;
+        if (data?.signedUrl) {
+          setPlayUrl(data.signedUrl);
+          return;
+        }
+      }
+      const url = await getProxiedMediaUrlAsync(recordingUrl, organizationId);
+      if (!cancelado) setPlayUrl(url);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [storagePath, recordingUrl, organizationId]);
+
+  // Trocar a fonte invalida o elemento de áudio que já existia.
+  useEffect(() => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setHasError(false);
+  }, [playUrl]);
+
+  const srcOk = !!playUrl && isValidHttpUrl(playUrl);
 
   useEffect(() => {
     return () => {
@@ -26,7 +68,7 @@ export function CallRecordingPlayer({ recordingUrl, duration }: CallRecordingPla
   const togglePlay = async () => {
     if (!srcOk || hasError) return;
     if (!audioRef.current) {
-      const a = new Audio(recordingUrl);
+      const a = new Audio(playUrl!);
       a.onended = () => {
         setIsPlaying(false);
         setCurrentTime(0);
@@ -39,7 +81,7 @@ export function CallRecordingPlayer({ recordingUrl, duration }: CallRecordingPla
         setHasError(true);
         reportAudioFailure({
           component: 'CallRecordingPlayer',
-          src: recordingUrl,
+          src: playUrl ?? recordingUrl,
           audio: a,
           error: a.error ? { name: 'MediaError', message: `code=${a.error.code}` } : undefined,
         });
@@ -61,7 +103,7 @@ export function CallRecordingPlayer({ recordingUrl, duration }: CallRecordingPla
       setHasError(true);
       reportAudioFailure({
         component: 'CallRecordingPlayer',
-        src: recordingUrl,
+        src: playUrl ?? recordingUrl,
         audio: audioRef.current,
         error: err,
       });
@@ -74,6 +116,15 @@ export function CallRecordingPlayer({ recordingUrl, duration }: CallRecordingPla
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  if (!playUrl) {
+    return (
+      <div className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-xs text-muted-foreground">
+        <SpeakerHigh className="h-4 w-4 animate-pulse" />
+        Carregando áudio...
+      </div>
+    );
+  }
 
   if (!srcOk) {
     return (
@@ -121,7 +172,7 @@ export function CallRecordingPlayer({ recordingUrl, duration }: CallRecordingPla
       )}
 
       <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-        <a href={recordingUrl} download target="_blank" rel="noopener noreferrer">
+        <a href={playUrl ?? recordingUrl} download target="_blank" rel="noopener noreferrer">
           <DownloadSimple className="h-4 w-4" />
         </a>
       </Button>
