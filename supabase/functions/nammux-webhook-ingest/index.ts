@@ -1,5 +1,10 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { loadActiveIntegrationSecret } from "../_shared/integration-credentials.ts";
+import {
+  calcularEntrada,
+  camposAlterados,
+  ErroCalculo,
+} from "../_shared/classificacao/certificar.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -96,6 +101,7 @@ Deno.serve(async (req) => {
       "process.snapshot.updated",
       "process.sync.failed",
       "contact.address.updated",
+      "classification.certified",
     ].includes(eventType)
   ) {
     return json(400, { error: "unsupported_event" });
@@ -197,12 +203,120 @@ Deno.serve(async (req) => {
 
   const { data: opportunity } = await admin
     .from("opportunities")
-    .select("id, organization_id, contact_id")
+    .select("id, organization_id, contact_id, status")
     .eq("id", opportunityId)
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
     .maybeSingle();
   if (!opportunity) return json(404, { error: "opportunity_not_found" });
+
+  // ===== Certificação pós-entrevista (Fase 3b) =====
+  // A entrevista acontece no Nammux; quem calcula é aqui. O Nammux manda as
+  // respostas conferidas, nunca faixa nem comissão -- o número é recalculado com
+  // a MESMA versão de calibração que o vendedor usou, senão a entrevista baixaria
+  // comissão por mudança de calibração em vez de por mudança de fato.
+  if (eventType === "classification.certified") {
+    const interviewer = String(data.interviewer ?? "").trim().slice(0, 200);
+    if (!interviewer) return json(400, { error: "interviewer_required" });
+    if (opportunity.status !== "won") return json(409, { error: "opportunity_not_won" });
+
+    const { data: ativa } = await admin
+      .from("process_classifications")
+      .select("id, band, commission, input, calibration_version_id")
+      .eq("opportunity_id", opportunityId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (!ativa) return json(409, { error: "not_classified" });
+
+    const { data: cal } = await admin
+      .from("classification_calibration_versions")
+      .select("id, content, motor_version")
+      .eq("id", ativa.calibration_version_id)
+      .maybeSingle();
+    if (!cal) return json(409, { error: "calibration_not_found" });
+
+    let entrada: Record<string, unknown>;
+    let resultado: Record<string, unknown>;
+    try {
+      const calculado = calcularEntrada(data.entrada, cal);
+      entrada = calculado.entrada;
+      resultado = calculado.resultado;
+    } catch (e) {
+      if (!(e instanceof ErroCalculo)) throw e;
+      // Erro de entrada é permanente: reenviar o mesmo evento não conserta.
+      await admin.from("nammux_sync_events").insert({
+        organization_id: organizationId,
+        opportunity_id: opportunityId,
+        external_event_id: eventId,
+        event_type: eventType,
+        direction: "inbound",
+        status: "error",
+        error: e.codigo,
+        summary: { campo: e.campo ?? null, pendencias: e.pendencias ?? null, interviewer },
+        occurred_at: envelope.occurred_at ?? null,
+      });
+      return json(422, { error: e.codigo, campo: e.campo, pendencias: e.pendencias });
+    }
+
+    const mudou = camposAlterados(ativa.input as Record<string, unknown>, entrada);
+    // `_external_event_id` tem índice único por organização: reenviar o mesmo
+    // evento devolve a certificação que já existe, sem gravar de novo.
+    const { data: gravado, error: certError } = await admin.rpc("pc_record_certification", {
+      _org: organizationId,
+      _opp: opportunityId,
+      _source: "nammux",
+      _actor: null,
+      _external_actor: interviewer,
+      _external_event_id: eventId,
+      _input: entrada,
+      _changed: mudou,
+      _result: resultado,
+      _note: typeof data.note === "string" ? data.note.slice(0, 1000) : "",
+      _redo: false,
+    });
+    if (certError) {
+      const codigo = /pc:([a-z_]+)/.exec(certError.message ?? "")?.[1] ?? "certification_failed";
+      const permanente = codigo !== "certification_failed";
+      console.error("certification failed", codigo);
+      await admin.from("nammux_sync_events").insert({
+        organization_id: organizationId,
+        opportunity_id: opportunityId,
+        external_event_id: eventId,
+        event_type: eventType,
+        direction: "inbound",
+        status: "error",
+        error: codigo,
+        summary: { interviewer, changed_fields: mudou },
+        occurred_at: envelope.occurred_at ?? null,
+      });
+      return json(permanente ? 409 : 500, { error: codigo });
+    }
+
+    const r = (gravado ?? {}) as { outcome?: string; finalBand?: string | null; finalCommission?: number };
+    await admin.from("nammux_sync_events").insert({
+      organization_id: organizationId,
+      opportunity_id: opportunityId,
+      external_event_id: eventId,
+      event_type: eventType,
+      direction: "inbound",
+      status: "processed",
+      summary: {
+        interviewer,
+        outcome: r.outcome ?? null,
+        changed_fields: mudou,
+        original: { faixa: ativa.band, comissao: Number(ativa.commission) },
+        final: { faixa: r.finalBand ?? null, comissao: Number(r.finalCommission ?? 0) },
+      },
+      occurred_at: envelope.occurred_at ?? null,
+    });
+
+    return json(200, {
+      ok: true,
+      outcome: r.outcome ?? null,
+      final: { faixa: r.finalBand ?? null, comissao: Number(r.finalCommission ?? 0) },
+      changed_fields: mudou,
+    });
+  }
 
   if (eventType === "process.sync.failed") {
     const message = String(data.error ?? "Falha de sincronização reportada pelo Nammux");
