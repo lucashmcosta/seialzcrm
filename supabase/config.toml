@@ -168,3 +168,33 @@ verify_jwt = false
 # Calibração da classificação (Fase 4). JWT validado em código + permissões RBAC v2.
 [functions.process-classification-admin]
 verify_jwt = false
+
+# Plano de trabalho da Inteligência e da telefonia: chamadas por cron (net.http_post)
+# e pelo próprio worker, SEM header Authorization -- a autenticação é o
+# x-worker-token validado em código. Precisam estar aqui, senão um deploy pela
+# CLI liga verify_jwt e o gateway passa a barrar o cron ANTES da função rodar.
+#
+# Foi exatamente o que aconteceu em 19/10/2026: intelligence-worker e
+# intelligence-retention-cron não constavam nesta lista, um deploy ligou a
+# verificação e a fila parou (2.908 jobs presos em 12h, de 660-868/hora).
+[functions.intelligence-worker]
+verify_jwt = false
+
+[functions.intelligence-retention-cron]
+verify_jwt = false
+
+[functions.telephony-archive-recording]
+verify_jwt = false
+
+[functions.telephony-transcribe-call]
+verify_jwt = false
+
+# Proxy do áudio do Twilio para o player de gravação. A URL vai dentro do
+# `src` de um elemento <audio>, e elemento de mídia não manda header -- por
+# isso o token do usuário chega como `access_token` na query e é validado em
+# código (`supabase.auth.getUser` + checagem de vínculo com a organização).
+# Com verify_jwt ligado o gateway barraria a requisição por não achar o
+# header, e as gravações antigas (que ainda estão no Twilio) parariam de tocar.
+# Conferido em 20/10/2026: em produção está desligado.
+[functions.twilio-media-proxy]
+verify_jwt = false
