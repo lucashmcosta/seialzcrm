@@ -9881,6 +9881,75 @@ export type Database = {
           },
         ]
       }
+      opportunity_companies: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          opportunity_id: string
+          organization_id: string
+          role_code: string
+          source: string
+          source_document_id: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          opportunity_id: string
+          organization_id: string
+          role_code: string
+          source?: string
+          source_document_id?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          opportunity_id?: string
+          organization_id?: string
+          role_code?: string
+          source?: string
+          source_document_id?: string | null
+        }
+        Relationships: []
+      }
+      opportunity_company_roles: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          is_counterparty: boolean
+          name: string
+          organization_id: string | null
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_counterparty?: boolean
+          name: string
+          organization_id?: string | null
+          sort_order?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_counterparty?: boolean
+          name?: string
+          organization_id?: string | null
+          sort_order?: number
+        }
+        Relationships: []
+      }
       opportunity_commissions: {
         Row: {
           amount: number
@@ -15982,6 +16051,21 @@ export type Database = {
           _expected_updated_at: string
           _note: string
           _org: string
+        }
+        Returns: Json
+      }
+      oportunidade_desvincular_empresa_v1: {
+        Args: { _id: string }
+        Returns: boolean
+      }
+      oportunidade_vincular_empresa_v1: {
+        Args: {
+          _cnpj: string
+          _dados?: Json
+          _opportunity_id: string
+          _role_code: string
+          _source?: string
+          _source_document_id?: string
         }
         Returns: Json
       }

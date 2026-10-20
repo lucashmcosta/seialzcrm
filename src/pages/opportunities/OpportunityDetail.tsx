@@ -40,6 +40,7 @@ import { PenNib } from '@phosphor-icons/react';
 import { TagSelector } from '@/components/common/TagSelector';
 import { NammuxOpportunityTab } from '@/components/opportunities/NammuxOpportunityTab';
 import { ProcessClassificationSlot } from '@/components/process-classification/ProcessClassificationSlot';
+import { EmpresaDoCasoSlot } from '@/components/opportunities/EmpresaDoCasoSlot';
 import { WidgetsTrigger } from '@/widgets/WidgetsTrigger';
 
 interface Opportunity {
@@ -398,6 +399,9 @@ export default function OpportunityDetail() {
 
             {selectedTab === 'overview' && (
               <>
+              {/* A empresa vem ANTES da classificação: só dá para classificar
+                  sabendo contra quem é o caso. */}
+              <EmpresaDoCasoSlot opportunityId={opportunity.id} contactId={opportunity.contact_id} />
               <ProcessClassificationSlot opportunityId={opportunity.id} />
               <CommercialAttributionPanel key={opportunity.id} entityType="opportunity" entityId={opportunity.id} contactId={opportunity.contact_id} />
               <Card>
@@ -689,6 +693,9 @@ export default function OpportunityDetail() {
             </Tabs.List>
 
             <Tabs.Panel id="overview">
+              {/* A empresa vem ANTES da classificação: só dá para classificar
+                  sabendo contra quem é o caso. */}
+              <EmpresaDoCasoSlot opportunityId={opportunity.id} contactId={opportunity.contact_id} />
               <ProcessClassificationSlot opportunityId={opportunity.id} />
               <CommercialAttributionPanel key={opportunity.id} entityType="opportunity" entityId={opportunity.id} contactId={opportunity.contact_id} />
               <Card>
