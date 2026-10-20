@@ -198,3 +198,24 @@ verify_jwt = false
 # Conferido em 20/10/2026: em produção está desligado.
 [functions.twilio-media-proxy]
 verify_jwt = false
+
+# Funções BYOK das chaves de IA. Validam o JWT do usuário EM CÓDIGO
+# (`requireOrgAdmin` exige o header Authorization e confere o papel na
+# organização), e em produção rodam com verify_jwt desligado. Precisam estar
+# aqui: sem a declaração, um deploy pela CLI liga a verificação no gateway e
+# muda o comportamento sem ninguém pedir -- foi o que aconteceu em 20/10/2026
+# com `byok-set-key` e `byok-test-key`.
+[functions.byok-set-key]
+verify_jwt = false
+
+[functions.byok-test-key]
+verify_jwt = false
+
+[functions.byok-revoke-key]
+verify_jwt = false
+
+[functions.byok-rotate-key]
+verify_jwt = false
+
+[functions.byok-update-policy]
+verify_jwt = false
