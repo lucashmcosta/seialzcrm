@@ -58,6 +58,27 @@ function modeloDoDeepgram(raw: unknown): string | null {
   return nomes.length > 0 ? nomes.join("+") : null;
 }
 
+/**
+ * Dialogo a partir dos segmentos diarizados da OpenAI. Aqui o falante vem de
+ * um rotulo do modelo ("A"/"B"), nao do canal -- entao nao da para dizer QUAL
+ * dos dois e o atendente sem olhar o conteudo. Mantemos o rotulo como veio.
+ */
+function textoDiarizadoDaOpenAI(raw: unknown): string {
+  const segs = (raw as { segments?: { speaker?: string; text?: string }[] })
+    ?.segments;
+  if (!Array.isArray(segs) || segs.length === 0) {
+    return (raw as { text?: string })?.text ?? "";
+  }
+  return segs
+    .map((s) => {
+      const t = (s.text ?? "").trim();
+      if (!t) return "";
+      return s.speaker ? `[Falante ${s.speaker}] ${t}` : t;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
 function textoDoDeepgram(raw: unknown): string {
   const r = raw as {
     results?: {
@@ -242,6 +263,14 @@ Deno.serve(async (req) => {
     raw = await r.json();
     text = (raw as { text?: string })?.text ?? "";
   } else {
+    // Os modelos `...-diarize` da OpenAI exigem o formato diarizado; com o
+    // `json` simples a resposta e 400. Pedir o formato certo e o que permite
+    // ler quem falou, do lado deles.
+    const ehDiarize = provider.model.includes("diarize");
+    if (ehDiarize) {
+      form.append("response_format", "diarized_json");
+      form.append("chunking_strategy", "auto");
+    }
     const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: { Authorization: `Bearer ${provider.apiKey}` },
@@ -260,7 +289,9 @@ Deno.serve(async (req) => {
       );
     }
     raw = await r.json();
-    text = (raw as { text?: string })?.text ?? "";
+    text = ehDiarize
+      ? textoDiarizadoDaOpenAI(raw)
+      : ((raw as { text?: string })?.text ?? "");
   }
 
   text = (text ?? "").trim();
