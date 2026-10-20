@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
   const authorization = req.headers.get("Authorization") ?? "";
   if (!authorization.startsWith("Bearer ")) return json({ error: "unauthorized" }, 401);
 
-  const { document_id } = await req.json().catch(() => ({}));
+  const { document_id, meses_prescricao } = await req.json().catch(() => ({}));
   if (!document_id) return json({ error: "document_id_required" }, 400);
 
   // Quem pergunta é o usuário: a leitura respeita a RLS dele.
@@ -106,7 +106,9 @@ Deno.serve(async (req) => {
   // A CTPS digital traz nome do empregador e período colados no CNPJ -- é o
   // que a pessoa precisa para saber qual é o caso. Quando o documento tem
   // outro formato, sobra a varredura simples por CNPJ válido.
-  const vinculos = vinculosDaCtps(texto, isValidCnpjValue);
+  const vinculos = vinculosDaCtps(texto, isValidCnpjValue, {
+    mesesPrescricao: Number(meses_prescricao) > 0 ? Number(meses_prescricao) : undefined,
+  });
   const encontrados = vinculos.length > 0
     ? vinculos.map((v) => v.cnpj)
     : cnpjsDoTexto(texto);
@@ -120,13 +122,22 @@ Deno.serve(async (req) => {
   const cnpjs = [];
   for (const cnpj of encontrados.slice(0, 15)) {
     const doDocumento = vinculos.find((v) => v.cnpj === cnpj);
-    const r = await lookupBrasilApiCnpj(cnpj);
+    // Consulta à Receita só para quem ainda pode virar caso. Na CTPS do teste
+    // eram 11 vínculos e 5 dentro do prazo: consultar os 11 gastaria o dobro
+    // à toa. O que está fora continua na lista, com o nome que o documento dá.
+    const r = doDocumento && !doDocumento.dentro_do_prazo
+      ? { ok: false, payload: null }
+      : await lookupBrasilApiCnpj(cnpj);
     const p = (r.ok ? r.payload : null) as Record<string, unknown> | null;
     cnpjs.push({
       cnpj,
       empregador_no_documento: doDocumento?.empregador ?? null,
       periodo: doDocumento?.periodo ?? null,
       vinculo_aberto: doDocumento?.atual ?? false,
+      fim_do_contrato: doDocumento?.fim ?? null,
+      prescreve_em: doDocumento?.prescreve_em ?? null,
+      dentro_do_prazo: doDocumento?.dentro_do_prazo ?? true,
+      dias_para_prescrever: doDocumento?.dias_para_prescrever ?? null,
       encontrado: r.ok,
       razao_social: (p?.legal_name ?? p?.razao_social ?? null) as string | null,
       nome_fantasia: (p?.trade_name ?? p?.nome_fantasia ?? null) as string | null,
