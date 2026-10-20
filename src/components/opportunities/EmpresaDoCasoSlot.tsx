@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -172,8 +173,12 @@ export function EmpresaDoCasoSlot(
     () => new Set(vinculos.map((v) => (v.companies?.cnpj ?? '').replace(/\D/g, ''))),
     [vinculos],
   );
-  const dentro = (achados ?? []).filter((a) => a.dentro_do_prazo);
-  const fora = (achados ?? []).filter((a) => !a.dentro_do_prazo);
+  // O que já está vinculado sai da lista: aparecer em cima como empresa do
+  // caso e de novo embaixo dizendo "já vinculada" é a mesma informação duas
+  // vezes, e a segunda só atrapalha.
+  const pendentes = (achados ?? []).filter((a) => !jaVinculados.has(a.cnpj));
+  const dentro = pendentes.filter((a) => a.dentro_do_prazo);
+  const fora = pendentes.filter((a) => !a.dentro_do_prazo);
 
   if (!contactId) return null;
   if (documentos.length === 0 && vinculos.length === 0) return null;
@@ -191,9 +196,16 @@ export function EmpresaDoCasoSlot(
             {vinculos.map((v) => (
               <div key={v.id} className="flex items-start justify-between gap-2 rounded-lg border p-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {v.companies?.legal_name || v.companies?.name || '—'}
-                  </p>
+                  {v.companies?.id
+                    ? (
+                      <Link
+                        to={`/companies/${v.companies.id}`}
+                        className="text-sm font-medium text-primary hover:underline truncate block"
+                      >
+                        {v.companies.legal_name || v.companies.name || '—'}
+                      </Link>
+                    )
+                    : <p className="text-sm font-medium truncate">—</p>}
                   <p className="text-xs text-muted-foreground">
                     {v.companies?.cnpj ? formatarCnpj(v.companies.cnpj.replace(/\D/g, '')) : ''}
                     {' · '}
@@ -211,12 +223,29 @@ export function EmpresaDoCasoSlot(
         {documentos.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
             {documentos.slice(0, 3).map((d) => (
-              <Button key={d.id} size="sm" variant="outline" disabled={lendo} onClick={() => ler(d.id)}>
+              <Button
+                key={d.id}
+                size="sm"
+                variant={vinculos.length > 0 ? 'ghost' : 'outline'}
+                className={vinculos.length > 0 ? 'h-7 px-2 text-xs text-muted-foreground' : undefined}
+                disabled={lendo}
+                onClick={() => ler(d.id)}
+              >
                 <FileText className="h-4 w-4 mr-1.5" />
-                {lendo ? 'Lendo…' : `Ler ${d.name.slice(0, 28)}`}
+                {lendo
+                  ? 'Lendo…'
+                  : vinculos.length > 0
+                  ? 'Ler o documento de novo'
+                  : `Ler ${d.name.slice(0, 28)}`}
               </Button>
             ))}
           </div>
+        )}
+
+        {achados !== null && achados.length > 0 && pendentes.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Todas as empresas deste documento já estão vinculadas ao caso.
+          </p>
         )}
 
         {achados !== null && achados.length === 0 && (
@@ -235,7 +264,6 @@ export function EmpresaDoCasoSlot(
                 key={a.cnpj}
                 achado={a}
                 papel={papelPadrao}
-                jaVinculado={jaVinculados.has(a.cnpj)}
                 onVincular={() => vincular(a)}
                 salvando={salvando === a.cnpj}
               />
@@ -259,7 +287,6 @@ export function EmpresaDoCasoSlot(
                   key={a.cnpj}
                   achado={a}
                   papel={papelPadrao}
-                  jaVinculado={jaVinculados.has(a.cnpj)}
                   onVincular={() => vincular(a)}
                   salvando={salvando === a.cnpj}
                 />
@@ -273,10 +300,9 @@ export function EmpresaDoCasoSlot(
 }
 
 function ItemAchado(
-  { achado, papel, jaVinculado, onVincular, salvando }: {
+  { achado, papel, onVincular, salvando }: {
     achado: Achado;
     papel?: Papel;
-    jaVinculado: boolean;
     onVincular: () => void;
     salvando: boolean;
   },
@@ -306,13 +332,9 @@ function ItemAchado(
         {achado.vinculo_aberto && <Badge variant="secondary" className="shrink-0">atual</Badge>}
       </div>
 
-      {jaVinculado
-        ? <p className="text-xs text-muted-foreground">Já vinculada a este caso.</p>
-        : (
-          <Button size="sm" className="h-8" disabled={salvando} onClick={onVincular}>
-            {salvando ? 'Vinculando…' : `Vincular como ${(papel?.name ?? 'parte contrária').toLowerCase()}`}
-          </Button>
-        )}
+      <Button size="sm" className="h-8" disabled={salvando} onClick={onVincular}>
+        {salvando ? 'Vinculando…' : `Vincular como ${(papel?.name ?? 'parte contrária').toLowerCase()}`}
+      </Button>
     </div>
   );
 }
