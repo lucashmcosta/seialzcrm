@@ -4,6 +4,10 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { telephonyV2Enabled } from "../_shared/telephony/feature-flag.ts";
 import {
+  recordingAttrs,
+  resolveRecordingEnabled,
+} from "../_shared/telephony/recording.ts";
+import {
   escapeXml,
   normalizeE164BR,
   TwilioVoiceAdapter,
@@ -208,9 +212,10 @@ async function renderTransferBridge(
   const recordingUrl = escapeXml(
     `${BASE_URL}/recording?callId=${call.id}&transferLegId=${leg?.id ?? ""}`,
   );
-  const record = number.recording_enabled
-    ? ` record="record-from-answer-dual" recordingStatusCallback="${recordingUrl}"`
-    : "";
+  const record = recordingAttrs(
+    await resolveRecordingEnabled(admin, number, leg?.user_id ?? userId),
+    recordingUrl,
+  );
   const connectedUrl = escapeXml(
     `${BASE_URL}/transfer-bridge-connected?transferId=${transfer.id}&legId=${
       leg?.id ?? ""
@@ -411,15 +416,20 @@ async function findOrCreateContact(
 }
 
 // deno-lint-ignore no-explicit-any
-function renderAttempt(call: any, number: any, attempt: any): Response {
+async function renderAttempt(
+  call: any,
+  number: any,
+  attempt: any,
+): Promise<Response> {
   const identity = twilioVoiceIdentity(attempt.user_id, call.organization_id);
   const query = `callId=${call.id}&attemptId=${attempt.id}`;
   const routeUrl = escapeXml(`${BASE_URL}/route?${query}`);
   const statusUrl = escapeXml(`${BASE_URL}/status?${query}`);
   const recordingUrl = escapeXml(`${BASE_URL}/recording?${query}`);
-  const record = number.recording_enabled
-    ? ` record="record-from-answer-dual" recordingStatusCallback="${recordingUrl}"`
-    : "";
+  const record = recordingAttrs(
+    await resolveRecordingEnabled(admin, number, attempt?.user_id),
+    recordingUrl,
+  );
   return xml(
     `<Dial timeout="${
       number.ring_timeout_seconds ?? 15
@@ -493,7 +503,7 @@ async function nextRecipient(call: any, number: any): Promise<Response> {
   }
 
   try {
-    return renderAttempt(call, number, attempt);
+    return await renderAttempt(call, number, attempt);
   } catch (error) {
     console.error("[telephony-webhook] attempt_render_failed", {
       callId: call.id,
@@ -1333,9 +1343,14 @@ async function handleVoice(
     const routeUrl = escapeXml(`${BASE_URL}/route?${query}`);
     const statusUrl = escapeXml(`${BASE_URL}/status?${query}`);
     const recordingUrl = escapeXml(`${BASE_URL}/recording?${query}`);
-    const record = context.number.recording_enabled
-      ? ` record="record-from-answer-dual" recordingStatusCallback="${recordingUrl}"`
-      : "";
+    const record = recordingAttrs(
+      await resolveRecordingEnabled(
+        admin,
+        context.number,
+        context.call.initiated_by_user_id,
+      ),
+      recordingUrl,
+    );
     return xml(
       `<Dial callerId="${
         escapeXml(context.number.phone_number)
@@ -1384,7 +1399,7 @@ async function handleVoice(
       .eq("call_id", call.id).order("attempt_number", { ascending: false })
       .limit(1).maybeSingle();
     if (existingAttempt && !existingAttempt.ended_at) {
-      return renderAttempt(call, number, existingAttempt);
+      return await renderAttempt(call, number, existingAttempt);
     }
     if (call.status === "no-answer") return await fallback(call, number);
   } else {
@@ -1499,7 +1514,11 @@ async function handleRoute(
         currentAttempt.attempt_number + 1,
       ).maybeSingle();
     if (followingAttempt && !followingAttempt.ended_at) {
-      return renderAttempt(context.call, context.number, followingAttempt);
+      return await renderAttempt(
+        context.call,
+        context.number,
+        followingAttempt,
+      );
     }
     if (context.call.status === "no-answer") {
       return await fallback(context.call, context.number);
@@ -1633,7 +1652,7 @@ async function handleRecording(
     !context ||
     !await verifySignature(req, params, context.call.organization_id)
   ) return empty(403);
-  await admin.from("call_recordings").upsert({
+  const { data: saved } = await admin.from("call_recordings").upsert({
     organization_id: context.call.organization_id,
     call_id: callId,
     call_attempt_id: attemptId || null,
@@ -1642,7 +1661,29 @@ async function handleRecording(
     recording_sid: params.RecordingSid,
     recording_url: voiceAdapter.recordingMediaUrl(params.RecordingUrl),
     duration_seconds: Number(params.RecordingDuration || 0) || null,
-  }, { onConflict: "recording_sid" });
+  }, { onConflict: "recording_sid" }).select("id").maybeSingle();
+
+  // Traz o áudio para o nosso Storage e apaga do Twilio (lá o armazenamento é
+  // mensal e cumulativo). O arquivamento é que enfileira a transcrição depois,
+  // porque ela lê do bucket -- e só para ligação acima de 1 minuto.
+  //
+  // Falha aqui NUNCA desfaz a gravação: o upsert acima já aconteceu, e o áudio
+  // continua no Twilio até o job rodar. A chave idempotente evita duplicar na
+  // reentrega do callback pelo Twilio.
+  if (saved?.id) {
+    const { error } = await admin.from("intelligence_jobs").insert({
+      organization_id: context.call.organization_id,
+      target_action: "intelligence.archive_recording",
+      payload: { recording_id: saved.id },
+      idempotency_key: `archive_recording:${params.RecordingSid}`,
+    });
+    if (error && !String(error.message).includes("duplicate")) {
+      console.error("[telephony-webhook] archive_enqueue_failed", {
+        recordingSid: params.RecordingSid,
+        error: error.message,
+      });
+    }
+  }
   return empty();
 }
 

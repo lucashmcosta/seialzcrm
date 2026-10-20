@@ -240,6 +240,8 @@ async function processJob(supabase: any, job: Job): Promise<JobOutcome> {
     let handlerPath: string | null = null;
     if (job.target_action === "intelligence.analyze_message") handlerPath = "analyze-message";
     else if (job.target_action === "intelligence.transcribe_audio") handlerPath = "transcribe-audio";
+    else if (job.target_action === "intelligence.archive_recording") handlerPath = "telephony-archive-recording";
+    else if (job.target_action === "intelligence.transcribe_call") handlerPath = "telephony-transcribe-call";
 
     if (!handlerPath) {
       await finalize(supabase, job.id, "permanent_failure", `no handler for ${job.target_action}`);

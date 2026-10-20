@@ -38,6 +38,9 @@ interface NumberUserGrant {
   can_receive_calls: boolean;
   can_originate_calls: boolean;
   priority: number;
+  // Gravação desta pessoa neste número. Opcional de propósito:
+  // null/ausente = segue a configuração do número.
+  recording_enabled?: boolean | null;
 }
 
 interface NumberUserGrant {
@@ -117,7 +120,7 @@ export function PhoneNumberSettings() {
       const phoneIds = (phones || []).map((phone) => phone.id);
       const { data: grants, error: grantsError } = phoneIds.length > 0
         ? await telephonySupabase.from('organization_phone_number_users')
-          .select('phone_number_id, user_id, can_receive_calls, can_originate_calls, priority')
+          .select('phone_number_id, user_id, can_receive_calls, can_originate_calls, priority, recording_enabled')
           .in('phone_number_id', phoneIds)
         : { data: [], error: null };
       if (grantsError) throw grantsError;
@@ -241,6 +244,7 @@ export function PhoneNumberSettings() {
           can_receive_calls: isOwner || (selectedPhone.number_type === 'company' && existing?.can_receive_calls === true),
           can_originate_calls: isOwner || existing?.can_originate_calls === true,
           priority: existing?.priority ?? index + 1,
+          recording_enabled: existing?.recording_enabled ?? null,
         };
       });
       const { error: grantError } = await telephonySupabase.from('organization_phone_number_users')
@@ -265,6 +269,23 @@ export function PhoneNumberSettings() {
     setSelectedPhone({
       ...selectedPhone,
       grants: [...selectedPhone.grants.filter((grant) => grant.user_id !== userId), { ...current, [key]: value }],
+    });
+  };
+
+  // Gravação é de TRÊS estados, não dois: seguir o número, sempre gravar ou
+  // nunca gravar. Por isso Select e não Switch -- um switch não consegue voltar
+  // para "segue o número" depois de tocado.
+  const updateGrantRecording = (userId: string, mode: 'inherit' | 'on' | 'off') => {
+    if (!selectedPhone) return;
+    const current = selectedPhone.grants.find((grant) => grant.user_id === userId) || {
+      user_id: userId, can_receive_calls: false, can_originate_calls: false, priority: selectedPhone.grants.length + 1,
+    };
+    setSelectedPhone({
+      ...selectedPhone,
+      grants: [
+        ...selectedPhone.grants.filter((grant) => grant.user_id !== userId),
+        { ...current, recording_enabled: mode === 'inherit' ? null : mode === 'on' },
+      ],
     });
   };
 
@@ -619,6 +640,50 @@ export function PhoneNumberSettings() {
                 <Label>Gravar chamadas</Label><Switch checked={selectedPhone.recording_enabled} onCheckedChange={(value) => setSelectedPhone({ ...selectedPhone, recording_enabled: value })} />
               </div>
               </div>
+
+              {selectedPhone.number_type === 'company' && (
+                <div className="rounded-lg border">
+                  <div className="border-b px-4 py-3">
+                    <p className="text-sm font-medium">Gravação por pessoa</p>
+                    <p className="text-xs text-muted-foreground">
+                      O número é compartilhado. Por padrão todos seguem a opção
+                      “Gravar chamadas” acima; aqui você abre exceção para quem não deve
+                      ser gravado.
+                    </p>
+                  </div>
+                  <div className="max-h-96 divide-y overflow-y-auto">
+                    {filteredUsers.map((user) => {
+                      const grant = selectedPhone.grants.find((item) => item.user_id === user.id);
+                      const mode = grant?.recording_enabled === true
+                        ? 'on'
+                        : grant?.recording_enabled === false
+                          ? 'off'
+                          : 'inherit';
+                      return (
+                        <div key={user.id} className="flex items-center justify-between gap-3 p-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{user.full_name}</p>
+                            <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                          </div>
+                          <Select value={mode} onValueChange={(value) => updateGrantRecording(user.id, value as 'inherit' | 'on' | 'off')}>
+                            <SelectTrigger className="w-[190px]"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="inherit">
+                                Segue o número ({selectedPhone.recording_enabled ? 'gravando' : 'sem gravar'})
+                              </SelectItem>
+                              <SelectItem value="on">Sempre gravar</SelectItem>
+                              <SelectItem value="off">Nunca gravar</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      );
+                    })}
+                    {filteredUsers.length === 0 && (
+                      <p className="p-4 text-center text-sm text-muted-foreground">Nenhum usuário encontrado.</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="space-y-5 border-t pt-8">
