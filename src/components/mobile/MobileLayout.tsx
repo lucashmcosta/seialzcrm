@@ -60,10 +60,10 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
     { label: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
   ];
 
-  if (hasWhatsApp) {
-    tabs.push({ label: t('nav.commercial'), href: '/commercial', icon: ChatCircleText });
-    tabs.push({ label: 'Atendimento', href: '/inbox', icon: Headset });
-  }
+  // Comercial e Atendimento sempre visíveis; a tela avisa se não há número ativo.
+  void hasWhatsApp;
+  tabs.push({ label: t('nav.commercial'), href: '/commercial', icon: ChatCircleText });
+  tabs.push({ label: 'Atendimento', href: '/inbox', icon: Headset });
 
   // Drawer nav items (full menu)
   const drawerItems = [
@@ -76,10 +76,8 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
   if (organization?.enable_companies_module) {
     drawerItems.push({ label: t('nav.companies'), href: '/companies', icon: Buildings });
   }
-  if (hasWhatsApp) {
-    drawerItems.push({ label: t('nav.commercial'), href: '/commercial', icon: ChatCircleText });
-    drawerItems.push({ label: 'Atendimento', href: '/inbox', icon: Headset });
-  }
+  drawerItems.push({ label: t('nav.commercial'), href: '/commercial', icon: ChatCircleText });
+  drawerItems.push({ label: 'Atendimento', href: '/inbox', icon: Headset });
 
   const systemItems: { label: string; href: string; icon: typeof House }[] = [];
   if (permissions.canManageSettings) {

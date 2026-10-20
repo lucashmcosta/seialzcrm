@@ -129,6 +129,7 @@ export function useSalesRouteManager(organizationId?: string | null) {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: key });
     qc.invalidateQueries({ queryKey: ['sales-route-config'] });
+    qc.invalidateQueries({ queryKey: ['whatsapp-any-enabled'] });
   };
 
   const provisionEndpoint = useMutation({

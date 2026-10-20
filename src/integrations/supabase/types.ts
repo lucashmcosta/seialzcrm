@@ -3779,6 +3779,7 @@ export type Database = {
           organization_id: string | null
           owner_type: string
           reference_kind: string
+          scans_cnpj: boolean
           sort_order: number
           updated_at: string
           updated_by: string | null
@@ -3801,6 +3802,7 @@ export type Database = {
           organization_id?: string | null
           owner_type?: string
           reference_kind?: string
+          scans_cnpj?: boolean
           sort_order?: number
           updated_at?: string
           updated_by?: string | null
@@ -3823,6 +3825,7 @@ export type Database = {
           organization_id?: string | null
           owner_type?: string
           reference_kind?: string
+          scans_cnpj?: boolean
           sort_order?: number
           updated_at?: string
           updated_by?: string | null
@@ -9881,78 +9884,6 @@ export type Database = {
           },
         ]
       }
-      opportunity_companies: {
-        Row: {
-          company_id: string
-          created_at: string
-          created_by: string | null
-          id: string
-          opportunity_id: string
-          organization_id: string
-          role_code: string
-          source: string
-          source_document_id: string | null
-        }
-        Insert: {
-          company_id: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          opportunity_id: string
-          organization_id: string
-          role_code: string
-          source?: string
-          source_document_id?: string | null
-        }
-        Update: {
-          company_id?: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          opportunity_id?: string
-          organization_id?: string
-          role_code?: string
-          source?: string
-          source_document_id?: string | null
-        }
-        Relationships: []
-      }
-      opportunity_company_roles: {
-        Row: {
-          code: string
-          created_at: string
-          id: string
-          is_active: boolean
-          is_counterparty: boolean
-          is_default: boolean
-          name: string
-          organization_id: string | null
-          sort_order: number
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          is_counterparty?: boolean
-          is_default?: boolean
-          name: string
-          organization_id?: string | null
-          sort_order?: number
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          is_counterparty?: boolean
-          is_default?: boolean
-          name?: string
-          organization_id?: string | null
-          sort_order?: number
-        }
-        Relationships: []
-      }
       opportunity_commissions: {
         Row: {
           amount: number
@@ -10009,6 +9940,115 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_companies: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          opportunity_id: string
+          organization_id: string
+          role_code: string
+          source: string
+          source_document_id: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          opportunity_id: string
+          organization_id: string
+          role_code: string
+          source?: string
+          source_document_id?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          opportunity_id?: string
+          organization_id?: string
+          role_code?: string
+          source?: string
+          source_document_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_companies_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_companies_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_companies_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
+            foreignKeyName: "opportunity_companies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_company_roles: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          is_counterparty: boolean
+          is_default: boolean
+          name: string
+          organization_id: string | null
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_counterparty?: boolean
+          is_default?: boolean
+          name: string
+          organization_id?: string | null
+          sort_order?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_counterparty?: boolean
+          is_default?: boolean
+          name?: string
+          organization_id?: string | null
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_company_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -16023,6 +16063,21 @@ export type Database = {
       }
       normalize_identity_digits: { Args: { _value: string }; Returns: string }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
+      oportunidade_desvincular_empresa_v1: {
+        Args: { _id: string }
+        Returns: boolean
+      }
+      oportunidade_vincular_empresa_v1: {
+        Args: {
+          _cnpj: string
+          _dados?: Json
+          _opportunity_id: string
+          _role_code: string
+          _source?: string
+          _source_document_id?: string
+        }
+        Returns: Json
+      }
       org_widget_enabled: {
         Args: { _key: string; _org: string }
         Returns: boolean
@@ -16054,21 +16109,6 @@ export type Database = {
           _expected_updated_at: string
           _note: string
           _org: string
-        }
-        Returns: Json
-      }
-      oportunidade_desvincular_empresa_v1: {
-        Args: { _id: string }
-        Returns: boolean
-      }
-      oportunidade_vincular_empresa_v1: {
-        Args: {
-          _cnpj: string
-          _dados?: Json
-          _opportunity_id: string
-          _role_code: string
-          _source?: string
-          _source_document_id?: string
         }
         Returns: Json
       }

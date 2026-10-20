@@ -80,3 +80,6 @@
 ## Galeria /widgets moderna (2026-10-14) — aprovado
 - [x] Cartões com prévia, estado Aberto/No dock, animações só visuais, grade 280px
 - [ ] Conferência visual logada — aguarda Nelson Junior
+
+## Comercial sempre visível (2026-10-20)
+- [x] Menu Comercial sem depender de número; aviso na tela quando não há número ativo
