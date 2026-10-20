@@ -41,6 +41,23 @@ const STRICT_BYOK =
  * Twilio grava primeiro no modo dual), canal 1 é o outro lado.
  * Sem utterances (áudio de um canal só), cai para o texto corrido.
  */
+/**
+ * Nome do modelo que o Deepgram diz ter usado, de `metadata.model_info`.
+ * Ele devolve um mapa por uuid; o nome está dentro.
+ */
+function modeloDoDeepgram(raw: unknown): string | null {
+  const info = (raw as {
+    metadata?: {
+      model_info?: Record<string, { name?: string; version?: string }>;
+    };
+  })?.metadata?.model_info;
+  if (!info) return null;
+  const nomes = Object.values(info)
+    .map((m) => m?.name)
+    .filter((n): n is string => !!n);
+  return nomes.length > 0 ? nomes.join("+") : null;
+}
+
 function textoDoDeepgram(raw: unknown): string {
   const r = raw as {
     results?: {
@@ -152,6 +169,10 @@ Deno.serve(async (req) => {
 
   let text: string;
   let raw: unknown;
+  // O modelo que o provedor REALMENTE usou. O Deepgram aceita um `model` que
+  // não suporta no idioma pedido e responde com outro, sem erro -- registrar o
+  // que foi pedido faria o relatório de custo mentir e esconderia a troca.
+  let modeloUsado = provider.model;
   if (provider.provider === "deepgram") {
     // `multichannel` + `utterances`: a gravação é `record-from-answer-dual`,
     // um canal por pessoa. Separar por canal é exato -- não é modelo
@@ -186,6 +207,13 @@ Deno.serve(async (req) => {
     }
     raw = await r.json();
     text = textoDoDeepgram(raw);
+    modeloUsado = modeloDoDeepgram(raw) ?? provider.model;
+    if (modeloUsado !== provider.model) {
+      safeLog("[telephony-transcribe-call] deepgram trocou de modelo", {
+        pedido: provider.model,
+        usado: modeloUsado,
+      });
+    }
   } else if (provider.provider === "elevenlabs") {
     const f = new FormData();
     f.append("file", audioBlob!, "call.mp3");
@@ -251,13 +279,13 @@ Deno.serve(async (req) => {
   const cost = await estimateAudioCostUsd(
     admin,
     provider.provider,
-    provider.model,
+    modeloUsado,
     Number(rec.duration_seconds ?? 0) || 30,
   );
   await logAiUsage(admin, {
     organization_id,
     provider: provider.provider,
-    model: provider.model,
+    model: modeloUsado,
     source: provider.source,
     action: "transcribe_call",
     integration_slug: provider.provider,
