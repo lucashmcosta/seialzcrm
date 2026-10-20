@@ -55,7 +55,7 @@ const CAPABILITY_BYOK_ORDER: Record<Capability, { provider: string; defaultModel
   // canais, um por pessoa. OpenAI tem limite de 25 MB por arquivo, que uma
   // entrevista de uma hora estoura.
   transcription: [
-    { provider: "deepgram",   defaultModel: "nova-2" },
+    { provider: "deepgram",   defaultModel: "nova-3" },
     { provider: "openai",     defaultModel: "gpt-4o-transcribe" },
     { provider: "elevenlabs", defaultModel: "scribe_v2" },
   ],
