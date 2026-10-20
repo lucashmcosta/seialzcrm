@@ -130,8 +130,8 @@ O vendedor **declara** a classificação. Depois do ganho, o Jurídico/Triagem e
 - A classificação do vendedor nunca é alterada. A comissão ativa vira `superseded` e entra a nova, com `note` ("Certificação: …"). O vendedor é notificado.
 - Permissão `ferramentas.certificar_classificacao` (dar ao perfil Jurídico no rollout; o Admin já tem).
 
-**Rascunho de contrato para o Nammux (a planejar com o time deles; NÃO ligado)**
-Quando a entrevista for feita no Nammux, ele envia um evento assinado pelo canal que já existe (`nammux-webhook-ingest`, HMAC por org, `schema_version: 1`):
+**Contrato com o Nammux — IMPLEMENTADO em 20/10/2026 (aguardando a tela do Nammux)**
+Quando a entrevista é feita no Nammux, ele envia um evento assinado pelo canal que já existe (`nammux-webhook-ingest`, HMAC por org, `schema_version: 1`):
 
 ```json
 {
@@ -146,7 +146,19 @@ Quando a entrevista for feita no Nammux, ele envia um evento assinado pelo canal
 }
 ```
 
-Para ligar: aceitar `classification.certified` no `nammux-webhook-ingest`, canonicalizar e calcular como a ação `certify` (mesma calibração da classificação) e chamar `pc_record_certification` com `_source = 'nammux'`, `_external_actor = interviewer` e `_external_event_id = event_id`. O mesmo evento reenviado vira replay, sem gravar de novo.
+O `nammux-webhook-ingest` aceita `classification.certified`, canonicaliza e calcula com a **mesma versão de calibração da classificação** e chama `pc_record_certification` com `_source = 'nammux'`, `_external_actor = interviewer` e `_external_event_id = event_id`. O mesmo evento reenviado vira replay, sem gravar de novo (índice único `pcc_external_event`).
+
+O Nammux manda **só as respostas conferidas** — nunca faixa nem comissão. O número é recalculado aqui, senão a entrevista baixaria comissão por mudança de calibração em vez de por mudança de fato.
+
+A conta (canonicalizar, calcular, o que mudou, o que vale) é a mesma dos dois lados: mora em `supabase/functions/_shared/classificacao/certificar.ts` e é usada tanto pela ação `certify` quanto pelo ingest. Duas cópias divergiriam, e divergir aqui é pagar comissão diferente dependendo da tela.
+
+| Peça | Onde |
+|---|---|
+| Classificação no payload do `opportunity.won` (para o Nammux ter o que conferir) | `supabase/migrations/20261020140000_nammux_payload_classificacao.sql` |
+| Conta compartilhada | `supabase/functions/_shared/classificacao/certificar.ts` |
+| Aceite do evento | `supabase/functions/nammux-webhook-ingest/index.ts` |
+
+**Falta para funcionar:** a tela no Nammux (confere / alterar, na confirmação da entrevista) e ligar o `rollout_phase` da assinatura `classification.certified` no Nammux.
 
 ```
 psql -d BANCO_DESCARTAVEL -v ON_ERROR_STOP=1 -f supabase/tests/process_classification_fixture.sql -f supabase/tests/process_classification_certification.sql

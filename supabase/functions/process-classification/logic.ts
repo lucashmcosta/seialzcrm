@@ -1,12 +1,20 @@
 // Regras puras da edge process-classification (sem I/O; testadas em logic.test.ts).
 // O vendedor só recebe faixa + comissão. Nada de chances, valores, score ou calibração sai daqui para ele.
 
-// @ts-types="../_shared/classificacao/motor.d.ts"
-import * as Motor from "../_shared/classificacao/motor.mjs";
-import { criarCanonicalizador, EntradaInvalida } from "../_shared/classificacao/canonicalizar.ts";
+import {
+  calcularEntrada,
+  type Calibracao,
+  ErroCalculo,
+} from "../_shared/classificacao/certificar.ts";
+
+// A conta (canonicalizar, calcular, o que mudou, o que vale) mora em
+// _shared/classificacao/certificar.ts porque o `nammux-webhook-ingest` faz a
+// MESMA conta quando a entrevista acontece no Nammux. Daqui sai só a tradução
+// para a resposta HTTP do vendedor.
+export { camposAlterados, decidirCertificacao } from "../_shared/classificacao/certificar.ts";
+export type { Calibracao };
 
 export const MODULE_KEY = "process_classification";
-const { canonicalizar } = criarCanonicalizador(Motor);
 
 export type Perms = { ferramentas?: Record<string, boolean>; dados?: { classificacoes?: { ver?: string } } } | null;
 
@@ -14,8 +22,6 @@ export const podeClassificar = (p: Perms) => p?.ferramentas?.classificar === tru
 /** Ver o estado de uma oportunidade de outra pessoa: só com "Ver classificações = Todos" (o resto fica na RLS). */
 export const podeVerTodas = (p: Perms) => p?.dados?.classificacoes?.ver === "todos";
 export const podeLiberar = (p: Perms) => p?.ferramentas?.liberar_correcao === true;
-
-export const major = (v: string) => String(v ?? "").split(".")[0];
 
 /** O que o navegador do vendedor recebe de uma classificação. Whitelist: nada além disso. */
 export interface VisaoVendedor { faixa: string | null; comissao: number; emRevisao: boolean; classificadoEm: string }
@@ -71,30 +77,20 @@ export function recusaDaRpc(msg: string): Recusa {
   return new Recusa(status, code, mensagem);
 }
 
-export interface Calibracao { id: string; content: Record<string, unknown>; motor_version: string }
-
-/**
- * Núcleo do "Finalizar": canonicaliza a Entrada (R1), confere o motor (R8), calcula e confere pendências.
- * Devolve o que vai para a RPC. Lança Recusa (sem ecoar a entrada).
- */
+/** Núcleo do "Finalizar": delega o cálculo e traduz o erro para o vendedor (sem ecoar a entrada). */
 export function calcular(entradaBruta: unknown, cal: Calibracao) {
-  if (major(cal.motor_version) !== major(Motor.MOTOR_VERSAO)) {
-    throw new Recusa(409, "motor_incompativel", "A calibração publicada não é compatível com esta versão. Fale com o administrador.");
-  }
-  let entrada: Record<string, unknown>;
   try {
-    entrada = canonicalizar(entradaBruta);
+    return calcularEntrada(entradaBruta, cal);
   } catch (e) {
-    if (e instanceof EntradaInvalida) throw new Recusa(422, "entrada_invalida", "Confira as respostas e tente de novo.", { campo: e.campo });
-    throw e;
+    if (!(e instanceof ErroCalculo)) throw e;
+    if (e.codigo === "motor_incompativel") {
+      throw new Recusa(409, "motor_incompativel", "A calibração publicada não é compatível com esta versão. Fale com o administrador.");
+    }
+    if (e.codigo === "entrada_invalida") {
+      throw new Recusa(422, "entrada_invalida", "Confira as respostas e tente de novo.", { campo: e.campo });
+    }
+    throw new Recusa(422, "falta_preencher", "Faltam respostas obrigatórias.", { pendencias: e.pendencias });
   }
-  const resultado = Motor.calcularCaso(entrada, cal.content);
-  if (resultado.faltaPreencher.length > 0) {
-    throw new Recusa(422, "falta_preencher", "Faltam respostas obrigatórias.", {
-      pendencias: resultado.faltaPreencher.map((f: { tese: string; aviso: string }) => ({ tese: f.tese, aviso: f.aviso })),
-    });
-  }
-  return { entrada, resultado, motorVersao: Motor.MOTOR_VERSAO as string };
 }
 
 const IDEM = /^[A-Za-z0-9_-]{8,100}$/;
@@ -103,26 +99,3 @@ export const chaveValida = (k: unknown): k is string => typeof k === "string" &&
 // ===== Certificação pós-ganho (Fase 3b) =====
 export const podeCertificar = (p: Perms) => p?.ferramentas?.certificar_classificacao === true;
 
-/** Caminhos da Entrada que mudaram entre o que o vendedor declarou e o que foi certificado (ex.: "testemunha", "horas_extras.he_dia"). */
-export function camposAlterados(declarada: Record<string, unknown>, certificada: Record<string, unknown>): string[] {
-  const igual = (x: unknown, y: unknown) => JSON.stringify(x) === JSON.stringify(y);
-  const out: string[] = [];
-  const topo = new Set([...Object.keys(declarada), ...Object.keys(certificada)].filter((k) => k !== "respostas" && k !== "teses"));
-  for (const k of [...topo].sort()) if (!igual(declarada[k], certificada[k])) out.push(k);
-  const tA = (declarada.teses ?? []) as string[], tB = (certificada.teses ?? []) as string[];
-  for (const t of tA) if (!tB.includes(t)) out.push(`-${t}`);
-  for (const t of tB) if (!tA.includes(t)) out.push(`+${t}`);
-  const rA = (declarada.respostas ?? {}) as Record<string, Record<string, unknown>>;
-  const rB = (certificada.respostas ?? {}) as Record<string, Record<string, unknown>>;
-  for (const t of tB.filter((x) => tA.includes(x))) {
-    const ids = new Set([...Object.keys(rA[t] ?? {}), ...Object.keys(rB[t] ?? {})]);
-    for (const id of [...ids].sort()) if (!igual(rA[t]?.[id], rB[t]?.[id])) out.push(`${t}.${id}`);
-  }
-  return out;
-}
-
-/** Só para baixo: comissão certificada menor que a original → vale a certificada; senão nada muda. Mesma regra da RPC. */
-export function decidirCertificacao(original: { faixa: string | null; comissao: number }, certificada: { faixa: string | null; comissao: number }) {
-  const reduzida = Math.round(certificada.comissao * 100) < Math.round(original.comissao * 100);
-  return { resultado: reduzida ? "reduced" as const : "confirmed" as const, final: reduzida ? certificada : original };
-}
