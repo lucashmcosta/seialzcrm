@@ -1,3 +1,4 @@
+import { NoWhatsAppNumberBanner } from "@/components/messages/NoWhatsAppNumberBanner";
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { useThreadPerms, DENY_CLOSE, DENY_ASSIGN } from '@/hooks/useThreadPerms';
 import { PermissionGate } from '@/components/permissions/PermissionGate';
