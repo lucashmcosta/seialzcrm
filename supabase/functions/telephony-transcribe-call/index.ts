@@ -41,6 +41,64 @@ const STRICT_BYOK =
  * Twilio grava primeiro no modo dual), canal 1 é o outro lado.
  * Sem utterances (áudio de um canal só), cai para o texto corrido.
  */
+/** Um trecho da transcricao: quem falou, quando, e o que disse. */
+interface Trecho {
+  inicio: number;
+  fim: number;
+  falante: "atendente" | "cliente";
+  texto: string;
+}
+
+/**
+ * Trechos a partir das `utterances`, em ordem de tempo, JUNTANDO falas
+ * seguidas da mesma pessoa -- o Deepgram corta a cada respiro e sem juntar o
+ * texto fica ilegivel ("[Cliente] Eu" / "[Cliente] que" / "[Cliente] agradeco").
+ *
+ * O falante vem do CANAL: a gravacao e `record-from-answer-dual`, canal 0 e
+ * quem atendeu. Nao e o modelo adivinhando.
+ */
+function trechosDoDeepgram(raw: unknown): Trecho[] {
+  const utt = (raw as {
+    results?: {
+      utterances?: {
+        channel?: number;
+        start?: number;
+        end?: number;
+        transcript?: string;
+      }[];
+    };
+  })?.results?.utterances;
+  if (!Array.isArray(utt) || utt.length === 0) return [];
+
+  const out: Trecho[] = [];
+  for (const u of utt.slice().sort((a, b) => (a.start ?? 0) - (b.start ?? 0))) {
+    const texto = (u.transcript ?? "").trim();
+    if (!texto) continue;
+    const falante = (u.channel ?? 0) === 0 ? "atendente" : "cliente";
+    const anterior = out[out.length - 1];
+    if (anterior && anterior.falante === falante) {
+      anterior.texto = `${anterior.texto} ${texto}`;
+      anterior.fim = u.end ?? anterior.fim;
+      continue;
+    }
+    out.push({
+      inicio: Number((u.start ?? 0).toFixed(2)),
+      fim: Number((u.end ?? u.start ?? 0).toFixed(2)),
+      falante,
+      texto,
+    });
+  }
+  return out;
+}
+
+function textoDosTrechos(trechos: Trecho[]): string {
+  return trechos
+    .map((t) =>
+      `[${t.falante === "atendente" ? "Atendente" : "Cliente"}] ${t.texto}`
+    )
+    .join("\n");
+}
+
 /**
  * Nome do modelo que o Deepgram diz ter usado, de `metadata.model_info`.
  * Ele devolve um mapa por uuid; o nome está dentro.
@@ -194,6 +252,7 @@ Deno.serve(async (req) => {
   // não suporta no idioma pedido e responde com outro, sem erro -- registrar o
   // que foi pedido faria o relatório de custo mentir e esconderia a troca.
   let modeloUsado = provider.model;
+  let segmentos: Trecho[] = [];
   if (provider.provider === "deepgram") {
     // `multichannel` + `utterances`: a gravação é `record-from-answer-dual`,
     // um canal por pessoa. Separar por canal é exato -- não é modelo
@@ -204,7 +263,11 @@ Deno.serve(async (req) => {
       multichannel: "true",
       utterances: "true",
       punctuate: "true",
-      smart_format: "true",
+      // `smart_format` converte numero por extenso em digito e destroi o
+      // sentido na fala do cliente: "uma construtora" virava "1 construtora" e
+      // "um holerite" virava "1 onelite". Pontuacao sim, numero nao.
+      smart_format: "false",
+      numerals: "false",
     });
     const r = await fetch(`https://api.deepgram.com/v1/listen?${qs}`, {
       method: "POST",
@@ -227,7 +290,8 @@ Deno.serve(async (req) => {
       );
     }
     raw = await r.json();
-    text = textoDoDeepgram(raw);
+    segmentos = trechosDoDeepgram(raw);
+    text = textoDosTrechos(segmentos) || textoDoDeepgram(raw);
     modeloUsado = modeloDoDeepgram(raw) ?? provider.model;
     if (modeloUsado !== provider.model) {
       safeLog("[telephony-transcribe-call] deepgram trocou de modelo", {
@@ -304,8 +368,10 @@ Deno.serve(async (req) => {
     return json({ ok: true, skipped: "empty_or_hallucination" });
   }
 
-  await admin.from("call_recordings").update({ transcription: text })
-    .eq("id", rec.id);
+  await admin.from("call_recordings").update({
+    transcription: text,
+    transcription_segments: segmentos.length > 0 ? segmentos : null,
+  }).eq("id", rec.id);
 
   const cost = await estimateAudioCostUsd(
     admin,
