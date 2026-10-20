@@ -3,7 +3,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Buildings, FileText, Trash, Warning } from '@phosphor-icons/react';
 import { toast } from '@/hooks/use-toast';
 
@@ -29,6 +28,7 @@ interface Papel {
   code: string;
   name: string;
   is_counterparty: boolean;
+  is_default: boolean;
   organization_id: string | null;
 }
 
@@ -63,7 +63,6 @@ export function EmpresaDoCasoSlot(
   const [motivo, setMotivo] = useState<string | null>(null);
   const [lendo, setLendo] = useState(false);
   const [salvando, setSalvando] = useState<string | null>(null);
-  const [papelEscolhido, setPapelEscolhido] = useState<Record<string, string>>({});
   const [docLido, setDocLido] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
@@ -74,7 +73,7 @@ export function EmpresaDoCasoSlot(
         .eq('opportunity_id', opportunityId),
       supabase
         .from('opportunity_company_roles')
-        .select('code, name, is_counterparty, organization_id')
+        .select('code, name, is_counterparty, is_default, organization_id')
         .eq('is_active', true)
         .order('sort_order'),
     ]);
@@ -129,11 +128,11 @@ export function EmpresaDoCasoSlot(
   };
 
   const vincular = async (a: Achado) => {
-    const papel = papelEscolhido[a.cnpj];
-    if (!papel) {
-      toast({ title: 'Escolha o papel da empresa neste caso', variant: 'destructive' });
+    if (!papelPadrao) {
+      toast({ title: 'Nenhum papel padrão configurado nesta organização', variant: 'destructive' });
       return;
     }
+    const papel = papelPadrao.code;
     setSalvando(a.cnpj);
     const { error } = await supabase.rpc('oportunidade_vincular_empresa_v1', {
       _opportunity_id: opportunityId,
@@ -160,6 +159,14 @@ export function EmpresaDoCasoSlot(
     }
     carregar();
   };
+
+  // Um clique: o papel vem do padrão da organização, a tela não pergunta.
+  // Tomadora e grupo econômico continuam no catálogo para quando a distinção
+  // importar -- é a ficha de entrevista que pergunta por elas.
+  const papelPadrao = useMemo(
+    () => papeis.find((p) => p.is_default) ?? papeis.find((p) => p.is_counterparty) ?? papeis[0],
+    [papeis],
+  );
 
   const jaVinculados = useMemo(
     () => new Set(vinculos.map((v) => (v.companies?.cnpj ?? '').replace(/\D/g, ''))),
@@ -227,10 +234,8 @@ export function EmpresaDoCasoSlot(
               <ItemAchado
                 key={a.cnpj}
                 achado={a}
-                papeis={papeis}
+                papel={papelPadrao}
                 jaVinculado={jaVinculados.has(a.cnpj)}
-                papelEscolhido={papelEscolhido[a.cnpj]}
-                onPapel={(p) => setPapelEscolhido((s) => ({ ...s, [a.cnpj]: p }))}
                 onVincular={() => vincular(a)}
                 salvando={salvando === a.cnpj}
               />
@@ -253,10 +258,8 @@ export function EmpresaDoCasoSlot(
                 <ItemAchado
                   key={a.cnpj}
                   achado={a}
-                  papeis={papeis}
+                  papel={papelPadrao}
                   jaVinculado={jaVinculados.has(a.cnpj)}
-                  papelEscolhido={papelEscolhido[a.cnpj]}
-                  onPapel={(p) => setPapelEscolhido((s) => ({ ...s, [a.cnpj]: p }))}
                   onVincular={() => vincular(a)}
                   salvando={salvando === a.cnpj}
                 />
@@ -270,12 +273,10 @@ export function EmpresaDoCasoSlot(
 }
 
 function ItemAchado(
-  { achado, papeis, jaVinculado, papelEscolhido, onPapel, onVincular, salvando }: {
+  { achado, papel, jaVinculado, onVincular, salvando }: {
     achado: Achado;
-    papeis: Papel[];
+    papel?: Papel;
     jaVinculado: boolean;
-    papelEscolhido?: string;
-    onPapel: (p: string) => void;
     onVincular: () => void;
     salvando: boolean;
   },
@@ -308,19 +309,9 @@ function ItemAchado(
       {jaVinculado
         ? <p className="text-xs text-muted-foreground">Já vinculada a este caso.</p>
         : (
-          <div className="flex flex-wrap items-center gap-2">
-            <Select value={papelEscolhido ?? ''} onValueChange={onPapel}>
-              <SelectTrigger className="h-8 w-56 text-xs">
-                <SelectValue placeholder="Papel no caso" />
-              </SelectTrigger>
-              <SelectContent>
-                {papeis.map((p) => <SelectItem key={p.code} value={p.code}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button size="sm" className="h-8" disabled={salvando} onClick={onVincular}>
-              {salvando ? 'Vinculando…' : 'Vincular'}
-            </Button>
-          </div>
+          <Button size="sm" className="h-8" disabled={salvando} onClick={onVincular}>
+            {salvando ? 'Vinculando…' : `Vincular como ${(papel?.name ?? 'parte contrária').toLowerCase()}`}
+          </Button>
         )}
     </div>
   );

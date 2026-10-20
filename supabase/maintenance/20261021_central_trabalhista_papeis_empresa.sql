@@ -34,3 +34,16 @@ update public.document_types
 select r.code, r.name, r.is_counterparty,
        coalesce(r.organization_id::text, '(global)') as escopo
   from public.opportunity_company_roles r order by r.organization_id nulls first, r.sort_order;
+
+-- ===== Segunda rodada: o papel padrao =====
+-- "Reclamada" e como o escritorio chama a parte contraria no processo
+-- trabalhista. E o que a tela aplica com um clique; empregadora, tomadora e
+-- grupo continuam no catalogo para quando a distincao importar (a secao 3 da
+-- ficha de entrevista pergunta por elas).
+
+insert into public.opportunity_company_roles
+  (organization_id, code, name, is_counterparty, sort_order, is_default)
+select '40ae935c-a7f7-4ad7-8ea4-91be6404a95f'::uuid, 'reclamada', 'Reclamada', true, 5, true
+ where not exists (
+   select 1 from public.opportunity_company_roles
+    where organization_id = '40ae935c-a7f7-4ad7-8ea4-91be6404a95f' and code = 'reclamada');
