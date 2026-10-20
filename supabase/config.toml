@@ -219,3 +219,10 @@ verify_jwt = false
 
 [functions.byok-update-policy]
 verify_jwt = false
+
+# Leitura de CNPJ em documento anexado. Valida o JWT do usuário em código (a
+# consulta ao documento passa pela RLS dele) e roda hoje com verify_jwt
+# desligado, como as demais; precisa estar declarada para um deploy pela CLI
+# não ligar a verificação sem ninguém pedir.
+[functions.documento-cnpjs]
+verify_jwt = false
