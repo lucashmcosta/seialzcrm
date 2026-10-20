@@ -1,20 +1,21 @@
-# Menu Comercial não aparece logo após conectar o WhatsApp
+# Comercial sempre visível no menu (igual ao Atendimento)
 
 ## O que está acontecendo
 
-A regra do menu já reconhece números Evolution. O problema é o tempo: o sistema guarda a resposta "esta conta não tem WhatsApp" por 10 minutos e não refaz a pergunta quando um número é conectado. Na conta Isenção IR, o menu foi carregado antes do número ficar ativo, então o "não" ficou guardado. Ao entrar direto em /commercial, a tela abriu (ela não depende dessa regra) e, com o tempo ou o recarregamento, o menu passou a aparecer.
-
-Confirmado no código: nenhuma das ações de conectar/provisionar número (Evolution, rotas comerciais) atualiza essa informação do menu.
+O item **Comercial** só aparece quando o sistema detecta um número de WhatsApp ativo, e essa resposta fica guardada por 10 minutos sem ser atualizada quando um número é conectado. Por isso, na Isenção IR, o número já estava ativo no Evolution e o menu não mostrava o Comercial; entrando direto em /commercial a tela abriu normalmente. O Atendimento não tem essa condição — aparece sempre.
 
 ## O que vou fazer
 
-1. Quando a resposta for "sem WhatsApp", verificar de novo com frequência (a cada 30 segundos e ao voltar para a aba), em vez de guardar por 10 minutos. Quando for "com WhatsApp", mantém como hoje.
-2. Ao conectar, provisionar ou ativar um número (Evolution e tela WhatsApp Comercial), atualizar imediatamente a informação do menu.
+1. **Menu**: o Comercial passa a aparecer sempre, no computador e no celular, no mesmo lugar de hoje — igual ao Atendimento. Continua respeitando a permissão do perfil (quem não pode ver Conversas comerciais segue sem o item).
+2. **Aviso na tela Comercial**: quando a conta não tiver nenhum número de WhatsApp ativo, mostrar uma faixa discreta no topo: "Nenhum número de WhatsApp ativo para o Comercial. Conecte um número em Configurações → WhatsApp Comercial." (com botão para Configurações para quem pode gerenciar). A lista de conversas continua funcionando normalmente.
+3. **Atualização imediata**: ao conectar/provisionar um número, a informação "tem número ativo" é atualizada na hora (e reconferida com frequência enquanto estiver "sem número"), para o aviso sumir sem recarregar.
 
-Resultado: o Comercial aparece logo que o número fica ativo, sem precisar digitar o endereço ou recarregar. Nada muda em envio, roteamento ou permissões.
+Nada muda em envio, roteamento, permissões ou banco. Modelos e Respostas Rápidas em Configurações continuam dependendo de haver número ativo.
 
 ## Detalhes técnicos
 
-- `src/hooks/useWhatsAppIntegration.ts`: `staleTime` dinâmico na query `whatsapp-any-enabled` (`false` → 30s + `refetchOnWindowFocus`; `true` → 10 min).
-- `src/hooks/useEvolutionProvisioning.ts`, `src/hooks/useEvolutionInstances.ts`, `src/hooks/settings/useSalesRouteManager.ts` (`invalidate`): adicionar `invalidateQueries({ queryKey: ['whatsapp-any-enabled'] })`.
-- Sem migration, RLS ou Edge Function.
+- `src/components/Layout.tsx` (Seialz e padrão) e `src/components/mobile/MobileLayout.tsx`: remover a condição `hasWhatsApp` do item `/commercial`; `areaAllowed` segue filtrando.
+- Página Comercial (`/commercial`, lista de mensagens): banner usando `hasWhatsApp` de `useWhatsAppIntegration` (só após `loading` terminar, para não piscar).
+- `src/hooks/useWhatsAppIntegration.ts`: `staleTime` curto (30s) + `refetchOnWindowFocus` quando o resultado for `false`.
+- `useEvolutionProvisioning.ts`, `useEvolutionInstances.ts`, `settings/useSalesRouteManager.ts`: invalidar `['whatsapp-any-enabled']` após conectar/ativar.
+- Registrar a tarefa em `roadmap.md`. Sem migration, RLS ou Edge Function.
