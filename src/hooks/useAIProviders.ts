@@ -17,7 +17,7 @@ export interface AIProviderInfo {
   source?: 'customer_key' | 'managed' | null;
 }
 
-export type AIProviderId = 'openai' | 'anthropic' | 'gemini' | 'elevenlabs';
+export type AIProviderId = 'openai' | 'anthropic' | 'gemini' | 'elevenlabs' | 'deepgram';
 
 export type AIProviderStatus =
   | 'not_configured'
@@ -56,6 +56,7 @@ export function resolveProviderId(integration: any): AIProviderId | null {
   if (slug === 'claude-ai') return 'anthropic';
   if (slug === 'google-gemini') return 'gemini';
   if (slug === 'elevenlabs') return 'elevenlabs';
+  if (slug === 'deepgram') return 'deepgram';
   return null;
 }
 

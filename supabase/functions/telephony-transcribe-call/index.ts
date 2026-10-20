@@ -35,6 +35,38 @@ const STRICT_BYOK =
   (Deno.env.get("INTELLIGENCE_AUDIO_STRICT_BYOK") ?? "true").toLowerCase() !==
     "false";
 
+/**
+ * Monta o diálogo a partir das `utterances` do Deepgram, em ordem de tempo e
+ * com o falante pelo CANAL -- canal 0 é quem atendeu (a perna da ligação que o
+ * Twilio grava primeiro no modo dual), canal 1 é o outro lado.
+ * Sem utterances (áudio de um canal só), cai para o texto corrido.
+ */
+function textoDoDeepgram(raw: unknown): string {
+  const r = raw as {
+    results?: {
+      utterances?: { channel?: number; start?: number; transcript?: string }[];
+      channels?: { alternatives?: { transcript?: string }[] }[];
+    };
+  };
+  const utt = r?.results?.utterances;
+  if (Array.isArray(utt) && utt.length > 0) {
+    return utt
+      .slice()
+      .sort((a, b) => (a.start ?? 0) - (b.start ?? 0))
+      .map((u) => {
+        const quem = (u.channel ?? 0) === 0 ? "Atendente" : "Cliente";
+        const t = (u.transcript ?? "").trim();
+        return t ? `[${quem}] ${t}` : "";
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+  return (r?.results?.channels ?? [])
+    .map((c) => (c.alternatives?.[0]?.transcript ?? "").trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
 Deno.serve(async (req) => {
   if (req.headers.get("x-worker-token") !== WORKER_TOKEN) {
     return json({ error: "unauthorized" }, 401);
@@ -93,22 +125,70 @@ Deno.serve(async (req) => {
     return json({ error: "byok_required", capability: "transcription" }, 402);
   }
 
-  const dl = await admin.storage.from(BUCKET).download(rec.storage_path);
-  if (dl.error || !dl.data) {
-    return json({ error: "storage_download_failed" }, 502);
+  // O Deepgram busca o áudio por URL; os outros sobem o arquivo. Baixar 24 MB
+  // dentro da função só para reenviar é o que faz ligação longa estourar.
+  let audioBlob: Blob | null = null;
+  let signedUrl: string | null = null;
+  if (provider.provider === "deepgram") {
+    const { data: signed, error: signErr } = await admin.storage
+      .from(BUCKET)
+      .createSignedUrl(rec.storage_path, 3600);
+    if (signErr || !signed?.signedUrl) {
+      return json({ error: "storage_sign_failed" }, 502);
+    }
+    signedUrl = signed.signedUrl;
+  } else {
+    const dl = await admin.storage.from(BUCKET).download(rec.storage_path);
+    if (dl.error || !dl.data) {
+      return json({ error: "storage_download_failed" }, 502);
+    }
+    audioBlob = dl.data;
   }
-  const audioBlob = dl.data;
 
   const form = new FormData();
-  form.append("file", audioBlob, "call.mp3");
+  if (audioBlob) form.append("file", audioBlob, "call.mp3");
   form.append("model", provider.model);
   form.append("language", "pt");
 
   let text: string;
   let raw: unknown;
-  if (provider.provider === "elevenlabs") {
+  if (provider.provider === "deepgram") {
+    // `multichannel` + `utterances`: a gravação é `record-from-answer-dual`,
+    // um canal por pessoa. Separar por canal é exato -- não é modelo
+    // adivinhando quem falou, e já diz QUAL dos dois é o atendente (canal 0).
+    const qs = new URLSearchParams({
+      model: provider.model,
+      language: "pt-BR",
+      multichannel: "true",
+      utterances: "true",
+      punctuate: "true",
+      smart_format: "true",
+    });
+    const r = await fetch(`https://api.deepgram.com/v1/listen?${qs}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${provider.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url: signedUrl }),
+    });
+    if (!r.ok) {
+      const err = sanitizeProviderError(r.status, await r.text());
+      safeLog("[telephony-transcribe-call] provider error", {
+        provider: provider.provider,
+        kind: err.kind,
+        status: err.status,
+      });
+      return json(
+        { error: "provider_error", kind: err.kind },
+        err.status >= 500 ? 502 : 400,
+      );
+    }
+    raw = await r.json();
+    text = textoDoDeepgram(raw);
+  } else if (provider.provider === "elevenlabs") {
     const f = new FormData();
-    f.append("file", audioBlob, "call.mp3");
+    f.append("file", audioBlob!, "call.mp3");
     f.append("model_id", provider.model);
     f.append("language_code", "por");
     f.append("tag_audio_events", "false");

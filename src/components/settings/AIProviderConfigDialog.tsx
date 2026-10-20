@@ -28,6 +28,7 @@ const PROVIDER_META: Record<AIProviderId, { name: string; docsUrl: string; place
   anthropic:  { name: 'Anthropic',      docsUrl: 'https://console.anthropic.com/settings/keys',  placeholder: 'sk-ant-…' },
   gemini:     { name: 'Google Gemini',  docsUrl: 'https://aistudio.google.com/app/apikey',       placeholder: 'AIza…' },
   elevenlabs: { name: 'ElevenLabs',     docsUrl: 'https://elevenlabs.io/app/settings/api-keys',  placeholder: 'sk_…' },
+  deepgram:   { name: 'Deepgram',       docsUrl: 'https://console.deepgram.com/',               placeholder: 'chave do projeto' },
 };
 
 async function unwrapFunctionError(error: Error): Promise<Error> {

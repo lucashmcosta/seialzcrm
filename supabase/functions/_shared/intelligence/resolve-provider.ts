@@ -49,9 +49,13 @@ const CAPABILITY_BYOK_ORDER: Record<Capability, { provider: string; defaultModel
   chat: [
     { provider: "openai", defaultModel: "gpt-4o-mini" },
   ],
-  // Internal policy (piloto): preferir OpenAI gpt-4o-transcribe quando houver BYOK;
-  // ElevenLabs managed continua disponível como fallback explícito.
+  // Ordem para transcrição de LIGAÇÃO, que é o caso difícil: áudio longo e
+  // dois falantes. O Deepgram vem primeiro porque é o único que busca o áudio
+  // por URL (sem limite de upload) e separa por canal -- a gravação é de dois
+  // canais, um por pessoa. OpenAI tem limite de 25 MB por arquivo, que uma
+  // entrevista de uma hora estoura.
   transcription: [
+    { provider: "deepgram",   defaultModel: "nova-2" },
     { provider: "openai",     defaultModel: "gpt-4o-transcribe" },
     { provider: "elevenlabs", defaultModel: "scribe_v2" },
   ],
