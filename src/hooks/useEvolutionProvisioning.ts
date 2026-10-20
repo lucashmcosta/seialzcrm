@@ -81,6 +81,7 @@ export function useCreateEvolutionInstance() {
       }>({ op: 'createInstance', organizationId: organization?.id }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['evolution'] });
+      qc.invalidateQueries({ queryKey: ['whatsapp-any-enabled'] });
     },
   });
 }
@@ -98,6 +99,7 @@ export function useDeleteEvolutionInstance() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['evolution'] });
+      qc.invalidateQueries({ queryKey: ['whatsapp-any-enabled'] });
     },
   });
 }
@@ -136,6 +138,7 @@ export function useSyncPendingInstanceIdentity() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['evolution'] });
+      qc.invalidateQueries({ queryKey: ['whatsapp-any-enabled'] });
     },
   });
 }
@@ -168,6 +171,7 @@ export function useLinkPendingInstance() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['evolution'] });
+      qc.invalidateQueries({ queryKey: ['whatsapp-any-enabled'] });
     },
   });
 }

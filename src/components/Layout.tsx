@@ -87,9 +87,8 @@ export function Layout({ children }: LayoutProps) {
 
     // Communication group
     const commItems: SeialzNavGroup['items'] = [];
-    if (hasWhatsApp) {
-      commItems.push({ label: t('nav.commercial'), href: '/commercial', icon: ChatCircleText });
-    }
+    // Comercial sempre visível (igual ao Atendimento); a tela avisa se não há número.
+    commItems.push({ label: t('nav.commercial'), href: '/commercial', icon: ChatCircleText });
     if (socialEnabled) {
       commItems.push({ label: 'Social', href: '/social', icon: ChatsCircle });
     }
@@ -166,14 +165,12 @@ export function Layout({ children }: LayoutProps) {
     });
   }
 
-  // Add Messages menu if WhatsApp is enabled
-  if (hasWhatsApp) {
-    navItems.push({
-      label: t('nav.commercial'),
-      href: '/commercial',
-      icon: ChatCircleText
-    });
-  }
+  // Comercial sempre visível; a tela avisa se não há número ativo.
+  navItems.push({
+    label: t('nav.commercial'),
+    href: '/commercial',
+    icon: ChatCircleText
+  });
 
   if (socialEnabled) {
     navItems.push({ label: 'Social', href: '/social', icon: ChatsCircle });

@@ -142,6 +142,7 @@ export function useDeleteInstance() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["evolution", "instances"] });
       qc.invalidateQueries({ queryKey: ["evolution", "endpoints"] });
+      qc.invalidateQueries({ queryKey: ["whatsapp-any-enabled"] });
     },
   });
 }
