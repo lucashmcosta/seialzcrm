@@ -9924,6 +9924,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_counterparty: boolean
+          is_default: boolean
           name: string
           organization_id: string | null
           sort_order: number
@@ -9934,6 +9935,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_counterparty?: boolean
+          is_default?: boolean
           name: string
           organization_id?: string | null
           sort_order?: number
@@ -9944,6 +9946,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_counterparty?: boolean
+          is_default?: boolean
           name?: string
           organization_id?: string | null
           sort_order?: number
