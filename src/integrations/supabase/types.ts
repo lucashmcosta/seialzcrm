@@ -14,13 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      meta_operational_routes: {
-        Row: { organization_id: string; route: string; connection_id: string | null; source: string; created_at: string }
-        Insert: { organization_id: string; route: string; connection_id?: string | null; source: string; created_at?: string }
-        Update: { connection_id?: string | null; source?: string }
-        Relationships: []
-      }
-
       _backup_ct_inbox_cleanup_2026_07: {
         Row: {
           id: string | null
@@ -1343,6 +1336,7 @@ export type Database = {
           segment_type: string
           storage_path: string | null
           transcription: string | null
+          transcription_segments: Json | null
         }
         Insert: {
           call_attempt_id?: string | null
@@ -1358,6 +1352,7 @@ export type Database = {
           segment_type?: string
           storage_path?: string | null
           transcription?: string | null
+          transcription_segments?: Json | null
         }
         Update: {
           call_attempt_id?: string | null
@@ -1373,6 +1368,7 @@ export type Database = {
           segment_type?: string
           storage_path?: string | null
           transcription?: string | null
+          transcription_segments?: Json | null
         }
         Relationships: [
           {
@@ -1991,6 +1987,215 @@ export type Database = {
           },
           {
             foreignKeyName: "capi_event_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classification_calibration_versions: {
+        Row: {
+          based_on_id: string | null
+          content: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          motor_version: string
+          note: string | null
+          number: number
+          organization_id: string
+          published_at: string | null
+          published_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          based_on_id?: string | null
+          content: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          motor_version: string
+          note?: string | null
+          number: number
+          organization_id: string
+          published_at?: string | null
+          published_by?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          based_on_id?: string | null
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          motor_version?: string
+          note?: string | null
+          number?: number
+          organization_id?: string
+          published_at?: string | null
+          published_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classification_calibration_versions_based_on_id_fkey"
+            columns: ["based_on_id"]
+            isOneToOne: false
+            referencedRelation: "classification_calibration_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classification_calibration_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classification_calibration_versions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classification_calibration_versions_published_by_fkey"
+            columns: ["published_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classification_correction_requests: {
+        Row: {
+          classification_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          organization_id: string
+          reason: string | null
+          replacement_id: string | null
+          seller_user_id: string
+          status: string
+        }
+        Insert: {
+          classification_id: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          organization_id: string
+          reason?: string | null
+          replacement_id?: string | null
+          seller_user_id: string
+          status?: string
+        }
+        Update: {
+          classification_id?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          organization_id?: string
+          reason?: string | null
+          replacement_id?: string | null
+          seller_user_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classification_correction_requests_classification_id_fkey"
+            columns: ["classification_id"]
+            isOneToOne: false
+            referencedRelation: "process_classifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classification_correction_requests_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classification_correction_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classification_correction_requests_replacement_id_fkey"
+            columns: ["replacement_id"]
+            isOneToOne: false
+            referencedRelation: "process_classifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classification_correction_requests_seller_user_id_fkey"
+            columns: ["seller_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classification_outcomes: {
+        Row: {
+          amount: number | null
+          cnj_number: string | null
+          created_at: string
+          created_by: string | null
+          decided_on: string | null
+          id: string
+          opportunity_id: string
+          organization_id: string
+          result: string
+          source: string | null
+          thesis: string
+        }
+        Insert: {
+          amount?: number | null
+          cnj_number?: string | null
+          created_at?: string
+          created_by?: string | null
+          decided_on?: string | null
+          id?: string
+          opportunity_id: string
+          organization_id: string
+          result: string
+          source?: string | null
+          thesis: string
+        }
+        Update: {
+          amount?: number | null
+          cnj_number?: string | null
+          created_at?: string
+          created_by?: string | null
+          decided_on?: string | null
+          id?: string
+          opportunity_id?: string
+          organization_id?: string
+          result?: string
+          source?: string | null
+          thesis?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classification_outcomes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classification_outcomes_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -8652,6 +8857,45 @@ export type Database = {
           },
         ]
       }
+      meta_operational_routes: {
+        Row: {
+          connection_id: string | null
+          created_at: string
+          organization_id: string
+          route: string
+          source: string
+        }
+        Insert: {
+          connection_id?: string | null
+          created_at?: string
+          organization_id: string
+          route: string
+          source: string
+        }
+        Update: {
+          connection_id?: string | null
+          created_at?: string
+          organization_id?: string
+          route?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_operational_routes_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "meta_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_operational_routes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_sync_runs: {
         Row: {
           asset_id: string | null
@@ -9637,6 +9881,66 @@ export type Database = {
           },
         ]
       }
+      opportunity_commissions: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          id: string
+          note: string | null
+          opportunity_id: string
+          organization_id: string
+          source_id: string | null
+          source_type: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string
+          id?: string
+          note?: string | null
+          opportunity_id: string
+          organization_id: string
+          source_id?: string | null
+          source_type: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          note?: string | null
+          opportunity_id?: string
+          organization_id?: string
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_commissions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_commissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_api_keys: {
         Row: {
           api_key: string
@@ -10610,6 +10914,353 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      process_classification_certification_results: {
+        Row: {
+          certification_id: string
+          organization_id: string
+          result: Json
+        }
+        Insert: {
+          certification_id: string
+          organization_id: string
+          result: Json
+        }
+        Update: {
+          certification_id?: string
+          organization_id?: string
+          result?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_classification_certification_resu_certification_id_fkey"
+            columns: ["certification_id"]
+            isOneToOne: true
+            referencedRelation: "process_classification_certifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classification_certification_resul_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      process_classification_certifications: {
+        Row: {
+          calibration_version_id: string
+          certified_band: string | null
+          certified_by: string | null
+          certified_commission: number
+          changed_fields: string[]
+          classification_id: string
+          created_at: string
+          external_actor: string | null
+          external_event_id: string | null
+          final_band: string | null
+          final_commission: number
+          id: string
+          input: Json
+          motor_version: string
+          note: string
+          opportunity_id: string
+          organization_id: string
+          original_band: string | null
+          original_commission: number
+          outcome: string
+          seller_user_id: string
+          source: string
+          status: string
+          superseded_by_id: string | null
+        }
+        Insert: {
+          calibration_version_id: string
+          certified_band?: string | null
+          certified_by?: string | null
+          certified_commission: number
+          changed_fields?: string[]
+          classification_id: string
+          created_at?: string
+          external_actor?: string | null
+          external_event_id?: string | null
+          final_band?: string | null
+          final_commission: number
+          id?: string
+          input: Json
+          motor_version: string
+          note: string
+          opportunity_id: string
+          organization_id: string
+          original_band?: string | null
+          original_commission: number
+          outcome: string
+          seller_user_id: string
+          source?: string
+          status?: string
+          superseded_by_id?: string | null
+        }
+        Update: {
+          calibration_version_id?: string
+          certified_band?: string | null
+          certified_by?: string | null
+          certified_commission?: number
+          changed_fields?: string[]
+          classification_id?: string
+          created_at?: string
+          external_actor?: string | null
+          external_event_id?: string | null
+          final_band?: string | null
+          final_commission?: number
+          id?: string
+          input?: Json
+          motor_version?: string
+          note?: string
+          opportunity_id?: string
+          organization_id?: string
+          original_band?: string | null
+          original_commission?: number
+          outcome?: string
+          seller_user_id?: string
+          source?: string
+          status?: string
+          superseded_by_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_classification_certificatio_calibration_version_id_fkey"
+            columns: ["calibration_version_id"]
+            isOneToOne: false
+            referencedRelation: "classification_calibration_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classification_certifications_certified_by_fkey"
+            columns: ["certified_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classification_certifications_classification_id_fkey"
+            columns: ["classification_id"]
+            isOneToOne: false
+            referencedRelation: "process_classifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classification_certifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classification_certifications_seller_user_id_fkey"
+            columns: ["seller_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classification_certifications_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "process_classification_certifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      process_classification_results: {
+        Row: {
+          band_by_value: string | null
+          classification_id: string
+          composite_value: number | null
+          expected_total: number | null
+          gross_total: number | null
+          organization_id: string
+          result: Json
+          score: number | null
+        }
+        Insert: {
+          band_by_value?: string | null
+          classification_id: string
+          composite_value?: number | null
+          expected_total?: number | null
+          gross_total?: number | null
+          organization_id: string
+          result: Json
+          score?: number | null
+        }
+        Update: {
+          band_by_value?: string | null
+          classification_id?: string
+          composite_value?: number | null
+          expected_total?: number | null
+          gross_total?: number | null
+          organization_id?: string
+          result?: Json
+          score?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_classification_results_classification_id_fkey"
+            columns: ["classification_id"]
+            isOneToOne: true
+            referencedRelation: "process_classifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classification_results_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      process_classification_settings: {
+        Row: {
+          daily_limit_per_opportunity: number | null
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          daily_limit_per_opportunity?: number | null
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          daily_limit_per_opportunity?: number | null
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_classification_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      process_classifications: {
+        Row: {
+          band: string | null
+          calibration_version_id: string
+          commission: number
+          created_at: string
+          id: string
+          idempotency_key: string
+          in_review: boolean
+          input: Json
+          motor_version: string
+          opportunity_id: string
+          organization_id: string
+          released_by: string | null
+          replaced_by_id: string | null
+          replaces_id: string | null
+          seller_user_id: string
+          status: string
+          voided_at: string | null
+          voided_by: string | null
+          voided_reason: string | null
+        }
+        Insert: {
+          band?: string | null
+          calibration_version_id: string
+          commission: number
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          in_review?: boolean
+          input: Json
+          motor_version: string
+          opportunity_id: string
+          organization_id: string
+          released_by?: string | null
+          replaced_by_id?: string | null
+          replaces_id?: string | null
+          seller_user_id: string
+          status?: string
+          voided_at?: string | null
+          voided_by?: string | null
+          voided_reason?: string | null
+        }
+        Update: {
+          band?: string | null
+          calibration_version_id?: string
+          commission?: number
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          in_review?: boolean
+          input?: Json
+          motor_version?: string
+          opportunity_id?: string
+          organization_id?: string
+          released_by?: string | null
+          replaced_by_id?: string | null
+          replaces_id?: string | null
+          seller_user_id?: string
+          status?: string
+          voided_at?: string | null
+          voided_by?: string | null
+          voided_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_classifications_calibration_version_id_fkey"
+            columns: ["calibration_version_id"]
+            isOneToOne: false
+            referencedRelation: "classification_calibration_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classifications_released_by_fkey"
+            columns: ["released_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classifications_replaced_by_id_fkey"
+            columns: ["replaced_by_id"]
+            isOneToOne: false
+            referencedRelation: "process_classifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classifications_replaces_id_fkey"
+            columns: ["replaces_id"]
+            isOneToOne: false
+            referencedRelation: "process_classifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classifications_seller_user_id_fkey"
+            columns: ["seller_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_classifications_voided_by_fkey"
+            columns: ["voided_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       products: {
         Row: {
@@ -11786,7 +12437,10 @@ export type Database = {
           organization_id: string
           participant_id: string
           platform: string
+          profile_data: Json | null
           profile_link: string | null
+          profile_page_id: string | null
+          profile_refresh_after: string | null
           refreshed_at: string
           updated_time: string | null
           username: string | null
@@ -11799,7 +12453,10 @@ export type Database = {
           organization_id: string
           participant_id: string
           platform: string
+          profile_data?: Json | null
           profile_link?: string | null
+          profile_page_id?: string | null
+          profile_refresh_after?: string | null
           refreshed_at?: string
           updated_time?: string | null
           username?: string | null
@@ -11812,7 +12469,10 @@ export type Database = {
           organization_id?: string
           participant_id?: string
           platform?: string
+          profile_data?: Json | null
           profile_link?: string | null
+          profile_page_id?: string | null
+          profile_refresh_after?: string | null
           refreshed_at?: string
           updated_time?: string | null
           username?: string | null
@@ -15291,6 +15951,118 @@ export type Database = {
       }
       normalize_identity_digits: { Args: { _value: string }; Returns: string }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
+      org_widget_enabled: {
+        Args: { _key: string; _org: string }
+        Returns: boolean
+      }
+      pc_can_view_classification: {
+        Args: { _org: string; _seller: string }
+        Returns: boolean
+      }
+      pc_dashboard_commissions: {
+        Args: { _from: string; _org: string; _seller?: string; _to: string }
+        Returns: Json
+      }
+      pc_decide_correction: {
+        Args: {
+          _manager: string
+          _opp: string
+          _org: string
+          _reason: string
+          _release: boolean
+        }
+        Returns: Json
+      }
+      pc_discard_draft: { Args: { _org: string }; Returns: boolean }
+      pc_has_flag: { Args: { _org: string; _path: string[] }; Returns: boolean }
+      pc_pode_ver_outros: { Args: { _org: string }; Returns: boolean }
+      pc_publish_calibration: {
+        Args: {
+          _actor: string
+          _expected_updated_at: string
+          _note: string
+          _org: string
+        }
+        Returns: Json
+      }
+      pc_record_certification: {
+        Args: {
+          _actor: string
+          _changed: string[]
+          _external_actor: string
+          _external_event_id: string
+          _input: Json
+          _note: string
+          _opp: string
+          _org: string
+          _redo: boolean
+          _result: Json
+          _source: string
+        }
+        Returns: Json
+      }
+      pc_record_classification: {
+        Args: {
+          _calibration_id: string
+          _input: Json
+          _key: string
+          _motor_version: string
+          _opp: string
+          _org: string
+          _result: Json
+          _seller: string
+        }
+        Returns: Json
+      }
+      pc_report: {
+        Args: {
+          _band?: string
+          _from: string
+          _in_review?: boolean
+          _limit?: number
+          _offset?: number
+          _org: string
+          _seller?: string
+          _statuses?: string[]
+          _to: string
+          _version?: number
+        }
+        Returns: Json
+      }
+      pc_report_detail: { Args: { _id: string }; Returns: Json }
+      pc_report_export: {
+        Args: {
+          _band?: string
+          _from: string
+          _in_review?: boolean
+          _org: string
+          _seller?: string
+          _statuses?: string[]
+          _to: string
+          _version?: number
+        }
+        Returns: Json
+      }
+      pc_request_correction: {
+        Args: { _opp: string; _org: string; _seller: string }
+        Returns: Json
+      }
+      pc_required_for_won: { Args: { _org: string }; Returns: boolean }
+      pc_save_draft: {
+        Args: {
+          _actor: string
+          _content: Json
+          _expected_updated_at: string
+          _motor_version: string
+          _org: string
+        }
+        Returns: Json
+      }
+      pc_update_settings: {
+        Args: { _limit_per_opportunity: number; _org: string }
+        Returns: Json
+      }
+      pc_user_perms: { Args: { _org: string; _user: string }; Returns: Json }
       perms_v2_for_user: {
         Args: { _org: string; _user: string }
         Returns: Json
@@ -15828,6 +16600,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      rpc_create_meta_oauth_connection: {
+        Args: {
+          p_ciphertext: string
+          p_meta: Json
+          p_org: string
+          p_user: string
+        }
+        Returns: string
+      }
       rpc_deactivate_push_token: {
         Args: { p_expo_push_token: string }
         Returns: boolean
@@ -15943,6 +16724,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      rpc_meta_effective_sync_assets: {
+        Args: { p_org: string }
+        Returns: {
+          connection_id: string
+          id: string
+        }[]
+      }
       rpc_register_push_token: {
         Args: { p_expo_push_token: string; p_platform: string }
         Returns: string
@@ -15986,6 +16774,10 @@ export type Database = {
           phone: string
           total_count: number
         }[]
+      }
+      rpc_select_meta_assets: {
+        Args: { p_connection: string; p_org: string; p_selections: Json }
+        Returns: number
       }
       rpc_set_operating_country: {
         Args: { p_country_code: string; p_organization_id: string }
