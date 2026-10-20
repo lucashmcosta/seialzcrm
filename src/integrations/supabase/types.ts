@@ -1341,6 +1341,7 @@ export type Database = {
           recording_sid: string
           recording_url: string
           segment_type: string
+          storage_path: string | null
           transcription: string | null
         }
         Insert: {
@@ -1355,6 +1356,7 @@ export type Database = {
           recording_sid: string
           recording_url: string
           segment_type?: string
+          storage_path?: string | null
           transcription?: string | null
         }
         Update: {
@@ -1369,6 +1371,7 @@ export type Database = {
           recording_sid?: string
           recording_url?: string
           segment_type?: string
+          storage_path?: string | null
           transcription?: string | null
         }
         Relationships: [
@@ -9830,6 +9833,7 @@ export type Database = {
           organization_id: string
           phone_number_id: string
           priority: number
+          recording_enabled: boolean | null
           updated_at: string
           user_id: string
         }
@@ -9842,6 +9846,7 @@ export type Database = {
           organization_id: string
           phone_number_id: string
           priority?: number
+          recording_enabled?: boolean | null
           updated_at?: string
           user_id: string
         }
@@ -9854,6 +9859,7 @@ export type Database = {
           organization_id?: string
           phone_number_id?: string
           priority?: number
+          recording_enabled?: boolean | null
           updated_at?: string
           user_id?: string
         }
