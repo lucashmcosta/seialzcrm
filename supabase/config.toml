@@ -188,3 +188,13 @@ verify_jwt = false
 
 [functions.telephony-transcribe-call]
 verify_jwt = false
+
+# Proxy do áudio do Twilio para o player de gravação. A URL vai dentro do
+# `src` de um elemento <audio>, e elemento de mídia não manda header -- por
+# isso o token do usuário chega como `access_token` na query e é validado em
+# código (`supabase.auth.getUser` + checagem de vínculo com a organização).
+# Com verify_jwt ligado o gateway barraria a requisição por não achar o
+# header, e as gravações antigas (que ainda estão no Twilio) parariam de tocar.
+# Conferido em 20/10/2026: em produção está desligado.
+[functions.twilio-media-proxy]
+verify_jwt = false
