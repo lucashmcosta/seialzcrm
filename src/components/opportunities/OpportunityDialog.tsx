@@ -207,9 +207,9 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
+      <DialogContent className="sm:max-w-[500px] max-h-[90dvh] flex flex-col overflow-hidden">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle>
               {opportunity?.id ? t('opportunities.editOpportunity') : t('opportunities.newOpportunity')}
             </DialogTitle>
@@ -217,6 +217,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
               {opportunity?.id ? 'Edite os detalhes da oportunidade' : 'Crie uma nova oportunidade no pipeline'}
             </DialogDescription>
           </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hide -mx-1 px-1">
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="title">{t('opportunities.title')}</Label>
@@ -343,7 +344,8 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
             )}
           </div>
           {!opportunity?.id && <CommercialOriginSelection contactId={formData.contact_id} value={commercialSelection} onChange={setCommercialSelection} />}
-          <DialogFooter>
+          </div>
+          <DialogFooter className="shrink-0 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
