@@ -52,6 +52,8 @@ interface Opportunity {
   amount: number | null;
   pipeline_stage_id: string;
   pipeline_stages: { name: string };
+  /** Papel da empresa nesta oportunidade, quando o vínculo tem papel. */
+  papel?: string | null;
 }
 
 export default function CompanyDetail() {
@@ -74,17 +76,36 @@ export default function CompanyDetail() {
     if (!id || !organization?.id) return;
 
     try {
-      const [companyResult, contactsResult, oppsResult] = await Promise.all([
+      // As oportunidades vêm de DOIS lugares: o vínculo com papel
+      // (`opportunity_companies`, onde a empresa é a reclamada) e o campo
+      // antigo `opportunities.company_id`. Ler só o antigo fazia a tela dizer
+      // "nenhuma oportunidade" mesmo com a empresa vinculada ao caso.
+      const [companyResult, contactsResult, oppsResult, vinculosResult] = await Promise.all([
         supabase.from('companies').select('*').eq('id', id).single(),
         supabase.from('contacts').select('id, full_name, email, phone').eq('company_id', id),
-        supabase.from('opportunities').select('id, title, amount, pipeline_stage_id, pipeline_stages(name)').eq('company_id', id)
+        supabase.from('opportunities').select('id, title, amount, pipeline_stage_id, pipeline_stages(name)').eq('company_id', id),
+        supabase
+          .from('opportunity_companies')
+          .select('role_code, opportunities(id, title, amount, pipeline_stage_id, pipeline_stages(name))')
+          .eq('company_id', id),
       ]);
 
       if (companyResult.error) throw companyResult.error;
-      
+
+      const porVinculo = ((vinculosResult.data ?? []) as unknown as {
+        role_code: string;
+        opportunities: Opportunity | null;
+      }[])
+        .filter((v) => v.opportunities)
+        .map((v) => ({ ...(v.opportunities as Opportunity), papel: v.role_code }));
+
+      const vistos = new Set(porVinculo.map((o) => o.id));
+      const legadas = ((oppsResult.data ?? []) as unknown as Opportunity[])
+        .filter((o) => !vistos.has(o.id));
+
       setCompany(companyResult.data);
       setContacts(contactsResult.data || []);
-      setOpportunities(oppsResult.data || []);
+      setOpportunities([...porVinculo, ...legadas]);
     } catch (error) {
       console.error('Error fetching company:', error);
       toast.error(t('common.error'));
@@ -299,7 +320,8 @@ export default function CompanyDetail() {
                         {opp.title}
                       </Link>
                       <p className="text-xs text-muted-foreground">
-                        {opp.pipeline_stages.name}
+                        {opp.papel ? `${opp.papel} · ` : ''}
+                        {opp.pipeline_stages?.name}
                         {opp.amount && ` • ${opp.amount.toLocaleString(locale, { style: 'currency', currency: organization?.default_currency || 'BRL' })}`}
                       </p>
                     </li>
