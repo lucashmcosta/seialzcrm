@@ -6,7 +6,7 @@ export interface OpportunityCloseItem {
   code: string;
   label: string;
   status: 'passed' | 'warning' | 'missing';
-  action?: 'edit_contact' | 'edit_opportunity' | 'edit_documents' | 'classify';
+  action?: 'edit_contact' | 'edit_opportunity' | 'edit_documents' | 'classify' | 'decide_correction';
   document_type_id?: string; // 1º tipo (compat); veja document_type_ids p/ grupos
   document_type_ids?: string[]; // alternativas do grupo (anyOf); single = 1 elemento
   owner_type?: 'contact' | 'opportunity';
