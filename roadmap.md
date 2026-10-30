@@ -83,3 +83,9 @@
 
 ## Comercial sempre visível (2026-10-20)
 - [x] Menu Comercial sem depender de número; aviso na tela quando não há número ativo
+
+## Templates Meta — categoria Autenticação (2026-10-30)
+- [x] Tipo authentication aceito no banco (só adição)
+- [x] Tela com OTP, prévia e criação isolada na função; testes UTILITY/MARKETING idênticos
+- [ ] Envio de template de autenticação — outra tarefa
+- [ ] Primeira criação real pela tela — aguarda Nelson Junior (confirma permissão do token)
