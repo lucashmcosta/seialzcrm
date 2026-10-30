@@ -98,13 +98,18 @@ export async function handleAuthentication(input: AuthInput, json: JsonFn): Prom
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const { data: oi, error: oiErr } = await supabase
+  const { data: oiRows, error: oiErr } = await supabase
     .from("organization_integrations")
     .select("id, connected_account, config_values, is_enabled, admin_integrations!inner(slug)")
     .eq("organization_id", v.organizationId)
     .eq("is_enabled", true)
-    .eq("admin_integrations.slug", "meta-whatsapp-cloud")
-    .maybeSingle();
+    .eq("admin_integrations.slug", "meta-whatsapp-cloud");
+    const __oiId = typeof (input as any)?.organizationIntegrationId === "string" ? (input as any).organizationIntegrationId : "";
+    const __rows = (oiRows ?? []).filter((r: any) => !__oiId || r.id === __oiId);
+    if (!oiErr && !__oiId && __rows.length > 1) {
+      return json(422, { error: "multiple_meta_accounts", message: "Esta organização tem mais de uma conta Meta conectada. Escolha a conta (número) do template." });
+    }
+    const oi = __rows[0] ?? null;
   if (oiErr) return json(500, { error: "integration_lookup_failed", details: oiErr.message });
   if (!oi) return json(404, { error: "integration_not_found" });
 
