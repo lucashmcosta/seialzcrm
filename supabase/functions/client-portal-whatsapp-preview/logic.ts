@@ -1,6 +1,52 @@
 // Funções puras da client-portal-whatsapp-preview (somente leitura, sem I/O).
 // NUNCA logar conteúdo de mensagens, telefone ou corpo da requisição.
-export { verifySignature, FORBIDDEN_ENDPOINT_ID } from "../client-portal-otp-send/logic.ts";
+// Assinatura: cópia idêntica de client-portal-otp-send/logic.ts (funções não compartilham arquivos no deploy).
+export const FORBIDDEN_ENDPOINT_ID = "407ff93d-4860-49cd-82ae-beda456c1774"; // 7020 histórico
+export const MAX_TIMESTAMP_SKEW_SECONDS = 300;
+
+const _UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function toHex(buf: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function hmacSha256Hex(secret: string, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return toHex(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message)));
+}
+
+export function timingSafeEqual(a: string, b: string): boolean {
+  const ea = new TextEncoder().encode(a);
+  const eb = new TextEncoder().encode(b);
+  const len = Math.max(ea.length, eb.length);
+  let diff = ea.length ^ eb.length;
+  for (let i = 0; i < len; i++) diff |= (ea[i] ?? 0) ^ (eb[i] ?? 0);
+  return diff === 0;
+}
+
+export async function verifySignature(params: {
+  secret: string | undefined;
+  timestampHeader: string | null;
+  signatureHeader: string | null;
+  rawBody: string;
+  nowSeconds: number;
+}): Promise<boolean> {
+  const { secret, timestampHeader, signatureHeader, rawBody, nowSeconds } = params;
+  if (!secret || !timestampHeader || !signatureHeader) return false;
+  if (!/^\d{1,12}$/.test(timestampHeader)) return false;
+  const ts = Number(timestampHeader);
+  if (Math.abs(nowSeconds - ts) > MAX_TIMESTAMP_SKEW_SECONDS) return false;
+  if (!signatureHeader.startsWith("sha256=")) return false;
+  const expected = "sha256=" + (await hmacSha256Hex(secret, `${timestampHeader}.${rawBody}`));
+  return timingSafeEqual(expected, signatureHeader.toLowerCase());
+}
+
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const DEFAULT_LIMIT = 20;

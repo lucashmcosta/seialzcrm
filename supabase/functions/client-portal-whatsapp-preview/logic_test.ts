@@ -1,6 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { hmacSha256Hex } from "../client-portal-otp-send/logic.ts";
-import { allowedThreadIds, buildPreview, validatePreviewInput, verifySignature, type MessageRow } from "./logic.ts";
+import { allowedThreadIds, buildPreview, validatePreviewInput, verifySignature, hmacSha256Hex, type MessageRow } from "./logic.ts";
 
 const SECRET = "test-secret";
 const BODY = '{"seialz_contact_ids":["11111111-1111-1111-1111-111111111111"]}';
