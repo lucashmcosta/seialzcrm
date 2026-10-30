@@ -2203,6 +2203,51 @@ export type Database = {
           },
         ]
       }
+      client_portal_otp_log: {
+        Row: {
+          contact_id: string
+          created_at: string
+          id: string
+          meta_message_id: string | null
+          organization_id: string
+          phone_last4: string | null
+          status: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          id?: string
+          meta_message_id?: string | null
+          organization_id: string
+          phone_last4?: string | null
+          status: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          id?: string
+          meta_message_id?: string | null
+          organization_id?: string
+          phone_last4?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_portal_otp_log_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_portal_otp_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commercial_attribution_history: {
         Row: {
           actor_id: string | null
