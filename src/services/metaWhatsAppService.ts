@@ -326,6 +326,7 @@ export const metaWhatsAppService = {
 
   async createTemplate(input: {
     organizationId: string;
+    organizationIntegrationId?: string;
     name: string;
     language: string;
     category: string;

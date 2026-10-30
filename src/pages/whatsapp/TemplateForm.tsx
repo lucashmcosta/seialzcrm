@@ -25,6 +25,9 @@ import {
   useCreateMetaTemplate,
 } from '@/hooks/useWhatsAppTemplates';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { getTemplateNameError, extractVariables } from '@/lib/template-validation';
 import { 
   ArrowLeft, 
@@ -63,6 +66,31 @@ export default function TemplateForm() {
   const createMutation = useCreateTemplate();
   const updateMutation = useUpdateTemplate();
   const createMetaMutation = useCreateMetaTemplate();
+
+  // Contas Meta conectadas (uma organização pode ter mais de um número/WABA)
+  const { data: metaAccounts = [] } = useQuery({
+    queryKey: ['meta-template-accounts', organization?.id],
+    enabled: isMetaProvider && !isEditing && !!organization?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('organization_integrations')
+        .select('id, connected_account, admin_integrations!inner(slug)')
+        .eq('organization_id', organization!.id)
+        .eq('is_enabled', true)
+        .eq('admin_integrations.slug', 'meta-whatsapp-cloud');
+      if (error) throw error;
+      return (data ?? []).map((r: any) => ({
+        id: r.id as string,
+        label: [r.connected_account?.display_phone_number, r.connected_account?.verified_name]
+          .filter(Boolean).join(' — ') || r.id,
+      }));
+    },
+  });
+  const [metaAccountId, setMetaAccountId] = useState<string>('');
+  useEffect(() => {
+    if (metaAccounts.length === 1) setMetaAccountId(metaAccounts[0].id);
+  }, [metaAccounts]);
+  const needsMetaAccount = isMetaProvider && !isEditing && metaAccounts.length > 1;
 
   // Form state
   const [step, setStep] = useState(1);
@@ -176,9 +204,14 @@ export default function TemplateForm() {
     if (!organization?.id) return;
 
     try {
+      if (needsMetaAccount && !metaAccountId) {
+        toast.error('Escolha a conta Meta (número) do template.');
+        return;
+      }
       if (isAuth) {
         await createMetaMutation.mutateAsync({
           organizationId: organization.id,
+          organizationIntegrationId: metaAccountId || undefined,
           name: friendlyName,
           language,
           category: 'AUTHENTICATION',
@@ -196,6 +229,7 @@ export default function TemplateForm() {
       if (isMetaProvider && !isEditing) {
         await createMetaMutation.mutateAsync({
           organizationId: organization.id,
+          organizationIntegrationId: metaAccountId || undefined,
           name: friendlyName,
           language,
           category,
@@ -305,6 +339,24 @@ export default function TemplateForm() {
                 {/* Step 1: Basic Info */}
                 {step === 1 && (
                   <>
+                    {needsMetaAccount && (
+                      <div className="space-y-2">
+                        <Label>Conta Meta (número) *</Label>
+                        <Select value={metaAccountId} onValueChange={setMetaAccountId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Escolha o número" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {metaAccounts.map((a) => (
+                              <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          O template será criado somente na conta deste número.
+                        </p>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <Label htmlFor="friendlyName">Nome do Template *</Label>
                       <Input
