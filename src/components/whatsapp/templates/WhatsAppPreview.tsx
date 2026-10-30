@@ -10,6 +10,8 @@ interface WhatsAppPreviewProps {
   actions?: { type: string; title: string; value?: string }[];
   mediaUrl?: string;
   className?: string;
+  /** Opcional: prévia aproximada de template de autenticação (OTP). */
+  otp?: { securityNotice: boolean; minutes: number; buttonText: string };
 }
 
 export function WhatsAppPreview({
@@ -21,7 +23,19 @@ export function WhatsAppPreview({
   actions = [],
   mediaUrl,
   className,
+  otp,
 }: WhatsAppPreviewProps) {
+  if (otp) {
+    body = otp.securityNotice
+      ? '*123456* é seu código de verificação. Para sua segurança, não o compartilhe.'
+      : '*123456* é seu código de verificação.';
+    header = undefined;
+    footer = `Este código expira em ${otp.minutes} minutos.`;
+    variables = [];
+    buttons = [];
+    actions = [{ type: 'copy_code', title: otp.buttonText || 'Copiar código' }];
+    mediaUrl = undefined;
+  }
   // Normalize variables to always be an array
   const normalizedVariables = Array.isArray(variables) ? variables : [];
 

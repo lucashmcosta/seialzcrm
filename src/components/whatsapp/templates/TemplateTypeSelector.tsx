@@ -10,7 +10,8 @@ import {
   CursorClick, 
   ListBullets, 
   ArrowSquareOut, 
-  Image 
+  Image,
+  Key,
 } from '@phosphor-icons/react';
 
 export type TemplateType = 'text' | 'quick-reply' | 'list-picker' | 'call-to-action' | 'media';
@@ -19,6 +20,8 @@ interface TemplateTypeSelectorProps {
   value: TemplateType;
   onValueChange: (value: TemplateType) => void;
   disabled?: boolean;
+  /** Opcional: mostra apenas a opção OTP (categoria Autenticação Meta). */
+  authOnly?: boolean;
 }
 
 const templateTypes: {
@@ -59,7 +62,32 @@ const templateTypes: {
   },
 ];
 
-export function TemplateTypeSelector({ value, onValueChange, disabled }: TemplateTypeSelectorProps) {
+export function TemplateTypeSelector({ value, onValueChange, disabled, authOnly }: TemplateTypeSelectorProps) {
+  if (authOnly) {
+    return (
+      <Select value="authentication" disabled={disabled}>
+        <SelectTrigger>
+          <SelectValue>
+            <div className="flex items-center gap-2">
+              <Key className="w-4 h-4 text-green-600" />
+              <span>Código de verificação (OTP)</span>
+            </div>
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="authentication">
+            <div className="flex items-start gap-3 py-1">
+              <Key className="w-4 h-4 mt-0.5 text-green-600" />
+              <div>
+                <div className="font-medium">Código de verificação (OTP)</div>
+                <div className="text-xs text-muted-foreground">Texto definido pela Meta, com botão de copiar código</div>
+              </div>
+            </div>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  }
   const selectedType = templateTypes.find(t => t.value === value);
   const SelectedIcon = selectedType?.icon || ChatCircle;
 
