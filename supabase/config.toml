@@ -226,3 +226,7 @@ verify_jwt = false
 # não ligar a verificação sem ninguém pedir.
 [functions.documento-cnpjs]
 verify_jwt = false
+
+# App de clientes Central: auth por HMAC (CLIENT_PORTAL_HMAC_SECRET), servidor a servidor.
+[functions.client-portal-otp-send]
+verify_jwt = false
