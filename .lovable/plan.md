@@ -1,45 +1,30 @@
-# Categoria Autenticação (OTP) em templates Meta Cloud
+# Templates AUTHENTICATION: ocultar no envio manual + sync preservar tipo
 
-Mudança aditiva. Utilidade e Marketing seguem exatamente o caminho atual.
+## Situação confirmada
+- `codigo_acesso_app` (Central, id `5d2d74f4-e931-4e04-91b6-538467400da6`): category=AUTHENTICATION, template_type=`text`, status no banco=`approved`, ativo.
+- Pontos de envio manual que listam templates:
+  - `WhatsAppTemplateSelector.tsx` (seletor da conversa — Comercial, Atendimento, contato, mobile).
+  - `SendTemplateModal.tsx` (modal de envio, via `useTemplates`).
+  - Envio em massa/campanhas: não existe tela de envio em massa de templates no código.
+- Fora do escopo (envio pelo sistema, não por atendente): configurações de assinatura WhatsApp e Meta Lead Ads; a página de gestão `/settings/whatsapp-templates` continua listando tudo.
+- Sync (`meta-whatsapp-templates-sync`) grava `template_type: "text"` fixo em insert e update.
 
-## Verificação do banco (feita, só leitura)
-- `category`: CHECK já aceita `AUTHENTICATION` e `authentication`. Nada a fazer.
-- `template_type`: CHECK aceita só `text, media, quick-reply, list-picker, call-to-action, interactive`. **`authentication` NÃO é aceito hoje.**
-
-Migration proposta (somente adiciona um valor; mantém todos os existentes). Não será aplicada sem sua aprovação deste plano:
-
-```sql
-BEGIN;
-ALTER TABLE public.whatsapp_templates DROP CONSTRAINT whatsapp_templates_template_type_check;
-ALTER TABLE public.whatsapp_templates ADD CONSTRAINT whatsapp_templates_template_type_check
-  CHECK (template_type = ANY (ARRAY['text','media','quick-reply','list-picker','call-to-action','interactive','authentication']));
-COMMIT;
-```
-Rollback: recriar a constraint com a lista original (sem `authentication`), após confirmar que nenhuma linha usa esse valor.
-
-Alternativa sem migration: gravar `template_type = 'text'` e identificar OTP pela categoria + componentes. Se preferir essa, diga e sigo sem migration.
-
-## Tela
-Quando Categoria = "Autenticação" (provedor Meta):
-- Tipo de Template mostra só "Código de verificação (OTP)".
-- Sem corpo, cabeçalho, variáveis, botões/ações, mídia.
-- Campos: "Adicionar aviso de segurança" (marcado), "Validade do código (minutos)" (1–90, padrão 5), "Texto do botão" (padrão "Copiar código", até 25).
-- Prévia: "*123456* é seu código de verificação. Para sua segurança, não o compartilhe." / "Este código expira em N minutos." / botão.
-- Erros da Meta (incluindo permissão) exibidos na tela.
-
-## Servidor (meta-whatsapp-templates-create)
-- Ramo `if (category === 'AUTHENTICATION')` isolado no início, com retorno próprio; código existente não é refatorado nem reformatado.
-- No ramo: valida entrada (minutos 1–90, texto 1–25, aviso booleano) e monta a linha local completa ANTES de chamar a Meta; depois POST com exatamente BODY/FOOTER/BUTTONS(OTP, COPY_CODE); grava na mesma tabela com category AUTHENTICATION e os componentes.
-- `buildComponents` existente extraído só por export (sem alterar corpo) para teste.
-
-## Testes
-- Teste Deno: para UTILITY e MARKETING, payload gerado é idêntico ao snapshot do comportamento atual (header, body com variáveis, footer, quick replies).
-- Teste Deno: payload AUTHENTICATION exatamente como especificado; validações recusam valores fora do limite.
-
-## Restrições respeitadas
-- Componentes compartilhados (TemplateTypeSelector, WhatsAppPreview, hook de criação): só props novas e opcionais.
-- Nada em envio, sincronização de status, webhooks, dispatchers, Twilio ou Evolution.
-- Nenhum template de teste criado na Meta; permissão do token só se confirma na sua primeira criação (erro aparece na tela).
+## Mudanças
+1. Novo helper `src/lib/whatsappTemplateManualSend.ts`: `isManualSendableTemplate(t)` retorna false quando `category` (case-insensitive) = AUTHENTICATION. Aplicado como filtro adicional, sem mexer nos filtros existentes:
+   - `WhatsAppTemplateSelector.tsx`: no `.filter` após a query (junto ao filtro de purpose).
+   - `SendTemplateModal.tsx`: em `approvedTemplates`.
+2. Novo `supabase/functions/meta-whatsapp-templates-sync/template_type.ts`: `resolveSyncedTemplateType(category)` → `'authentication'` se AUTHENTICATION, senão `'text'` (igual a hoje). `index.ts` usa no `row.template_type`. Publicar a função.
+3. Correção do registro (após mostrar o UPDATE e um SELECT count = 1):
+   ```sql
+   UPDATE whatsapp_templates SET template_type='authentication'
+   WHERE id='5d2d74f4-e931-4e04-91b6-538467400da6'
+     AND organization_id='40ae935c-a7f7-4ad7-8ea4-91be6404a95f'
+     AND friendly_name='codigo_acesso_app';
+   ```
+4. Testes:
+   - Vitest `src/lib/whatsappTemplateManualSend.test.ts`: AUTHENTICATION/authentication ocultos; MARKETING, UTILITY e null visíveis.
+   - Deno `template_type_test.ts`: AUTHENTICATION → authentication; MARKETING/UTILITY/undefined → text.
+5. Status na Meta: consultar o status atual do `codigo_acesso_app` direto na Meta (somente leitura) e reportar APPROVED/PENDING/REJECTED.
 
 ## Entrega
-Lista de arquivos, diff da função, resultado dos testes e status da migration.
+Arquivos alterados, diff de cada um, resultado dos testes e status Meta. Alertas do banco não serão tratados. Nenhuma migration.
