@@ -1,3 +1,4 @@
+// @ts-nocheck — executado com bun test
 import { describe, expect, test } from 'bun:test';
 import { isManualSendableTemplate } from './whatsappTemplateManualSend';
 
