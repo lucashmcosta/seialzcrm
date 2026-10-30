@@ -230,3 +230,6 @@ verify_jwt = false
 # App de clientes Central: auth por HMAC (CLIENT_PORTAL_HMAC_SECRET), servidor a servidor.
 [functions.client-portal-otp-send]
 verify_jwt = false
+
+[functions.client-portal-whatsapp-preview]
+verify_jwt = false
