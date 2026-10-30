@@ -7,6 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { metaWaGet, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
 import { resolveMetaCredentials, MetaCredentialsError } from "../_shared/meta-whatsapp/credentials.ts";
+import { resolveSyncedTemplateType } from "./template_type.ts";
 
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -215,7 +216,7 @@ serve(async (req) => {
         meta_waba_id: String(wabaId),
         friendly_name: tpl.name,
         language: tpl.language,
-        template_type: "text",
+        template_type: resolveSyncedTemplateType(tpl.category),
         category: tpl.category || null,
         status,
         rejection_reason: status === "rejected" ? rejectedReason : null,

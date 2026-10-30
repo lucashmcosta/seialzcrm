@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrganization } from '@/hooks/useOrganization';
 import { usePermissions } from '@/hooks/usePermissions';
+import { isManualSendableTemplate } from '@/lib/whatsappTemplateManualSend';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -134,7 +135,7 @@ export function WhatsAppTemplateSelector({
       // Filtro por endpoint.purpose (governança Seialz)
       // - templates com allowed_purposes vazio/null ficam ocultos
       // - se endpoint tem purpose, mostrar só templates cujo allowed_purposes contém o purpose
-      const filtered = all.filter((t) => {
+      const filtered = all.filter(isManualSendableTemplate).filter((t) => {
         const ap = t.allowed_purposes;
         if (!ap || ap.length === 0) return false;
         if (purpose) return ap.includes(purpose);

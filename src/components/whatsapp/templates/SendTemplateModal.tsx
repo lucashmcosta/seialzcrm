@@ -21,6 +21,7 @@ import { PhoneInput } from '@/components/ui/phone-input';
 import { WhatsAppPreview } from './WhatsAppPreview';
 import { useTemplates, useSendTemplate, WhatsAppTemplate } from '@/hooks/useWhatsAppTemplates';
 import { useOrganization } from '@/hooks/useOrganization';
+import { isManualSendableTemplate } from '@/lib/whatsappTemplateManualSend';
 import { extractVariables } from '@/lib/template-validation';
 import { sanitizeTemplateVariables } from '@/lib/templateParamText';
 
@@ -50,7 +51,7 @@ export function SendTemplateModal({
   const [variableValues, setVariableValues] = useState<Record<string, string>>({});
 
   // Filter only approved templates
-  const approvedTemplates = templates?.filter(t => t.status === 'approved') || [];
+  const approvedTemplates = templates?.filter(t => t.status === 'approved').filter(isManualSendableTemplate) || [];
 
   // Get selected template
   const selectedTemplate = approvedTemplates.find(t => t.id === selectedTemplateId);
