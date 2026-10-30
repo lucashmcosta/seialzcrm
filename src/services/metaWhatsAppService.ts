@@ -334,6 +334,11 @@ export const metaWhatsAppService = {
     footer?: string;
     variables?: { key: string; name: string; example: string }[];
     buttons?: { id: string; title: string }[];
+    authentication?: {
+      add_security_recommendation: boolean;
+      code_expiration_minutes: number;
+      button_text: string;
+    };
   }): Promise<{ success: true; id: string; meta_template_id: string | null; status: string }> {
     const { data, error } = await supabase.functions.invoke(
       "meta-whatsapp-templates-create",

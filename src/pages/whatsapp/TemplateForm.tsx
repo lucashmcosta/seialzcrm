@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 import { TemplateTypeSelector, TemplateType } from '@/components/whatsapp/templates/TemplateTypeSelector';
 import { WhatsAppPreview } from '@/components/whatsapp/templates/WhatsAppPreview';
 import { VariablesTable, Variable } from '@/components/whatsapp/templates/VariablesTable';
@@ -76,6 +77,11 @@ export default function TemplateForm() {
   const [buttons, setButtons] = useState<QuickReplyButton[]>([]);
   const [actions, setActions] = useState<CTAAction[]>([]);
   const [mediaUrl, setMediaUrl] = useState('');
+  // Autenticação (OTP) — somente Meta Cloud, criação nova
+  const [authSecurity, setAuthSecurity] = useState(true);
+  const [authExpiry, setAuthExpiry] = useState<number>(5);
+  const [authButtonText, setAuthButtonText] = useState('Copiar código');
+  const isAuth = isMetaProvider && !isEditing && category === 'AUTHENTICATION';
 
   // Load existing template data
   useEffect(() => {
@@ -103,7 +109,11 @@ export default function TemplateForm() {
   const bodyStartsWithVariable = /^\s*\{\{\d+\}\}/.test(body);
 
   const isStep1Valid = !nameError && language && category && templateType;
-  const isStep2Valid = !bodyError && !bodyStartsWithVariable;
+  const authExpiryValid = Number.isInteger(authExpiry) && authExpiry >= 1 && authExpiry <= 90;
+  const authButtonValid = authButtonText.trim().length > 0 && authButtonText.length <= 25;
+  const isStep2Valid = isAuth
+    ? authExpiryValid && authButtonValid
+    : !bodyError && !bodyStartsWithVariable;
   const isStep3Valid = variables.every(v => v.example.trim()) || variables.length === 0;
 
   // Insert variable at cursor
@@ -166,6 +176,23 @@ export default function TemplateForm() {
     if (!organization?.id) return;
 
     try {
+      if (isAuth) {
+        await createMetaMutation.mutateAsync({
+          organizationId: organization.id,
+          name: friendlyName,
+          language,
+          category: 'AUTHENTICATION',
+          body: '',
+          authentication: {
+            add_security_recommendation: authSecurity,
+            code_expiration_minutes: authExpiry,
+            button_text: authButtonText.trim(),
+          },
+        });
+        navigate('/settings/whatsapp-templates');
+        return;
+      }
+
       if (isMetaProvider && !isEditing) {
         await createMetaMutation.mutateAsync({
           organizationId: organization.id,
@@ -331,13 +358,58 @@ export default function TemplateForm() {
                         value={templateType} 
                         onValueChange={setTemplateType}
                         disabled={isEditing}
+                        authOnly={isAuth || undefined}
                       />
                     </div>
                   </>
                 )}
 
                 {/* Step 2: Content */}
-                {step === 2 && (
+                {step === 2 && isAuth && (
+                  <>
+                    <Alert>
+                      <WarningCircle className="w-4 h-4" />
+                      <AlertDescription>
+                        O texto de templates de autenticação é definido pela Meta. Configure apenas as opções abaixo.
+                      </AlertDescription>
+                    </Alert>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="authSecurity"
+                        checked={authSecurity}
+                        onCheckedChange={(v) => setAuthSecurity(v === true)}
+                      />
+                      <Label htmlFor="authSecurity">Adicionar aviso de segurança</Label>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="authExpiry">Validade do código (minutos)</Label>
+                      <Input
+                        id="authExpiry"
+                        type="number"
+                        min={1}
+                        max={90}
+                        value={Number.isNaN(authExpiry) ? '' : authExpiry}
+                        onChange={(e) => setAuthExpiry(parseInt(e.target.value, 10))}
+                        className={!authExpiryValid ? 'border-destructive' : ''}
+                      />
+                      {!authExpiryValid && (
+                        <p className="text-xs text-destructive">Informe um número inteiro de 1 a 90.</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="authButtonText">Texto do botão</Label>
+                      <Input
+                        id="authButtonText"
+                        value={authButtonText}
+                        maxLength={25}
+                        onChange={(e) => setAuthButtonText(e.target.value)}
+                        className={!authButtonValid ? 'border-destructive' : ''}
+                      />
+                      <p className="text-xs text-muted-foreground text-right">{authButtonText.length}/25</p>
+                    </div>
+                  </>
+                )}
+                {step === 2 && !isAuth && (
                   <>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -536,7 +608,7 @@ export default function TemplateForm() {
                     </Button>
                   )}
 
-                  {step < 3 ? (
+                  {step < 3 && !(isAuth && step === 2) ? (
                     <Button
                       type="button"
                       onClick={() => setStep(step + 1)}
@@ -548,7 +620,7 @@ export default function TemplateForm() {
                   ) : (
                     <Button
                       onClick={handleSubmit}
-                      disabled={!isStep3Valid || isSubmitting}
+                      disabled={(isAuth ? !isStep2Valid : !isStep3Valid) || isSubmitting}
                     >
                       {isSubmitting ? (
                         <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
@@ -575,6 +647,7 @@ export default function TemplateForm() {
                 buttons={templateType === 'quick-reply' ? buttons : []}
                 actions={templateType === 'call-to-action' ? actions : []}
                 mediaUrl={templateType === 'media' ? mediaUrl : undefined}
+                otp={isAuth ? { securityNotice: authSecurity, minutes: authExpiry, buttonText: authButtonText } : undefined}
               />
             </div>
           </div>
