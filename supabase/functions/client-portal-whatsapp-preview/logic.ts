@@ -4,7 +4,6 @@
 export const FORBIDDEN_ENDPOINT_ID = "407ff93d-4860-49cd-82ae-beda456c1774"; // 7020 histórico
 export const MAX_TIMESTAMP_SKEW_SECONDS = 300;
 
-const _UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function toHex(buf: ArrayBuffer): string {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
