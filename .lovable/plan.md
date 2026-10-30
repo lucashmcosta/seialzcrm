@@ -1,27 +1,45 @@
 # Categoria Autenticação (OTP) em templates Meta Cloud
 
-Mudança aditiva. Utilidade e Marketing seguem exatamente o caminho atual (mesmos campos, mesmo payload, mesma gravação).
+Mudança aditiva. Utilidade e Marketing seguem exatamente o caminho atual.
 
-## Tela (/whatsapp/templates/new?provider=meta_cloud_api)
-Quando Categoria = "Autenticação" (só para provedor Meta):
-- "Tipo de Template" mostra só "Código de verificação (OTP)".
-- Some corpo, cabeçalho, variáveis, botões/ações e mídia.
-- Novos campos: "Adicionar aviso de segurança" (marcado), "Validade do código (minutos)" (1–90, padrão 5), "Texto do botão" (padrão "Copiar código", até 25).
-- Prévia: "*123456* é seu código de verificação. Para sua segurança, não o compartilhe." (sem a segunda frase se o aviso estiver desmarcado) / rodapé "Este código expira em N minutos." / botão com o texto escolhido.
-- Voltar de Autenticação para outra categoria restaura o tipo "Texto".
-- Erros da Meta (incluindo falta de permissão) aparecem na tela com a mensagem retornada.
+## Verificação do banco (feita, só leitura)
+- `category`: CHECK já aceita `AUTHENTICATION` e `authentication`. Nada a fazer.
+- `template_type`: CHECK aceita só `text, media, quick-reply, list-picker, call-to-action, interactive`. **`authentication` NÃO é aceito hoje.**
 
-## Servidor (função que cria o template na Meta)
-- Se category = AUTHENTICATION: não exige body; monta exatamente
-  BODY {add_security_recommendation}, FOOTER {code_expiration_minutes}, BUTTONS [{OTP, COPY_CODE, text}]; valida minutos 1–90 e texto ≤ 25 (422 se inválido).
-- Não envia `allow_category_change` nesse caso (evita reclassificação).
-- Grava na mesma tabela dos demais: category AUTHENTICATION, template_type "authentication", components acima, body com o texto aproximado da prévia; sincronização de status inalterada.
-- Demais categorias: código atual intocado.
+Migration proposta (somente adiciona um valor; mantém todos os existentes). Não será aplicada sem sua aprovação deste plano:
 
-## Detalhes técnicos
-- `src/pages/whatsapp/TemplateForm.tsx`: estado `authSecurity`, `authExpiry`, `authButtonText`; ramo `isAuth = isMetaProvider && category==='AUTHENTICATION'`; validação dos passos ignora corpo quando isAuth; envio passa `authentication: {...}`.
-- Hook de criação Meta: repassar o campo `authentication` e exibir `message` do erro 422.
-- `TemplateTypeSelector`/`WhatsAppPreview`: modo OTP opcional (sem afetar uso atual).
-- `supabase/functions/meta-whatsapp-templates-create/index.ts`: ramo `buildAuthComponents`; deploy da função.
-- Permissão do token: não dá para saber sem tentar; após implementar, faço uma criação de teste na Central só se você autorizar (cria um template real pendente na Meta). Sem autorização, informo que fica a confirmar no primeiro uso.
-- Envio do template: fora de escopo.
+```sql
+BEGIN;
+ALTER TABLE public.whatsapp_templates DROP CONSTRAINT whatsapp_templates_template_type_check;
+ALTER TABLE public.whatsapp_templates ADD CONSTRAINT whatsapp_templates_template_type_check
+  CHECK (template_type = ANY (ARRAY['text','media','quick-reply','list-picker','call-to-action','interactive','authentication']));
+COMMIT;
+```
+Rollback: recriar a constraint com a lista original (sem `authentication`), após confirmar que nenhuma linha usa esse valor.
+
+Alternativa sem migration: gravar `template_type = 'text'` e identificar OTP pela categoria + componentes. Se preferir essa, diga e sigo sem migration.
+
+## Tela
+Quando Categoria = "Autenticação" (provedor Meta):
+- Tipo de Template mostra só "Código de verificação (OTP)".
+- Sem corpo, cabeçalho, variáveis, botões/ações, mídia.
+- Campos: "Adicionar aviso de segurança" (marcado), "Validade do código (minutos)" (1–90, padrão 5), "Texto do botão" (padrão "Copiar código", até 25).
+- Prévia: "*123456* é seu código de verificação. Para sua segurança, não o compartilhe." / "Este código expira em N minutos." / botão.
+- Erros da Meta (incluindo permissão) exibidos na tela.
+
+## Servidor (meta-whatsapp-templates-create)
+- Ramo `if (category === 'AUTHENTICATION')` isolado no início, com retorno próprio; código existente não é refatorado nem reformatado.
+- No ramo: valida entrada (minutos 1–90, texto 1–25, aviso booleano) e monta a linha local completa ANTES de chamar a Meta; depois POST com exatamente BODY/FOOTER/BUTTONS(OTP, COPY_CODE); grava na mesma tabela com category AUTHENTICATION e os componentes.
+- `buildComponents` existente extraído só por export (sem alterar corpo) para teste.
+
+## Testes
+- Teste Deno: para UTILITY e MARKETING, payload gerado é idêntico ao snapshot do comportamento atual (header, body com variáveis, footer, quick replies).
+- Teste Deno: payload AUTHENTICATION exatamente como especificado; validações recusam valores fora do limite.
+
+## Restrições respeitadas
+- Componentes compartilhados (TemplateTypeSelector, WhatsAppPreview, hook de criação): só props novas e opcionais.
+- Nada em envio, sincronização de status, webhooks, dispatchers, Twilio ou Evolution.
+- Nenhum template de teste criado na Meta; permissão do token só se confirma na sua primeira criação (erro aparece na tela).
+
+## Entrega
+Lista de arquivos, diff da função, resultado dos testes e status da migration.
