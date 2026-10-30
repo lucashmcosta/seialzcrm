@@ -91,3 +91,4 @@
 - [ ] Primeira criação real pela tela — aguarda Nelson Junior (confirma permissão do token)
 
 - [x] client-portal-otp-send: migration, função, testes e secrets concluídos
+- [x] client-portal-whatsapp-preview (somente leitura)
