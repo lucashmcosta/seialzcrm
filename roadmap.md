@@ -90,4 +90,4 @@
 - [ ] Envio de template de autenticação — outra tarefa
 - [ ] Primeira criação real pela tela — aguarda Nelson Junior (confirma permissão do token)
 
-- [ ] client-portal-otp-send: pronto; falta só o usuário cadastrar CLIENT_PORTAL_HMAC_SECRET
+- [x] client-portal-otp-send: migration, função, testes e secrets concluídos
