@@ -1,4 +1,4 @@
-import { Calculator, GridNine, Scales } from '@phosphor-icons/react';
+import { Calculator, GridNine, PawPrint, Scales } from '@phosphor-icons/react';
 import type { WidgetDefinition } from './types';
 import { OvertimeCalculatorWidget } from './overtime-calculator/OvertimeCalculatorWidget';
 import { TicTacToeWidget } from './tic-tac-toe/TicTacToeWidget';
@@ -6,6 +6,8 @@ import { OvertimePreview } from './overtime-calculator/OvertimePreview';
 import { TicTacToePreview } from './tic-tac-toe/TicTacToePreview';
 import { ProcessClassificationWidget } from './process-classification/ProcessClassificationWidget';
 import { ProcessClassificationPreview } from './process-classification/ProcessClassificationPreview';
+import { PlamevQuoteWidget } from './plamev-quote/PlamevQuoteWidget';
+import { PlamevQuotePreview } from './plamev-quote/PlamevQuotePreview';
 
 /**
  * Catálogo global de widgets. Tudo aqui aparece em Configurações para todos
@@ -40,6 +42,17 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     Component: ProcessClassificationWidget,
     Preview: ProcessClassificationPreview,
     settings: () => import('@/components/process-classification/settings/ProcessClassificationSettings'),
+  },
+  {
+    // Cada org cola o próprio token da API da Plamev em "Configurar" (plamev_credentials, cifrado).
+    key: 'plamev_quote',
+    name: 'Cotação Plamev',
+    description: 'Cota planos pet da Plamev com campanhas e cupom e grava a cotação na Plamev.',
+    icon: PawPrint,
+    contextMode: 'none',
+    Component: PlamevQuoteWidget,
+    Preview: PlamevQuotePreview,
+    settings: () => import('./plamev-quote/PlamevQuoteSettings'),
   },
 ];
 
