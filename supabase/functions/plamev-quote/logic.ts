@@ -102,7 +102,7 @@ export interface PetEntrada {
   nome: string; especie: "1" | "2"; racaId: string; nascimento: string; coberturaId: string; sexo: "M" | "F" | null;
 }
 
-/** Valor de Sexo que a Plamev espera (não documentado no Swagger). Simulação não exige; gravar cotação exige. */
+/** Valor de Sexo que a Plamev espera (fora do Swagger; M/F confirmado em produção em 2026-11-02). Simulação não exige; gravar cotação exige. */
 export const SEXO_PLAMEV: Record<"M" | "F", string> = { M: "M", F: "F" };
 
 export interface PedidoSimulacao {
