@@ -56,15 +56,26 @@ Deno.test("simulação: recusa entrada inválida", () => {
   assertEquals(recusa(() => L.pedidoSimulacao({ ...PEDIDO, campanha: { id: "x" } })).codigo, "invalid_campanha_id");
 });
 
-Deno.test("cotação: separa DDD, limpa CEP e telefone com +55", () => {
-  const c = L.cliente({ cliente: {
-    nome: "Ana", email: "ana@ex.com", telefone: "+55 (11) 98765-4321", cep: "01310-100",
-    logradouro: "Av. Paulista", numero: "1000", bairro: "Bela Vista", cidade_id: CIDADE,
-  } });
-  assertEquals([c.ddd, c.telefone, c.cep], ["11", "987654321", "01310100"]);
-  const corpo = L.corpoCotacao(L.pedidoSimulacao(PEDIDO), c, null);
-  assertEquals([corpo.Site, corpo.CotacoesOrigensId, corpo.CidadesId, corpo.Complemento], [1, 2, CIDADE, undefined]);
-  assertEquals(recusa(() => L.cliente({ cliente: { ...c, telefone: "1234", cidade_id: CIDADE } })).codigo, "invalid_telefone");
+const CLIENTE = {
+  nome: "Ana", cpf: "529.982.247-25", email: "ana@ex.com", telefone: "+55 (11) 98765-4321", cep: "01310-100",
+  logradouro: "Av. Paulista", numero: "1000", bairro: "Bela Vista", cidade_id: CIDADE,
+};
+
+Deno.test("cotação: separa DDD, limpa CEP, telefone com +55 e CPF; manda Sexo e Documento", () => {
+  const c = L.cliente({ cliente: CLIENTE });
+  assertEquals([c.ddd, c.telefone, c.cep, c.documento], ["11", "987654321", "01310100", "52998224725"]);
+  const corpo = L.corpoCotacao(L.pedidoSimulacao({ ...PEDIDO, pets: [{ ...PET, sexo: "F" }] }), c, null);
+  assertEquals([corpo.Site, corpo.CotacoesOrigensId, corpo.CidadesId, corpo.Complemento, corpo.Documento], [1, 2, CIDADE, undefined, "52998224725"]);
+  assertEquals(corpo.CotacoesPets[0].Sexo, "F");
+  assertEquals(recusa(() => L.cliente({ cliente: { ...CLIENTE, telefone: "1234" } })).codigo, "invalid_telefone");
+  assertEquals(recusa(() => L.cliente({ cliente: { ...CLIENTE, cpf: "529.982.247-24" } })).codigo, "invalid_cpf");
+  assertEquals(recusa(() => L.cliente({ cliente: { ...CLIENTE, cpf: "111.111.111-11" } })).codigo, "invalid_cpf");
+});
+
+Deno.test("sexo: opcional na simulação, obrigatório para gravar a cotação", () => {
+  assertEquals("Sexo" in L.corpoSimulacao(L.pedidoSimulacao(PEDIDO), null).CotacoesPets[0], false);
+  assertEquals(recusa(() => L.pedidoSimulacao({ ...PEDIDO, pets: [{ ...PET, sexo: "X" }] })).codigo, "invalid_sexo");
+  assertEquals(recusa(() => L.corpoCotacao(L.pedidoSimulacao(PEDIDO), L.cliente({ cliente: CLIENTE }), null)).codigo, "missing_sexo");
 });
 
 Deno.test("resultado: arredonda e tira linhas zeradas", () => {

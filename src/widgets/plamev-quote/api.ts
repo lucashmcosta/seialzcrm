@@ -17,13 +17,15 @@ export interface Resultado {
   numeroCotacao?: string; cotacaoId?: string;
 }
 
-export interface PetPedido { nome: string; especie: '1' | '2'; raca_id: string; nascimento: string; cobertura_id: string }
+export interface PetPedido {
+  nome: string; especie: '1' | '2'; sexo: 'M' | 'F' | null; raca_id: string; nascimento: string; cobertura_id: string;
+}
 export interface PedidoSimulacao {
   estado_id: string; forma_pagamento: 1 | 2; origem: string; pets: PetPedido[];
   campanha: { id: string; tabela_id: string } | null; cupom: string | null;
 }
 export interface ClientePedido {
-  nome: string; email: string; telefone: string; cep: string; logradouro: string;
+  nome: string; cpf: string; email: string; telefone: string; cep: string; logradouro: string;
   numero: string; complemento: string; bairro: string; cidade_id: string;
 }
 
@@ -34,6 +36,11 @@ const MENSAGENS: Record<string, string> = {
   token_rejected: 'A Plamev recusou este token. Gere um novo no portal da Plamev e tente de novo.',
   invalid_token: 'Isso não parece um token da Plamev. Cole só o token, sem espaços.',
   can_manage_settings_required: 'Você não tem permissão para configurar este widget.',
+  missing_sexo: 'Escolha o sexo de cada pet para gravar a cotação.',
+  invalid_cpf: 'CPF inválido. Confira os números.',
+  invalid_email: 'E-mail inválido.',
+  invalid_telefone: 'Telefone inválido. Use DDD + número.',
+  invalid_cep: 'CEP inválido. Use os 8 números.',
   plamev_unavailable: 'A Plamev não respondeu. Tente de novo.',
 };
 

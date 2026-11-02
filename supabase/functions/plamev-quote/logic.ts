@@ -98,7 +98,12 @@ export function tabelas(raw: Json) {
     .map((t) => ({ id: t.Id as string, nome: t.Nome as string, tipo: t.Tipo as string }));
 }
 
-export interface PetEntrada { nome: string; especie: "1" | "2"; racaId: string; nascimento: string; coberturaId: string }
+export interface PetEntrada {
+  nome: string; especie: "1" | "2"; racaId: string; nascimento: string; coberturaId: string; sexo: "M" | "F" | null;
+}
+
+/** Valor de Sexo que a Plamev espera (não documentado no Swagger). Simulação não exige; gravar cotação exige. */
+export const SEXO_PLAMEV: Record<"M" | "F", string> = { M: "M", F: "F" };
 
 export interface PedidoSimulacao {
   estadoId: string;
@@ -120,7 +125,9 @@ export function pedidoSimulacao(body: Json): PedidoSimulacao {
     if (p?.especie !== "1" && p?.especie !== "2") throw new Recusa(400, "invalid_especie");
     if (typeof p?.raca_id !== "string" || !RACA_ID.test(p.raca_id)) throw new Recusa(400, "invalid_raca_id");
     if (typeof p?.nascimento !== "string" || !DATA.test(p.nascimento) || p.nascimento > hoje) throw new Recusa(400, "invalid_nascimento");
+    if (p?.sexo != null && p.sexo !== "M" && p.sexo !== "F") throw new Recusa(400, "invalid_sexo");
     return {
+      sexo: p?.sexo ?? null,
       nome: texto(p?.nome, "nome_pet", 60, false),
       especie: p.especie,
       racaId: p.raca_id,
@@ -139,6 +146,7 @@ export function pedidoSimulacao(body: Json): PedidoSimulacao {
 function petsPlamev(p: PedidoSimulacao) {
   return p.pets.map((pet) => ({
     Nome: pet.nome || undefined,
+    ...(pet.sexo ? { Sexo: SEXO_PLAMEV[pet.sexo] } : {}),
     Especie: pet.especie,
     RacasId: pet.racaId,
     DataNascimento: pet.nascimento,
@@ -159,8 +167,21 @@ export function corpoSimulacao(p: PedidoSimulacao, consultorId: string | null) {
   };
 }
 
+/** CPF com dígitos verificadores. */
+export function cpfValido(v: string): boolean {
+  const d = v.replace(/\D/g, "");
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  const dv = (n: number) => {
+    let soma = 0;
+    for (let i = 0; i < n; i++) soma += Number(d[i]) * (n + 1 - i);
+    const r = (soma * 10) % 11;
+    return r === 10 ? 0 : r;
+  };
+  return dv(9) === Number(d[9]) && dv(10) === Number(d[10]);
+}
+
 export interface Cliente {
-  nome: string; email: string; ddd: string; telefone: string;
+  nome: string; documento: string; email: string; ddd: string; telefone: string;
   cep: string; logradouro: string; numero: string; complemento: string; bairro: string; cidadeId: string;
 }
 
@@ -172,8 +193,11 @@ export function cliente(body: Json): Cliente {
   if (fone.length < 10 || fone.length > 11) throw new Recusa(400, "invalid_telefone");
   const cep = String(c.cep ?? "").replace(/\D/g, "");
   if (cep.length !== 8) throw new Recusa(400, "invalid_cep");
+  const documento = String(c.cpf ?? "").replace(/\D/g, "");
+  if (!cpfValido(documento)) throw new Recusa(400, "invalid_cpf");
   return {
     nome: texto(c.nome, "nome", 120),
+    documento,
     email,
     ddd: fone.slice(0, 2),
     telefone: fone.slice(2),
@@ -187,10 +211,14 @@ export function cliente(body: Json): Cliente {
 }
 
 export function corpoCotacao(p: PedidoSimulacao, c: Cliente, consultorId: string | null) {
+  // A Plamev recusa cotação de pet sem sexo ("dados inválidos"); a simulação aceita sem.
+  if (p.pets.some((pet) => !pet.sexo)) throw new Recusa(400, "missing_sexo");
   return {
     ...(consultorId ? { ConsultoresId: consultorId } : {}),
     ...(p.cupom ? { CupomDesconto: p.cupom } : {}),
     Nome: c.nome,
+    // Documento (CPF) não está no Swagger da cotação, mas o checkout do site da Plamev envia.
+    Documento: c.documento,
     Email: c.email,
     Ddd: c.ddd,
     Telefone: c.telefone,

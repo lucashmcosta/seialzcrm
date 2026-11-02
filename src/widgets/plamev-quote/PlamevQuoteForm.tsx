@@ -11,11 +11,13 @@ import {
 } from './api';
 import { brl, resumoParaCliente } from './resumo';
 
-interface PetForm { chave: number; nome: string; especie: '1' | '2'; racaNome: string; nascimento: string; coberturaId: string }
+interface PetForm {
+  chave: number; nome: string; especie: '1' | '2'; sexo: 'M' | 'F' | null; racaNome: string; nascimento: string; coberturaId: string;
+}
 
-const novoPet = (chave: number): PetForm => ({ chave, nome: '', especie: '2', racaNome: '', nascimento: '', coberturaId: '' });
+const novoPet = (chave: number): PetForm => ({ chave, nome: '', especie: '2', sexo: null, racaNome: '', nascimento: '', coberturaId: '' });
 const CLIENTE_VAZIO: ClientePedido = {
-  nome: '', email: '', telefone: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade_id: '',
+  nome: '', cpf: '', email: '', telefone: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade_id: '',
 };
 
 function useDebounced<T>(valor: T, ms: number): T {
@@ -55,6 +57,15 @@ function PetCampos({ org, pet, planos, podeRemover, onChange, onRemove }: {
             <Trash className="h-4 w-4" />
           </Button>
         )}
+      </div>
+      <div className="flex items-center gap-2">
+        <Label className="text-xs">Sexo</Label>
+        {(['M', 'F'] as const).map((s) => (
+          <Button key={s} type="button" size="sm" variant={pet.sexo === s ? 'default' : 'outline'} className="h-7"
+            onClick={() => onChange({ ...pet, sexo: s })}>
+            {s === 'M' ? 'Macho' : 'Fêmea'}
+          </Button>
+        ))}
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
@@ -134,7 +145,7 @@ export function PlamevQuoteForm({ organizationId: org }: { organizationId: strin
     const montados = pets.map((p) => {
       const raca = racaId(p);
       return raca && p.nascimento && p.coberturaId
-        ? { nome: p.nome.trim(), especie: p.especie, raca_id: raca, nascimento: p.nascimento, cobertura_id: p.coberturaId }
+        ? { nome: p.nome.trim(), especie: p.especie, sexo: p.sexo, raca_id: raca, nascimento: p.nascimento, cobertura_id: p.coberturaId }
         : null;
     });
     if (montados.some((m) => !m)) return null;
@@ -194,7 +205,8 @@ export function PlamevQuoteForm({ organizationId: org }: { organizationId: strin
 
   const setC = (k: keyof ClientePedido) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setCliente((c) => ({ ...c, [k]: e.target.value }));
-  const clienteOk = cliente.nome && cliente.email && cliente.telefone && cliente.cep && cliente.logradouro
+  const faltaSexo = pets.some((p) => !p.sexo);
+  const clienteOk = !faltaSexo && cliente.nome && cliente.cpf.replace(/\D/g, '').length === 11 && cliente.email && cliente.telefone && cliente.cep && cliente.logradouro
     && cliente.numero && cliente.bairro && cliente.cidade_id;
 
   if (estados.isError) {
@@ -322,6 +334,7 @@ export function PlamevQuoteForm({ organizationId: org }: { organizationId: strin
           <p className="text-xs text-muted-foreground">Grava a cotação de verdade na Plamev, com estes dados.</p>
           <div className="grid grid-cols-2 gap-2">
             <Input className="col-span-2 h-8" placeholder="Nome completo" value={cliente.nome} onChange={setC('nome')} />
+            <Input className="col-span-2 h-8" inputMode="numeric" placeholder="CPF" value={cliente.cpf} onChange={setC('cpf')} />
             <Input className="h-8" type="email" placeholder="E-mail" value={cliente.email} onChange={setC('email')} />
             <Input className="h-8" inputMode="tel" placeholder="Telefone com DDD" value={cliente.telefone} onChange={setC('telefone')} />
             <Input className="h-8" inputMode="numeric" placeholder="CEP" value={cliente.cep} onChange={setC('cep')} />
@@ -333,6 +346,7 @@ export function PlamevQuoteForm({ organizationId: org }: { organizationId: strin
             <Input className="h-8" placeholder="Complemento" value={cliente.complemento} onChange={setC('complemento')} />
             <Input className="col-span-2 h-8" placeholder="Bairro" value={cliente.bairro} onChange={setC('bairro')} />
           </div>
+          {faltaSexo && <p className="text-xs text-destructive">Escolha o sexo de cada pet para gravar a cotação.</p>}
           <Button type="button" size="sm" className="w-full" disabled={!clienteOk || gravando} onClick={gravar}>
             {gravando ? <SpinnerGap className="mr-1 h-4 w-4 animate-spin" /> : null} Gravar cotação
           </Button>
