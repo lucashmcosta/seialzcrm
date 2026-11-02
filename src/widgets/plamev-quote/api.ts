@@ -43,6 +43,7 @@ const MENSAGENS: Record<string, string> = {
   invalid_email: 'E-mail inválido.',
   invalid_telefone: 'Telefone inválido. Use DDD + número.',
   invalid_cep: 'CEP inválido. Use os 8 números.',
+  opportunity_not_found: 'Você não tem acesso a esta oportunidade.',
   plamev_unavailable: 'A Plamev não respondeu. Tente de novo.',
 };
 
@@ -93,6 +94,27 @@ export function useCampanhas(org: string | undefined, estadoId: string, tipoId: 
     queryKey: ['plamev', org, 'campanhas', estadoId, tipoId], enabled: !!org && !!estadoId && !!tipoId, staleTime: HORA,
     queryFn: () => chamar<{ campanhas: Campanha[] }>(org!, 'campanhas', { estado_id: estadoId, tipo_id: tipoId })
       .then((r) => r.campanhas),
+  });
+}
+
+export interface ClienteContato {
+  nome: string; cpf: string; email: string; telefone: string; cep: string; logradouro: string;
+  numero: string; complemento: string; bairro: string; cidade: string; estado: string;
+}
+export interface CotacaoSalva {
+  numeroCotacao: string; linkPagamento: string | null; formaPagamento: 1 | 2;
+  mensalidade: number; adesao: number; pets: { nome: string; plano: string }[]; criadaEm: string;
+}
+export interface Contexto { cliente: ClienteContato | null; cotacoes: CotacaoSalva[] }
+
+export const contextoKey = (org: string | undefined, opportunityId: string | null, contactId: string | null) =>
+  ['plamev', org, 'contexto', opportunityId, contactId] as const;
+
+/** Contato da oportunidade (ou da conversa) para preencher o formulário + cotações já salvas na oportunidade. */
+export function useContexto(org: string | undefined, opportunityId: string | null, contactId: string | null) {
+  return useQuery({
+    queryKey: contextoKey(org, opportunityId, contactId), enabled: !!org && !!(opportunityId || contactId), retry: false,
+    queryFn: () => chamar<Contexto>(org!, 'contexto', { opportunity_id: opportunityId, contact_id: contactId }),
   });
 }
 

@@ -10,7 +10,10 @@
 //   { action: 'campanhas', estado_id, tipo_id }             → campanhas de desconto do tipo de plano, com tabelas
 //   { action: 'cupom', estado_id, tipo_id, cupom }          → { valido, mensagem }
 //   { action: 'simular', ...pedido }                        → valores sem gravar nada na Plamev
-//   { action: 'solicitar', ...pedido, cliente }             → grava a cotação na Plamev (número da cotação)
+//   { action: 'solicitar', ...pedido, cliente, opportunity_id?, resumo_pets? }
+//                                                           → grava a cotação na Plamev; com oportunidade, salva em
+//                                                             plamev_quotes e põe nota na linha do tempo
+//   { action: 'contexto', opportunity_id?, contact_id? }    → dados do contato para preencher + cotações da oportunidade
 //   { action: 'config_get' }                                → { configurado, final, atualizadoEm }
 //   { action: 'config_set', token }                         → testa o token na Plamev e grava
 //   { action: 'config_delete' }                             → remove o token
@@ -132,6 +135,39 @@ Deno.serve(async (req) => {
       .eq("organization_id", org).eq("widget_key", L.MODULE_KEY).maybeSingle();
     if (widget?.is_enabled !== true) return json(403, { error: "module_disabled" });
 
+    // Oportunidade/contato lidos com o JWT do usuário: valem as regras de visibilidade (RLS) do CRM.
+    const oportunidade = async (id: unknown) => {
+      if (id == null) return null;
+      const oppId = L.guid(id, "opportunity_id");
+      const { data } = await userClient.from("opportunities").select("id, organization_id, contact_id, deleted_at")
+        .eq("id", oppId).maybeSingle();
+      if (!data || data.deleted_at || data.organization_id !== org) throw new L.Recusa(404, "opportunity_not_found");
+      return data as { id: string; contact_id: string | null };
+    };
+
+    if (action === "contexto") {
+      const opp = await oportunidade(body.opportunity_id);
+      const contatoId = opp?.contact_id ?? (body.contact_id != null ? L.guid(body.contact_id, "contact_id") : null);
+      const { data: contato } = contatoId
+        ? await userClient.from("contacts")
+          .select("full_name, first_name, last_name, email, phone, cpf, address_zip, address_street, address_number, address_complement, address_neighborhood, address_city, address_state, organization_id, deleted_at")
+          .eq("id", contatoId).maybeSingle()
+        : { data: null };
+      const contatoOk = contato && !contato.deleted_at && contato.organization_id === org;
+      const { data: cotacoes } = opp
+        ? await db.from("plamev_quotes")
+          .select("numero_cotacao, link_pagamento, forma_pagamento, valor_mensalidade, valor_adesao, pets, created_at")
+          .eq("organization_id", org).eq("opportunity_id", opp.id).order("created_at", { ascending: false }).limit(20)
+        : { data: [] };
+      return json(200, {
+        cliente: contatoOk ? L.clienteDoContato(contato) : null,
+        cotacoes: (cotacoes ?? []).map((c) => ({
+          numeroCotacao: c.numero_cotacao, linkPagamento: c.link_pagamento, formaPagamento: c.forma_pagamento,
+          mensalidade: Number(c.valor_mensalidade), adesao: Number(c.valor_adesao), pets: c.pets, criadaEm: c.created_at,
+        })),
+      });
+    }
+
     const { data: cred } = await db.from("plamev_credentials").select("token_ciphertext").eq("organization_id", org).maybeSingle();
     if (!cred) return json(409, { error: "plamev_not_configured" });
     const token = await decryptIntegrationSecret(cred.token_ciphertext);
@@ -197,9 +233,33 @@ Deno.serve(async (req) => {
       case "solicitar": {
         const pedido = L.pedidoSimulacao(body);
         const cliente = L.cliente(body);
+        // Confere a oportunidade ANTES de gravar na Plamev: sem acesso, não cria cotação lá.
+        const opp = await oportunidade(body.opportunity_id);
         const raw = await plamev(token, "Cotacoes/SolicitaCotacaoPet", { body: L.corpoCotacao(pedido, cliente, CONSULTOR) });
-        console.log(`[plamev-quote] cotação gravada org=${org} user=${me.id}`);
-        return json(200, { resultado: L.resultado(raw) });
+        const r = L.resultado(raw);
+        console.log(`[plamev-quote] cotação gravada org=${org} user=${me.id} opp=${opp?.id ?? "-"}`);
+
+        let salvaNaOportunidade = false;
+        if (opp && r.numeroCotacao) {
+          const pets = (Array.isArray(body.resumo_pets) ? body.resumo_pets : []).slice(0, 10).map((p: { nome?: unknown; plano?: unknown }) => ({
+            nome: typeof p?.nome === "string" ? p.nome.trim().slice(0, 60) : "",
+            plano: typeof p?.plano === "string" ? p.plano.trim().slice(0, 80) : "",
+          }));
+          // A cotação já existe na Plamev; falha aqui não pode esconder o número/link do vendedor.
+          const { error: e1 } = await db.from("plamev_quotes").insert({
+            organization_id: org, opportunity_id: opp.id, numero_cotacao: r.numeroCotacao, plamev_cotacao_id: r.cotacaoId,
+            link_pagamento: r.linkPagamento, forma_pagamento: pedido.formaPagamento,
+            valor_mensalidade: r.totalMensalidade, valor_adesao: r.adesao, pets, created_by_user_id: me.id,
+          });
+          const nota = L.notaCotacao(r, pets, pedido.formaPagamento);
+          const { error: e2 } = await db.from("activities").insert({
+            organization_id: org, opportunity_id: opp.id, contact_id: opp.contact_id, activity_type: "note",
+            title: nota.title, body: nota.body, created_by_user_id: me.id,
+          });
+          if (e1 || e2) console.error(`[plamev-quote] salvar na oportunidade falhou opp=${opp.id} quotes=${e1?.code ?? "ok"} activity=${e2?.code ?? "ok"}`);
+          salvaNaOportunidade = !e1;
+        }
+        return json(200, { resultado: r, salvaNaOportunidade });
       }
     }
   } catch (e) {

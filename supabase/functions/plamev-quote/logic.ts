@@ -4,7 +4,7 @@
 export const MODULE_KEY = "plamev_quote";
 
 export const ACTIONS = [
-  "estados", "cidades", "racas", "planos", "campanhas", "cupom", "simular", "solicitar",
+  "estados", "cidades", "racas", "planos", "campanhas", "cupom", "simular", "solicitar", "contexto",
   "config_get", "config_set", "config_delete",
 ] as const;
 export type Action = typeof ACTIONS[number];
@@ -266,6 +266,42 @@ export function resultado(raw: Json) {
         linkPagamento: linkPagamento(String(raw.Id ?? "")),
       }
       : {}),
+  };
+}
+
+/**
+ * Contato do Seialz → dados do cliente no formulário. Cidade e estado vão como texto (o widget casa com as
+ * listas da Plamev). Telefone sem +55. Campo vazio fica "".
+ */
+export function clienteDoContato(c: Json) {
+  const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const fone = s(c?.phone).replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
+  return {
+    nome: s(c?.full_name) || [s(c?.first_name), s(c?.last_name)].filter(Boolean).join(" "),
+    cpf: s(c?.cpf).replace(/\D/g, ""),
+    email: s(c?.email),
+    telefone: fone,
+    cep: s(c?.address_zip).replace(/\D/g, ""),
+    logradouro: s(c?.address_street),
+    numero: s(c?.address_number),
+    complemento: s(c?.address_complement),
+    bairro: s(c?.address_neighborhood),
+    cidade: s(c?.address_city),
+    estado: s(c?.address_state),
+  };
+}
+
+const brl = (v: number) => `R$ ${v.toFixed(2).replace(".", ",")}`;
+
+/** Nota na linha do tempo da oportunidade quando a cotação é gravada. */
+export function notaCotacao(r: ReturnType<typeof resultado>, pets: { nome: string; plano: string }[], forma: 1 | 2) {
+  return {
+    title: `Cotação Plamev nº ${r.numeroCotacao}`,
+    body: [
+      ...pets.map((p, i) => `${p.nome || `Pet ${i + 1}`}: plano ${p.plano}`),
+      `Mensalidade ${brl(r.totalMensalidade)} · adesão ${brl(r.adesao)} · ${forma === 2 ? "cartão" : "boleto"}`,
+      ...(r.linkPagamento ? [`Link de pagamento: ${r.linkPagamento}`] : []),
+    ].join("\n"),
   };
 }
 

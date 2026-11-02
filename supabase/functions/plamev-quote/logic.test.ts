@@ -101,6 +101,33 @@ Deno.test("link de pagamento = checkout da Plamev com o Id da cotação em base6
   assertEquals(L.resultado({ NumeroCotacao: "1", Id: "" }).linkPagamento, null);
 });
 
+Deno.test("contato do Seialz vira dados do cliente (telefone sem +55, CEP e CPF só números)", () => {
+  const c = L.clienteDoContato({
+    full_name: " Lucas Costa ", phone: "+5511910307707", email: "l@ex.com", cpf: "529.982.247-25",
+    address_zip: "01310-100", address_street: "Av. Paulista", address_number: "1000", address_complement: null,
+    address_neighborhood: "Bela Vista", address_city: "São Paulo", address_state: "SP",
+  });
+  assertEquals(c, {
+    nome: "Lucas Costa", cpf: "52998224725", email: "l@ex.com", telefone: "11910307707", cep: "01310100",
+    logradouro: "Av. Paulista", numero: "1000", complemento: "", bairro: "Bela Vista", cidade: "São Paulo", estado: "SP",
+  });
+  assertEquals(L.clienteDoContato({ first_name: "Ana", last_name: "Lima" }).nome, "Ana Lima");
+});
+
+Deno.test("nota da cotação na linha do tempo leva número, valores e link", () => {
+  const r = L.resultado({
+    NumeroCotacao: "202611000000020-01", Id: "76812963-47A8-6698-B73F-EC791792B205",
+    ValorTotalMensalidade: 139.99, ValorAdesao: 89.99,
+  });
+  const n = L.notaCotacao(r, [{ nome: "Max", plano: "Advance" }], 2);
+  assertEquals(n.title, "Cotação Plamev nº 202611000000020-01");
+  assertEquals(n.body.split("\n"), [
+    "Max: plano Advance",
+    "Mensalidade R$ 139,99 · adesão R$ 89,99 · cartão",
+    "Link de pagamento: https://cliente.plamev.com.br/pagamento/checkout/NzY4MTI5NjMtNDdBOC02Njk4LUI3M0YtRUM3OTE3OTJCMjA1/",
+  ]);
+});
+
 Deno.test("erro da Plamev não vaza o eco de cabeçalhos", () => {
   assertEquals(L.erroPlamev({ erro: "Cupom não validado.", mensagem: "Cupom não validado. Código da Mensagem: 611309538" }), "Cupom não validado.");
   assertEquals(L.erroPlamev({ erro: "Não Autorizado", argumento: { Descricao: { Authorization: "segredo" } } }), "Não Autorizado");

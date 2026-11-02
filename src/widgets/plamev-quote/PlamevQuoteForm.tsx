@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowSquareOut, Cat, CheckCircle, Copy, Dog, LinkSimple, Plus, SpinnerGap, Trash, WarningCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,8 +7,8 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import { toast } from '@/hooks/use-toast';
 import {
-  chamar, type ClientePedido, type PedidoSimulacao, type Plano, type Resultado,
-  useCampanhas, useCidades, useEstados, usePlanos, useRacas, useSimulacao,
+  chamar, contextoKey, type ClientePedido, type CotacaoSalva, type PedidoSimulacao, type Plano, type Resultado,
+  useCampanhas, useCidades, useContexto, useEstados, usePlanos, useRacas, useSimulacao,
 } from './api';
 import { brl, resumoParaCliente } from './resumo';
 
@@ -105,7 +106,49 @@ function Composicao({ titulo, linhas }: { titulo: string; linhas: Resultado['com
   );
 }
 
-export function PlamevQuoteForm({ organizationId: org }: { organizationId: string }) {
+/** Compara nomes ignorando acento e caixa ("São Paulo" = "sao paulo"). */
+const norm = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+
+function CotacoesSalvas({ cotacoes }: { cotacoes: CotacaoSalva[] }) {
+  if (!cotacoes.length) return null;
+  const copiar = async (link: string) => {
+    await navigator.clipboard.writeText(link);
+    toast({ title: 'Link de pagamento copiado' });
+  };
+  return (
+    <details className="rounded-[6px] border border-border p-2 text-xs" open={cotacoes.length <= 2}>
+      <summary className="cursor-pointer font-medium">Cotações desta oportunidade ({cotacoes.length})</summary>
+      <div className="mt-2 space-y-2">
+        {cotacoes.map((c) => (
+          <div key={c.numeroCotacao} className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="truncate">nº {c.numeroCotacao} · {c.pets.map((p) => p.nome || p.plano).filter(Boolean).join(', ')}</div>
+              <div className="text-muted-foreground">
+                {new Date(c.criadaEm).toLocaleDateString('pt-BR')} · <span className="font-data">{brl(c.mensalidade)}</span>/mês
+              </div>
+            </div>
+            {c.linkPagamento && (
+              <div className="flex shrink-0 gap-1">
+                <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label="Copiar link de pagamento"
+                  onClick={() => copiar(c.linkPagamento!)}><LinkSimple className="h-4 w-4" /></Button>
+                <Button type="button" size="icon" variant="ghost" className="h-7 w-7" asChild>
+                  <a href={c.linkPagamento} target="_blank" rel="noopener noreferrer" aria-label="Abrir link de pagamento">
+                    <ArrowSquareOut className="h-4 w-4" />
+                  </a>
+                </Button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+export function PlamevQuoteForm({ organizationId: org, opportunityId, contactId }: {
+  organizationId: string; opportunityId: string | null; contactId: string | null;
+}) {
+  const qc = useQueryClient();
   const [estadoId, setEstadoId] = useState('');
   const [pets, setPets] = useState<PetForm[]>([novoPet(1)]);
   const [forma, setForma] = useState<1 | 2>(2);
@@ -119,10 +162,33 @@ export function PlamevQuoteForm({ organizationId: org }: { organizationId: strin
   const [cotacao, setCotacao] = useState<Resultado | null>(null);
 
   const estados = useEstados(org);
+  const contexto = useContexto(org, opportunityId, contactId);
+  const doContato = contexto.data?.cliente ?? null;
   const planos = usePlanos(org, estadoId);
   const racasCao = useRacas(org, '2');
   const racasGato = useRacas(org, '1');
-  const cidades = useCidades(org, estadoId, abrirCliente);
+  const cidades = useCidades(org, estadoId, abrirCliente || !!doContato?.cidade);
+
+  // Preenche com o contato uma vez: estado (UF ou nome) e dados do cliente; o vendedor pode mudar tudo.
+  const [preenchido, setPreenchido] = useState(false);
+  useEffect(() => {
+    if (preenchido || !doContato || !estados.data) return;
+    const uf = estados.data.find((e) => norm(e.uf) === norm(doContato.estado) || norm(e.nome) === norm(doContato.estado));
+    if (uf) setEstadoId((atual) => atual || uf.id);
+    setCliente((c) => ({
+      ...c,
+      nome: c.nome || doContato.nome, cpf: c.cpf || doContato.cpf, email: c.email || doContato.email,
+      telefone: c.telefone || doContato.telefone, cep: c.cep || doContato.cep, logradouro: c.logradouro || doContato.logradouro,
+      numero: c.numero || doContato.numero, complemento: c.complemento || doContato.complemento, bairro: c.bairro || doContato.bairro,
+    }));
+    setPreenchido(true);
+  }, [preenchido, doContato, estados.data]);
+  // Cidade só depois que a lista do estado chega (casa pelo nome).
+  useEffect(() => {
+    if (!doContato?.cidade || !cidades.data) return;
+    const cidade = cidades.data.find((c) => norm(c.nome) === norm(doContato.cidade));
+    if (cidade) setCliente((c) => (c.cidade_id ? c : { ...c, cidade_id: cidade.id }));
+  }, [doContato, cidades.data]);
 
   const planoDe = (id: string) => planos.data?.find((p) => p.id === id);
   // Campanha e cupom valem por tipo de plano: só aparecem quando todos os pets estão no mesmo tipo.
@@ -182,9 +248,16 @@ export function PlamevQuoteForm({ organizationId: org }: { organizationId: strin
     if (!pedidoAgora) return;
     setGravando(true);
     try {
-      const r = await chamar<{ resultado: Resultado }>(org, 'solicitar', { ...pedidoAgora, cliente });
+      const r = await chamar<{ resultado: Resultado; salvaNaOportunidade?: boolean }>(org, 'solicitar', {
+        ...pedidoAgora, cliente, opportunity_id: opportunityId,
+        resumo_pets: pets.map((p) => ({ nome: p.nome.trim(), plano: planoDe(p.coberturaId)?.tipoNome ?? '' })),
+      });
       setCotacao(r.resultado);
-      toast({ title: `Cotação ${r.resultado.numeroCotacao ?? ''} gravada na Plamev` });
+      if (opportunityId) await qc.invalidateQueries({ queryKey: contextoKey(org, opportunityId, contactId) });
+      toast({
+        title: `Cotação ${r.resultado.numeroCotacao ?? ''} gravada na Plamev`,
+        description: r.salvaNaOportunidade ? 'Salva também na oportunidade.' : undefined,
+      });
     } catch (e) {
       toast({ title: 'Cotação não gravada', description: (e as Error).message, variant: 'destructive' });
     } finally { setGravando(false); }
@@ -225,6 +298,8 @@ export function PlamevQuoteForm({ organizationId: org }: { organizationId: strin
 
   return (
     <div className="space-y-4">
+      <CotacoesSalvas cotacoes={contexto.data?.cotacoes ?? []} />
+      {opportunityId && contexto.isError && <p className="text-xs text-destructive">{(contexto.error as Error).message}</p>}
       <div className="space-y-1.5">
         <Label>Estado do cliente</Label>
         <NativeSelect value={estadoId} onChange={(e) => setEstadoId(e.target.value)} disabled={estados.isLoading}
@@ -351,7 +426,11 @@ export function PlamevQuoteForm({ organizationId: org }: { organizationId: strin
       {abrirCliente && !cotacao && pedidoAgora && (
         <div className="space-y-2 rounded-[6px] border border-border p-3">
           <div className="text-sm font-medium">Dados do cliente</div>
-          <p className="text-xs text-muted-foreground">Grava a cotação de verdade na Plamev, com estes dados.</p>
+          <p className="text-xs text-muted-foreground">
+            Grava a cotação de verdade na Plamev, com estes dados.
+            {doContato && ' Preenchido com o contato; confira antes de gravar.'}
+            {opportunityId && ' A cotação fica salva nesta oportunidade.'}
+          </p>
           <div className="grid grid-cols-2 gap-2">
             <Input className="col-span-2 h-8" placeholder="Nome completo" value={cliente.nome} onChange={setC('nome')} />
             <Input className="col-span-2 h-8" inputMode="numeric" placeholder="CPF" value={cliente.cpf} onChange={setC('cpf')} />
