@@ -3,8 +3,12 @@
 
 export const MODULE_KEY = "plamev_quote";
 
-export const ACTIONS = ["estados", "cidades", "racas", "planos", "campanhas", "cupom", "simular", "solicitar"] as const;
+export const ACTIONS = [
+  "estados", "cidades", "racas", "planos", "campanhas", "cupom", "simular", "solicitar",
+  "config_get", "config_set", "config_delete",
+] as const;
 export type Action = typeof ACTIONS[number];
+export const CONFIG_ACTIONS: readonly Action[] = ["config_get", "config_set", "config_delete"];
 
 export class Recusa extends Error {
   constructor(public status: number, public codigo: string, mensagem?: string) {
@@ -229,7 +233,9 @@ export function erroPlamev(raw: Json): string {
   return m.replace(/\s*Código da Mensagem:.*$/i, "").slice(0, 200) || "Erro na API da Plamev";
 }
 
-/** Orgs liberadas a usar o token da Plamev (env PLAMEV_ORG_IDS, separado por vírgula). Vazio = ninguém. */
-export function orgLiberada(org: string, env: string | undefined): boolean {
-  return (env ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean).includes(org.toLowerCase());
+/** Token colado pela org (portal Plamev → Token API). Alfanumérico, sem espaços; o real tem 850 caracteres. */
+export function tokenColado(v: unknown): string {
+  const t = typeof v === "string" ? v.replace(/^\s*Authorization:\s*/i, "").replace(/^Bearer\s+/i, "").trim() : "";
+  if (t.length < 32 || t.length > 4096 || !/^[A-Za-z0-9._~+/=-]+$/.test(t)) throw new Recusa(400, "invalid_token");
+  return t;
 }

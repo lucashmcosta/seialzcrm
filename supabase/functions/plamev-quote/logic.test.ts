@@ -88,9 +88,11 @@ Deno.test("erro da Plamev não vaza o eco de cabeçalhos", () => {
   assertEquals(L.erroPlamev({ erro: "Não Autorizado", argumento: { Descricao: { Authorization: "segredo" } } }), "Não Autorizado");
 });
 
-Deno.test("só orgs em PLAMEV_ORG_IDS usam o token (vazio = ninguém)", () => {
-  const org = "279a19c4-0000-0000-0000-000000000000";
-  assertEquals(L.orgLiberada(org, undefined), false);
-  assertEquals(L.orgLiberada(org, ""), false);
-  assertEquals(L.orgLiberada(org, ` outra , ${org.toUpperCase()} `), true);
+Deno.test("token colado: aceita com prefixo Authorization/Bearer, recusa curto ou com espaço", () => {
+  const t = "a".repeat(850);
+  assertEquals(L.tokenColado(`  ${t}\n`), t);
+  assertEquals(L.tokenColado(`Authorization: Bearer ${t}`), t);
+  assertEquals(recusa(() => L.tokenColado("curto")).codigo, "invalid_token");
+  assertEquals(recusa(() => L.tokenColado(`${t} ${t}`)).codigo, "invalid_token");
+  assertEquals(recusa(() => L.tokenColado(undefined)).codigo, "invalid_token");
 });

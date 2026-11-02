@@ -28,10 +28,12 @@ export interface ClientePedido {
 }
 
 const MENSAGENS: Record<string, string> = {
-  org_not_allowed: 'Esta organização não está liberada para a API da Plamev.',
   module_disabled: 'O widget da Plamev está desligado nesta organização.',
-  plamev_not_configured: 'A integração com a Plamev ainda não foi configurada.',
-  plamev_unauthorized: 'A Plamev recusou o token da integração.',
+  plamev_not_configured: 'Falta o token da Plamev. Peça a um administrador para colar em Configurações › Widgets › Cotação Plamev.',
+  plamev_unauthorized: 'A Plamev recusou o token salvo. Um administrador precisa colar um token novo nas configurações do widget.',
+  token_rejected: 'A Plamev recusou este token. Gere um novo no portal da Plamev e tente de novo.',
+  invalid_token: 'Isso não parece um token da Plamev. Cole só o token, sem espaços.',
+  can_manage_settings_required: 'Você não tem permissão para configurar este widget.',
   plamev_unavailable: 'A Plamev não respondeu. Tente de novo.',
 };
 

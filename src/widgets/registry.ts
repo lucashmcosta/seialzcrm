@@ -44,7 +44,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     settings: () => import('@/components/process-classification/settings/ProcessClassificationSettings'),
   },
   {
-    // Só funciona nas orgs em PLAMEV_ORG_IDS (o token da API é da Plamev); nas demais o servidor recusa.
+    // Cada org cola o próprio token da API da Plamev em "Configurar" (plamev_credentials, cifrado).
     key: 'plamev_quote',
     name: 'Cotação Plamev',
     description: 'Cota planos pet da Plamev com campanhas e cupom e grava a cotação na Plamev.',
@@ -52,6 +52,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     contextMode: 'none',
     Component: PlamevQuoteWidget,
     Preview: PlamevQuotePreview,
+    settings: () => import('./plamev-quote/PlamevQuoteSettings'),
   },
 ];
 
