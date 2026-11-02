@@ -27,5 +27,6 @@ export function resumoParaCliente({ resultado, pets, formaPagamento, numeroCotac
     `Pagamento: ${formaPagamento === 2 ? 'cartão de crédito' : 'boleto'}`,
     ...(fidelidade ? [fidelidade] : []),
     ...(descontos.length ? ['', 'Descontos aplicados:', ...descontos.map((d) => `• ${d}`)] : []),
+    ...(resultado.linkPagamento ? ['', 'Para contratar, é só pagar por aqui:', resultado.linkPagamento] : []),
   ].join('\n');
 }

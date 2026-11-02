@@ -241,6 +241,14 @@ const linhas = (v: Json) => lista(v)
   .map((l) => ({ nome: String(l?.Nome ?? ""), valor: num(l?.Valor) }))
   .filter((l) => l.nome && l.valor !== 0);
 
+/**
+ * Link de pagamento que o cliente abre para fechar: checkout da Plamev com o Id da cotação em base64
+ * (fora do Swagger; formato conferido com o link gerado pela cotação 202611000000020-01).
+ */
+export function linkPagamento(cotacaoId: string): string | null {
+  return GUID.test(cotacaoId) ? `https://cliente.plamev.com.br/pagamento/checkout/${btoa(cotacaoId.toUpperCase())}/` : null;
+}
+
 /** Resultado da simulação/cotação: só o que o vendedor precisa ver. */
 export function resultado(raw: Json) {
   return {
@@ -251,7 +259,13 @@ export function resultado(raw: Json) {
     fidelidadeAte: typeof raw?.DataFidelidade === "string" ? raw.DataFidelidade : null,
     composicaoMensalidade: linhas(raw?.ComposicaoMensalidade),
     composicaoAdesao: linhas(raw?.ComposicaoAdesao),
-    ...(raw?.NumeroCotacao ? { numeroCotacao: String(raw.NumeroCotacao), cotacaoId: String(raw.Id ?? "") } : {}),
+    ...(raw?.NumeroCotacao
+      ? {
+        numeroCotacao: String(raw.NumeroCotacao),
+        cotacaoId: String(raw.Id ?? ""),
+        linkPagamento: linkPagamento(String(raw.Id ?? "")),
+      }
+      : {}),
   };
 }
 

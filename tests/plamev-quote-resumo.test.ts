@@ -32,5 +32,14 @@ describe('resumo da cotação Plamev', () => {
     expect(t).not.toContain('(de ');
     expect(t).not.toContain('Descontos aplicados');
     expect(t).toContain('Pagamento: boleto');
+    expect(t).not.toContain('Para contratar');
+  });
+  it('com cotação gravada, termina com o link de pagamento', () => {
+    const link = 'https://cliente.plamev.com.br/pagamento/checkout/NzY4MTI5NjMtNDdBOC02Njk4LUI3M0YtRUM3OTE3OTJCMjA1/';
+    const t = resumoParaCliente({
+      resultado: { ...resultado, linkPagamento: link }, formaPagamento: 2, numeroCotacao: '202611000000020-01',
+      pets: [{ nome: 'Max', plano: 'Advance' }],
+    });
+    expect(t.endsWith(`Para contratar, é só pagar por aqui:\n${link}`)).toBe(true);
   });
 });

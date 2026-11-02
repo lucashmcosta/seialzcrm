@@ -15,6 +15,8 @@ export interface Resultado {
   mensalidade: number; totalMensalidade: number; descontosMensalidade: number; adesao: number;
   fidelidadeAte: string | null; composicaoMensalidade: Linha[]; composicaoAdesao: Linha[];
   numeroCotacao?: string; cotacaoId?: string;
+  /** Checkout da Plamev onde o cliente paga e fecha (só depois de gravar a cotação). */
+  linkPagamento?: string | null;
 }
 
 export interface PetPedido {

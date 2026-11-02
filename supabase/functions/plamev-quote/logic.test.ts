@@ -94,6 +94,13 @@ Deno.test("resultado: arredonda e tira linhas zeradas", () => {
   assertEquals(L.resultado({ NumeroCotacao: 123, Id: "abc" }).numeroCotacao, "123");
 });
 
+Deno.test("link de pagamento = checkout da Plamev com o Id da cotação em base64", () => {
+  // Link real gerado pela cotação 202611000000020-01.
+  const r = L.resultado({ NumeroCotacao: "202611000000020-01", Id: "76812963-47a8-6698-b73f-ec791792b205" });
+  assertEquals(r.linkPagamento, "https://cliente.plamev.com.br/pagamento/checkout/NzY4MTI5NjMtNDdBOC02Njk4LUI3M0YtRUM3OTE3OTJCMjA1/");
+  assertEquals(L.resultado({ NumeroCotacao: "1", Id: "" }).linkPagamento, null);
+});
+
 Deno.test("erro da Plamev não vaza o eco de cabeçalhos", () => {
   assertEquals(L.erroPlamev({ erro: "Cupom não validado.", mensagem: "Cupom não validado. Código da Mensagem: 611309538" }), "Cupom não validado.");
   assertEquals(L.erroPlamev({ erro: "Não Autorizado", argumento: { Descricao: { Authorization: "segredo" } } }), "Não Autorizado");

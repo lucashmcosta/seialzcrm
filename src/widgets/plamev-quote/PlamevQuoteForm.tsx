@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Cat, CheckCircle, Copy, Dog, Plus, SpinnerGap, Trash, WarningCircle } from '@phosphor-icons/react';
+import { ArrowSquareOut, Cat, CheckCircle, Copy, Dog, LinkSimple, Plus, SpinnerGap, Trash, WarningCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -203,6 +203,12 @@ export function PlamevQuoteForm({ organizationId: org }: { organizationId: strin
     toast({ title: 'Resumo copiado para enviar ao cliente' });
   };
 
+  const copiarLink = async () => {
+    if (!cotacao?.linkPagamento) return;
+    await navigator.clipboard.writeText(cotacao.linkPagamento);
+    toast({ title: 'Link de pagamento copiado' });
+  };
+
   const setC = (k: keyof ClientePedido) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setCliente((c) => ({ ...c, [k]: e.target.value }));
   const faltaSexo = pets.some((p) => !p.sexo);
@@ -314,6 +320,20 @@ export function PlamevQuoteForm({ organizationId: org }: { organizationId: strin
             {cotacao?.numeroCotacao && (
               <div className="flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-400">
                 <CheckCircle className="h-4 w-4" weight="fill" /> Cotação nº {cotacao.numeroCotacao} gravada na Plamev
+              </div>
+            )}
+            {cotacao?.linkPagamento && (
+              <div className="space-y-1.5 rounded-[6px] border border-border bg-background p-2">
+                <div className="text-xs text-muted-foreground">Link de pagamento para o cliente fechar</div>
+                <div className="truncate font-data text-xs">{cotacao.linkPagamento}</div>
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" onClick={copiarLink}><LinkSimple className="mr-1 h-4 w-4" /> Copiar link</Button>
+                  <Button type="button" size="sm" variant="outline" asChild>
+                    <a href={cotacao.linkPagamento} target="_blank" rel="noopener noreferrer">
+                      <ArrowSquareOut className="mr-1 h-4 w-4" /> Abrir
+                    </a>
+                  </Button>
+                </div>
               </div>
             )}
             <div className="flex flex-wrap gap-2 pt-1">
