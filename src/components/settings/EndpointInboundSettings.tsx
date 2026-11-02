@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { InboundOpportunityTriggerFields, type OpportunityTrigger, type OpportunityTriggerSettings } from './InboundOpportunityTriggerFields';
 
 interface InboundSettings {
   auto_create_contact: boolean;
@@ -17,6 +18,8 @@ interface InboundSettings {
   default_pipeline_id: string | null;
   default_stage_id: string | null;
   default_opportunity_owner: string;
+  opportunity_trigger?: OpportunityTrigger | null;
+  reopen_skip_won_days?: number | null;
 }
 
 const DEFAULT_SETTINGS: InboundSettings = {
@@ -122,6 +125,11 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
     setHasChanges(true);
   };
 
+  const updateTrigger = (patch: OpportunityTriggerSettings) => {
+    setSettings((prev) => ({ ...prev, ...patch }));
+    setHasChanges(true);
+  };
+
   const handleToggleGeneral = (v: boolean) => {
     setUseGeneral(v);
     if (v) {
@@ -217,6 +225,7 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
 
         {settings.auto_create_opportunity && (
           <div className="space-y-2 pl-4 border-l-2 border-primary/20">
+            <InboundOpportunityTriggerFields value={settings} onChange={updateTrigger} disabled={disabled} />
             <Label className="text-sm">{uiText("Etapa inicial do pipeline")}</Label>
             {stages && stages.length > 0 ? (
               <select
