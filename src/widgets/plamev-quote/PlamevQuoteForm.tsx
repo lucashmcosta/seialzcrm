@@ -284,6 +284,11 @@ export function PlamevQuoteForm({ organizationId: org, opportunityId, contactId 
 
   const setC = (k: keyof ClientePedido) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setCliente((c) => ({ ...c, [k]: e.target.value }));
+  // O que o contato não tinha e o vendedor ainda precisa preencher para gravar.
+  const faltando = [
+    !cliente.cpf && 'CPF', !cliente.email && 'e-mail', !cliente.telefone && 'telefone',
+    !(cliente.cep && cliente.logradouro && cliente.numero && cliente.bairro && cliente.cidade_id) && 'endereço',
+  ].filter(Boolean) as string[];
   const faltaSexo = pets.some((p) => !p.sexo);
   const clienteOk = !faltaSexo && cliente.nome && cliente.cpf.replace(/\D/g, '').length === 11 && cliente.email && cliente.telefone && cliente.cep && cliente.logradouro
     && cliente.numero && cliente.bairro && cliente.cidade_id;
@@ -300,6 +305,26 @@ export function PlamevQuoteForm({ organizationId: org, opportunityId, contactId 
     <div className="space-y-4">
       <CotacoesSalvas cotacoes={contexto.data?.cotacoes ?? []} />
       {opportunityId && contexto.isError && <p className="text-xs text-destructive">{(contexto.error as Error).message}</p>}
+      {!opportunityId && !contactId && (
+        <p className="text-xs text-muted-foreground">
+          Aberto fora de uma oportunidade: nada é preenchido. Abra pelo botão de widgets dentro da oportunidade para puxar os dados do contato e salvar a cotação nela.
+        </p>
+      )}
+      {(opportunityId || contactId) && contexto.isLoading && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground"><SpinnerGap className="h-3.5 w-3.5 animate-spin" /> Buscando dados do contato…</div>
+      )}
+      {doContato && (
+        <div className="space-y-1 rounded-[6px] border border-border bg-muted/40 p-2.5 text-xs">
+          <div className="text-muted-foreground">Cliente (dados do contato)</div>
+          <div className="text-sm font-medium">{cliente.nome || doContato.nome || 'Sem nome'}</div>
+          <div className="text-muted-foreground">
+            {[cliente.cpf && `CPF ${cliente.cpf.replace(/\D/g, '').replace(/^(\d{3})\d{6}(\d{2})$/, '$1.***.***-$2')}`,
+              cliente.telefone, cliente.email, [doContato.cidade, doContato.estado].filter(Boolean).join('/')]
+              .filter(Boolean).join(' · ')}
+          </div>
+          {faltando.length > 0 && <div className="text-amber-700 dark:text-amber-400">Falta no contato: {faltando.join(', ')}. Complete ao gravar.</div>}
+        </div>
+      )}
       <div className="space-y-1.5">
         <Label>Estado do cliente</Label>
         <NativeSelect value={estadoId} onChange={(e) => setEstadoId(e.target.value)} disabled={estados.isLoading}
