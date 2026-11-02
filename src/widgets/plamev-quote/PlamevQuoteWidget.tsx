@@ -4,7 +4,12 @@ import { useOrganization } from '@/hooks/useOrganization';
 import type { WidgetContext } from '../types';
 
 // Carregado sob demanda: o registro de widgets fica na raiz do app e não deve levar o formulário junto.
-const PlamevQuoteForm = lazy(() => import('./PlamevQuoteForm').then((m) => ({ default: m.PlamevQuoteForm })));
+// Com chunk que não carrega, o guard de chunk do main.tsx engole o erro e o import resolve undefined: vira erro
+// claro para o WidgetErrorBoundary da janela.
+const PlamevQuoteForm = lazy(() => import('./PlamevQuoteForm').then((m) => {
+  if (!m) throw new Error('Failed to fetch dynamically imported module: PlamevQuoteForm');
+  return { default: m.PlamevQuoteForm };
+}));
 
 /**
  * Cotação Plamev na janela do Workspace. Funciona em qualquer tela (contextMode 'none'); numa oportunidade preenche
