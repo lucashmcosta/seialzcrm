@@ -233,3 +233,7 @@ verify_jwt = false
 
 [functions.client-portal-whatsapp-preview]
 verify_jwt = false
+
+# Cotação Plamev (widget plamev_quote). JWT validado em código + org em PLAMEV_ORG_IDS.
+[functions.plamev-quote]
+verify_jwt = false
