@@ -32,8 +32,9 @@ import {
   type EndpointDestination,
 } from '@/components/settings/EndpointDestinationStep';
 import { ProviderChip } from '@/components/messages/route/RouteIndicators';
+import { EndpointInboundSettings } from '@/components/settings/EndpointInboundSettings';
 import {
-  ChatCircle, ArrowsClockwise, WarningCircle, SpinnerGap, Plus, QrCode,
+  ChatCircle, ArrowsClockwise, WarningCircle, SpinnerGap, Plus, QrCode, SlidersHorizontal,
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
@@ -112,6 +113,8 @@ export function SalesWhatsAppSettingsSection() {
   const [address, setAddress] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [instanceName, setInstanceName] = useState('');
+  // Número com as regras de entrada abertas (criar contato/oportunidade ao receber mensagem).
+  const [rulesEndpointId, setRulesEndpointId] = useState<string | null>(null);
   const [connectTarget, setConnectTarget] = useState<
     { instanceName: string; endpointId: string | null } | null
   >(null);
@@ -344,7 +347,22 @@ export function SalesWhatsAppSettingsSection() {
                           <QrCode className="h-3 w-3 mr-1" /> Conectar WhatsApp
                         </Button>
                       )}
+                      {canManage && (
+                        <Button
+                          size="sm" variant="ghost" className="h-7 px-2 text-[11px]"
+                          aria-expanded={rulesEndpointId === ep.endpointId}
+                          onClick={() => setRulesEndpointId((id) => (id === ep.endpointId ? null : ep.endpointId))}
+                        >
+                          <SlidersHorizontal className="h-3 w-3 mr-1" /> Regras de entrada
+                        </Button>
+                      )}
                     </span>
+
+                    {canManage && rulesEndpointId === ep.endpointId && (
+                      <div className="basis-full">
+                        <EndpointInboundSettings endpointId={ep.endpointId} />
+                      </div>
+                    )}
                   </li>
 
                 );
