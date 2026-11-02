@@ -18,6 +18,7 @@ import { metaWaGetMediaUrl, metaWaDownloadMedia, MetaWaGraphError } from "../_sh
 import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
 import { salesCanonicalInboundEnabled } from "../_shared/sales-canonical-gate.ts";
 import { resolveInboundSuggestedAssignee } from "../_shared/inbound-assignee.ts";
+import { autoCreateInboundOpportunity, type OpportunityTrigger } from "../_shared/inbound-opportunity.ts";
 
 import {
   resolveVerifyTokenForOi,
@@ -34,6 +35,8 @@ interface InboundSettings {
   default_pipeline_id?: string | null;
   default_stage_id?: string | null;
   default_opportunity_owner?: string;
+  opportunity_trigger?: OpportunityTrigger | null;
+  reopen_skip_won_days?: number | null;
 }
 
 const DEFAULT_INBOUND_SETTINGS: InboundSettings = {
@@ -548,83 +551,6 @@ async function findOrCreateContact(
   return { contactId: newContact.id, contactOwnerId: newContact.owner_user_id ?? null, created: true };
 }
 
-async function autoCreateOpportunityIfEnabled(
-  supabase: any,
-  endpoint: { organization_id: string },
-  contactId: string,
-  contactName: string,
-  contactOwnerId: string | null,
-  inbound: InboundSettings,
-): Promise<string | null> {
-  if (!inbound.auto_create_opportunity) return null;
-
-  try {
-    const { data: existingOpen } = await supabase
-      .from("opportunities")
-      .select("id")
-      .eq("organization_id", endpoint.organization_id)
-      .eq("contact_id", contactId)
-      .eq("status", "open")
-      .is("deleted_at", null)
-      .limit(1)
-      .maybeSingle();
-
-    if (existingOpen) {
-      console.log("[meta-wa-webhook] skip opp creation — open opp exists", existingOpen.id);
-      return null;
-    }
-
-    let resolvedStageId: string | null = null;
-    if (inbound.default_stage_id) {
-      const { data: validStage } = await supabase
-        .from("pipeline_stages")
-        .select("id")
-        .eq("id", inbound.default_stage_id)
-        .eq("organization_id", endpoint.organization_id)
-        .maybeSingle();
-      if (validStage) resolvedStageId = validStage.id;
-    }
-    if (!resolvedStageId) {
-      const { data: firstStage } = await supabase
-        .from("pipeline_stages")
-        .select("id")
-        .eq("organization_id", endpoint.organization_id)
-        .order("order_index", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (firstStage) resolvedStageId = firstStage.id;
-    }
-    if (!resolvedStageId) {
-      console.error("[meta-wa-webhook] no pipeline_stages — skipping opp", endpoint.organization_id);
-      return null;
-    }
-
-    const oppData: Record<string, any> = {
-      organization_id: endpoint.organization_id,
-      contact_id: contactId,
-      title: `Oportunidade - ${contactName}`,
-      status: "open",
-      pipeline_stage_id: resolvedStageId,
-    };
-    if (contactOwnerId) oppData.owner_user_id = contactOwnerId;
-
-    const { data: newOpp, error } = await supabase
-      .from("opportunities")
-      .insert(oppData)
-      .select("id")
-      .single();
-    if (error) {
-      console.error("[meta-wa-webhook] auto-create opp error", error);
-    } else if (newOpp) {
-      console.log("[meta-wa-webhook] auto-created opportunity", newOpp.id);
-      return newOpp.id;
-    }
-  } catch (e) {
-    console.error("[meta-wa-webhook] auto-create opp exception", e);
-  }
-  return null;
-}
-
 async function saveReferralFields(
   supabase: any,
   contactId: string,
@@ -830,15 +756,16 @@ async function handleInbound(
     return { messageId: null, threadId: null, error: "no_contact" };
   }
 
-  // 4) Auto-create opportunity quando contato foi recém-criado
-  let commercialOpportunityId: string | null = null;
-  if (created) {
-    commercialOpportunityId = await autoCreateOpportunityIfEnabled(
-      supabase, endpoint, contactId,
-      profileName || `WhatsApp ${fromE164}`,
-      contactOwnerId, inboundSettings,
-    );
-  }
+  // 4) Auto-oportunidade (regra em _shared/inbound-opportunity.ts)
+  const commercialOpportunityId: string | null = await autoCreateInboundOpportunity(supabase, {
+    organizationId: endpoint.organization_id,
+    contactId,
+    contactName: profileName || `WhatsApp ${fromE164}`,
+    contactOwnerId,
+    contactCreated: created,
+    settings: inboundSettings,
+    logTag: "meta-wa-webhook",
+  });
 
   // 5) Persistir campos CTWA no contato
   if (hasReferral && referral) {

@@ -29,6 +29,7 @@ import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { logEvolution, newRequestId } from "../_shared/evolution/logger.ts";
 import { callerKey, rateLimit } from "../_shared/evolution/rate-limit.ts";
 import { resolveInboundSuggestedAssignee } from "../_shared/inbound-assignee.ts";
+import { autoCreateInboundOpportunity, type OpportunityTrigger } from "../_shared/inbound-opportunity.ts";
 import { normalizeEvolutionState } from "../_shared/evolution/state.ts";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
@@ -482,6 +483,8 @@ interface InboundSettings {
   default_pipeline_id?: string | null;
   default_stage_id?: string | null;
   default_opportunity_owner?: string;
+  opportunity_trigger?: OpportunityTrigger | null;
+  reopen_skip_won_days?: number | null;
 }
 const DEFAULT_INBOUND_SETTINGS: InboundSettings = {
   auto_create_contact: true,
@@ -587,63 +590,6 @@ async function findOrCreateContact(
     contactOwnerId: ((created as any).owner_user_id as string | null) ?? null,
     created: true,
   };
-}
-
-async function autoCreateOpportunityIfEnabled(
-  service: SupabaseClient,
-  organizationId: string,
-  contactId: string,
-  contactName: string,
-  contactOwnerId: string | null,
-  inbound: InboundSettings,
-): Promise<void> {
-  if (!inbound.auto_create_opportunity) return;
-  try {
-    const { data: openOpp } = await service
-      .from("opportunities")
-      .select("id")
-      .eq("organization_id", organizationId)
-      .eq("contact_id", contactId)
-      .eq("status", "open")
-      .is("deleted_at", null)
-      .limit(1)
-      .maybeSingle();
-    if (openOpp) return;
-
-    let stageId: string | null = null;
-    if (inbound.default_stage_id) {
-      const { data: v } = await service
-        .from("pipeline_stages")
-        .select("id")
-        .eq("id", inbound.default_stage_id)
-        .eq("organization_id", organizationId)
-        .maybeSingle();
-      if (v) stageId = (v as any).id;
-    }
-    if (!stageId) {
-      const { data: first } = await service
-        .from("pipeline_stages")
-        .select("id")
-        .eq("organization_id", organizationId)
-        .order("order_index", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (first) stageId = (first as any).id;
-    }
-    if (!stageId) return;
-
-    const oppData: Record<string, unknown> = {
-      organization_id: organizationId,
-      contact_id: contactId,
-      title: `Oportunidade - ${contactName}`,
-      status: "open",
-      pipeline_stage_id: stageId,
-    };
-    if (contactOwnerId) oppData.owner_user_id = contactOwnerId;
-    await service.from("opportunities").insert(oppData);
-  } catch (e) {
-    logEvolution("warn", { fn: FN, code: "INTERNAL_ERROR", message: `auto_opp_failed: ${(e as Error).message}` });
-  }
 }
 
 async function findOrCreateThread(
@@ -1102,14 +1048,16 @@ async function ingestInboundMessage(
     return { messageId: null, threadId: null, error: "no_contact" };
   }
 
-  // 3) Auto-oportunidade
-  if (created) {
-    await autoCreateOpportunityIfEnabled(
-      service, ctx.organizationId, contactId,
-      parsed.pushName || `WhatsApp ${fromE164}`,
-      contactOwnerId, settings,
-    );
-  }
+  // 3) Auto-oportunidade (regra em _shared/inbound-opportunity.ts)
+  await autoCreateInboundOpportunity(service, {
+    organizationId: ctx.organizationId,
+    contactId,
+    contactName: parsed.pushName || `WhatsApp ${fromE164}`,
+    contactOwnerId,
+    contactCreated: created,
+    settings,
+    logTag: FN,
+  });
 
   // 4) Thread
   const inboundAtIso = new Date(parsed.timestampMs).toISOString();

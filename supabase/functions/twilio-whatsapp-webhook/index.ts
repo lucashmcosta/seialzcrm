@@ -5,6 +5,7 @@ import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
 import { salesCanonicalInboundEnabled } from "../_shared/sales-canonical-gate.ts";
 import { resolveInboundSuggestedAssignee } from "../_shared/inbound-assignee.ts";
+import { autoCreateInboundOpportunity } from "../_shared/inbound-opportunity.ts";
 
 
 const corsHeaders = {
@@ -741,91 +742,6 @@ serve(async (req) => {
           commercialFirstContact = true
           contactOwnerId = newContact.owner_user_id
           console.log('Created new contact:', contactId)
-
-          // Auto-create opportunity if enabled
-          if (inboundSettings.auto_create_opportunity) {
-            try {
-              // Guard: skip if contact already has an open opportunity
-              const { data: existingOpenOpp } = await supabase
-                .from('opportunities')
-                .select('id')
-                .eq('organization_id', orgId)
-                .eq('contact_id', contactId)
-                .eq('status', 'open')
-                .is('deleted_at', null)
-                .limit(1)
-                .maybeSingle()
-
-              if (existingOpenOpp) {
-                console.log('[wa-inbound] skip opp creation — open opp already exists', existingOpenOpp.id)
-              } else {
-                const oppData: any = {
-                  organization_id: orgId,
-                  contact_id: contactId,
-                  title: `Oportunidade - ${contactName}`,
-                  status: 'open',
-                }
-
-                // Resolve pipeline_stage_id
-                let resolvedStageId: string | null = null
-
-                if (inboundSettings.default_stage_id) {
-                  // Validate stage belongs to org
-                  const { data: validStage } = await supabase
-                    .from('pipeline_stages')
-                    .select('id')
-                    .eq('id', inboundSettings.default_stage_id)
-                    .eq('organization_id', orgId)
-                    .single()
-                  if (validStage) {
-                    resolvedStageId = validStage.id
-                  }
-                }
-
-                if (!resolvedStageId) {
-                  // Fallback: first stage by order_index
-                  const { data: firstStage } = await supabase
-                    .from('pipeline_stages')
-                    .select('id')
-                    .eq('organization_id', orgId)
-                    .order('order_index', { ascending: true })
-                    .limit(1)
-                    .single()
-                  if (firstStage) {
-                    resolvedStageId = firstStage.id
-                  }
-                }
-
-                if (!resolvedStageId) {
-                  console.error('No pipeline stages found for org', orgId, '- skipping opportunity creation')
-                } else {
-                  oppData.pipeline_stage_id = resolvedStageId
-                }
-
-                if (contactOwnerId) {
-                  oppData.owner_user_id = contactOwnerId
-                }
-
-                if (resolvedStageId) {
-                  const { data: newOpp, error: oppError } = await supabase
-                    .from('opportunities')
-                    .insert(oppData)
-                    .select('id')
-                    .single()
-
-                  if (newOpp) {
-                    commercialOpportunityId = newOpp.id
-                    console.log('Auto-created opportunity:', newOpp.id)
-                  } else if (oppError) {
-                    console.error('Error auto-creating opportunity:', oppError)
-                  }
-                }
-              }
-
-            } catch (oppErr) {
-              console.error('Error in auto-create opportunity:', oppErr)
-            }
-          }
         } else if (createError) {
           console.error('Error creating contact:', createError)
         }
@@ -844,6 +760,17 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'text/xml' }
         })
       }
+
+      // Auto-oportunidade (regra em _shared/inbound-opportunity.ts)
+      commercialOpportunityId = await autoCreateInboundOpportunity(supabase, {
+        organizationId: orgId!,
+        contactId,
+        contactName: existingContact?.full_name || profileName || `WhatsApp ${from}`,
+        contactOwnerId,
+        contactCreated: commercialFirstContact,
+        settings: inboundSettings,
+        logTag: 'wa-inbound',
+      })
 
       // Save CTWA Referral data to contact (only on first message with referral)
       if (hasReferral && contactId) {
