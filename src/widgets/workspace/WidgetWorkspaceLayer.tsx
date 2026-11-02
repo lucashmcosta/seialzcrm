@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { getWidget } from '../registry';
 import { useWidgetWorkspace } from './WidgetWorkspaceContext';
 import { MIN_H, MIN_W } from './layout';
+import { WidgetErrorBoundary } from './WidgetErrorBoundary';
 import type { WidgetContext, WidgetDefinition } from '../types';
 
 /** Camada global: não intercepta cliques; só as janelas recebem eventos. Sem backdrop. */
@@ -86,7 +87,9 @@ function WidgetWindow({ def, widgetKey }: { def: WidgetDefinition; widgetKey: st
           <p className="text-sm text-muted-foreground">{ctx.message}</p>
         ) : (
           // key por entidade: trocar de contato/conversa remonta o corpo (sem dado antigo).
-          <Body key={ctx.key} context={ctx.value} />
+          <WidgetErrorBoundary key={ctx.key} widgetKey={widgetKey}>
+            <Body context={ctx.value} />
+          </WidgetErrorBoundary>
         )}
       </div>
     </div>
