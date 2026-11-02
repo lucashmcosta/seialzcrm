@@ -37,7 +37,11 @@ const LIFECYCLE_OPTIONS = [
 
 interface Props {
   endpointId: string;
-  integrationFallback: Partial<InboundSettings> | null;
+  /**
+   * Regras gerais da integração dona do número. Omitido: o componente busca pela integração vinculada ao número.
+   * Número sem integração (ex.: Evolution) não tem o que herdar, então só existem regras próprias.
+   */
+  integrationFallback?: Partial<InboundSettings> | null;
 }
 
 export function EndpointInboundSettings({ endpointId, integrationFallback }: Props) {
@@ -54,25 +58,39 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
     queryFn: async () => {
       const { data, error } = await supabase
         .from('communication_endpoints')
-        .select('inbound_settings')
+        .select('inbound_settings, organization_integration_id, organization_integrations(whatsapp_inbound_settings)')
         .eq('id', endpointId)
         .maybeSingle();
       if (error) throw error;
-      return (data as any)?.inbound_settings as InboundSettings | null;
+      const row = data as unknown as {
+        inbound_settings: InboundSettings | null;
+        organization_integration_id: string | null;
+        organization_integrations: { whatsapp_inbound_settings: Partial<InboundSettings> | null } | null;
+      } | null;
+      return {
+        inbound: row?.inbound_settings ?? null,
+        hasIntegration: !!row?.organization_integration_id,
+        integrationInbound: row?.organization_integrations?.whatsapp_inbound_settings ?? null,
+      };
     },
     enabled: !!endpointId,
   });
 
-  const fallback: InboundSettings = { ...DEFAULT_SETTINGS, ...(integrationFallback || {}) };
+  const canInherit = integrationFallback !== undefined || !!current?.hasIntegration;
+  const fallback: InboundSettings = {
+    ...DEFAULT_SETTINGS,
+    ...((integrationFallback !== undefined ? integrationFallback : current?.integrationInbound) || {}),
+  };
 
   useEffect(() => {
     if (current === undefined) return;
-    if (current === null) {
+    if (current.inbound === null && canInherit) {
       setUseGeneral(true);
       setSettings(fallback);
     } else {
+      // Sem integração, NULL = padrão do webhook (mesmo DEFAULT_SETTINGS): mostra como regra própria editável.
       setUseGeneral(false);
-      setSettings({ ...DEFAULT_SETTINGS, ...current });
+      setSettings({ ...DEFAULT_SETTINGS, ...(current.inbound || {}) });
     }
     setHasChanges(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,11 +134,14 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
     setSaving(true);
     try {
       const payload = useGeneral ? null : (settings as any);
-      const { error } = await supabase
+      const { data: saved, error } = await supabase
         .from('communication_endpoints')
         .update({ inbound_settings: payload })
-        .eq('id', endpointId);
+        .eq('id', endpointId)
+        .select('id');
       if (error) throw error;
+      // RLS sem permissão não dá erro: só não atualiza nenhuma linha.
+      if (!saved?.length) throw new Error(uiText('sem permissão para alterar este número'));
       toast.success(uiText('Regras do número salvas!'));
       setHasChanges(false);
       queryClient.invalidateQueries({ queryKey: ['endpoint-inbound', endpointId] });
@@ -146,11 +167,13 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
           <Label className="text-sm font-semibold">{uiText("Regras de Entrada deste número")}</Label>
-          <p className="text-xs text-muted-foreground">
-            {useGeneral ? uiText("Herdando regras gerais da integração") : uiText("Usando regras personalizadas")}
-          </p>
+          {canInherit && (
+            <p className="text-xs text-muted-foreground">
+              {useGeneral ? uiText("Herdando regras gerais da integração") : uiText("Usando regras personalizadas")}
+            </p>
+          )}
         </div>
-        <Switch checked={useGeneral} onCheckedChange={handleToggleGeneral} />
+        {canInherit && <Switch checked={useGeneral} onCheckedChange={handleToggleGeneral} />}
       </div>
 
       <div className={disabled ? 'opacity-60 pointer-events-none space-y-4' : 'space-y-4'}>
