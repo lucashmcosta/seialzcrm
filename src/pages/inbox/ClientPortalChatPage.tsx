@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams, Navigate } from 'react-router-dom';
+import { useSearchParams, Navigate, Link } from 'react-router-dom';
+import { zeroConversationUnread } from '@/lib/clientPortalUnread';
+import { PORTAL_MENU_UNREAD_KEY } from '@/hooks/useClientPortalUnreadCount';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, PaperPlaneRight, CheckCircle, ArrowCounterClockwise, UserCirclePlus, Info, FilePdf, SpinnerGap } from '@phosphor-icons/react';
 import { Layout } from '@/components/Layout';
@@ -109,6 +111,7 @@ export default function ClientPortalChatPage() {
           {selectedId ? (
             <Conversation key={selectedId} conversationId={selectedId} conversation={selected}
               contactName={(contacts?.get(selected?.seialzContactId ?? '') as any)?.full_name}
+              contactId={(contacts?.get(selected?.seialzContactId ?? '') as any)?.id}
               myUserId={userProfile?.id ?? null} />
           ) : (
             <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Selecione uma conversa do App.</div>
@@ -119,8 +122,8 @@ export default function ClientPortalChatPage() {
   );
 }
 
-function Conversation({ conversationId, conversation, contactName, myUserId }: {
-  conversationId: string; conversation: PortalConversation | null; contactName?: string; myUserId: string | null;
+function Conversation({ conversationId, conversation, contactName, contactId, myUserId }: {
+  conversationId: string; conversation: PortalConversation | null; contactName?: string; contactId?: string; myUserId: string | null;
 }) {
   const qc = useQueryClient();
   const [text, setText] = useState('');
@@ -144,7 +147,10 @@ function Conversation({ conversationId, conversation, contactName, myUserId }: {
 
   useEffect(() => {
     portalCall('conversation.read', { conversationId })
-      .then(() => qc.invalidateQueries({ queryKey: ['portal-chat', 'list'] }))
+      .then(() => {
+        qc.setQueriesData({ queryKey: ['portal-chat', 'list'] }, (d: any) => zeroConversationUnread(d, conversationId));
+        qc.invalidateQueries({ queryKey: PORTAL_MENU_UNREAD_KEY });
+      })
       .catch(() => { /* leitura é best-effort */ });
   }, [conversationId, qc]);
 
@@ -194,7 +200,11 @@ function Conversation({ conversationId, conversation, contactName, myUserId }: {
   return (
     <>
       <header className="px-4 py-2 border-b border-border flex items-center justify-between gap-2">
-        <div className="font-medium truncate">{contactName || 'Cliente'}</div>
+        <div className="font-medium truncate">
+          {contactId
+            ? <Link to={`/contacts/${contactId}`} className="hover:underline">{contactName || 'Cliente'}</Link>
+            : (contactName || 'Cliente')}
+        </div>
         <div className="flex gap-2">
           {!assignedToMe && (
             <Button size="sm" variant="outline" disabled={action.isPending || !myUserId}
