@@ -11018,6 +11018,122 @@ export type Database = {
           },
         ]
       }
+      plamev_credentials: {
+        Row: {
+          created_at: string
+          organization_id: string
+          token_ciphertext: string
+          token_last4: string
+          updated_at: string
+          updated_by_user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          organization_id: string
+          token_ciphertext: string
+          token_last4: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          organization_id?: string
+          token_ciphertext?: string
+          token_last4?: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plamev_credentials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plamev_credentials_updated_by_user_id_fkey"
+            columns: ["updated_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plamev_quotes: {
+        Row: {
+          created_at: string
+          created_by_user_id: string | null
+          forma_pagamento: number
+          id: string
+          link_pagamento: string | null
+          numero_cotacao: string
+          opportunity_id: string
+          organization_id: string
+          pets: Json
+          plamev_cotacao_id: string
+          valor_adesao: number
+          valor_mensalidade: number
+        }
+        Insert: {
+          created_at?: string
+          created_by_user_id?: string | null
+          forma_pagamento: number
+          id?: string
+          link_pagamento?: string | null
+          numero_cotacao: string
+          opportunity_id: string
+          organization_id: string
+          pets?: Json
+          plamev_cotacao_id: string
+          valor_adesao: number
+          valor_mensalidade: number
+        }
+        Update: {
+          created_at?: string
+          created_by_user_id?: string | null
+          forma_pagamento?: number
+          id?: string
+          link_pagamento?: string | null
+          numero_cotacao?: string
+          opportunity_id?: string
+          organization_id?: string
+          pets?: Json
+          plamev_cotacao_id?: string
+          valor_adesao?: number
+          valor_mensalidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plamev_quotes_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plamev_quotes_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plamev_quotes_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
+            foreignKeyName: "plamev_quotes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plans: {
         Row: {
           created_at: string | null
