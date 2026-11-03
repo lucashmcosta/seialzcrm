@@ -9,11 +9,20 @@ export interface Plano {
   maisVendido: boolean; reembolso: boolean; coparticipativo: boolean;
   fidelidadeMeses: number | null; procedimentos: number | null; boleto: number; cartao: number;
 }
-export interface Campanha { id: string; nome: string; tabelas: { id: string; nome: string; tipo: string }[] }
+export interface CampanhaPlamev { id: string; nome: string; tabelas: { id: string; nome: string; tipo: string }[] }
 export interface Linha { nome: string; valor: number }
+/** Valor de cada fatura com o desconto da campanha (ComposicaoCampanha da Plamev). */
+export interface Campanha {
+  nome: string | null; totalAdesao: number;
+  /** Soma dos pets por período ("1ª Fatura (Adesão)", "Demais Faturas"...). */
+  faturas: { periodo: string; total: number }[];
+  pets: { nome: string; faturas: { periodo: string; total: number; detalhes: Linha[] }[] }[];
+}
 export interface Resultado {
   mensalidade: number; totalMensalidade: number; descontosMensalidade: number; adesao: number;
   fidelidadeAte: string | null; composicaoMensalidade: Linha[]; composicaoAdesao: Linha[];
+  /** Ausente em respostas antigas da Plamev; null sem campanha. */
+  campanha?: Campanha | null;
   numeroCotacao?: string; cotacaoId?: string;
   /** Checkout da Plamev onde o cliente paga e fecha (só depois de gravar a cotação). */
   linkPagamento?: string | null;
@@ -100,7 +109,7 @@ export function usePlanos(org: string | undefined, estadoId: string) {
 export function useCampanhas(org: string | undefined, estadoId: string, tipoId: string | null) {
   return useQuery({
     queryKey: ['plamev', org, 'campanhas', estadoId, tipoId], enabled: !!org && !!estadoId && !!tipoId, staleTime: HORA,
-    queryFn: () => chamar<{ campanhas: Campanha[] }>(org!, 'campanhas', { estado_id: estadoId, tipo_id: tipoId })
+    queryFn: () => chamar<{ campanhas: CampanhaPlamev[] }>(org!, 'campanhas', { estado_id: estadoId, tipo_id: tipoId })
       .then((r) => r.campanhas),
   });
 }

@@ -10,7 +10,10 @@ export function resumoParaCliente({ resultado, pets, formaPagamento, numeroCotac
   numeroCotacao: string | null;
 }): string {
   const linhasPets = pets.map((p, i) => `• ${p.nome || `Pet ${i + 1}`}: plano ${p.plano}`);
-  const descontos = [...resultado.composicaoMensalidade, ...resultado.composicaoAdesao]
+  const camp = resultado.campanha ?? null;
+  const descontos = (camp
+    ? camp.pets.flatMap((p) => p.faturas.flatMap((f) => f.detalhes))
+    : [...resultado.composicaoMensalidade, ...resultado.composicaoAdesao])
     .filter((l) => l.valor < 0)
     .map((l) => l.nome)
     .filter((n, i, a) => a.indexOf(n) === i);
@@ -24,6 +27,8 @@ export function resumoParaCliente({ resultado, pets, formaPagamento, numeroCotac
     '',
     `Mensalidade: ${brl(resultado.totalMensalidade)}${resultado.descontosMensalidade < 0 ? ` (de ${brl(resultado.mensalidade)})` : ''}`,
     `Adesão (1ª cobrança): ${brl(resultado.adesao)}`,
+    // Campanha com mais de um valor depois da adesão (ex.: desconto só nas primeiras faturas).
+    ...(camp && camp.faturas.length > 2 ? camp.faturas.map((f) => `• ${f.periodo}: ${brl(f.total)}`) : []),
     `Pagamento: ${formaPagamento === 2 ? 'cartão de crédito' : 'boleto'}`,
     ...(fidelidade ? [fidelidade] : []),
     ...(descontos.length ? ['', 'Descontos aplicados:', ...descontos.map((d) => `• ${d}`)] : []),
