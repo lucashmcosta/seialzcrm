@@ -42,4 +42,24 @@ describe('resumo da cotação Plamev', () => {
     });
     expect(t.endsWith(`Para contratar, é só pagar por aqui:\n${link}`)).toBe(true);
   });
+  it('com campanha, os descontos vêm da composição da campanha', () => {
+    const t = resumoParaCliente({
+      resultado: {
+        ...resultado, mensalidade: 149.99, totalMensalidade: 90, descontosMensalidade: -59.99, adesao: 69.98,
+        campanha: {
+          nome: 'ADVANCE 50%', totalAdesao: 69.98,
+          faturas: [{ periodo: '1ª Fatura (Adesão)', total: 69.98 }, { periodo: 'Demais Faturas', total: 90 }],
+          pets: [{ nome: 'Luna', faturas: [
+            { periodo: '1ª Fatura (Adesão)', total: 69.98, detalhes: [{ nome: 'Desconto Advance 89,99', valor: -70.01 }] },
+            { periodo: 'Demais Faturas', total: 90, detalhes: [{ nome: 'Desconto Advance 89,99', valor: -49.99 }] },
+          ] }],
+        },
+      },
+      formaPagamento: 2, numeroCotacao: null, pets: [{ nome: 'Luna', plano: 'Advance' }],
+    });
+    expect(t).toMatch(/Mensalidade: R\$\s?90,00 \(de R\$\s?149,99\)/);
+    expect(t).toMatch(/Adesão \(1ª cobrança\): R\$\s?69,98/);
+    expect(t.match(/Desconto Advance 89,99/g)).toHaveLength(1);
+    expect(t).not.toContain('Desconto 2° Pet');
+  });
 });

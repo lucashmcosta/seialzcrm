@@ -416,11 +416,34 @@ export function PlamevQuoteForm({ organizationId: org, opportunityId, contactId 
                 Fidelidade até {new Date(`${resultado.fidelidadeAte}T12:00:00`).toLocaleDateString('pt-BR')}
               </div>
             )}
+            {resultado.campanha && (
+              <div className="space-y-0.5 rounded-[6px] border border-border bg-background p-2">
+                <div className="text-xs font-medium text-muted-foreground">
+                  Valor por fatura{resultado.campanha.nome ? ` · campanha ${resultado.campanha.nome}` : ''}
+                </div>
+                {resultado.campanha.faturas.map((f) => (
+                  <div key={f.periodo} className="flex justify-between gap-2 text-xs">
+                    <span>{f.periodo}</span>
+                    <span className="font-data">{brl(f.total)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <details className="text-xs">
               <summary className="cursor-pointer text-muted-foreground">Ver composição</summary>
               <div className="mt-2 space-y-2">
-                <Composicao titulo="Mensalidade" linhas={resultado.composicaoMensalidade} />
-                <Composicao titulo="Adesão" linhas={resultado.composicaoAdesao} />
+                {resultado.campanha
+                  ? resultado.campanha.pets.flatMap((p) => p.faturas.map((f) => (
+                    <Composicao key={`${p.nome}-${f.periodo}`}
+                      titulo={`${f.periodo}${resultado.campanha!.pets.length > 1 && p.nome ? ` · ${p.nome}` : ''}`}
+                      linhas={[...f.detalhes, { nome: 'Total', valor: f.total }]} />
+                  )))
+                  : (
+                    <>
+                      <Composicao titulo="Mensalidade" linhas={resultado.composicaoMensalidade} />
+                      <Composicao titulo="Adesão" linhas={resultado.composicaoAdesao} />
+                    </>
+                  )}
               </div>
             </details>
             {cotacao?.numeroCotacao && (

@@ -141,3 +141,46 @@ Deno.test("token colado: aceita com prefixo Authorization/Bearer, recusa curto o
   assertEquals(recusa(() => L.tokenColado(`${t} ${t}`)).codigo, "invalid_token");
   assertEquals(recusa(() => L.tokenColado(undefined)).codigo, "invalid_token");
 });
+
+Deno.test("campanha: mensalidade vem de ComposicaoCampanha (resposta real de 2026-11-03)", () => {
+  const raw = {
+    ValorAdesao: 69.981001, ValorMensalidade: 149.99, ValorTotalMensalidade: 139.99, ValorDescontosMensalidades: -10,
+    ComposicaoCampanha: {
+      NomeCampanha: "ADVANCE 50%",
+      TotalAdesao: "69.98",
+      Tabela: [{
+        PetNome: "Luna", TotalAdesao: "69.98",
+        Linhas: [
+          { Periodo: "1ª Fatura (Adesão)", Total: "69.98", Detalhes: [
+            { Descricao: "Valor do plano", Tipo: "Valor", Valor: "149.99" },
+            { Descricao: "Desconto cartão de crédito", Tipo: "Desconto", Valor: "10.00" },
+            { Descricao: "Desconto Advance 89,99", Tipo: "Desconto", Valor: "70.01" },
+          ] },
+          { Periodo: "Demais Faturas", Total: "90.00", Detalhes: [
+            { Descricao: "Valor do plano", Tipo: "Valor", Valor: "149.99" },
+            { Descricao: "Desconto cartão de crédito", Tipo: "Desconto", Valor: "10.00" },
+            { Descricao: "Desconto Advance 89,99", Tipo: "Desconto", Valor: "49.99" },
+          ] },
+        ],
+      }],
+    },
+  };
+  const r = L.resultado(raw);
+  assertEquals(r.totalMensalidade, 90);
+  assertEquals(r.descontosMensalidade, -59.99);
+  assertEquals(r.adesao, 69.98);
+  assertEquals(r.campanha?.nome, "ADVANCE 50%");
+  assertEquals(r.campanha?.faturas, [{ periodo: "1ª Fatura (Adesão)", total: 69.98 }, { periodo: "Demais Faturas", total: 90 }]);
+  assertEquals(r.campanha?.pets[0].faturas[1].detalhes[2], { nome: "Desconto Advance 89,99", valor: -49.99 });
+
+  // Dois pets: soma por período.
+  const dois = L.resultado({ ...raw, ComposicaoCampanha: { ...raw.ComposicaoCampanha, TotalAdesao: "139.96",
+    Tabela: [raw.ComposicaoCampanha.Tabela[0], { ...raw.ComposicaoCampanha.Tabela[0], PetNome: "Thor" }] } });
+  assertEquals(dois.totalMensalidade, 180);
+  assertEquals(dois.campanha?.faturas[0].total, 139.96);
+});
+
+Deno.test("sem ComposicaoCampanha: continua usando os campos antigos", () => {
+  const r = L.resultado({ ValorMensalidade: 149.99, ValorTotalMensalidade: 139.99, ValorDescontosMensalidades: -10, ValorAdesao: 89.99 });
+  assertEquals([r.totalMensalidade, r.descontosMensalidade, r.adesao, r.campanha], [139.99, -10, 89.99, null]);
+});

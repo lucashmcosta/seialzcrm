@@ -249,13 +249,54 @@ export function linkPagamento(cotacaoId: string): string | null {
   return GUID.test(cotacaoId) ? `https://cliente.plamev.com.br/pagamento/checkout/${btoa(cotacaoId.toUpperCase())}/` : null;
 }
 
+/**
+ * `ComposicaoCampanha` (fora do Swagger, desde 2026-11-03): valor de cada fatura com o desconto da campanha. Os campos
+ * antigos (ValorTotalMensalidade, ComposicaoMensalidade) não aplicam o desconto da campanha nas mensalidades.
+ * Tabela = um item por pet, com uma linha por período ("1ª Fatura (Adesão)", "Demais Faturas"...). Detalhes de
+ * desconto vêm positivos; aqui viram negativos, como em ComposicaoMensalidade.
+ */
+function campanha(raw: Json) {
+  const c = raw?.ComposicaoCampanha;
+  if (!c || typeof c !== "object") return null;
+  const pets = lista(c.Tabela).map((t) => ({
+    nome: String(t?.PetNome ?? ""),
+    faturas: lista(t?.Linhas).map((l) => ({
+      periodo: String(l?.Periodo ?? "").trim(),
+      total: num(l?.Total),
+      detalhes: lista(l?.Detalhes)
+        .map((d) => ({
+          nome: String(d?.Descricao ?? ""),
+          valor: String(d?.Tipo ?? "").toLowerCase() === "desconto" ? -Math.abs(num(d?.Valor)) : num(d?.Valor),
+        }))
+        .filter((d) => d.nome && d.valor !== 0),
+    })).filter((l) => l.periodo),
+  })).filter((p) => p.faturas.length > 0);
+  if (!pets.length) return null;
+  // Soma dos pets por período, na ordem em que aparecem.
+  const faturas: { periodo: string; total: number }[] = [];
+  for (const p of pets) {
+    for (const l of p.faturas) {
+      const f = faturas.find((x) => x.periodo === l.periodo);
+      if (f) f.total = num(f.total + l.total);
+      else faturas.push({ periodo: l.periodo, total: l.total });
+    }
+  }
+  return { nome: String(c.NomeCampanha ?? "").trim() || null, faturas, pets, totalAdesao: num(c.TotalAdesao) };
+}
+
 /** Resultado da simulação/cotação: só o que o vendedor precisa ver. */
 export function resultado(raw: Json) {
+  const mensalidade = num(raw?.ValorMensalidade ?? raw?.ValorTotal);
+  const camp = campanha(raw);
+  // Com campanha, a mensalidade é a primeira fatura depois da adesão (a 1ª fatura é a adesão).
+  const recorrente = camp?.faturas.find((f, i) => i > 0 && !/ades[aã]o/i.test(f.periodo));
+  const totalMensalidade = recorrente ? recorrente.total : num(raw?.ValorTotalMensalidade ?? raw?.ValorTotal);
   return {
-    mensalidade: num(raw?.ValorMensalidade ?? raw?.ValorTotal),
-    totalMensalidade: num(raw?.ValorTotalMensalidade ?? raw?.ValorTotal),
-    descontosMensalidade: num(raw?.ValorDescontosMensalidades),
-    adesao: num(raw?.ValorAdesao),
+    mensalidade,
+    totalMensalidade,
+    descontosMensalidade: recorrente ? num(totalMensalidade - mensalidade) : num(raw?.ValorDescontosMensalidades),
+    adesao: camp?.totalAdesao || num(raw?.ValorAdesao),
+    campanha: camp,
     fidelidadeAte: typeof raw?.DataFidelidade === "string" ? raw.DataFidelidade : null,
     composicaoMensalidade: linhas(raw?.ComposicaoMensalidade),
     composicaoAdesao: linhas(raw?.ComposicaoAdesao),
