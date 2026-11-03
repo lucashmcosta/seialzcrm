@@ -2203,6 +2203,67 @@ export type Database = {
           },
         ]
       }
+      client_portal_chat_events: {
+        Row: {
+          assigned_user_id: string | null
+          conversation_id: string
+          created_at: string
+          last_event: string
+          last_from: string
+          last_message_at: string
+          organization_id: string
+          seialz_contact_id: string
+          unread_for_staff: number
+          updated_at: string
+        }
+        Insert: {
+          assigned_user_id?: string | null
+          conversation_id: string
+          created_at?: string
+          last_event: string
+          last_from: string
+          last_message_at: string
+          organization_id: string
+          seialz_contact_id: string
+          unread_for_staff?: number
+          updated_at?: string
+        }
+        Update: {
+          assigned_user_id?: string | null
+          conversation_id?: string
+          created_at?: string
+          last_event?: string
+          last_from?: string
+          last_message_at?: string
+          organization_id?: string
+          seialz_contact_id?: string
+          unread_for_staff?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_portal_chat_events_assigned_user_id_fkey"
+            columns: ["assigned_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_portal_chat_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_portal_chat_events_seialz_contact_id_fkey"
+            columns: ["seialz_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_portal_otp_log: {
         Row: {
           contact_id: string
@@ -15390,6 +15451,7 @@ export type Database = {
         Args: { p_organization_id: string; p_user_id: string }
         Returns: boolean
       }
+      can_view_client_portal_chat: { Args: { _org: string }; Returns: boolean }
       cancel_telephony_transfer_workflow: {
         Args: {
           _expected_version: number
