@@ -4,3 +4,4 @@
 - Perfil de sistema da org = `permission_profiles.is_system` (checar com `is_org_system_admin`), nunca pelo nome "Admin"; triggers de proteção liberam só execução interna (`current_user NOT IN (authenticated, anon)`) — porque nomes são editáveis e RPCs SECURITY DEFINER legítimas precisam passar.
 
 - `client-portal-otp-send` envia OTP direto pela Meta sem tocar em message_threads/messages e audita só em `client_portal_otp_log` (service_role) — porque o código não pode aparecer na Inbox nem para atendentes.
+- Chat do App do cliente: conversas vivem no projeto do App; o Seialz só guarda o último estado em `client_portal_chat_events` (sem texto) e fala com `portal-staff` exclusivamente via `client-portal-staff-proxy` (8 operações, org/staff da sessão) — porque o segredo HMAC não pode ir ao navegador e o chat não é thread de WhatsApp.

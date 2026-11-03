@@ -24,3 +24,6 @@ Superfície de conversas da **equipe de atendimento / customer success**: suport
 
 ## Rodízio do Atendimento
 Separado do rodízio comercial: `organizations.cs_round_robin_enabled`, `cs_round_robin_members`, `assign_cs_round_robin`, `can_receive_cs`. Só quem tem Atendimentos Ver e Responder ≠ "nenhum" (e, com rodízio ligado, está ativo na lista) recebe conversa de Atendimento. Regras e verificação: `docs/platform/security/rbac-v2/etapa1-log.md` (seção "Rodízio do Atendimento"); ADR-0011.
+
+## Chat do App do cliente (`/inbox/portal`)
+Tela separada do Atendimento WhatsApp, atrás da flag `client_portal_chat`. Ver ADR-0012. Responder aqui entrega no aplicativo do cliente, não no WhatsApp. Atualiza por Realtime em `client_portal_chat_events` e a cada 30 s.

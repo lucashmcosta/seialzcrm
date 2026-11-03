@@ -158,6 +158,8 @@ export function Notifications() {
         navigate(`/opportunities/${notification.entity_id}`);
       } else if (notification.entity_type === 'task') {
         navigate('/tasks');
+      } else if (notification.entity_type === 'client_portal_chat') {
+        navigate(`/inbox/portal?c=${notification.entity_id}`);
       } else if (notification.entity_type === 'message_thread' || notification.entity_type === 'message') {
         void navigateToThreadNotification(notification.entity_id);
       }

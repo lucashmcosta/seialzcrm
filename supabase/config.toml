@@ -234,6 +234,14 @@ verify_jwt = false
 [functions.client-portal-whatsapp-preview]
 verify_jwt = false
 
+# Aviso de chat do App (HMAC, servidor a servidor).
+[functions.client-portal-chat-notify]
+verify_jwt = false
+
+# Proxy da tela de chat do App: JWT validado em código + membership/permissão de Atendimento.
+[functions.client-portal-staff-proxy]
+verify_jwt = false
+
 # Cotação Plamev (widget plamev_quote). JWT validado em código + org em PLAMEV_ORG_IDS.
 [functions.plamev-quote]
 verify_jwt = false
