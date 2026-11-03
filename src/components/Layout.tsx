@@ -19,7 +19,9 @@ import {
   ChartBar,
   Headset,
   ChatsCircle,
+  DeviceMobile,
 } from '@phosphor-icons/react';
+import { useClientPortalChatFlag } from '@/hooks/useClientPortalChatFlag';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -52,6 +54,7 @@ export function Layout({ children }: LayoutProps) {
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { hasWhatsApp } = useWhatsAppIntegration();
   const { enabled: socialEnabled } = useMetaSocialPublishingFlag(organization?.id);
+  const portalChatEnabled = useClientPortalChatFlag(organization?.id);
   const { themePreset } = useTheme();
 
   // ═══════════════════════════════════════
@@ -99,7 +102,10 @@ export function Layout({ children }: LayoutProps) {
     // Atendimento group (módulo independente — pós-venda / jurídico)
     groups.push({
       label: uiText("ATENDIMENTO"),
-      items: [{ label: uiText("Atendimento"), href: '/inbox', icon: Headset }],
+      items: [
+        { label: uiText("Atendimento"), href: '/inbox', icon: Headset },
+        ...(portalChatEnabled ? [{ label: 'Chat do App', href: '/inbox/portal', icon: DeviceMobile }] : []),
+      ],
     });
 
     // System group
@@ -182,6 +188,9 @@ export function Layout({ children }: LayoutProps) {
     href: '/inbox',
     icon: Headset,
   });
+  if (portalChatEnabled) {
+    navItems.push({ label: 'Chat do App', href: '/inbox/portal', icon: DeviceMobile });
+  }
 
   navItems.splice(0, navItems.length, ...navItems.filter((i) => areaAllowed(permissions, i.href)));
 

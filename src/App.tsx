@@ -209,6 +209,7 @@ const OpportunityDetail = lazyWithRetry("OpportunityDetail", () => import("./pag
 const TasksList = lazyWithRetry("TasksList", () => import("./pages/tasks/TasksList"));
 const MessagesList = lazyWithRetry("MessagesList", () => import("./pages/messages/MessagesList"));
 const InboxPage = lazyWithRetry("InboxPage", () => import("./pages/inbox/InboxPage"));
+const ClientPortalChatPage = lazyWithRetry("ClientPortalChatPage", () => import("./pages/inbox/ClientPortalChatPage"));
 const MarketingOverview = lazyWithRetry("MarketingOverview", () => import("./pages/marketing/index"));
 const MarketingAds = lazyWithRetry("MarketingAds", () => import("./pages/marketing/ads/index"));
 const MarketingOrganic = lazyWithRetry("MarketingOrganic", () => import("./pages/marketing/organic/index"));
@@ -674,6 +675,14 @@ const App = () => (
           <Route
             path="/messages"
             element={<RedirectPreserveQuery to="/commercial" />}
+          />
+          <Route
+            path="/inbox/portal"
+            element={
+              <ProtectedRoute>
+                <RequirePerm path="dados.atendimentos.ver"><ClientPortalChatPage /></RequirePerm>
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/inbox"
