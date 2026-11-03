@@ -7,10 +7,11 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import { toast } from '@/hooks/use-toast';
 import {
-  chamar, contextoKey, type ClientePedido, type CotacaoSalva, type PedidoSimulacao, type Plano, type Resultado,
+  chamar, contextoKey, ErroPlamev, type ChamadaPlamev, type ClientePedido, type CotacaoSalva, type PedidoSimulacao, type Plano, type Resultado,
   useCampanhas, useCidades, useContexto, useEstados, usePlanos, useRacas, useSimulacao,
 } from './api';
 import { brl, resumoParaCliente } from './resumo';
+import { PayloadPlamev } from './PayloadPlamev';
 
 interface PetForm {
   chave: number; nome: string; especie: '1' | '2'; sexo: 'M' | 'F' | null; racaNome: string; nascimento: string; coberturaId: string;
@@ -229,8 +230,10 @@ export function PlamevQuoteForm({ organizationId: org, opportunityId, contactId 
 
   const pedido = useDebounced(pedidoAgora, 500);
   const sim = useSimulacao(org, pedido);
+  // Payload de "Gravar cotação" (o da simulação vem do próprio sim). Mudou o pedido, some com a cotação.
+  const [payloadGravar, setPayloadGravar] = useState<ChamadaPlamev[] | null>(null);
   // Cotação gravada corresponde a um pedido; mudou o pedido, some o número.
-  useEffect(() => { setCotacao(null); }, [pedidoAgora]);
+  useEffect(() => { setCotacao(null); setPayloadGravar(null); }, [pedidoAgora]);
 
   const validarCupom = async () => {
     if (!tipoUnico || !cupomTexto.trim()) return;
@@ -248,22 +251,25 @@ export function PlamevQuoteForm({ organizationId: org, opportunityId, contactId 
     if (!pedidoAgora) return;
     setGravando(true);
     try {
-      const r = await chamar<{ resultado: Resultado; salvaNaOportunidade?: boolean }>(org, 'solicitar', {
+      const r = await chamar<{ resultado: Resultado; salvaNaOportunidade?: boolean; payload?: ChamadaPlamev[] }>(org, 'solicitar', {
         ...pedidoAgora, cliente, opportunity_id: opportunityId,
         resumo_pets: pets.map((p) => ({ nome: p.nome.trim(), plano: planoDe(p.coberturaId)?.tipoNome ?? '' })),
       });
       setCotacao(r.resultado);
+      setPayloadGravar(r.payload ?? null);
       if (opportunityId) await qc.invalidateQueries({ queryKey: contextoKey(org, opportunityId, contactId) });
       toast({
         title: `Cotação ${r.resultado.numeroCotacao ?? ''} gravada na Plamev`,
         description: r.salvaNaOportunidade ? 'Salva também na oportunidade.' : undefined,
       });
     } catch (e) {
+      setPayloadGravar(e instanceof ErroPlamev ? e.payload : null);
       toast({ title: 'Cotação não gravada', description: (e as Error).message, variant: 'destructive' });
     } finally { setGravando(false); }
   };
 
-  const resultado = cotacao ?? sim.data ?? null;
+  const resultado = cotacao ?? sim.data?.resultado ?? null;
+  const payloadSimular = sim.data?.payload ?? (sim.error instanceof ErroPlamev ? sim.error.payload : null);
   const copiar = async () => {
     if (!resultado || !pedidoAgora) return;
     const texto = resumoParaCliente({
@@ -475,6 +481,13 @@ export function PlamevQuoteForm({ organizationId: org, opportunityId, contactId 
             {gravando ? <SpinnerGap className="mr-1 h-4 w-4 animate-spin" /> : null} Gravar cotação
           </Button>
         </div>
+      )}
+
+      {pedidoAgora && (payloadSimular || payloadGravar) && (
+        <PayloadPlamev chamadas={[
+          ...(payloadSimular ?? []).map((c) => ({ ...c, titulo: 'Simulação' })),
+          ...(payloadGravar ?? []).map((c) => ({ ...c, titulo: 'Gravar cotação' })),
+        ]} />
       )}
     </div>
   );

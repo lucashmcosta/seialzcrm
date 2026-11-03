@@ -38,11 +38,12 @@ const cache = new Map<string, { ate: number; valor: unknown }>();
 const UMA_HORA = 60 * 60 * 1000;
 
 // deno-lint-ignore no-explicit-any
-async function plamev(token: string, path: string, init?: { body?: unknown; cacheOrg?: string }): Promise<any> {
+async function plamev(token: string, path: string, init?: { body?: unknown; cacheOrg?: string; trace?: Chamada[] }): Promise<any> {
   const chave = init?.cacheOrg ? `${init.cacheOrg}:${path}` : null;
   const hit = chave ? cache.get(chave) : undefined;
   if (hit && hit.ate > Date.now()) return hit.valor;
 
+  const inicio = Date.now();
   const res = await fetch(`${BASE}/${path}`, {
     method: init?.body ? "POST" : "GET",
     headers: { Authorization: token, ...(init?.body ? { "Content-Type": "application/json" } : {}) },
@@ -52,6 +53,11 @@ async function plamev(token: string, path: string, init?: { body?: unknown; cach
   const texto = await res.text();
   let dados: unknown = null;
   try { dados = texto ? JSON.parse(texto) : null; } catch { /* resposta não-JSON */ }
+  // Sem o token: só o que foi enviado e o que voltou, para o vendedor conferir com a Plamev.
+  init?.trace?.push({
+    metodo: init?.body ? "POST" : "GET", url: `${BASE}/${path}`, status: res.status, ms: Date.now() - inicio,
+    enviado: init?.body ?? null, recebido: dados ?? (texto ? texto.slice(0, 20_000) : null),
+  });
   if (!res.ok) {
     console.warn(`[plamev-quote] ${path.split("?")[0]} -> ${res.status}`);
     if (res.status === 401) throw new L.Recusa(502, "plamev_unauthorized", "Token da Plamev recusado");
@@ -60,6 +66,9 @@ async function plamev(token: string, path: string, init?: { body?: unknown; cach
   if (chave) cache.set(chave, { ate: Date.now() + UMA_HORA, valor: dados });
   return dados;
 }
+
+/** Uma chamada à API da Plamev, devolvida ao widget em simular/solicitar ("Ver payload"). */
+interface Chamada { metodo: string; url: string; status: number; ms: number; enviado: unknown; recebido: unknown }
 
 const q = (params: Record<string, string>) => new URLSearchParams(params).toString();
 
@@ -92,6 +101,7 @@ Deno.serve(async (req) => {
     .eq("user_id", me.id).eq("organization_id", org).eq("is_active", true).maybeSingle();
   if (!membership) return json(403, { error: "forbidden" });
 
+  const trace: Chamada[] = [];
   try {
     if (L.CONFIG_ACTIONS.includes(action)) {
       const { data: perfil } = membership.permission_profile_id
@@ -226,8 +236,8 @@ Deno.serve(async (req) => {
 
       case "simular": {
         const pedido = L.pedidoSimulacao(body);
-        const raw = await plamev(token, "Cotacoes/SimulaCotacaoPet", { body: L.corpoSimulacao(pedido, CONSULTOR) });
-        return json(200, { resultado: L.resultado(raw) });
+        const raw = await plamev(token, "Cotacoes/SimulaCotacaoPet", { body: L.corpoSimulacao(pedido, CONSULTOR), trace });
+        return json(200, { resultado: L.resultado(raw), payload: trace });
       }
 
       case "solicitar": {
@@ -235,7 +245,7 @@ Deno.serve(async (req) => {
         const cliente = L.cliente(body);
         // Confere a oportunidade ANTES de gravar na Plamev: sem acesso, não cria cotação lá.
         const opp = await oportunidade(body.opportunity_id);
-        const raw = await plamev(token, "Cotacoes/SolicitaCotacaoPet", { body: L.corpoCotacao(pedido, cliente, CONSULTOR) });
+        const raw = await plamev(token, "Cotacoes/SolicitaCotacaoPet", { body: L.corpoCotacao(pedido, cliente, CONSULTOR), trace });
         const r = L.resultado(raw);
         console.log(`[plamev-quote] cotação gravada org=${org} user=${me.id} opp=${opp?.id ?? "-"}`);
 
@@ -259,13 +269,14 @@ Deno.serve(async (req) => {
           if (e1 || e2) console.error(`[plamev-quote] salvar na oportunidade falhou opp=${opp.id} quotes=${e1?.code ?? "ok"} activity=${e2?.code ?? "ok"}`);
           salvaNaOportunidade = !e1;
         }
-        return json(200, { resultado: r, salvaNaOportunidade });
+        return json(200, { resultado: r, salvaNaOportunidade, payload: trace });
       }
     }
   } catch (e) {
-    if (e instanceof L.Recusa) return json(e.status, { error: e.codigo, message: e.message });
+    const payload = trace.length ? trace : undefined;
+    if (e instanceof L.Recusa) return json(e.status, { error: e.codigo, message: e.message, payload });
     console.error(`[plamev-quote] ${action} falhou: ${(e as Error).name}`);
-    return json(502, { error: "plamev_unavailable" });
+    return json(502, { error: "plamev_unavailable", payload });
   }
   return json(400, { error: "invalid_action" });
 });

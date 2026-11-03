@@ -47,14 +47,22 @@ const MENSAGENS: Record<string, string> = {
   plamev_unavailable: 'A Plamev não respondeu. Tente de novo.',
 };
 
+/** Chamada feita à API da Plamev (sem o token), para conferir em "Ver payload". */
+export interface ChamadaPlamev { metodo: string; url: string; status: number; ms: number; enviado: unknown; recebido: unknown }
+
+/** Erro da função com o payload trocado com a Plamev, quando a chamada chegou até ela. */
+export class ErroPlamev extends Error {
+  constructor(mensagem: string, public payload: ChamadaPlamev[] | null) { super(mensagem); }
+}
+
 export async function chamar<T>(organizationId: string, action: string, payload: object = {}): Promise<T> {
   const { data, error } = await supabase.functions.invoke('plamev-quote', {
     body: { action, organization_id: organizationId, ...payload },
   });
   if (error) {
-    let corpo: { error?: string; message?: string } | null = null;
+    let corpo: { error?: string; message?: string; payload?: ChamadaPlamev[] } | null = null;
     try { corpo = await (error as { context?: Response }).context?.json?.(); } catch { /* sem corpo */ }
-    throw new Error(MENSAGENS[corpo?.error ?? ''] ?? corpo?.message ?? 'Falha ao falar com a Plamev.');
+    throw new ErroPlamev(MENSAGENS[corpo?.error ?? ''] ?? corpo?.message ?? 'Falha ao falar com a Plamev.', corpo?.payload ?? null);
   }
   return data as T;
 }
@@ -122,6 +130,6 @@ export function useContexto(org: string | undefined, opportunityId: string | nul
 export function useSimulacao(org: string | undefined, pedido: PedidoSimulacao | null) {
   return useQuery({
     queryKey: ['plamev', org, 'simular', pedido], enabled: !!org && !!pedido, staleTime: 5 * 60 * 1000, retry: false,
-    queryFn: () => chamar<{ resultado: Resultado }>(org!, 'simular', pedido!).then((r) => r.resultado),
+    queryFn: () => chamar<{ resultado: Resultado; payload?: ChamadaPlamev[] }>(org!, 'simular', pedido!),
   });
 }
