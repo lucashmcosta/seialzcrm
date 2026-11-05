@@ -5,6 +5,7 @@ import {
   camposAlterados,
   ErroCalculo,
 } from "../_shared/classificacao/certificar.ts";
+import { notaCertificacao } from "./logic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,11 +15,6 @@ const corsHeaders = {
 };
 const toleranceSeconds = 5 * 60;
 
-/** Nota nula/vazia vinda do Nammux (entrevista que confirmou tudo) vira texto padrão. */
-export function notaCertificacao(note: unknown, interviewer: string): string {
-  const texto = typeof note === "string" ? note.trim().slice(0, 1000) : "";
-  return texto || `Certificado na entrevista por ${interviewer}`;
-}
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
