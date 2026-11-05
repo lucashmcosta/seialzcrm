@@ -92,3 +92,7 @@
 
 - [x] client-portal-otp-send: migration, função, testes e secrets concluídos
 - [x] client-portal-whatsapp-preview (somente leitura)
+
+## Nammux classification.certified (2026-11-05)
+- [x] Nota nula → texto padrão; repetido só se processado; publicado
+- [ ] Teste com 1 certificação real — aguarda Nammux publicar envio

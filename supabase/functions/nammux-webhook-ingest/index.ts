@@ -5,6 +5,7 @@ import {
   camposAlterados,
   ErroCalculo,
 } from "../_shared/classificacao/certificar.ts";
+import { notaCertificacao } from "./logic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,6 +14,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const toleranceSeconds = 5 * 60;
+
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -134,6 +136,8 @@ Deno.serve(async (req) => {
     .eq("organization_id", organizationId)
     .eq("direction", "inbound")
     .eq("external_event_id", eventId)
+    .eq("status", "processed")
+    .limit(1)
     .maybeSingle();
   if (duplicate) return json(200, { ok: true, duplicate: true });
 
@@ -271,7 +275,7 @@ Deno.serve(async (req) => {
       _input: entrada,
       _changed: mudou,
       _result: resultado,
-      _note: typeof data.note === "string" ? data.note.slice(0, 1000) : "",
+      _note: notaCertificacao(data.note, interviewer),
       _redo: false,
     });
     if (certError) {
