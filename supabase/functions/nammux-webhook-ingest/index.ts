@@ -14,6 +14,12 @@ const corsHeaders = {
 };
 const toleranceSeconds = 5 * 60;
 
+/** Nota nula/vazia vinda do Nammux (entrevista que confirmou tudo) vira texto padrão. */
+export function notaCertificacao(note: unknown, interviewer: string): string {
+  const texto = typeof note === "string" ? note.trim().slice(0, 1000) : "";
+  return texto || `Certificado na entrevista por ${interviewer}`;
+}
+
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
     status,
@@ -134,6 +140,8 @@ Deno.serve(async (req) => {
     .eq("organization_id", organizationId)
     .eq("direction", "inbound")
     .eq("external_event_id", eventId)
+    .eq("status", "processed")
+    .limit(1)
     .maybeSingle();
   if (duplicate) return json(200, { ok: true, duplicate: true });
 
@@ -271,7 +279,7 @@ Deno.serve(async (req) => {
       _input: entrada,
       _changed: mudou,
       _result: resultado,
-      _note: typeof data.note === "string" ? data.note.slice(0, 1000) : "",
+      _note: notaCertificacao(data.note, interviewer),
       _redo: false,
     });
     if (certError) {
