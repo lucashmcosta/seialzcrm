@@ -80,17 +80,27 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
         body: { organization_id: organization!.id },
       });
       if (error) throw error;
-      if ((data as any)?.success === false) throw new Error((data as any).error_message || uiText("Falha ao listar contas"));
-      return (data as any)?.ad_accounts || [];
+      if ((data as any)?.success === false && !((data as any)?.error_code === 'no_ad_accounts' && (data as any)?.credential_source === 'canonical')) {
+        throw new Error((data as any).error_message || uiText("Falha ao listar contas"));
+      }
+      return {
+        accounts: ((data as any)?.ad_accounts || []) as any[],
+        // Regra única do backend: 'canonical' = Meta Connection (flag ON ou org sem legado).
+        source: ((data as any)?.credential_source || 'legacy') as 'canonical' | 'legacy',
+      };
     },
   });
+  const adAccounts = adAccountsQuery.data?.accounts || [];
+  const isCanonical = adAccountsQuery.data?.source === 'canonical';
+  // No canônico o sync roda nas ad accounts selecionadas mesmo antes de salvar uma.
+  const canSync = !!currentAdAccountId || (isCanonical && adAccounts.length > 0);
 
   const saveAdsManager = useMutation({
     mutationFn: async () => {
       if (!organization?.id) throw new Error(uiText("Organização não encontrada"));
       const accountId = selectedAdAccount || currentAdAccountId;
       if (!accountId) throw new Error(uiText("Selecione uma Ad Account"));
-      const account = (adAccountsQuery.data || []).find(
+      const account = adAccounts.find(
         (a: any) => a.id === accountId || a.account_id === accountId.replace('act_', ''),
       );
       const { data, error } = await supabase.functions.invoke('meta-ads-manager-save', {
@@ -170,7 +180,7 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
             <SelectValue placeholder={adAccountsQuery.isLoading ? uiText("Carregando contas...") : uiText("Selecione uma Ad Account")} />
           </SelectTrigger>
           <SelectContent>
-            {(adAccountsQuery.data || []).map((acc: any) => (
+            {adAccounts.map((acc: any) => (
               <SelectItem key={acc.id} value={acc.id}>{acc.name} ({acc.id})</SelectItem>
             ))}
           </SelectContent>
@@ -178,8 +188,13 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
         {adAccountsQuery.isError && (
           <p className="text-xs text-destructive">{(adAccountsQuery.error as any)?.message || uiText("Falha ao listar contas")}</p>
         )}
-        {!adAccountsQuery.isLoading && !adAccountsQuery.isError && (adAccountsQuery.data || []).length === 0 && (
-          <p className="text-xs text-muted-foreground">{uiText("Nenhuma Ad Account acessível por esse token. Verifique permissões")}{' '}<code>ads_read</code> {uiText("e")}{' '}<code>business_management</code>.</p>
+        {isCanonical && (
+          <p className="text-xs text-muted-foreground">{uiText("Contas selecionadas nos Ativos da Meta Connection.")}</p>
+        )}
+        {!adAccountsQuery.isLoading && !adAccountsQuery.isError && adAccounts.length === 0 && (
+          isCanonical
+            ? <p className="text-xs text-muted-foreground">{uiText("Nenhuma Ad Account selecionada nos Ativos da Meta Connection.")}</p>
+            : <p className="text-xs text-muted-foreground">{uiText("Nenhuma Ad Account acessível por esse token. Verifique permissões")}{' '}<code>ads_read</code> {uiText("e")}{' '}<code>business_management</code>.</p>
         )}
       </div>
 
@@ -192,7 +207,7 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
       </div>
 
       <div className="flex flex-wrap gap-2 justify-end">
-        <Button variant="ghost" size="sm" onClick={() => syncNow.mutate()} disabled={syncNow.isPending || !currentAdAccountId} title={uiText("Sincronizar agora (diagnóstico)")}>
+        <Button variant="ghost" size="sm" onClick={() => syncNow.mutate()} disabled={syncNow.isPending || !canSync} title={uiText("Sincronizar agora (diagnóstico)")}>
           <ArrowsClockwise className={`h-4 w-4 mr-1 ${syncNow.isPending ? 'animate-spin' : ''}`} />
           {uiText("Sincronizar agora")}</Button>
         <Button onClick={() => saveAdsManager.mutate()} disabled={saveAdsManager.isPending || (!selectedAdAccount && !currentAdAccountId)}>

@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { decryptSecret } from "../_shared/crypto.ts";
+import { appSecretProof } from "../_shared/meta-graph.ts";
+import { listCanonicalAdsOrgIds, resolveOrgAdsAccess, syncAdAccountIds } from "../_shared/meta/ads-access.ts";
 
 const API_VERSION = "v25.0";
 const GRAPH_TIMEOUT_MS = 30000;
@@ -62,13 +63,15 @@ async function graphFetchInsights(
   token: string,
   since: string,
   until: string,
+  appSecret?: string,
 ): Promise<{ ok: boolean; status: number; body: any }> {
   let url: string | null =
     `https://graph.facebook.com/${API_VERSION}/${adId}/insights` +
     `?fields=spend,impressions,reach,clicks,inline_link_clicks,actions` +
     `&time_range=${encodeURIComponent(JSON.stringify({ since, until }))}` +
     `&time_increment=1` +
-    `&access_token=${encodeURIComponent(token)}`;
+    `&access_token=${encodeURIComponent(token)}` +
+    (appSecret ? `&appsecret_proof=${await appSecretProof(appSecret, token)}` : "");
 
   const allData: any[] = [];
   let lastStatus = 0;
@@ -119,6 +122,7 @@ async function processAd(
   ad: { id: string; external_id: string; spend_currency: string | null },
   token: string,
   daysBack: number,
+  appSecret?: string,
 ): Promise<{ days_inserted: number; status: "success" | "failed" | "skipped"; error?: string }> {
   const today = new Date();
   const since = new Date(today);
@@ -130,7 +134,7 @@ async function processAd(
   let result: { ok: boolean; status: number; body: any } | null = null;
 
   while (attempt < 2) {
-    result = await graphFetchInsights(ad.external_id, token, sinceStr, untilStr);
+    result = await graphFetchInsights(ad.external_id, token, sinceStr, untilStr, appSecret);
     if (result.ok) break;
 
     if (isTokenError(result.body)) {
@@ -294,6 +298,12 @@ serve(async (req) => {
       seen.add(oi.organization_id);
       orgs.push({ id: oi.organization_id });
     }
+    // Orgs só-canônicas (Meta Connection com ad account selecionada) também entram (dedupe por `seen`).
+    for (const orgId of await listCanonicalAdsOrgIds(admin)) {
+      if (seen.has(orgId)) continue;
+      seen.add(orgId);
+      orgs.push({ id: orgId });
+    }
   }
 
   let adsProcessed = 0;
@@ -303,31 +313,25 @@ serve(async (req) => {
   const errors: any[] = [];
 
   for (const org of orgs) {
-    const { data: credRows, error: credErr } = await admin.rpc("get_meta_credentials", {
-      p_org_id: org.id,
-    });
-    if (credErr) {
-      errors.push({ org_id: org.id, error: `creds: ${credErr.message}` });
+    // Regra única de credencial (canônico se flag ON ou sem legado; senão legado).
+    const res = await resolveOrgAdsAccess(admin, org.id, { tag: "marketing-insights-sync-daily" });
+    if (!res.ok) {
+      if (res.reason === "creds_error") {
+        errors.push({ org_id: org.id, error: res.message });
+        continue;
+      }
+      // Mesma ordem de antes: sem config => ignora silenciosamente.
+      const l = res.legacy;
+      if (!l || !l.syncEnabled || !l.adAccountId) continue;
+      errors.push({ org_id: org.id, error: res.reason === "decrypt_failed" ? "decrypt_failed" : "no_token" });
       continue;
     }
-    const cred = credRows?.[0];
-    if (!cred?.is_connected || !cred.feature_ads_manager_sync || !cred.ad_account_id) {
-      continue;
-    }
-    if (!cred.system_user_token_encrypted) {
-      errors.push({ org_id: org.id, error: "no_token" });
-      continue;
-    }
-
-    let token: string;
-    try {
-      token = await decryptSecret(cred.system_user_token_encrypted);
-      console.log(`[meta-token] slug=${cred.source ?? "meta"} org=${org.id} result=ok`);
-    } catch (e) {
-      console.warn(`[meta-token] slug=${cred.source ?? "meta"} org=${org.id} result=fail reason=${(e as Error).message}`);
-      errors.push({ org_id: org.id, error: "decrypt_failed" });
-      continue;
-    }
+    const access = res.access;
+    if (!access.syncEnabled || syncAdAccountIds(access).length === 0) continue;
+    const token = access.token;
+    // appsecret_proof só no canônico; legado idêntico ao de hoje.
+    const proofSecret = access.source === "canonical" ? access.appSecret : undefined;
+    const cred = { source: access.legacy?.source ?? null };
 
     const { data: ads, error: adsErr } = await admin
       .from("marketing_campaigns")
@@ -346,7 +350,7 @@ serve(async (req) => {
 
     let tokenInvalid = false;
     for (const ad of (ads ?? []) as any[]) {
-      const result = await processAd(admin, org, ad, token, daysBack);
+      const result = await processAd(admin, org, ad, token, daysBack, proofSecret);
       if (result.status === "success") {
         adsProcessed++;
         daysInserted += result.days_inserted;
@@ -355,7 +359,8 @@ serve(async (req) => {
         errors.push({ org_id: org.id, ad_id: ad.external_id, error: result.error });
         if (result.error === "token_invalid") {
           tokenInvalid = true;
-          const { data: integ } = await admin
+          // Marca erro de token só na linha LEGADA; no canônico a saúde é da Meta Connection.
+          const { data: integ } = access.source !== "legacy" ? { data: null } : await admin
             .from("admin_integrations")
             .select("id")
             .eq("slug", cred.source === "meta" ? "meta" : "meta-lead-ads")

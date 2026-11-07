@@ -23,7 +23,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { decryptSecret } from "../_shared/crypto.ts";
+import { resolveOrgAdsAccess } from "../_shared/meta/ads-access.ts";
 import { isTokenError, metaGraphGet, MetaGraphError } from "../_shared/meta-graph.ts";
 import { notifyOrgUsers } from "../_shared/notify.ts";
 import { validateServiceRoleAuth } from "../_shared/auth.ts";
@@ -103,8 +103,22 @@ serve(async (req) => {
         .eq("is_enabled", true)
         .maybeSingle();
 
-      if (!integration?.connected_account) {
-        console.log(`Org ${orgId} has no meta-lead-ads integration → marking ${orgCampaigns.length} campaigns as no_token`);
+      // Regra única de credencial: legado = token do slug meta-lead-ads (como sempre foi
+      // aqui); sem legado utilizável ou flag ON → Meta Connection canônica.
+      const ca: any = integration?.connected_account ?? null;
+      const res = await resolveOrgAdsAccess(admin, orgId, {
+        tag: "marketing-campaign-enrich",
+        loadLegacy: async () => ca ? {
+          tokenEncrypted: ca.system_user_token_encrypted || null,
+          appSecretEncrypted: ca.app_secret_encrypted || null,
+          adAccountId: ca.ad_account_id || null,
+          syncEnabled: true,
+          source: "meta-lead-ads",
+        } : null,
+      });
+
+      if (!res.ok && !ca) {
+        console.log(`Org ${orgId} has no meta-lead-ads integration nor canonical connection → marking ${orgCampaigns.length} campaigns as no_token`);
         await admin
           .from("marketing_campaigns")
           .update({
@@ -116,27 +130,23 @@ serve(async (req) => {
         totalNoToken += orgCampaigns.length;
         continue;
       }
-
-      const ca: any = integration.connected_account;
-      let systemUserToken: string;
-      let appSecret: string | undefined;
-      try {
-        if (!ca.system_user_token_encrypted) throw new Error("system_user_token_encrypted missing");
-        systemUserToken = await decryptSecret(ca.system_user_token_encrypted);
-        appSecret = ca.app_secret_encrypted ? await decryptSecret(ca.app_secret_encrypted) : undefined;
-      } catch (e: any) {
-        console.error(`Org ${orgId} token decryption failed:`, e.message);
+      if (!res.ok) {
+        const msg = res.reason === "no_credential" ? "system_user_token_encrypted missing" : res.message;
+        console.error(`Org ${orgId} token decryption failed:`, msg);
         await admin
           .from("marketing_campaigns")
           .update({
             sync_status: "failed",
-            sync_error: `Decryption error: ${e.message}`,
+            sync_error: `Decryption error: ${msg}`,
             last_synced_at: new Date().toISOString(),
           })
           .in("id", orgCampaigns.map((c) => c.id));
         totalFailed += orgCampaigns.length;
         continue;
       }
+      const systemUserToken = res.access.token;
+      const appSecret = res.access.appSecret;
+      const notifyEntityId = integration?.id ?? res.access.connection_id ?? undefined;
 
       // 4. Pra cada campaign, chamar Meta Marketing API
       let orgTokenExpired = false;
@@ -254,9 +264,11 @@ serve(async (req) => {
             await notifyOrgUsers(admin, orgId, {
               type: "warning",
               title: "Token Meta expirado",
-              body: "Os anúncios Meta não pôde ser enriquecidos: token expirado. Reconecte a integração Meta Lead Ads.",
+              body: res.access.source === "canonical"
+                ? "Os anúncios Meta não puderam ser enriquecidos: token expirado. Reconecte a Meta Connection."
+                : "Os anúncios Meta não pôde ser enriquecidos: token expirado. Reconecte a integração Meta Lead Ads.",
               entity_type: "integration",
-              entity_id: integration.id,
+              entity_id: notifyEntityId,
             });
           }
         }

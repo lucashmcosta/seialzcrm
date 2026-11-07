@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { decryptSecret } from "../_shared/crypto.ts";
+import { appSecretProof } from "../_shared/meta-graph.ts";
+import { normalizeAdAccountId, resolveOrgAdsAccess } from "../_shared/meta/ads-access.ts";
 
 const API_VERSION = "v25.0";
 const GRAPH_TIMEOUT_MS = 30000;
@@ -30,10 +31,11 @@ function redactToken(t: string) {
   return `${t.slice(0, 8)}***`;
 }
 
-async function graphGet(path: string, token: string, fields?: string) {
+async function graphGet(path: string, token: string, fields?: string, appSecret?: string) {
   const url = new URL(`https://graph.facebook.com/${API_VERSION}${path}`);
   if (fields) url.searchParams.set("fields", fields);
   url.searchParams.set("access_token", token);
+  if (appSecret) url.searchParams.set("appsecret_proof", await appSecretProof(appSecret, token));
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), GRAPH_TIMEOUT_MS);
   try {
@@ -105,35 +107,21 @@ serve(async (req) => {
     return errorResponse("invalid_body", "organization_id (uuid) required", undefined, 400);
   }
 
-  // Read credentials
-  const { data: credRows, error: credErr } = await admin.rpc("get_meta_credentials", {
-    p_org_id: orgId,
-  });
-  if (credErr) {
-    console.error("get_meta_credentials error:", credErr);
-    return errorResponse("token_decrypt_failed", credErr.message, undefined, 500);
-  }
-  const cred = credRows?.[0];
-  if (!cred?.is_connected) {
-    return errorResponse(
-      "no_meta_integration",
-      "Org não tem integração Meta conectada",
-      undefined,
-      404,
-    );
-  }
-
-  const tokenEnc = cred.system_user_token_encrypted;
-  if (!tokenEnc) {
-    return errorResponse("token_decrypt_failed", "Token criptografado ausente", undefined, 500);
-  }
-
-  let accessToken: string;
-  try {
-    accessToken = await decryptSecret(tokenEnc);
-    console.log(`[meta-token] slug=meta org=${orgId} result=ok`);
-  } catch (e) {
-    console.warn(`[meta-token] slug=meta org=${orgId} result=fail reason=${(e as Error).message}`);
+  // Credencial: mesma regra única (canônico se flag ON ou sem legado; senão legado).
+  const res = await resolveOrgAdsAccess(admin, orgId, { tag: "meta-discover-ad-accounts" });
+  if (!res.ok) {
+    if (res.reason === "no_credential") {
+      return errorResponse(
+        "no_meta_integration",
+        "Org não tem integração Meta conectada",
+        undefined,
+        404,
+      );
+    }
+    if (res.reason === "creds_error") {
+      console.error("get_meta_credentials error:", res.message);
+      return errorResponse("token_decrypt_failed", res.message, undefined, 500);
+    }
     return errorResponse(
       "token_decrypt_failed",
       "Falha ao decriptar token da integração Meta. Reconecte a integração Meta para esta organização.",
@@ -141,16 +129,24 @@ serve(async (req) => {
       500,
     );
   }
+  const access = res.access;
+  const accessToken = access.token;
+  // appsecret_proof só no canônico (app da plataforma); legado segue idêntico ao de hoje.
+  const proofSecret = access.source === "canonical" ? access.appSecret : undefined;
+  const cred = {
+    meta_user_id: access.legacy?.meta_user_id ?? null,
+    meta_user_name: access.legacy?.meta_user_name ?? null,
+  };
 
-  // Sem fallback cross-slug. Esta função usa exclusivamente o token da integração `meta`.
+  // Linha onde a escolha da ad account é persistida (slug `meta`) — igual nos dois modos.
   const sourceSlug = "meta";
 
   console.log(
-    `[meta-discover-ad-accounts] org=${orgId} source=${sourceSlug} token=${redactToken(accessToken)}`,
+    `[meta-discover-ad-accounts] org=${orgId} source=${access.source} slug=${sourceSlug} token=${redactToken(accessToken)}`,
   );
 
   // 1) permissions
-  const perms = await graphGet("/me/permissions", accessToken);
+  const perms = await graphGet("/me/permissions", accessToken, undefined, proofSecret);
   if (!perms.ok) {
     return errorResponse("meta_api_error", "Falha ao ler /me/permissions", perms.body, 502);
   }
@@ -163,6 +159,7 @@ serve(async (req) => {
     "/me/adaccounts",
     accessToken,
     "id,account_id,name,currency,timezone_name,account_status,business",
+    proofSecret,
   );
   if (!adAccountsRes.ok) {
     return errorResponse(
@@ -172,10 +169,15 @@ serve(async (req) => {
       502,
     );
   }
-  const adAccounts: any[] = adAccountsRes.body?.data ?? [];
+  let adAccounts: any[] = adAccountsRes.body?.data ?? [];
+  // Canônico: só as ad accounts que o usuário SELECIONOU nos Ativos da Meta Connection.
+  if (access.source === "canonical") {
+    const selected = new Set(access.adAccountIds);
+    adAccounts = adAccounts.filter((a: any) => selected.has(normalizeAdAccountId(a.id ?? a.account_id)));
+  }
 
   // 3) businesses
-  const bizRes = await graphGet("/me/businesses", accessToken, "id,name");
+  const bizRes = await graphGet("/me/businesses", accessToken, "id,name", proofSecret);
   const businesses: any[] = bizRes.ok ? (bizRes.body?.data ?? []) : [];
 
   if (adAccounts.length === 0) {
@@ -184,6 +186,7 @@ serve(async (req) => {
       error_code: "no_ad_accounts",
       error_message: "Token não tem acesso a nenhum ad account",
       source_integration_slug: sourceSlug,
+      credential_source: access.source,
       meta_user_id: cred.meta_user_id,
       meta_user_name: cred.meta_user_name,
       ad_accounts: [],
@@ -230,6 +233,7 @@ serve(async (req) => {
   return json({
     success: true,
     source_integration_slug: sourceSlug,
+    credential_source: access.source,
     meta_user_id: cred.meta_user_id,
     meta_user_name: cred.meta_user_name,
     ad_accounts: adAccounts,

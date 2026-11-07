@@ -263,8 +263,10 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
       // Com credencial canônica ativa não se pede token manual; salvar a configuração
       // (pixel/test code/CTWA/url) reusa o caminho sem-token. O token de envio real é
       // resolvido server-side pela Meta Connection quando a flag está ligada.
+      // Canônico ativo (flag ON ou org sem legado): sempre o caminho sem-token —
+      // o backend resolve a Meta Connection pela mesma regra (só o Pixel ID é pedido).
       const useReuse =
-        (canonicalActive && !!hasMetaLeadAds) ||
+        canonicalActive ||
         (mode === "reuse" && !isConnected) ||
         (isConnected && !reconnectMode && manualToken.length === 0 && !!hasMetaLeadAds);
       const fnName = useReuse ? "meta-capi-connect-from-existing" : "meta-capi-connect";

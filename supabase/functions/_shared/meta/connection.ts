@@ -77,18 +77,62 @@ export async function introspectToken(token: string): Promise<TokenDebug> {
   };
 }
 
-// ---- Fase 1: resolução de credencial CANÔNICA com dual-read + fallback legado ----
-// Consumidores (Lead Generation, CAPI, …) resolvem o token Meta pela Meta Connection
-// canônica quando a flag `meta_canonical_credential` está ligada p/ a org E existe uma
-// conexão `connected`; senão caem no token legado (fallback preservado). Sem token/
-// ciphertext no frontend (isto roda só com service_role). O caminho escolhido é logado
-// com a tag [meta-token] source=canonical|legacy — trilha de auditoria nos edge logs.
+// ---- Resolução de credencial Meta da org (fonte única da regra) ----
+// Regra: usa a credencial CANÔNICA (Meta Connection) quando
+//   (a) a flag `meta_canonical_credential` está ligada p/ a org, OU
+//   (b) a org NÃO tem credencial legada utilizável (o callback `legacyToken` retorna null).
+// Senão usa a LEGADA — exatamente o comportamento anterior. Assim:
+//   - legado presente + flag OFF  → legado (sem mudança; ex.: orgs antigas)
+//   - flag ON                      → canônico, com o fallback legado de sempre
+//   - sem legado (orgs novas)      → canônico automaticamente, sem flag
+// `route.source==='legacy'` (meta_operational_routes) continua barrando o canônico.
+// Sem token/ciphertext no frontend (isto roda só com service_role). O caminho
+// escolhido é logado com a tag [meta-token] source=canonical|legacy reason=flag|no_legacy.
 export interface ResolvedMetaToken {
   token: string;
   appSecret?: string;
   source: "canonical" | "legacy";
   connection_id?: string;
 }
+
+export async function isCanonicalFlagOn(admin: any, orgId: string): Promise<boolean> {
+  try {
+    const { data } = await admin.rpc("fn_feature_flag_enabled", {
+      _flag_key: "meta_canonical_credential",
+      _organization_id: orgId,
+    });
+    return data === true;
+  } catch (_) {
+    return false;
+  }
+}
+
+type CanonicalAttempt =
+  | { kind: "ok"; resolved: ResolvedMetaToken }
+  | { kind: "no_connection"; strict: boolean }
+  | { kind: "token_failed"; strict: boolean; reason: string };
+
+async function tryCanonicalToken(admin: any, orgId: string, cap: string): Promise<CanonicalAttempt> {
+  const routeKey = cap.startsWith('lead-generation') ? 'lead-generation' : cap;
+  const { data: route, error: routeError } = await admin.from('meta_operational_routes').select('source,connection_id')
+    .eq('organization_id',orgId).eq('route',routeKey).maybeSingle();
+  if (routeError) throw new Error('route_lookup_failed');
+  const strict = route?.source === 'canonical';
+  const { data: connections, error: connectionsError } = await admin.from('meta_connections')
+    .select('id,status,activation_state,last_health,expires_at,data_access_expires_at,granted_scopes')
+    .eq('organization_id',orgId).eq('status','connected').order('created_at',{ascending:false});
+  if (connectionsError) throw new Error('connection_lookup_failed');
+  const scopes = routeKey === 'lead-generation' ? ['leads_retrieval'] : [];
+  const conn = routedCandidates(connections ?? [], route, scopes)[0];
+  if (!conn?.id) return { kind: "no_connection", strict };
+  try {
+    const token = await resolveConnectionToken(admin, conn.id);
+    return { kind: "ok", resolved: { token, appSecret: facebookAppSecret(), source: "canonical", connection_id: conn.id } };
+  } catch (e) {
+    return { kind: "token_failed", strict, reason: (e as Error).message };
+  }
+}
+
 export async function resolveOrgMetaToken(
   admin: any,
   orgId: string,
@@ -96,38 +140,21 @@ export async function resolveOrgMetaToken(
   ctx?: { capability?: string },
 ): Promise<ResolvedMetaToken | null> {
   const cap = ctx?.capability ?? "meta";
-  let canonicalOn = false;
-  try {
-    const { data } = await admin.rpc("fn_feature_flag_enabled", {
-      _flag_key: "meta_canonical_credential",
-      _organization_id: orgId,
-    });
-    canonicalOn = data === true;
-  } catch (_) { canonicalOn = false; }
+  const canonicalOn = await isCanonicalFlagOn(admin, orgId);
 
   if (canonicalOn) {
-    const routeKey = cap.startsWith('lead-generation') ? 'lead-generation' : cap;
-    const { data: route, error: routeError } = await admin.from('meta_operational_routes').select('source,connection_id')
-      .eq('organization_id',orgId).eq('route',routeKey).maybeSingle();
-    if (routeError) throw new Error('route_lookup_failed');
-    const { data: connections, error: connectionsError } = await admin.from('meta_connections')
-      .select('id,status,activation_state,last_health,expires_at,data_access_expires_at,granted_scopes')
-      .eq('organization_id',orgId).eq('status','connected').order('created_at',{ascending:false});
-    if (connectionsError) throw new Error('connection_lookup_failed');
-    const scopes = routeKey === 'lead-generation' ? ['leads_retrieval'] : [];
-    const conn = routedCandidates(connections ?? [], route, scopes)[0];
-    if (conn?.id) {
-      try {
-        const token = await resolveConnectionToken(admin, conn.id);
-        console.log(`[meta-token] cap=${cap} org=${orgId} source=canonical connection=${conn.id} result=ok`);
-        return { token, appSecret: facebookAppSecret(), source: "canonical", connection_id: conn.id };
-      } catch (e) {
-        console.warn(`[meta-token] cap=${cap} org=${orgId} source=canonical result=fail reason=${(e as Error).message} fallback=legacy`);
-        if (route?.source === 'canonical') throw new Error('operational_credentials_unavailable');
-      }
+    // Comportamento anterior (flag ON) preservado byte a byte, incl. rotas estritas.
+    const c = await tryCanonicalToken(admin, orgId, cap);
+    if (c.kind === "ok") {
+      console.log(`[meta-token] cap=${cap} org=${orgId} source=canonical reason=flag connection=${c.resolved.connection_id} result=ok`);
+      return c.resolved;
+    }
+    if (c.kind === "token_failed") {
+      console.warn(`[meta-token] cap=${cap} org=${orgId} source=canonical result=fail reason=${c.reason} fallback=legacy`);
+      if (c.strict) throw new Error('operational_credentials_unavailable');
     } else {
       console.log(`[meta-token] cap=${cap} org=${orgId} source=canonical result=no_connection fallback=legacy`);
-      if (route?.source === 'canonical') return null;
+      if (c.strict) return null;
     }
   }
 
@@ -135,6 +162,22 @@ export async function resolveOrgMetaToken(
   if (legacy?.token) {
     console.log(`[meta-token] cap=${cap} org=${orgId} source=legacy result=ok`);
     return { token: legacy.token, appSecret: legacy.appSecret, source: "legacy" };
+  }
+
+  if (!canonicalOn) {
+    // Sem credencial legada utilizável → canônico automaticamente (orgs novas).
+    // Nunca lança aqui: antes desta regra o resultado era `null` e os callers já
+    // tratam isso (no_meta_token etc.) — mantemos o mesmo modo de falha.
+    try {
+      const c = await tryCanonicalToken(admin, orgId, cap);
+      if (c.kind === "ok") {
+        console.log(`[meta-token] cap=${cap} org=${orgId} source=canonical reason=no_legacy connection=${c.resolved.connection_id} result=ok`);
+        return c.resolved;
+      }
+      console.log(`[meta-token] cap=${cap} org=${orgId} source=canonical reason=no_legacy result=${c.kind}${c.kind === "token_failed" ? ` detail=${c.reason}` : ""}`);
+    } catch (e) {
+      console.warn(`[meta-token] cap=${cap} org=${orgId} source=canonical reason=no_legacy result=fail detail=${(e as Error).message}`);
+    }
   }
   console.warn(`[meta-token] cap=${cap} org=${orgId} result=fail reason=no_token_any_source`);
   return null;

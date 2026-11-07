@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret, encryptSecret } from "../_shared/crypto.ts";
 import { metaGraphGet, MetaGraphError } from "../_shared/meta-graph.ts";
+import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -46,6 +47,15 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    // Usa a credencial JÁ guardada da org (legada ou Meta Connection) → exige membro da org.
+    const { data: caller } = await admin
+      .from("users").select("id").eq("auth_user_id", claims.claims.sub).maybeSingle();
+    if (!caller) return json({ error: "user_not_found" }, 403);
+    const { data: membership } = await admin
+      .from("user_organizations").select("id")
+      .eq("user_id", caller.id).eq("organization_id", organization_id).maybeSingle();
+    if (!membership) return json({ error: "forbidden_org" }, 403);
+
     // Fetch Meta Lead Ads token
     const { data: leadAds } = await admin
       .from("organization_integrations")
@@ -56,21 +66,29 @@ serve(async (req) => {
       .maybeSingle();
 
     const enc = (leadAds?.connected_account as any)?.system_user_token_encrypted;
-    if (!enc) {
+
+    // Regra única (resolveOrgMetaToken): legado = token do Meta Lead Ads (como antes);
+    // canônico quando a flag está ON ou a org não tem esse legado.
+    let resolved: Awaited<ReturnType<typeof resolveOrgMetaToken>>;
+    try {
+      resolved = await resolveOrgMetaToken(admin, organization_id, async () => {
+        if (!enc) return null;
+        return { token: await decryptSecret(enc) };
+      }, { capability: "capi" });
+    } catch (e: any) {
+      if (enc && e.message !== "operational_credentials_unavailable") return json({ error: "Falha ao descriptografar token do Meta Lead Ads: " + e.message }, 500);
+      return json({ error: "Credencial Meta indisponível: " + e.message }, 500);
+    }
+    if (!resolved) {
       return json({ error: "Meta Lead Ads não conectado nesta org. Não é possível reusar o token." }, 400);
     }
-
-    let tokenPlain: string;
-    try {
-      tokenPlain = await decryptSecret(enc);
-    } catch (e: any) {
-      return json({ error: "Falha ao descriptografar token do Meta Lead Ads: " + e.message }, 500);
-    }
+    const tokenPlain = resolved.token;
 
     // Validate pixel access
     try {
       const res = await metaGraphGet(`/${pixel_id}`, { fields: "id,name" }, {
         accessToken: tokenPlain,
+        appSecret: resolved.source === "canonical" ? resolved.appSecret : undefined,
       });
       if (!res?.id) {
         return json({ error: "Pixel ID não encontrado pelo token do Meta Lead Ads", meta_error_code: 100 }, 400);
@@ -107,20 +125,25 @@ serve(async (req) => {
       .eq("auth_user_id", claims.claims.sub)
       .maybeSingle();
 
-    // Re-encrypt the token into meta-capi's OWN access_token_encrypted slot.
+    // Legado: re-encrypt the token into meta-capi's OWN access_token_encrypted slot.
     // CAPI is now autonomous at runtime — no cross-slug reads.
-    let ownAccessTokenEncrypted: string;
-    try {
-      ownAccessTokenEncrypted = await encryptSecret(tokenPlain);
-    } catch (e: any) {
-      return json({ error: "Falha ao cifrar token para meta-capi: " + e.message }, 500);
+    // Canônico: NÃO copia o token da Meta Connection p/ a linha da CAPI (viraria um
+    // "legado" congelado e a regra passaria a escolhê-lo); o envio resolve o token
+    // canônico em runtime (meta-capi-send-event → resolveOrgMetaToken).
+    const tokenFields: Record<string, unknown> = {};
+    if (resolved.source === "legacy") {
+      try {
+        tokenFields.access_token_encrypted = await encryptSecret(tokenPlain);
+      } catch (e: any) {
+        return json({ error: "Falha ao cifrar token para meta-capi: " + e.message }, 500);
+      }
+      tokenFields.access_token_last4 = tokenPlain.slice(-4);
     }
 
     const connected_account = {
       ...ca,
       pixel_id: String(pixel_id).trim(),
-      access_token_encrypted: ownAccessTokenEncrypted,
-      access_token_last4: tokenPlain.slice(-4),
+      ...tokenFields,
       test_event_code: test_event_code || null,
       whatsapp_business_account_id: whatsapp_business_account_id || null,
       page_id: page_id || null,
@@ -157,7 +180,7 @@ serve(async (req) => {
       if (error) throw error;
     }
 
-    return json({ success: true, token_source: "self" });
+    return json({ success: true, token_source: resolved.source === "canonical" ? "canonical" : "self" });
   } catch (e: any) {
     console.error("meta-capi-connect-from-existing error", e);
     return json({ error: e.message || "Internal error" }, 500);

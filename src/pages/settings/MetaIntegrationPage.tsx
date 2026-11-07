@@ -19,6 +19,7 @@ import {
 import { MetaConnectButton } from '@/components/integrations/meta/MetaConnectButton';
 import { MetaAssetSelector } from '@/components/integrations/meta/MetaAssetSelector';
 import { AdsManagerConfig } from '@/components/integrations/meta/AdsManagerConfig';
+import { useMetaConnection } from '@/hooks/useMetaConnection';
 import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaLeadAdsDialog';
 import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDialog';
 import { MetaWhatsAppCloudDialog } from '@/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog';
@@ -128,6 +129,8 @@ export default function MetaIntegrationPage() {
     return orgIntegrations.find((oi: { integration_id: string }) => oi.integration_id === integ?.id) ?? null;
   };
   const enabledSlug = (slug: string) => Boolean(orgBySlug(slug)?.is_enabled);
+  // Performance também aparece p/ orgs só-canônicas (mesma regra do backend: flag ON ou sem legado).
+  const { canonicalActive: adsCanonical } = useMetaConnection(orgId, 'asset:ad_account');
 
   const connected = conn?.status === 'connected';
   const selCount = (t: string) => assets.filter((a) => a.asset_type === t && a.selection_state === 'selected').length;
@@ -278,7 +281,7 @@ export default function MetaIntegrationPage() {
                 status={lastSync('performance') ? uiText("Último sync: {0}", {"0": fmtDateBR(lastSync('performance')!)}) : uiText("Sync automático diário")}
                 to="/marketing" toLabel={uiText("Ver no Marketing")}
               />
-              <AdsManagerConfig enabled={enabledSlug('meta-lead-ads')} />
+              <AdsManagerConfig enabled={enabledSlug('meta-lead-ads') || adsCanonical} />
             </div>
           )}
           {section === 'organico' && (

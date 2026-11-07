@@ -8,6 +8,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { encryptSecret } from "../_shared/crypto.ts";
+import { resolveOrgAdsAccess } from "../_shared/meta/ads-access.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -94,8 +95,55 @@ serve(async (req) => {
   let metaOi = orgRows?.find((o: any) => o.integration_id === metaInteg.id) as any;
   const leadOi = orgRows?.find((o: any) => leadInteg && o.integration_id === leadInteg.id) as any;
 
-  // Compute token to use on consolidated row
   const metaCa = (metaOi?.connected_account || {}) as any;
+
+  // Regra única de credencial: canônico se flag ON ou sem legado utilizável.
+  // Canônico: a ad account precisa estar SELECIONADA nos Ativos da Meta Connection e
+  // NÃO copiamos token nenhum p/ a linha legada (senão a org "ganharia" um legado
+  // congelado e a regra voltaria a escolher legado). Legado: fluxo abaixo, inalterado.
+  const access = await resolveOrgAdsAccess(admin, orgId, { tag: "meta-ads-manager-save" });
+  if (access.ok && access.access.source === "canonical") {
+    if (!access.access.adAccountIds.includes(adAccountId)) {
+      return json({
+        success: false,
+        error_code: "ad_account_not_selected",
+        error: "Ad account não está selecionada nos Ativos da Meta Connection.",
+      }, 400);
+    }
+    const canonicalConnectedAccount = {
+      ...metaCa,
+      ad_account_id: adAccountId,
+      ad_account_name: body.ad_account_name ?? metaCa.ad_account_name ?? null,
+      business_id: body.business_id ?? metaCa.business_id ?? null,
+    };
+    const canonicalConfigValues = {
+      ...((metaOi?.config_values || {}) as any),
+      feature_ads_manager_sync: enableSync,
+    };
+    const writeErr = metaOi
+      ? (await admin.from("organization_integrations").update({
+          connected_account: canonicalConnectedAccount,
+          config_values: canonicalConfigValues,
+          is_enabled: true,
+          updated_at: new Date().toISOString(),
+        }).eq("id", metaOi.id)).error
+      : (await admin.from("organization_integrations").insert({
+          organization_id: orgId,
+          integration_id: metaInteg.id,
+          is_enabled: true,
+          connected_account: canonicalConnectedAccount,
+          config_values: canonicalConfigValues,
+        })).error;
+    if (writeErr) return json({ success: false, error: writeErr.message }, 500);
+    return json({
+      success: true,
+      ad_account_id: adAccountId,
+      feature_ads_manager_sync: enableSync,
+      credential_source: "canonical",
+    });
+  }
+
+  // Compute token to use on consolidated row (LEGADO — inalterado)
   let tokenEncrypted: string | null = metaCa.system_user_token_encrypted || null;
 
   if (!tokenEncrypted && leadOi) {

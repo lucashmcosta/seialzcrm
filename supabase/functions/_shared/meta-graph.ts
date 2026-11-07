@@ -119,3 +119,8 @@ export function isTokenError(err: unknown): boolean {
   }
   return false;
 }
+
+/** appsecret_proof p/ chamadas que montam a URL do Graph manualmente. */
+export function appSecretProof(appSecret: string, accessToken: string): Promise<string> {
+  return hmacSha256Hex(appSecret, accessToken);
+}
