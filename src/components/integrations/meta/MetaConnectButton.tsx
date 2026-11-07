@@ -1,6 +1,6 @@
 import { uiError } from '@/lib/ui-locale';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { CircleNotch, FacebookLogo } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,14 +29,33 @@ export function MetaConnectButton({ onConnected }: { onConnected?: (connectionId
   const { ensureSdk, login } = useFacebookSdk();
   const [loading, setLoading] = useState(false);
 
+  const busy = useRef(false);
+
+  // 3) troca do code no backend. Usada tanto no fluxo normal quanto quando o
+  // callback do SDK chega atrasado (depois do watchdog liberar o botão).
+  const exchangeCode = async (orgId: string, intentId: string, code: string) => {
+    const { data: conn, error: connErr } = await supabase.functions.invoke(
+      'meta-connect',
+      { body: { organization_id: orgId, code, intent_id: intentId } },
+    );
+    if (connErr || !conn?.success) {
+      toast.error(uiText("Falha ao confirmar a conexão com a Meta."));
+      return;
+    }
+    toast.success(uiText("Conta Meta conectada. Agora selecione os ativos da organização."));
+    onConnected?.(conn.connection_id);
+  };
+
   const handleConnect = async () => {
-    if (!organization?.id || loading) return;
+    if (!organization?.id || busy.current) return;
+    const orgId = organization.id;
+    busy.current = true;
     setLoading(true);
     try {
       // 1) intent (backend devolve app_id/config_id/graph_version — fonte única)
       const { data: intent, error: intentErr } = await supabase.functions.invoke(
         'meta-connect-intent',
-        { body: { organization_id: organization.id } },
+        { body: { organization_id: orgId } },
       );
       if (intentErr) {
         const code = await readInvokeError(intentErr);
@@ -50,28 +69,29 @@ export function MetaConnectButton({ onConnected }: { onConnected?: (connectionId
         return;
       }
 
-      // 2) SDK + login for business
+      // 2) SDK + login for business. O watchdog libera o botão se o popup for
+      // fechado/finalizado sem o SDK chamar o callback.
       await ensureSdk(intent.app_id, intent.graph_version || 'v25.0');
-      const res = await login(intent.config_id);
+      const res = await login(intent.config_id, undefined, {
+        onLateResult: (late) => {
+          if (!late.code || busy.current) return;
+          busy.current = true;
+          setLoading(true);
+          void exchangeCode(orgId, intent.intent_id, late.code)
+            .catch(() => toast.error(uiText("Não foi possível conectar com o Facebook agora.")))
+            .finally(() => { busy.current = false; setLoading(false); });
+        },
+      });
       if (!res.code) {
         if (res.status !== 'connected') toast.message(uiText("Login do Facebook cancelado."));
         return;
       }
 
-      // 3) troca do code no backend
-      const { data: conn, error: connErr } = await supabase.functions.invoke(
-        'meta-connect',
-        { body: { organization_id: organization.id, code: res.code, intent_id: intent.intent_id } },
-      );
-      if (connErr || !conn?.success) {
-        toast.error(uiText("Falha ao confirmar a conexão com a Meta."));
-        return;
-      }
-      toast.success(uiText("Conta Meta conectada. Agora selecione os ativos da organização."));
-      onConnected?.(conn.connection_id);
+      await exchangeCode(orgId, intent.intent_id, res.code);
     } catch {
       toast.error(uiText("Não foi possível conectar com o Facebook agora."));
     } finally {
+      busy.current = false;
       setLoading(false);
     }
   };
