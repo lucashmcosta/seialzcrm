@@ -59,6 +59,9 @@ serve(async (req) => {
       intent_id: intent.id,
       app_id: facebookAppId() ?? null,
       config_id: Deno.env.get("FACEBOOK_CONFIG_ID")?.trim() || null,
+      // Configuração separada (tipo "WhatsApp Embedded Signup") — não reaproveita a
+      // de Ads/Leads para não alterar o fluxo canônico que já está em produção.
+      whatsapp_config_id: Deno.env.get("FACEBOOK_WA_CONFIG_ID")?.trim() || null,
       graph_version: GRAPH_API_VERSION,
     });
   } catch (e) {

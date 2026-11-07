@@ -21,7 +21,8 @@ export function useFacebookSdk() {
   const ensureSdk = useCallback((appId: string, version: string) => loadFacebookSdk(appId, version, getUiLocale()), []);
 
   // Login for Business: usa config_id (não scope) e response_type=code.
-  const login = useCallback((configId: string): Promise<FbLoginResult> => {
+  // `extras` é usado pelo WhatsApp Embedded Signup (v4: { setup: {} }).
+  const login = useCallback((configId: string, extras?: Record<string, unknown>): Promise<FbLoginResult> => {
     return new Promise((resolve) => {
       if (!window.FB) {
         resolve({ error: 'sdk_not_ready' });
@@ -33,7 +34,12 @@ export function useFacebookSdk() {
           if (code) resolve({ code, status: response?.status });
           else resolve({ status: response?.status, error: response?.status || 'cancelled' });
         },
-        { config_id: configId, response_type: 'code', override_default_response_type: true },
+        {
+          config_id: configId,
+          response_type: 'code',
+          override_default_response_type: true,
+          ...(extras ? { extras } : {}),
+        },
       );
     });
   }, []);

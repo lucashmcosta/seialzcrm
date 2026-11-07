@@ -755,3 +755,29 @@ Object.assign(uiEnglish, {'Editar legenda':'Edit caption','Legenda atualizada':'
 Object.assign(uiEnglish, { 'Desativado':'Disabled', 'Conexão necessária':'Connection required', 'Selecione um ativo':'Select an asset', 'Permissão necessária':'Permission required', 'Não foi possível verificar o status.':'Unable to verify status.' });
 
 Object.assign(uiEnglish, {"Salvando...": "Saving…", "Validando...": "Validating…", "Verificando...": "Verifying…"});
+
+// WhatsApp Embedded Signup (meta-whatsapp-embedded-signup): UI + mensagens do backend.
+Object.assign(uiEnglish, {
+  'Conexão do WhatsApp pela Meta ainda não configurada no servidor.': 'WhatsApp connection through Meta is not configured on the server yet.',
+  'Conexão com a Meta cancelada.': 'Meta connection cancelled.',
+  'Falha ao conectar o WhatsApp.': 'Failed to connect WhatsApp.',
+  'WhatsApp conectado, mas o número ainda não foi registrado na Cloud API. Use "Verificar" ou refaça a conexão.': 'WhatsApp connected, but the number is not registered on the Cloud API yet. Use "Verify" or connect again.',
+  'WhatsApp conectado.': 'WhatsApp connected.',
+  'O número foi conectado, mas não foi vinculado à rota. Vincule em Configurações de WhatsApp.': 'The number was connected but not linked to a route. Link it in WhatsApp settings.',
+  'Não foi possível conectar com a Meta agora.': 'Could not connect to Meta right now.',
+  'Conectar pela Meta (recomendado)': 'Connect through Meta (recommended)',
+  'Abre o fluxo oficial da Meta: você escolhe ou cria a conta do WhatsApp Business e o número. Sem copiar tokens ou IDs.': "Opens Meta's official flow: you pick or create the WhatsApp Business account and number. No tokens or IDs to copy.",
+  'Conectar WhatsApp com a Meta': 'Connect WhatsApp with Meta',
+  'Ou conecte manualmente com o App Meta da própria organização:': "Or connect manually with the organization's own Meta App:",
+  'A Meta não autorizou nenhuma conta do WhatsApp. Refaça a conexão e selecione a conta.': 'Meta did not authorize any WhatsApp account. Connect again and select the account.',
+  'A conta do WhatsApp escolhida não foi autorizada para a Seialz.': 'The selected WhatsApp account was not authorized for Seialz.',
+  'Mais de uma conta do WhatsApp foi autorizada. Refaça a conexão escolhendo só uma.': 'More than one WhatsApp account was authorized. Connect again selecting only one.',
+  'A conta do WhatsApp não tem número. Adicione um número no fluxo da Meta.': 'The WhatsApp account has no phone number. Add one in the Meta flow.',
+  'A conta tem vários números. Refaça a conexão e selecione o número.': 'The account has several numbers. Connect again and select the number.',
+  'O número escolhido não pertence à conta do WhatsApp autorizada.': 'The selected number does not belong to the authorized WhatsApp account.',
+  'Esta conta do WhatsApp já está conectada pelo modo manual. Desconecte-a antes de usar a conexão pela Meta.': 'This WhatsApp account is already connected manually. Disconnect it before connecting through Meta.',
+  'Este número já está conectado em outra organização.': 'This number is already connected to another organization.',
+  'Este número já está conectado nesta organização por outra integração.': 'This number is already connected to this organization through another integration.',
+  'Já existe um número WhatsApp igual nesta organização (outro provedor). Use a migração de provedor.': 'This organization already has the same WhatsApp number (another provider). Use the provider migration.',
+  'Esta organização já tem outra conta do WhatsApp conectada. Desconecte-a antes de conectar uma nova.': 'This organization already has another WhatsApp account connected. Disconnect it before connecting a new one.',
+});
