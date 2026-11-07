@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { cn } from '@/lib/utils';
 import type { Granularity } from './trendBuckets';
 
@@ -7,12 +8,13 @@ interface Props {
 }
 
 export function GranularityToggle({ value, onChange }: Props) {
+  useUiLocale();
   return (
     <div className="flex items-center gap-1 rounded-md border border-border bg-muted/40 p-0.5">
       {(
         [
-          { value: 'daily' as Granularity, label: 'Diária' },
-          { value: 'weekly' as Granularity, label: 'Semanal' },
+          { value: 'daily' as Granularity, label: uiText('Diária') },
+          { value: 'weekly' as Granularity, label: uiText('Semanal') },
         ]
       ).map((opt) => (
         <button

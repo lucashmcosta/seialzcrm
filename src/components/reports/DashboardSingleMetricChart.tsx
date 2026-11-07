@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
@@ -48,6 +49,7 @@ export function DashboardSingleMetricChart({
   variant = 'bar',
   height = 'h-56',
 }: Props) {
+  const locale = useUiLocale();
   const defaultGranularity = useMemo(() => defaultGranularityFor(from, to), [from, to]);
   const [granularity, setGranularity] = useState<Granularity>(defaultGranularity);
   useEffect(() => setGranularity(defaultGranularity), [defaultGranularity]);
@@ -68,7 +70,7 @@ export function DashboardSingleMetricChart({
               ? (b.won / b.created) * 100
               : null,
     }));
-  }, [data, from, to, weekly, metric]);
+  }, [data, from, to, weekly, metric, locale]);
 
   const tooltipProps = {
     cursor: variant === 'bar'
@@ -95,7 +97,7 @@ export function DashboardSingleMetricChart({
         <div>
           <h3 className="text-sm font-semibold text-foreground">{title}</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {weekly ? 'Agregação semanal' : 'Agregação diária'}
+            {weekly ? uiText('Agregação semanal') : uiText('Agregação diária')}
           </p>
         </div>
         <GranularityToggle value={granularity} onChange={setGranularity} />

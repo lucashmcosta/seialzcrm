@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getUiLocale, uiText, useUiLocale } from '@/lib/ui-locale';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Hourglass, SealCheck } from '@phosphor-icons/react';
@@ -23,10 +24,13 @@ interface Resumo {
   linhas?: Linha[];
 }
 
-const nomeFaixa = (f: Faixa | null) => (f ? NOME_FAIXA[f] : 'Em revisão');
-const vendas = (n: number) => `${n} ${n === 1 ? 'venda' : 'vendas'}`;
+const nomeFaixa = (f: Faixa | null) => (f ? NOME_FAIXA[f] : uiText('Em revisão'));
+const vendas = (n: number) => (n === 1 ? uiText('{0} venda', { 0: n }) : uiText('{0} vendas', { 0: n }));
 /** close_date é DATE: "2026-10-19" → "19/10/2026" sem passar por fuso. */
-const dia = (s: string) => s.split('-').reverse().join('/');
+const dia = (s: string) => {
+  const [y, m, d] = s.split('-');
+  return getUiLocale() === 'en-US' ? [m, d, y].join('/') : [d, m, y].join('/');
+};
 
 const TITULO: Record<Situacao, string> = { prevista: 'Comissão prevista', confirmada: 'Comissão confirmada' };
 const EXPLICA: Record<Situacao, string> = {
@@ -40,6 +44,7 @@ const EXPLICA: Record<Situacao, string> = {
  * O servidor decide o escopo: quem só vê as próprias recebe as próprias, qualquer que seja `sellerId`.
  */
 export function DashboardCommissions({ fromDay, toDay, sellerId }: { fromDay: string; toDay: string; sellerId: string | null }) {
+  useUiLocale();
   const { organization } = useOrganization();
   const enabled = useProcessClassificationEnabled();
   const navigate = useNavigate();
@@ -61,24 +66,24 @@ export function DashboardCommissions({ fromDay, toDay, sellerId }: { fromDay: st
   if (!enabled || (!isLoading && !data?.visivel)) return null;
 
   const cards: { s: Situacao; icon: typeof Hourglass; accent: 'warning' | 'success'; detalhe: string }[] = [
-    { s: 'prevista', icon: Hourglass, accent: 'warning', detalhe: 'aguardando a entrevista' },
-    { s: 'confirmada', icon: SealCheck, accent: 'success', detalhe: 'entrevista feita' },
+    { s: 'prevista', icon: Hourglass, accent: 'warning', detalhe: uiText('aguardando a entrevista') },
+    { s: 'confirmada', icon: SealCheck, accent: 'success', detalhe: uiText('entrevista feita') },
   ];
   const linhas = (data?.linhas ?? []).filter((l) => l.situacao === aberta);
 
   return (
     <section className="space-y-2">
       <div>
-        <h2 className="text-sm font-semibold text-foreground">Comissões</h2>
+        <h2 className="text-sm font-semibold text-foreground">{uiText("Comissões")}</h2>
         <p className="text-xs text-muted-foreground">
-          {data?.soMinhas === false ? 'Da equipe, nas vendas ganhas no período.' : 'Suas, nas vendas ganhas no período.'}
+          {data?.soMinhas === false ? uiText('Da equipe, nas vendas ganhas no período.') : uiText('Suas, nas vendas ganhas no período.')}
         </p>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map(({ s, icon, accent, detalhe }) => {
           const r = data?.[s];
           return (
-            <KpiCard key={s} label={TITULO[s]} value={r ? formatarBRL(Number(r.total)) : '—'} icon={icon} accent={accent} mono
+            <KpiCard key={s} label={uiText(TITULO[s])} value={r ? formatarBRL(Number(r.total)) : '—'} icon={icon} accent={accent} mono
               loading={isLoading} sublabel={r ? `${vendas(r.quantidade)} · ${detalhe}` : undefined}
               onClick={r ? () => setAberta(s) : undefined} />
           );
@@ -88,12 +93,12 @@ export function DashboardCommissions({ fromDay, toDay, sellerId }: { fromDay: st
       <Dialog open={aberta !== null} onOpenChange={(o) => !o && setAberta(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle>{aberta && `${TITULO[aberta]} — ${linhas.length}`}</DialogTitle>
-            <DialogDescription>{aberta && EXPLICA[aberta]}</DialogDescription>
+            <DialogTitle>{aberta && `${uiText(TITULO[aberta])} — ${linhas.length}`}</DialogTitle>
+            <DialogDescription>{aberta && uiText(EXPLICA[aberta])}</DialogDescription>
           </DialogHeader>
           <div className="overflow-auto -mx-6 px-6">
             {linhas.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-6 text-center">Sem vendas no período.</p>
+              <p className="text-sm text-muted-foreground py-6 text-center">{uiText("Sem vendas no período.")}</p>
             ) : (
               <ul className="divide-y divide-border">
                 {linhas.map((l) => (
@@ -101,15 +106,15 @@ export function DashboardCommissions({ fromDay, toDay, sellerId }: { fromDay: st
                     <button type="button" onClick={() => { setAberta(null); navigate(`/opportunities/${l.oportunidadeId}`); }}
                       className="w-full flex items-start justify-between gap-4 py-3 text-left hover:bg-muted/50 px-2 rounded transition">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-foreground truncate">{l.contato || '(sem contato)'}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{l.oportunidade || '(sem título)'}</p>
+                        <p className="text-sm font-medium text-foreground truncate">{l.contato || uiText('(sem contato)')}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{l.oportunidade || uiText('(sem título)')}</p>
                         <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                          {`Ganha em ${dia(l.ganhaEm)} · ${nomeFaixa(l.faixa)}`}
+                          {`${uiText('Ganha em {0}', { 0: dia(l.ganhaEm) })} · ${nomeFaixa(l.faixa)}`}
                           {data?.soMinhas === false && l.vendedor ? ` · ${l.vendedor}` : ''}
                         </p>
                         {l.ajuste && (
                           <p className="text-xs text-destructive mt-0.5">
-                            Ajustada na entrevista ({nomeFaixa(l.ajuste.faixa)} → {nomeFaixa(l.faixa)}): {l.ajuste.motivo}
+                            {uiText('Ajustada na entrevista ({0} → {1}): {2}', { 0: nomeFaixa(l.ajuste.faixa), 1: nomeFaixa(l.faixa), 2: l.ajuste.motivo })}
                           </p>
                         )}
                       </div>

@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -50,6 +51,7 @@ export default function Dashboard() {
   const { organization, userProfile, locale, loading: orgLoading, error } = useOrganization();
   const { user, signOut } = useAuth();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
+  useUiLocale();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { permissions } = usePermissions();
@@ -239,13 +241,13 @@ export default function Dashboard() {
       <Layout>
         <div className="flex flex-col items-center justify-center h-full p-6">
           <div className="text-center space-y-4 max-w-md">
-            <h2 className="text-2xl font-bold text-foreground">Erro ao carregar perfil</h2>
+            <h2 className="text-2xl font-bold text-foreground">{uiText("Erro ao carregar perfil")}</h2>
             <p className="text-muted-foreground">
-              Não foi possível carregar seus dados. Tente recarregar a página.
+              {uiText("Não foi possível carregar seus dados. Tente recarregar a página.")}
             </p>
             <div className="flex gap-4 justify-center">
-              <Button onClick={() => window.location.reload()}>Recarregar</Button>
-              <Button variant="outline" onClick={() => signOut()}>Sair</Button>
+              <Button onClick={() => window.location.reload()}>{uiText("Recarregar")}</Button>
+              <Button variant="outline" onClick={() => signOut()}>{uiText("Sair")}</Button>
             </div>
           </div>
         </div>
@@ -258,11 +260,11 @@ export default function Dashboard() {
       <Layout>
         <div className="flex flex-col items-center justify-center h-full p-6">
           <div className="text-center space-y-4 max-w-md">
-            <h2 className="text-2xl font-bold text-foreground">Sem organização</h2>
+            <h2 className="text-2xl font-bold text-foreground">{uiText("Sem organização")}</h2>
             <p className="text-muted-foreground">
-              Você ainda não está vinculado a uma organização. Complete o onboarding para começar.
+              {uiText("Você ainda não está vinculado a uma organização. Complete o onboarding para começar.")}
             </p>
-            <Button onClick={() => navigate('/onboarding')}>Ir para Onboarding</Button>
+            <Button onClick={() => navigate('/onboarding')}>{uiText("Ir para Onboarding")}</Button>
           </div>
         </div>
       </Layout>
@@ -385,7 +387,7 @@ export default function Dashboard() {
                 from={from}
                 to={to}
                 loading={loading}
-                title="Criadas"
+                title={uiText("Criadas")}
                 metric="created"
                 height="h-44"
               />
@@ -394,7 +396,7 @@ export default function Dashboard() {
                 from={from}
                 to={to}
                 loading={loading}
-                title="Ganhas"
+                title={uiText("Ganhas")}
                 metric="won"
                 height="h-44"
               />
@@ -405,7 +407,7 @@ export default function Dashboard() {
                 from={from}
                 to={to}
                 loading={loading}
-                title="Conversão"
+                title={uiText("Conversão")}
                 metric="conversion"
                 variant="line"
                 height="h-[23rem]"
@@ -432,7 +434,7 @@ export default function Dashboard() {
               </div>
             ) : detailRows.length === 0 ? (
               <p className="text-sm text-muted-foreground py-6 text-center">
-                Sem oportunidades no período.
+                {uiText("Sem oportunidades no período.")}
               </p>
             ) : (
 
@@ -449,16 +451,16 @@ export default function Dashboard() {
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-foreground truncate">
-                          {o.contacts?.full_name || '(sem contato)'}
+                          {o.contacts?.full_name || uiText('(sem contato)')}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                          {o.title || '(sem título)'}
+                          {o.title || uiText('(sem título)')}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5 truncate">
                           {(detail === 'closed'
-                            ? `Ganha em ${fmtDate(o.close_date, true)}`
-                            : `Criada em ${fmtDate(o.created_at)}`)
-                            + ` · Responsável: ${o.users?.full_name || '—'}`}
+                            ? uiText('Ganha em {0}', { 0: fmtDate(o.close_date, true) })
+                            : uiText('Criada em {0}', { 0: fmtDate(o.created_at) }))
+                            + uiText(' · Responsável: {0}', { 0: o.users?.full_name || '—' })}
                         </p>
                       </div>
 
