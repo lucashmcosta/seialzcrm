@@ -64,6 +64,19 @@ export function MetaLeadAdsDialog({
 
   const rediscover = useMutation({
     mutationFn: async () => {
+      // Org só-canônica ainda sem linha meta-lead-ads: ativa pela Meta Connection
+      // (meta-lead-ads-connect sem token manual cria a linha SEM token e dispara o discover).
+      if (!orgIntegration?.id && canonicalActive) {
+        const { data, error } = await supabase.functions.invoke("meta-lead-ads-connect", {
+          body: { organization_id: organization!.id },
+        });
+        if (error) throw error;
+        const connectError = (data as { error?: string } | null)?.error;
+        if (connectError) throw new Error(connectError);
+        qc.invalidateQueries({ queryKey: ["org-integration-v2"] });
+        qc.invalidateQueries({ queryKey: ["organization-integrations"] });
+        return;
+      }
       if (!orgIntegration?.id) throw new Error(uiText("Não conectado"));
       const { error } = await supabase.functions.invoke("meta-lead-ads-discover", {
         body: { organization_integration_id: orgIntegration.id, organization_id: organization!.id },

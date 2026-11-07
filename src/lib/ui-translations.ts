@@ -213,6 +213,8 @@ export const uiEnglish: Record<string, string> = {
   "Escolha a Ad Account que alimenta campanhas, criativos e insights. A análise fica em": "Choose the Ad Account that provides campaigns, creatives and insights. Analysis is available at",
   "Atual:": "Current:",
   "Nenhuma Ad Account acessível por esse token. Verifique permissões": "No Ad Account is accessible with this token. Check permissions",
+  "Contas selecionadas nos Ativos da Meta Connection.": "Accounts selected in the Meta Connection Assets.",
+  "Nenhuma Ad Account selecionada nos Ativos da Meta Connection.": "No Ad Account selected in the Meta Connection Assets.",
   "e": "and",
   "Sincronizar campanhas e insights": "Sync campaigns and insights",
   "Liga o sync automático diário que popula": "Enables automatic daily sync that populates",

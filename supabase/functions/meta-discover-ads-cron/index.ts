@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { decryptSecret } from "../_shared/crypto.ts";
+import { appSecretProof } from "../_shared/meta-graph.ts";
+import { listCanonicalAdsOrgIds, resolveOrgAdsAccess, syncAdAccountIds } from "../_shared/meta/ads-access.ts";
 
 const API_VERSION = "v25.0";
 const GRAPH_TIMEOUT_MS = 30000;
@@ -63,13 +64,15 @@ interface MetaAd {
 async function fetchAllAds(
   adAccountId: string,
   token: string,
+  appSecret?: string,
 ): Promise<{ ok: boolean; ads: MetaAd[]; error?: any; status?: number }> {
   const ads: MetaAd[] = [];
   let url: string | null =
     `https://graph.facebook.com/${API_VERSION}/${adAccountId}/ads` +
     `?fields=${encodeURIComponent(AD_FIELDS)}` +
     `&limit=100` +
-    `&access_token=${encodeURIComponent(token)}`;
+    `&access_token=${encodeURIComponent(token)}` +
+    (appSecret ? `&appsecret_proof=${await appSecretProof(appSecret, token)}` : "");
 
   let pages = 0;
   while (url && pages < 50) {
@@ -101,11 +104,6 @@ function mapStatus(s?: string | null): string {
   return "unknown";
 }
 
-function normalizeAdAccountId(adAccountId: string): string {
-  const trimmed = adAccountId.trim();
-  return trimmed.startsWith("act_") ? trimmed : `act_${trimmed}`;
-}
-
 function extractDestinationUrl(creative: any): string | null {
   const oss = creative?.object_story_spec;
   if (!oss) return null;
@@ -128,33 +126,43 @@ async function processOrg(
   ads_archived: number;
   error?: string;
 }> {
-  const { data: credRows, error: credErr } = await admin.rpc("get_meta_credentials", {
-    p_org_id: orgId,
-  });
-  if (credErr) return { org_id: orgId, status: "failed", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: `creds: ${credErr.message}` };
-  const cred: any = credRows?.[0];
-  if (!cred?.is_connected || !cred.feature_ads_manager_sync || !cred.ad_account_id) {
-    return { org_id: orgId, status: "skipped", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: "not_configured" };
-  }
-  if (!cred.system_user_token_encrypted) {
+  // Regra única de credencial (canônico se flag ON ou sem legado; senão legado).
+  const res = await resolveOrgAdsAccess(admin, orgId, { tag: "meta-discover-ads-cron" });
+  if (!res.ok) {
+    if (res.reason === "creds_error") return { org_id: orgId, status: "failed", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: res.message };
+    // Mantém a ordem de checagem de antes: config ausente => skipped antes de qualquer erro de token.
+    const l = res.legacy;
+    if (!l || !l.syncEnabled || !l.adAccountId) {
+      return { org_id: orgId, status: "skipped", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: "not_configured" };
+    }
+    if (res.reason === "decrypt_failed") return { org_id: orgId, status: "failed", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: "decrypt_failed" };
+    // no_credential: tinha config legada mas nenhum token (nem legado nem canônico).
     return { org_id: orgId, status: "failed", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: "no_token" };
   }
-
-  let token: string;
-  try {
-    token = await decryptSecret(cred.system_user_token_encrypted);
-    console.log(`[meta-token] slug=${cred.source ?? "meta"} org=${orgId} result=ok`);
-  } catch (e) {
-    console.warn(`[meta-token] slug=${cred.source ?? "meta"} org=${orgId} result=fail reason=${(e as Error).message}`);
-    return { org_id: orgId, status: "failed", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: "decrypt_failed" };
+  const access = res.access;
+  const adAccountIds = syncAdAccountIds(access);
+  if (!access.syncEnabled || adAccountIds.length === 0) {
+    return { org_id: orgId, status: "skipped", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: "not_configured" };
   }
+  const token = access.token;
+  // appsecret_proof só no canônico; legado idêntico ao de hoje.
+  const proofSecret = access.source === "canonical" ? access.appSecret : undefined;
 
-  const normalizedAdAccountId = normalizeAdAccountId(cred.ad_account_id);
-  const result = await fetchAllAds(normalizedAdAccountId, token);
-  if (!result.ok) {
-    const msg = result.error?.error?.message ?? `http_${result.status}`;
-    return { org_id: orgId, status: "failed", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: String(msg).slice(0, 300) };
+  // Canônico pode ter >1 ad account selecionada: une os anúncios antes do upsert/arquivamento
+  // (arquivar só com a lista COMPLETA; qualquer falha aborta a org sem arquivar nada).
+  const allAds: MetaAd[] = [];
+  for (const actId of adAccountIds) {
+    const r = await fetchAllAds(actId, token, proofSecret);
+    if (!r.ok) {
+      const msg = r.error?.error?.message ?? `http_${r.status}`;
+      return { org_id: orgId, status: "failed", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: String(msg).slice(0, 300) };
+    }
+    allAds.push(...r.ads);
   }
+  const byId = new Map<string, MetaAd>();
+  for (const ad of allAds) byId.set(ad.id, ad);
+  const result = { ok: true, ads: [...byId.values()] };
+  const normalizedAdAccountId = adAccountIds.join(",");
 
   const { data: existing } = await admin
     .from("marketing_campaigns")
@@ -279,6 +287,13 @@ serve(async (req) => {
       if (seen.has(oi.organization_id)) continue;
       seen.add(oi.organization_id);
       orgs.push({ id: oi.organization_id });
+    }
+    // Orgs só-canônicas (Meta Connection com ad account selecionada) também entram.
+    // Dedupe pelo mesmo `seen`; a decisão legado×canônico é por org em processOrg.
+    for (const orgId of await listCanonicalAdsOrgIds(admin)) {
+      if (seen.has(orgId)) continue;
+      seen.add(orgId);
+      orgs.push({ id: orgId });
     }
   }
 
