@@ -154,10 +154,7 @@ export async function resolveMetaCredentials(
     "access_token(connected_account)",
   );
   if (!accessToken) throw new MetaCredentialsError("missing_access_token");
-  const appSecret = await tryDecrypt(
-    ca.app_secret_encrypted,
-    "app_secret(connected_account)",
-  );
+  const appSecret = await resolveAppSecretForIntegration(ca);
   const verifyToken = await tryDecrypt(
     ca.verify_token_encrypted,
     "verify_token(connected_account)",
@@ -189,9 +186,25 @@ export async function resolveMetaCredentials(
 // um segredo pontual sem carregar toda a integração.
 // ============================================================
 
+/**
+ * Integrações do Embedded Signup usam o app da PLATAFORMA: o app secret é lido do
+ * env (FACEBOOK_APP_SECRET) em tempo de execução, nunca de uma cópia no banco —
+ * assim, rotacionar o secret não exige reconectar ninguém.
+ * Qualquer outra integração (app próprio do cliente) segue exatamente como antes.
+ */
+export function platformAppSecretFor(
+  connectedAccount: Record<string, any> | null | undefined,
+  env: (k: string) => string | undefined = (k) => Deno.env.get(k),
+): string | undefined | null {
+  if (connectedAccount?.source !== "embedded_signup") return null; // null = não se aplica
+  return env("FACEBOOK_APP_SECRET")?.trim() || undefined;
+}
+
 export async function resolveAppSecretForIntegration(
   connectedAccount: Record<string, any> | null | undefined,
 ): Promise<string | undefined> {
+  const platform = platformAppSecretFor(connectedAccount);
+  if (platform !== null) return platform;
   return await tryDecrypt(
     connectedAccount?.app_secret_encrypted,
     "app_secret",

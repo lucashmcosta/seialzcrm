@@ -147,6 +147,16 @@ serve(async (req) => {
       return new Response("forbidden", { status: 403, headers: corsHeaders });
     }
 
+    // Embedded Signup: o webhook do app da plataforma (FACEBOOK_APP_ID) é
+    // configurado uma vez no App Dashboard, antes de existir qualquer org
+    // conectada — por isso o verify token dele vem de env, não de uma integração.
+    // Sem o secret definido, o comportamento é exatamente o anterior.
+    const platformVerifyToken = Deno.env.get("META_WA_WEBHOOK_VERIFY_TOKEN")?.trim();
+    if (platformVerifyToken && timingSafeEqual(token, platformVerifyToken)) {
+      console.log("[meta-wa-webhook] GET handshake", { matched: true, via: "platform_env" });
+      return new Response(challenge ?? "", { status: 200, headers: corsHeaders });
+    }
+
     const { data: rows } = await supabase
       .from("organization_integrations")
       .select("id, connected_account, meta_credentials_id, admin_integrations!inner(slug)")

@@ -24,6 +24,7 @@ import { AddMetaWhatsAppNumberDialog } from "./AddMetaWhatsAppNumberDialog";
 import { MetaAdditionalEndpointsSection } from "./MetaAdditionalEndpointsSection";
 import { MetaWabasSection } from "./MetaWabasSection";
 import { MigrateEndpointDialog } from "./MigrateEndpointDialog";
+import { MetaWhatsAppEmbeddedSignup } from "./MetaWhatsAppEmbeddedSignup";
 import { useMetaMultiWabaFlag } from "@/hooks/useMetaMultiWabaFlag";
 import { useMetaWabaConnections } from "@/hooks/useMetaWabaConnections";
 
@@ -287,6 +288,16 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
 
 
 
+
+            {/* ===== Embedded Signup (app da plataforma) — só em nova conexão ===== */}
+            {!isConnected && (
+              <>
+                <MetaWhatsAppEmbeddedSignup onConnected={() => onOpenChange(false)} />
+                <p className="text-sm text-muted-foreground">
+                  {uiText("Ou conecte manualmente com o App Meta da própria organização:")}
+                </p>
+              </>
+            )}
 
             {/* ===== Form de conexão / edição ===== */}
             <Card className="p-4 space-y-4">
