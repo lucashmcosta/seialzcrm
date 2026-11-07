@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useState, useMemo } from 'react';
 import {
   GearSix,
@@ -127,6 +128,7 @@ export function getSettingsLabelByPath(path: string): string | null {
 }
 
 export function SettingsGrid() {
+  const locale = useUiLocale();
   const [search, setSearch] = useState('');
   const { permissions } = usePermissions();
   const { hasWhatsApp } = useWhatsAppIntegration();
@@ -140,10 +142,18 @@ export function SettingsGrid() {
   };
 
   const filteredGroups = useMemo(() => {
+    // Textos exibidos (traduzidos) — a busca casa com o que o usuário vê.
     return settingsGroups
       .map((group) => ({
         ...group,
-        items: group.items.filter((item) => {
+        title: uiText(group.title),
+        description: uiText(group.description),
+        items: group.items.map((item) => ({
+          ...item,
+          label: uiText(item.label),
+          description: uiText(item.description),
+          badge: item.badge ? uiText(item.badge) : undefined,
+        })).filter((item) => {
           // Permission check
           if (item.permission && !permissions[item.permission]) return false;
           if (item.v2Only && !permissions.rbacV2) return false;
@@ -158,7 +168,7 @@ export function SettingsGrid() {
         }),
       }))
       .filter((group) => group.items.length > 0);
-  }, [search, permissions, flags.hasWhatsApp, flags.showAIFeatures]);
+  }, [search, permissions, flags.hasWhatsApp, flags.showAIFeatures, locale]);
 
   return (
     <div className="animate-in fade-in duration-200">
@@ -168,7 +178,7 @@ export function SettingsGrid() {
           <MagnifyingGlass size={16} weight="light" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Buscar configurações..."
+            placeholder={uiText("Buscar configurações...")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -205,7 +215,7 @@ export function SettingsGrid() {
       {filteredGroups.length === 0 && (
         <div className="text-center py-16">
           <MagnifyingGlass size={40} weight="light" className="mx-auto text-muted-foreground/30 mb-3" />
-          <p className="text-muted-foreground text-sm">Nenhuma configuração encontrada para "{search}"</p>
+          <p className="text-muted-foreground text-sm">{uiText('Nenhuma configuração encontrada para "{0}"', { 0: search })}</p>
         </div>
       )}
     </div>

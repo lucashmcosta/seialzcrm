@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMemo } from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 
@@ -19,23 +20,24 @@ const STATUS_META = [
 ] as const;
 
 export function DashboardStatusDonut({ data, loading }: Props) {
+  const locale = useUiLocale();
   const { slices, total } = useMemo(() => {
     const slices = STATUS_META.map((m) => ({
-      name: m.label,
+      name: uiText(m.label),
       value: Number(data?.[m.key]) || 0,
       color: m.color,
     }));
     const total = slices.reduce((a, b) => a + b.value, 0);
     return { slices, total };
-  }, [data]);
+  }, [data, locale]);
 
 
   return (
     <div className="rounded-md border border-border bg-card p-5">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-foreground">Status</h3>
+        <h3 className="text-sm font-semibold text-foreground">{uiText("Status")}</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Oportunidades criadas no período
+          {uiText("Oportunidades criadas no período")}
         </p>
       </div>
 
@@ -43,7 +45,7 @@ export function DashboardStatusDonut({ data, loading }: Props) {
         <div className="h-64 animate-pulse rounded-md bg-muted/50" />
       ) : total === 0 ? (
         <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-          Sem dados no período
+          {uiText("Sem dados no período")}
         </div>
       ) : (
         <div className="relative h-64 w-full">
@@ -76,7 +78,7 @@ export function DashboardStatusDonut({ data, loading }: Props) {
           </ResponsiveContainer>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-2xl font-semibold text-foreground">{total}</span>
-            <span className="text-xs text-muted-foreground">total</span>
+            <span className="text-xs text-muted-foreground">{uiText("total")}</span>
           </div>
         </div>
       )}

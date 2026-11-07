@@ -1,3 +1,6 @@
+import { format } from 'date-fns';
+import { uiDateLocale, uiDatePattern } from '@/lib/ui-locale';
+
 export interface TrendBucketRow {
   /** YYYY-MM-DD (local day) */
   bucket_date: string;
@@ -29,7 +32,8 @@ export function startOfWeek(d: Date) {
 }
 
 export function formatBucketLabel(d: Date, _weekly: boolean) {
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  // Dia/mês na ordem do idioma: pt-BR dd/MM · en-US MM/dd (uiDatePattern sem o ano).
+  return format(d, uiDatePattern().replace(/\/yyyy$/, ''), { locale: uiDateLocale() });
 }
 
 export function defaultGranularityFor(from: Date, to: Date): Granularity {

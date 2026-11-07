@@ -33,7 +33,7 @@ import { useAIProviders } from '@/hooks/useAIProviders';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTelephonyV2Flag } from '@/hooks/useTelephonyV2Flag';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { uiDateLocale, uiDatePattern, uiText, useUiLocale } from '@/lib/ui-locale';
 
 import { toast } from 'sonner';
 
@@ -68,6 +68,7 @@ const categories = [
 
 export function IntegrationsSettings() {
   const { locale, organization } = useOrganization();
+  useUiLocale();
   const navigate = useNavigate();
   const { t } = useTranslation(locale as any);
   const queryClient = useQueryClient();
@@ -167,12 +168,12 @@ export function IntegrationsSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Integração desconectada com sucesso!');
+      toast.success(uiText('Integração desconectada com sucesso!'));
       queryClient.invalidateQueries({ queryKey: ['organization-integrations'] });
       setDetailDialogOpen(false);
     },
     onError: (error: any) => {
-      toast.error(`Erro ao desconectar: ${error.message}`);
+      toast.error(uiText('Erro ao desconectar: {0}', { 0: error.message }));
     },
   });
 
@@ -185,11 +186,11 @@ export function IntegrationsSettings() {
       if (error) throw error;
     },
     onSuccess: (_, { enabled }) => {
-      toast.success(enabled ? 'Integração ativada!' : 'Integração desativada!');
+      toast.success(enabled ? uiText('Integração ativada!') : uiText('Integração desativada!'));
       queryClient.invalidateQueries({ queryKey: ['organization-integrations'] });
     },
     onError: (error: any) => {
-      toast.error(`Erro: ${error.message}`);
+      toast.error(uiText('Erro: {0}', { 0: error.message }));
     },
   });
 
@@ -257,13 +258,13 @@ export function IntegrationsSettings() {
     // Determine connection status
     let statusBadge;
     if (tokenExpiry?.isExpired) {
-      statusBadge = <Badge variant="destructive" className="text-xs">Token expirado</Badge>;
+      statusBadge = <Badge variant="destructive" className="text-xs">{uiText("Token expirado")}</Badge>;
     } else if (tokenExpiry?.isExpiring) {
-      statusBadge = <Badge variant="outline" className="text-xs border-yellow-500 text-yellow-600">Token expirando</Badge>;
+      statusBadge = <Badge variant="outline" className="text-xs border-yellow-500 text-yellow-600">{uiText("Token expirando")}</Badge>;
     } else if (isConnected) {
-      statusBadge = <Badge className="text-xs bg-green-600">Conectado</Badge>;
+      statusBadge = <Badge className="text-xs bg-green-600">{uiText("Conectado")}</Badge>;
     } else {
-      statusBadge = <Badge variant="secondary" className="text-xs">Desconectado</Badge>;
+      statusBadge = <Badge variant="secondary" className="text-xs">{uiText("Desconectado")}</Badge>;
     }
 
     return (
@@ -291,12 +292,12 @@ export function IntegrationsSettings() {
                       <TooltipTrigger asChild>
                         <Badge variant="outline" className="flex items-center gap-1 shrink-0">
                           <Warning className="w-3 h-3" />
-                          Beta
+                          {uiText("Beta")}
                         </Badge>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p className="max-w-xs">
-                          Esta integração está em fase beta e pode apresentar comportamentos instáveis.
+                          {uiText("Esta integração está em fase beta e pode apresentar comportamentos instáveis.")}
                         </p>
                       </TooltipContent>
                     </Tooltip>
@@ -304,7 +305,7 @@ export function IntegrationsSettings() {
                 )}
               </div>
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                {integration.description}
+                {integration.description ? uiText(integration.description) : integration.description}
               </p>
             </div>
           </div>
@@ -320,7 +321,7 @@ export function IntegrationsSettings() {
           <Alert className="mt-3 border-yellow-500/50 bg-yellow-500/5 py-2">
             <Warning className="h-3.5 w-3.5 text-yellow-600" />
             <AlertDescription className="text-xs text-yellow-700 dark:text-yellow-400">
-              Token expira em {tokenExpiry.daysLeft} dia(s). Reconecte a integração para renovar.
+              {uiText("Token expira em {0} dia(s). Reconecte a integração para renovar.", { 0: tokenExpiry.daysLeft })}
             </AlertDescription>
           </Alert>
         )}
@@ -329,7 +330,7 @@ export function IntegrationsSettings() {
           <Alert variant="destructive" className="mt-3 py-2">
             <XCircle className="h-3.5 w-3.5" />
             <AlertDescription className="text-xs">
-              Token expirado. Reconecte a integração para continuar importando dados.
+              {uiText("Token expirado. Reconecte a integração para continuar importando dados.")}
             </AlertDescription>
           </Alert>
         )}
@@ -338,26 +339,26 @@ export function IntegrationsSettings() {
         {isConnected && lastKommoImport && (
           <div className="mt-3 p-2.5 rounded-md bg-muted/50 space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Última importação</span>
+              <span className="text-xs text-muted-foreground">{uiText("Última importação")}</span>
               <Badge variant={lastKommoImport.status === 'completed' ? 'default' : 'secondary'} className="text-[10px] h-5">
-                {lastKommoImport.status === 'completed' ? 'Concluída' : 
-                 lastKommoImport.status === 'running' ? 'Em andamento' :
-                 lastKommoImport.status === 'failed' ? 'Falhou' : lastKommoImport.status}
+                {lastKommoImport.status === 'completed' ? uiText('Concluída') : 
+                 lastKommoImport.status === 'running' ? uiText('Em andamento') :
+                 lastKommoImport.status === 'failed' ? uiText('Falhou') : lastKommoImport.status}
               </Badge>
             </div>
             {lastKommoImport.completed_at && (
               <p className="text-[11px] text-muted-foreground">
-                {format(new Date(lastKommoImport.completed_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                {format(new Date(lastKommoImport.completed_at), uiDatePattern(true), { locale: uiDateLocale() })}
               </p>
             )}
             <div className="flex gap-3 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Users className="h-3 w-3" />
-                {lastKommoImport.imported_contacts || 0} contatos
+                {uiText("{0} contatos", { 0: lastKommoImport.imported_contacts || 0 })}
               </span>
               <span className="flex items-center gap-1">
                 <Briefcase className="h-3 w-3" />
-                {lastKommoImport.imported_opportunities || 0} oportunidades
+                {uiText("{0} oportunidades", { 0: lastKommoImport.imported_opportunities || 0 })}
               </span>
             </div>
           </div>
@@ -372,7 +373,7 @@ export function IntegrationsSettings() {
               onClick={() => setKommoMigrationOpen(true)}
             >
               <UploadSimple className="h-4 w-4 mr-1" />
-              Importar dados
+              {uiText("Importar dados")}
             </Button>
           )}
           <Button
@@ -387,7 +388,7 @@ export function IntegrationsSettings() {
               }
             }}
           >
-            {t('settings.viewIntegration') || 'Ver integração'}
+            {t('settings.viewIntegration') || uiText('Ver integração')}
           </Button>
         </div>
       </Card>
@@ -420,7 +421,7 @@ export function IntegrationsSettings() {
           <TabsList variant="pills" className="flex-wrap">
             {categories.map((category) => (
               <TabsTrigger key={category.id} value={category.id} variant="pills">
-                {category.label}
+                {uiText(category.label)}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -430,8 +431,8 @@ export function IntegrationsSettings() {
         {selectedCategory === 'telephony' && (
           <section id="telephony-control-center" className="scroll-mt-6 space-y-4">
             <div>
-              <h3 className="text-base font-semibold">Operação da telefonia</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Gerencie disponibilidade, números, destinatários, saída, horários e fallback.</p>
+              <h3 className="text-base font-semibold">{uiText("Operação da telefonia")}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{uiText("Gerencie disponibilidade, números, destinatários, saída, horários e fallback.")}</p>
             </div>
             <TelephonyAvailabilitySettings />
             {canManagePhoneNumbers ? (
@@ -440,7 +441,7 @@ export function IntegrationsSettings() {
               <Alert>
                 <Warning className="h-4 w-4" />
                 <AlertDescription>
-                  Você pode controlar sua disponibilidade, mas precisa da permissão “Gerenciar Telefonia” para alterar números e equipes.
+                  {uiText("Você pode controlar sua disponibilidade, mas precisa da permissão “Gerenciar Telefonia” para alterar números e equipes.")}
                 </AlertDescription>
               </Alert>
             )}
@@ -454,9 +455,9 @@ export function IntegrationsSettings() {
             className="scroll-mt-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 px-4 py-3"
           >
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">WhatsApp Comercial</p>
+              <p className="text-sm font-medium text-foreground">{uiText("WhatsApp Comercial")}</p>
               <p className="text-xs text-muted-foreground">
-                Gerencie os números comerciais utilizados pelo CRM.
+                {uiText("Gerencie os números comerciais utilizados pelo CRM.")}
               </p>
             </div>
             <Button
@@ -465,7 +466,7 @@ export function IntegrationsSettings() {
               className="text-xs"
               onClick={() => navigate('/settings/whatsapp-comercial')}
             >
-              Abrir módulo →
+              {uiText("Abrir módulo →")}
             </Button>
           </div>
 
@@ -475,7 +476,7 @@ export function IntegrationsSettings() {
         {/* Integrations Grid */}
         {isLoading ? (
           <div className="text-center py-8">
-            <p className="text-muted-foreground">Carregando integrações...</p>
+            <p className="text-muted-foreground">{uiText("Carregando integrações...")}</p>
           </div>
         ) : filteredIntegrations && filteredIntegrations.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -490,15 +491,15 @@ export function IntegrationsSettings() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-medium text-foreground">Meta</h3>
                         {metaConn?.status === 'connected'
-                          ? <Badge className="text-[10px] bg-green-600 text-white">Conectado</Badge>
-                          : <Badge variant="secondary" className="text-[10px]">Não conectado</Badge>}
+                          ? <Badge className="text-[10px] bg-green-600 text-white">{uiText("Conectado")}</Badge>
+                          : <Badge variant="secondary" className="text-[10px]">{uiText("Não conectado")}</Badge>}
                       </div>
-                      <p className="mt-1 text-sm text-muted-foreground">Ads, Orgânico, Lead Generation, Conversions API, WhatsApp.</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{uiText("Ads, Orgânico, Lead Generation, Conversions API, WhatsApp.")}</p>
                     </div>
                   </div>
                 </div>
                 <div className="mt-4 flex justify-end">
-                  <Button variant="outline" size="sm" onClick={() => navigate('/settings/integrations/meta')}>Ver integração</Button>
+                  <Button variant="outline" size="sm" onClick={() => navigate('/settings/integrations/meta')}>{uiText("Ver integração")}</Button>
                 </div>
               </Card>
             )}
@@ -567,9 +568,9 @@ export function IntegrationsSettings() {
                           <h3 className="font-medium text-foreground truncate">{integration.name}</h3>
                           {isConnected && (
                             (connection?.connected_account as any)?.test_event_code ? (
-                              <Badge className="text-[10px] bg-amber-500 text-white">Modo teste</Badge>
+                              <Badge className="text-[10px] bg-amber-500 text-white">{uiText("Modo teste")}</Badge>
                             ) : (
-                              <Badge className="text-[10px] bg-green-600 text-white">Conectado</Badge>
+                              <Badge className="text-[10px] bg-green-600 text-white">{uiText("Conectado")}</Badge>
                             )
                           )}
                           {isBeta && (
@@ -578,12 +579,12 @@ export function IntegrationsSettings() {
                                 <TooltipTrigger asChild>
                                   <Badge variant="outline" className="flex items-center gap-1 shrink-0">
                                     <Warning className="w-3 h-3" />
-                                    Beta
+                                    {uiText("Beta")}
                                   </Badge>
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <p className="max-w-xs">
-                                    Esta integração está em fase beta e pode apresentar comportamentos instáveis.
+                                    {uiText("Esta integração está em fase beta e pode apresentar comportamentos instáveis.")}
                                   </p>
                                 </TooltipContent>
                               </Tooltip>
@@ -591,7 +592,7 @@ export function IntegrationsSettings() {
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                          {integration.description}
+                          {integration.description ? uiText(integration.description) : integration.description}
                         </p>
                       </div>
                     </div>
@@ -609,7 +610,7 @@ export function IntegrationsSettings() {
                         onClick={openTelephonyControl}
                       >
                         <SlidersHorizontal className="mr-1 h-4 w-4" />
-                        Gerenciar números e equipe
+                        {uiText("Gerenciar números e equipe")}
                       </Button>
                     )}
                     <Button
@@ -624,7 +625,7 @@ export function IntegrationsSettings() {
                         }
                       }}
                     >
-                      {t('settings.viewIntegration') || 'Ver integração'}
+                      {t('settings.viewIntegration') || uiText('Ver integração')}
                     </Button>
                   </div>
                 </Card>
@@ -633,7 +634,7 @@ export function IntegrationsSettings() {
           </div>
         ) : (
           <div className="text-center py-8">
-            <p className="text-muted-foreground">Nenhuma integração encontrada nesta categoria.</p>
+            <p className="text-muted-foreground">{uiText("Nenhuma integração encontrada nesta categoria.")}</p>
           </div>
         )}
 
@@ -735,9 +736,9 @@ export function IntegrationsSettings() {
       <ConfirmDialog
         open={disconnectConfirmOpen}
         onOpenChange={setDisconnectConfirmOpen}
-        title="Desconectar Integração"
-        description="Tem certeza que deseja desconectar esta integração? Você precisará configurá-la novamente para usá-la."
-        confirmText="Desconectar"
+        title={uiText("Desconectar Integração")}
+        description={uiText("Tem certeza que deseja desconectar esta integração? Você precisará configurá-la novamente para usá-la.")}
+        confirmText={uiText("Desconectar")}
         variant="destructive"
         onConfirm={handleDisconnectConfirm}
         loading={disconnectMutation.isPending}

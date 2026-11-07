@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getUiLocale, uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMutation } from '@tanstack/react-query';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,7 +32,7 @@ const STATUS_MAP: Record<AIProviderStatus, { label: string; variant: 'default' |
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
-  try { return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); }
+  try { return new Date(iso).toLocaleString(getUiLocale() === 'en-US' ? 'en-US' : 'pt-BR', { dateStyle: 'short', timeStyle: 'short' }); }
   catch { return '—'; }
 }
 
@@ -48,6 +49,7 @@ export function AIProviderCard({
   integration, organizationId, info, legacyConnection, canManage,
 }: AIProviderCardProps) {
   const providerId = resolveProviderId(integration);
+  useUiLocale();
   const [dialogOpen, setDialogOpen] = useState(false);
   const invalidate = useInvalidateAIProviders();
 
@@ -70,7 +72,7 @@ export function AIProviderCard({
       return nextActive;
     },
     onSuccess: (nextActive) => {
-      toast.success(nextActive ? 'Provider ativado' : 'Provider desativado (chave preservada)');
+      toast.success(nextActive ? uiText('Provider ativado') : uiText('Provider desativado (chave preservada)'));
       invalidate(organizationId);
     },
     onError: (e: Error) => toast.error(e.message),
@@ -100,18 +102,18 @@ export function AIProviderCard({
       return data;
     },
     onSuccess: () => {
-      toast.success('Chave migrada com segurança. Agora está criptografada como Chave Própria.');
+      toast.success(uiText('Chave migrada com segurança. Agora está criptografada como Chave Própria.'));
       invalidate(organizationId);
     },
     onError: (e: Error) => {
       const msg = e.message.startsWith('key_test_failed')
-        ? 'A chave antiga foi rejeitada pelo provider. Atualize a chave para concluir a migração.'
+        ? uiText('A chave antiga foi rejeitada pelo provider. Atualize a chave para concluir a migração.')
         : e.message === 'no_legacy_key'
-        ? 'Nenhuma chave antiga encontrada para migrar.'
+        ? uiText('Nenhuma chave antiga encontrada para migrar.')
         : e.message === 'byok_already_configured'
-        ? 'Já existe uma chave segura cadastrada. Use Gerenciar chave.'
+        ? uiText('Já existe uma chave segura cadastrada. Use Gerenciar chave.')
         : e.message === 'migration_temporarily_unavailable'
-        ? 'A migração está temporariamente indisponível no servidor. Tente novamente em instantes.'
+        ? uiText('A migração está temporariamente indisponível no servidor. Tente novamente em instantes.')
         : e.message;
       toast.error(msg);
     },
@@ -157,11 +159,11 @@ export function AIProviderCard({
                 <h3 className="font-medium text-foreground truncate">{integration.name}</h3>
                 <Badge variant={meta.variant} className="gap-1 text-[10px]">
                   <StatusIcon size={11} weight="fill" />
-                  {meta.label}
+                  {uiText(meta.label)}
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                {integration.description}
+                {integration.description ? uiText(integration.description) : integration.description}
               </p>
             </div>
           </div>
@@ -176,8 +178,7 @@ export function AIProviderCard({
           <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
             <WarningCircle size={14} weight="fill" className="mt-0.5 shrink-0" />
             <span>
-              Detectamos uma chave configurada no formato antigo. Você pode migrá-la com segurança em 1 clique —
-              a chave é testada e criptografada no servidor, sem precisar digitar novamente.
+              {uiText("Detectamos uma chave configurada no formato antigo. Você pode migrá-la com segurança em 1 clique — a chave é testada e criptografada no servidor, sem precisar digitar novamente.")}
             </span>
           </div>
         )}
@@ -185,23 +186,23 @@ export function AIProviderCard({
         {hasNewKey && (
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs pl-[52px]">
             <div>
-              <dt className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Chave</dt>
+              <dt className="text-[10px] uppercase tracking-wider text-muted-foreground/70">{uiText("Chave")}</dt>
               <dd className="font-mono">•••• {info?.last4 ?? '????'}</dd>
             </div>
             <div>
-              <dt className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Verificada</dt>
+              <dt className="text-[10px] uppercase tracking-wider text-muted-foreground/70">{uiText("Verificada")}</dt>
               <dd>{formatDate(info?.verified_at ?? null)}</dd>
             </div>
             <div>
-              <dt className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Origem</dt>
-              <dd>Chave própria</dd>
+              <dt className="text-[10px] uppercase tracking-wider text-muted-foreground/70">{uiText("Origem")}</dt>
+              <dd>{uiText("Chave própria")}</dd>
             </div>
             <div>
-              <dt className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Limite</dt>
+              <dt className="text-[10px] uppercase tracking-wider text-muted-foreground/70">{uiText("Limite")}</dt>
               <dd>
                 {info?.monthly_budget_usd
-                  ? `US$ ${Number(info.monthly_budget_usd).toFixed(2)}/mês`
-                  : <span className="text-muted-foreground">Sem limite</span>}
+                  ? uiText('US$ {0}/mês', { 0: Number(info.monthly_budget_usd).toFixed(2) })
+                  : <span className="text-muted-foreground">{uiText("Sem limite")}</span>}
               </dd>
             </div>
           </dl>
@@ -217,7 +218,7 @@ export function AIProviderCard({
                 onClick={() => setDialogOpen(true)}
                 disabled={!canManage}
               >
-                Usar outra chave
+                {uiText("Usar outra chave")}
               </Button>
               <Button
                 size="sm"
@@ -225,7 +226,7 @@ export function AIProviderCard({
                 disabled={!canManage || migrateMut.isPending}
               >
                 <Key size={14} weight="bold" className="mr-1.5" />
-                {migrateMut.isPending ? 'Migrando…' : 'Migrar chave existente com segurança'}
+                {migrateMut.isPending ? uiText('Migrando…') : uiText('Migrar chave existente com segurança')}
               </Button>
             </>
           ) : (
@@ -236,7 +237,7 @@ export function AIProviderCard({
               onClick={() => setDialogOpen(true)}
               disabled={!canManage && !hasNewKey}
             >
-              {hasNewKey ? 'Gerenciar chave' : 'Configurar'}
+              {hasNewKey ? uiText('Gerenciar chave') : uiText('Configurar')}
             </Button>
           )}
         </div>

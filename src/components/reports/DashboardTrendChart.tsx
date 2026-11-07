@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export function DashboardTrendChart({ data, from, to, loading }: Props) {
+  const locale = useUiLocale();
   const defaultGranularity = useMemo(() => defaultGranularityFor(from, to), [from, to]);
 
   const [granularity, setGranularity] = useState<Granularity>(defaultGranularity);
@@ -39,10 +41,11 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
     () =>
       buildTrendBuckets(data, from, to, weekly).map((b) => ({
         label: b.label,
-        Criadas: b.created,
-        Ganhas: b.won,
+        created: b.created,
+        won: b.won,
       })),
-    [data, from, to, weekly],
+    // locale: rótulos do eixo X dependem do idioma.
+    [data, from, to, weekly, locale],
   );
 
   return (
@@ -50,10 +53,10 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-foreground">
-            Criadas x Ganhas
+            {uiText("Criadas x Ganhas")}
           </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {weekly ? 'Agregação semanal' : 'Agregação diária'}
+            {weekly ? uiText('Agregação semanal') : uiText('Agregação diária')}
           </p>
         </div>
         <GranularityToggle value={granularity} onChange={setGranularity} />
@@ -89,8 +92,8 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
                 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="Criadas" fill="hsl(var(--info))" radius={[3, 3, 0, 0]} maxBarSize={28} />
-              <Bar dataKey="Ganhas" fill="hsl(var(--success))" radius={[3, 3, 0, 0]} maxBarSize={28} />
+              <Bar dataKey="created" name={uiText("Criadas")} fill="hsl(var(--info))" radius={[3, 3, 0, 0]} maxBarSize={28} />
+              <Bar dataKey="won" name={uiText("Ganhas")} fill="hsl(var(--success))" radius={[3, 3, 0, 0]} maxBarSize={28} />
             </BarChart>
           </ResponsiveContainer>
         </div>

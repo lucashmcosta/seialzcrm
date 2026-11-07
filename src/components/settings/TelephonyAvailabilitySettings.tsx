@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { format } from 'date-fns';
+import { getUiLocale, uiDateLocale, uiText, useUiLocale } from '@/lib/ui-locale';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -13,6 +15,7 @@ import { useOutboundCall } from '@/contexts/OutboundCallContext';
 
 export function TelephonyAvailabilitySettings() {
   const { organization, userProfile } = useOrganization();
+  useUiLocale();
   const { isDeviceReady, errorMessage } = useOutboundCall();
   const [receiveCalls, setReceiveCalls] = useState(true);
   const [dndUntil, setDndUntil] = useState<string | null>(null);
@@ -42,10 +45,10 @@ export function TelephonyAvailabilitySettings() {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'organization_id,user_id' });
     setSaving(false);
-    if (error) return toast.error('Não foi possível atualizar sua disponibilidade');
+    if (error) return toast.error(uiText('Não foi possível atualizar sua disponibilidade'));
     setReceiveCalls(nextReceive);
     setDndUntil(nextDnd);
-    toast.success('Disponibilidade atualizada');
+    toast.success(uiText('Disponibilidade atualizada'));
   };
 
   const dndActive = !!dndUntil && new Date(dndUntil).getTime() > Date.now();
@@ -53,27 +56,27 @@ export function TelephonyAvailabilitySettings() {
     <Card>
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
-          <CardTitle className="flex items-center gap-2"><PhoneCall className="h-5 w-5" /> Minha disponibilidade</CardTitle>
-          <Badge variant={isDeviceReady ? 'default' : 'destructive'}>{isDeviceReady ? 'Navegador pronto' : 'Telefonia offline'}</Badge>
+          <CardTitle className="flex items-center gap-2"><PhoneCall className="h-5 w-5" /> {uiText("Minha disponibilidade")}</CardTitle>
+          <Badge variant={isDeviceReady ? 'default' : 'destructive'}>{isDeviceReady ? uiText('Navegador pronto') : uiText('Telefonia offline')}</Badge>
         </div>
-        <CardDescription>O roteamento também exige que este navegador esteja conectado recentemente.</CardDescription>
+        <CardDescription>{uiText("O roteamento também exige que este navegador esteja conectado recentemente.")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {!isDeviceReady && (
           <Alert variant="destructive">
-            <AlertDescription>{errorMessage || 'Este navegador não está registrado para receber chamadas. Atualize a página.'}</AlertDescription>
+            <AlertDescription>{errorMessage || uiText('Este navegador não está registrado para receber chamadas. Atualize a página.')}</AlertDescription>
           </Alert>
         )}
         <div className="flex items-center justify-between">
-          <Label>Participar das chamadas recebidas</Label>
+          <Label>{uiText("Participar das chamadas recebidas")}</Label>
           <Switch checked={receiveCalls} disabled={saving} onCheckedChange={(value) => void save(value, dndUntil)} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant={dndActive ? 'default' : 'outline'} disabled={saving || !receiveCalls} onClick={() => void save(receiveCalls, new Date(Date.now() + 60 * 60_000).toISOString())}>
-            <Moon className="mr-2 h-4 w-4" /> Não perturbe por 1 hora
+            <Moon className="mr-2 h-4 w-4" /> {uiText("Não perturbe por 1 hora")}
           </Button>
-          {dndActive && <Button variant="ghost" disabled={saving} onClick={() => void save(receiveCalls, null)}>Voltar a receber</Button>}
-          {dndActive && <span className="text-xs text-muted-foreground">Até {new Date(dndUntil!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+          {dndActive && <Button variant="ghost" disabled={saving} onClick={() => void save(receiveCalls, null)}>{uiText("Voltar a receber")}</Button>}
+          {dndActive && <span className="text-xs text-muted-foreground">{uiText('Até {0}', { 0: format(new Date(dndUntil!), getUiLocale() === 'en-US' ? 'h:mm a' : 'HH:mm', { locale: uiDateLocale() }) })}</span>}
         </div>
       </CardContent>
     </Card>

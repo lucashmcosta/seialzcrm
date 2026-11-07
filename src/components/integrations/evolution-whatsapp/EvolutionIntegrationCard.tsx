@@ -1,3 +1,4 @@
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMemo } from 'react';
 import { ChatCircle } from '@phosphor-icons/react';
 import { Card } from '@/components/ui/card';
@@ -26,12 +27,13 @@ interface EvolutionIntegrationCardProps {
  * Apenas apresentação — nenhuma escrita, nenhuma chamada de backend.
  */
 export function EvolutionIntegrationCard({ integration, onOpen }: EvolutionIntegrationCardProps) {
+  const locale = useUiLocale();
   const { organization } = useOrganization();
   const { data: instances, isLoading } = useEvolutionInstances();
 
   const statusBadge = useMemo(() => {
     if (isLoading) {
-      return <Badge variant="outline" className="text-[10px]">Verificando…</Badge>;
+      return <Badge variant="outline" className="text-[10px]">{uiText("Verificando…")}</Badge>;
     }
 
     const orgInstances = (instances ?? []).filter(
@@ -39,14 +41,14 @@ export function EvolutionIntegrationCard({ integration, onOpen }: EvolutionInteg
     );
 
     if (orgInstances.length === 0) {
-      return <Badge variant="outline" className="text-[10px]">Não configurado</Badge>;
+      return <Badge variant="outline" className="text-[10px]">{uiText("Não configurado")}</Badge>;
     }
 
     const connected = orgInstances.some(
       (i) => i.provisioning_status === 'linked' && i.last_known_state === 'open',
     );
     if (connected) {
-      return <Badge className="text-[10px] bg-green-600 text-white">Conectado</Badge>;
+      return <Badge className="text-[10px] bg-green-600 text-white">{uiText("Conectado")}</Badge>;
     }
 
     const awaiting = orgInstances.some(
@@ -57,13 +59,13 @@ export function EvolutionIntegrationCard({ integration, onOpen }: EvolutionInteg
     if (awaiting) {
       return (
         <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600">
-          Aguardando conexão
+          {uiText("Aguardando conexão")}
         </Badge>
       );
     }
 
-    return <Badge variant="secondary" className="text-[10px]">Desconectado</Badge>;
-  }, [instances, isLoading, organization?.id]);
+    return <Badge variant="secondary" className="text-[10px]">{uiText("Desconectado")}</Badge>;
+  }, [instances, isLoading, organization?.id, locale]);
 
   return (
     <Card className="p-4">
@@ -85,13 +87,13 @@ export function EvolutionIntegrationCard({ integration, onOpen }: EvolutionInteg
             {statusBadge}
           </div>
           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-            {integration.description}
+            {integration.description ? uiText(integration.description) : integration.description}
           </p>
         </div>
       </div>
       <div className="mt-4 flex justify-end">
         <Button variant="link" size="sm" className="h-auto p-0 text-primary" onClick={onOpen}>
-          Ver integração
+          {uiText("Ver integração")}
         </Button>
       </div>
     </Card>
