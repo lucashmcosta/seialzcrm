@@ -16,6 +16,11 @@ interface Props {
    * discreto e sem animação. `default` mantém o visual histórico (Atendimento/Mobile).
    */
   tone?: Tone;
+  /**
+   * Cabeçalho enxuto do Comercial: só mostra a janela 24h quando pede atenção
+   * (fechada, nunca aberta ou fechando em < 2h). O resto fica em "Detalhes da rota".
+   */
+  attentionOnly?: boolean;
 }
 
 /**
@@ -23,7 +28,7 @@ interface Props {
  *  - conversationWindow (24h) → gate de freeform.
  *  - billingWindow (72h CTWA) → gate de gratuidade de templates.
  */
-export function WhatsAppWindowChip({ channel, lastInboundAt, contact, contactId, tone = 'default' }: Props) {
+export function WhatsAppWindowChip({ channel, lastInboundAt, contact, contactId, tone = 'default', attentionOnly = false }: Props) {
   const window = useServiceWindow({
     contact: contact ?? null,
     contactId: contactId ?? null,
@@ -33,6 +38,12 @@ export function WhatsAppWindowChip({ channel, lastInboundAt, contact, contactId,
   if (channel !== 'whatsapp') return null;
 
   const { conversation, billing } = window;
+
+  if (attentionOnly) {
+    const needsAttention = conversation.status === 'never' || !conversation.isOpen
+      || conversation.remainingMs < 2 * 60 * 60 * 1000;
+    return needsAttention ? <ConversationChip window={conversation} tone={tone} /> : null;
+  }
 
   return (
     <span className="inline-flex items-center gap-1.5 flex-wrap">

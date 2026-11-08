@@ -2228,8 +2228,10 @@ function DesktopMessagesList() {
                       lastInboundAt={composerLastInboundAt}
                       contactId={selectedThread.contact_id}
                       tone="soft"
+                      attentionOnly
                     />
                   }
+                  minimal
                   actions={
                     <>
                       <Button
@@ -2362,6 +2364,14 @@ function DesktopMessagesList() {
                     contactName={selectedThread.contact_name}
                     contactPhone={selectedThread.contact_phone}
                     assigneeName={selectedThread.assigned_user_name ?? null}
+                    windowInfo={
+                      <WhatsAppWindowChip
+                        channel="whatsapp"
+                        lastInboundAt={composerLastInboundAt}
+                        contactId={selectedThread.contact_id}
+                        tone="soft"
+                      />
+                    }
                     statusLabel={
                       selectedThread.status && statusConfig[selectedThread.status]
                         ? (locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn)

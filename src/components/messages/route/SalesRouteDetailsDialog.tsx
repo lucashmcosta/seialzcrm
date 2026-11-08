@@ -2,6 +2,7 @@
 // Fase 2.5 — modal de detalhes da conversa Comercial (SOMENTE LEITURA).
 // ============================================================================
 
+import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -11,6 +12,8 @@ import { Row, SalesRoutePanel, useSalesRouteView, type SalesRouteContextProps } 
 interface Props extends SalesRouteContextProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Janelas 24h / CTWA completas (o cabeçalho enxuto só mostra quando pede atenção). */
+  windowInfo?: ReactNode;
 }
 
 function useLastOutbound(threadId: string) {
@@ -31,7 +34,7 @@ function useLastOutbound(threadId: string) {
   });
 }
 
-export function SalesRouteDetailsDialog({ open, onOpenChange, ...ctx }: Props) {
+export function SalesRouteDetailsDialog({ open, onOpenChange, windowInfo, ...ctx }: Props) {
   const { history, flag } = useSalesRouteView(ctx);
   const { data: lastOutbound } = useLastOutbound(ctx.threadId);
 
@@ -59,6 +62,8 @@ export function SalesRouteDetailsDialog({ open, onOpenChange, ...ctx }: Props) {
             {ctx.contactName ?? '—'}
             {ctx.contactPhone ? <span className="font-data"> · {ctx.contactPhone}</span> : null}
           </Row>
+
+          {windowInfo && <Row label="Janelas">{windowInfo}</Row>}
 
           <Row label="Último outbound">
             {lastOutbound?.created_at
