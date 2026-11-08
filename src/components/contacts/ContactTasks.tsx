@@ -3,6 +3,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,11 +28,14 @@ interface Task {
 }
 
 interface ContactTasksProps {
+  compact?: boolean;
   contactId?: string;
   opportunityId?: string;
 }
 
-export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
+// compact: sem moldura de Card, para a Ficha lateral do Comercial (320px).
+export function ContactTasks({ contactId, opportunityId, compact = false }: ContactTasksProps) {
+  useUiLocale();
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
@@ -142,7 +146,7 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
 
   if (loading) {
     return (
-      <Card>
+      <Card className={compact ? 'border-0 shadow-none' : undefined}>
         <CardContent className="py-8 flex justify-center">
           <SpinnerGap className="h-8 w-8 animate-spin" />
         </CardContent>
@@ -151,13 +155,15 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className={compact ? 'border-0 shadow-none bg-transparent' : undefined}>
+      <CardHeader className={compact ? 'p-0 pb-3' : undefined}>
         <div className="flex items-center justify-between">
-          <CardTitle>{t('contacts.tasksTab')}</CardTitle>
+          {compact
+            ? <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('contacts.tasksTab')}</h3>
+            : <CardTitle>{t('contacts.tasksTab')}</CardTitle>}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm">
+              <Button size="sm" variant={compact ? 'outline' : undefined} className={compact ? 'h-7 px-2 text-xs' : undefined}>
                 <Plus className="w-4 h-4 mr-2" />
                 {t('tasks.newTask')}
               </Button>
@@ -166,7 +172,7 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
               <form onSubmit={handleSubmit}>
                 <DialogHeader>
                   <DialogTitle>{t('tasks.newTask')}</DialogTitle>
-                  <DialogDescription>Create a new task for this contact</DialogDescription>
+                  <DialogDescription>{uiText('Crie uma nova tarefa para este contato')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
@@ -241,10 +247,10 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
           </Dialog>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className={compact ? 'p-0' : undefined}>
         <div className="space-y-3">
           {tasks.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No tasks yet</p>
+            <p className={compact ? 'text-xs text-muted-foreground' : 'text-center text-muted-foreground py-8'}>{uiText('Nenhuma tarefa ainda')}</p>
           ) : (
             tasks.map((task) => (
               <div key={task.id} className="flex items-start gap-3 p-3 rounded-lg border">
@@ -272,7 +278,7 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
                   )}
                   {task.due_at && (
                     <p className="text-xs text-muted-foreground">
-                      Due {formatDistanceToNow(new Date(task.due_at), { addSuffix: true, locale: dateLocale })}
+                      {uiText('Vence {quando}', { quando: formatDistanceToNow(new Date(task.due_at), { addSuffix: true, locale: dateLocale }) })}
                     </p>
                   )}
                 </div>

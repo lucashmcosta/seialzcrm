@@ -73,7 +73,8 @@ import { resolveComposerCapability } from '@/lib/composerCapability';
 import { useEndpointNumbers } from '@/hooks/useEndpointNumbers';
 import { pickPreferredEndpoint } from '@/lib/composerEndpoint';
 import { isSalesPurpose } from '@/lib/endpointPurpose';
-import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown } from '@phosphor-icons/react';
+import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown, IdentificationCard, CaretDoubleRight } from '@phosphor-icons/react';
+import { CommercialFichaPanel } from '@/components/messages/ficha/CommercialFichaPanel';
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
@@ -272,12 +273,41 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   /** Metadados da última mensagem (preview) — resolvidos em lote. */
   lastMessageMediaType?: string | null;
   lastMessageStatus?: string | null;
+  /** Lista recolhida em trilho: só avatar (nome no title) + bolinha de não lida. */
+  rail?: boolean;
+  /**
+   * Org com agente de IA ligado. Sem IA, os webhooks marcam needs_human_attention em
+   * todo inbound (o selo não diz nada) — então só mostramos o aviso com IA ligada.
+   */
+  aiEnabled?: boolean;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = false, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
+
+  if (rail) {
+    return (
+      <ListBoxItem
+        {...otherProps}
+        id={value.id}
+        textValue={value.contact_name}
+        className={(state) =>
+          cn(
+            'relative flex items-center justify-center border-b border-border/60 py-2.5 select-none cursor-pointer',
+            state.isFocused && 'outline-2 -outline-offset-2 outline-ring',
+            state.isSelected && 'bg-accent',
+          )
+        }
+      >
+        <span title={value.contact_name} className="relative inline-flex">
+          <Avatar fallbackText={value.contact_name} size="md" />
+          {value.unread && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-card" />}
+        </span>
+      </ListBoxItem>
+    );
+  }
 
   return (
     <ListBoxItem
@@ -332,12 +362,16 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpo
           <span className={cn('text-[10px] font-medium shrink-0', status.color)}>
             {locale === 'pt-BR' ? status.label : status.labelEn}
           </span>
-          {value.needs_human_attention && (
+          {/* IA passou pra humano e ninguém assumiu ainda (só com agente de IA ligado). */}
+          {aiEnabled && value.needs_human_attention && !value.assigned_user_id && (
             <>
               <span className="text-[10px] text-muted-foreground/60 shrink-0">·</span>
-              <span className="inline-flex items-center gap-1 shrink-0 text-destructive">
-                <WarningCircle className="h-3 w-3" />
-                <span className="text-[10px] font-medium">Atenção</span>
+              <span
+                className="inline-flex items-center gap-1 shrink-0 text-destructive"
+                title={locale === 'pt-BR' ? 'O agente de IA passou a conversa para um humano e ninguém assumiu ainda' : 'The AI agent handed this conversation to a human and nobody has taken it yet'}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                <span className="text-[10px] font-medium">{locale === 'pt-BR' ? 'Pediu humano' : 'Needs human'}</span>
               </span>
             </>
           )}
@@ -383,6 +417,41 @@ function DesktopMessagesList() {
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  // Ficha lateral (contato/campos) ao lado do chat; preferência salva por navegador.
+  const [fichaOpen, setFichaOpen] = useState<boolean>(() => {
+    try { return window.localStorage.getItem('commercial.ficha.open') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem('commercial.ficha.open', fichaOpen ? '1' : '0'); } catch { /* storage indisponível */ }
+  }, [fichaOpen]);
+  // Atalhos ao lado do chat só se sobrar conversa legível: lista 400 + painel 360 + chat ≥ 400.
+  const commercialRowRef = useRef<HTMLDivElement | null>(null);
+  const [rowWidth, setRowWidth] = useState(0);
+  useEffect(() => {
+    const el = commercialRowRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => setRowWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Regra de espaço (a conversa nunca é espremida abaixo de CHAT_MIN):
+  //  1) cabe tudo → lista 400 + conversa + Atalhos 360
+  //  2) aperta → a lista encolhe até 320
+  //  3) aperta mais → a lista vira trilho de avatares (76px)
+  //  4) nem assim → Atalhos abre por cima (gaveta)
+  // Com Atalhos fechado: lista 400 (320 em telas estreitas).
+  const LIST_MAX = 400, LIST_MIN = 320, LIST_RAIL = 76, PANEL_W = 360, CHAT_MIN = 440;
+  const commercialLayout = (() => {
+    const w = rowWidth || 1600;
+    if (!fichaOpen) return { listWidth: w - LIST_MAX >= CHAT_MIN ? LIST_MAX : LIST_MIN, rail: false, fichaInline: false };
+    const roomForList = w - PANEL_W - CHAT_MIN;
+    if (roomForList >= LIST_MAX) return { listWidth: LIST_MAX, rail: false, fichaInline: true };
+    if (roomForList >= LIST_MIN) return { listWidth: Math.floor(roomForList), rail: false, fichaInline: true };
+    if (roomForList >= LIST_RAIL) return { listWidth: LIST_RAIL, rail: true, fichaInline: true };
+    return { listWidth: LIST_RAIL, rail: true, fichaInline: false };
+  })();
+  const fichaInline = commercialLayout.fichaInline;
+  const listRail = commercialLayout.rail;
   const [selectedThreadOverride, setSelectedThreadOverride] = useState<(ChatThread & { primary_endpoint_id?: string | null }) | null>(null);
   const selectedThreadWaProvider = useWhatsAppProvider({ threadId: selectedThreadId });
   // Endpoint EFETIVO de envio: se o primary da thread está desconectado, resolve
@@ -504,8 +573,9 @@ function DesktopMessagesList() {
   const [isExporting, setIsExporting] = useState(false);
 
   // Opportunities for current contact (mark as won/lost from chat)
-  type ChatOpp = { id: string; title: string; pipeline_stage_id: string; close_date: string | null; contact_id: string | null };
+  type ChatOpp = { id: string; title: string; pipeline_stage_id: string; close_date: string | null; contact_id: string | null; amount?: number | null; currency?: string | null; owner_user_id?: string | null };
   const [contactOpportunities, setContactOpportunities] = useState<ChatOpp[]>([]);
+  const [oppReloadKey, setOppReloadKey] = useState(0); // recarrega após criar oportunidade pelo painel Atalhos
   const [pipelineStages, setPipelineStages] = useState<Array<{ id: string; name: string; type: string | null; order_index: number | null }>>([]);
   const [confirmAction, setConfirmAction] = useState<{ kind: 'won' | 'lost'; opp: ChatOpp } | null>(null);
   const [pendingCloseDate, setPendingCloseDate] = useState<{ kind: 'won' | 'lost'; opp: ChatOpp } | null>(null);
@@ -1032,14 +1102,14 @@ function DesktopMessagesList() {
     (async () => {
       const { data } = await supabase
         .from('opportunities')
-        .select('id, title, pipeline_stage_id, close_date, contact_id')
+        .select('id, title, pipeline_stage_id, close_date, contact_id, amount, currency, owner_user_id')
         .eq('organization_id', organization.id)
         .eq('contact_id', contactId)
         .eq('status', 'open')
         .is('deleted_at', null);
       setContactOpportunities((data as ChatOpp[]) || []);
     })();
-  }, [organization?.id, selectedThread?.contact_id]);
+  }, [organization?.id, selectedThread?.contact_id, oppReloadKey]);
 
   const handleMarkOpportunity = async (kind: 'won' | 'lost', opp: ChatOpp, closeDateOverride?: string) => {
     if (!organization?.id) return;
@@ -1264,14 +1334,9 @@ function DesktopMessagesList() {
       // Marcos históricos do CRM (somente leitura, escopo da thread).
       // Puramente apresentacional: não altera mensagens, envio ou realtime.
       try {
+        // "Conversa criada" saiu: o cabeçalho do bloco (canal · número) já marca o início,
+        // numa linha só e discreta, no estilo da data do WhatsApp.
         const events: TimelineEvent[] = [];
-        if (thread?.created_at) {
-          events.push({
-            id: `created-${threadId}`,
-            occurred_at: thread.created_at,
-            label: locale === 'pt-BR' ? 'Conversa criada' : 'Conversation created',
-          });
-        }
         const { data: assignments } = await supabase
           .from('thread_assignment_history')
           .select('id, action_type, from_user_id, to_user_id, performed_by_user_id, created_at, from_user:from_user_id(full_name), to_user:to_user_id(full_name), performed_by:performed_by_user_id(full_name)')
@@ -1335,8 +1400,16 @@ function DesktopMessagesList() {
 
   const handleSendNote = async () => {
     if (!organization?.id || !messageText.trim() || !selectedThread) return;
-
     const noteText = messageText.trim();
+    setMessageText('');
+    setIsNoteMode(false);
+    await addConversationNote(noteText);
+  };
+
+  // Nota na conversa (activities type=note). Usada pelo composer (modo nota) e pela
+  // Ficha lateral — aparece na timeline do chat na hora (otimista).
+  const addConversationNote = async (noteText: string): Promise<boolean> => {
+    if (!organization?.id || !noteText.trim() || !selectedThread) return false;
     const tempId = `note-temp-${Date.now()}`;
     const tempNote: InlineNote = {
       id: tempId,
@@ -1347,8 +1420,6 @@ function DesktopMessagesList() {
     };
 
     setInlineNotes((prev) => [...prev, tempNote]);
-    setMessageText('');
-    setIsNoteMode(false);
     scrollToBottom();
 
     try {
@@ -1363,9 +1434,11 @@ function DesktopMessagesList() {
       });
       if (error) throw error;
       invalidateThreadLastEndpoint(selectedThreadId);
+      return true;
     } catch (err: any) {
       setInlineNotes((prev) => prev.filter((n) => n.id !== tempId));
       toast({ variant: 'destructive', description: 'Erro ao salvar nota' });
+      return false;
     }
   };
 
@@ -1937,9 +2010,27 @@ function DesktopMessagesList() {
 
   return (
     <Layout>
-      <div className="h-screen overflow-hidden flex">
+      <div ref={commercialRowRef} className="h-screen overflow-hidden flex relative">
         {/* Left Panel - Chat List (fixed width) */}
-        <div className="w-[400px] flex-shrink-0 border-r border-border flex flex-col bg-card h-full overflow-hidden">
+        <div
+          className="flex-shrink-0 border-r border-border flex flex-col bg-card h-full overflow-hidden transition-[width] duration-200"
+          style={{ width: commercialLayout.listWidth }}
+        >
+            {listRail ? (
+              // Trilho: a lista cedeu espaço pros Atalhos. O botão devolve a lista (fecha os Atalhos).
+              <div className="flex flex-col items-center gap-2 py-3 border-b border-border">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setFichaOpen(false)}
+                  title={locale === 'pt-BR' ? 'Mostrar lista completa (fecha os Atalhos)' : 'Show full list (closes Shortcuts)'}
+                  aria-label={locale === 'pt-BR' ? 'Mostrar lista completa' : 'Show full list'}
+                >
+                  <CaretDoubleRight className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (<>
             <NoWhatsAppNumberBanner />
             {/* Header */}
             <div className="p-4 border-b border-border">
@@ -2010,6 +2101,7 @@ function DesktopMessagesList() {
                 />
               </div>
             </div>
+            </>)}
 
             {/* Chat List */}
             <ScrollArea className="flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
@@ -2068,6 +2160,8 @@ function DesktopMessagesList() {
                       <ChatListItem
                         key={thread.id}
                         value={thread}
+                        rail={listRail}
+                        aiEnabled={!!hasAIAgent}
                         locale={locale as 'pt-BR' | 'en-US'}
                         onHide={handleHideThread}
                         /* Badge visual: última mensagem -> primary_endpoint_id.
@@ -2139,15 +2233,30 @@ function DesktopMessagesList() {
                       lastInboundAt={composerLastInboundAt}
                       contactId={selectedThread.contact_id}
                       tone="soft"
+                      attentionOnly
                     />
                   }
+                  minimal
                   actions={
                     <>
+                      <Button
+                        variant={fichaOpen ? 'secondary' : 'outline'}
+                        size="sm"
+                        className="inline-flex"
+                        onClick={() => setFichaOpen((v) => !v)}
+                        title={locale === 'pt-BR' ? (fichaOpen ? 'Fechar atalhos' : 'Abrir atalhos') : (fichaOpen ? 'Close shortcuts' : 'Open shortcuts')}
+                        aria-pressed={fichaOpen}
+                      >
+                        <IdentificationCard className="w-4 h-4 xl:mr-1" />
+                        <span className="hidden xl:inline">{locale === 'pt-BR' ? 'Atalhos' : 'Shortcuts'}</span>
+                      </Button>
                       {organization?.id && (
                         <WidgetsTrigger screen="commercial" context={{ screen: 'commercial', organizationId: organization.id, threadId: selectedThread.id, contactId: selectedThread.contact_id ?? null }} />
                       )}
 
 
+                      {/* Menu Ações substituído pelo painel Atalhos no desktop (o celular usa MobileMessagesList). */}
+                      <div className="md:hidden">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="outline" size="sm" title={locale === 'pt-BR' ? 'Ações' : 'Actions'}>
@@ -2243,6 +2352,7 @@ function DesktopMessagesList() {
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
+                      </div>
                     </>
                   }
                 />
@@ -2259,6 +2369,14 @@ function DesktopMessagesList() {
                     contactName={selectedThread.contact_name}
                     contactPhone={selectedThread.contact_phone}
                     assigneeName={selectedThread.assigned_user_name ?? null}
+                    windowInfo={
+                      <WhatsAppWindowChip
+                        channel="whatsapp"
+                        lastInboundAt={composerLastInboundAt}
+                        contactId={selectedThread.contact_id}
+                        tone="soft"
+                      />
+                    }
                     statusLabel={
                       selectedThread.status && statusConfig[selectedThread.status]
                         ? (locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn)
@@ -2288,7 +2406,8 @@ function DesktopMessagesList() {
                   </div>
                 ) : (
                   <>
-                    <ScrollArea className="flex-1">
+                    {/* Área da conversa estilo WhatsApp: fundo ocupa tudo, sem cartão/margem branca. */}
+                    <ScrollArea className="flex-1 bg-muted/85">
                       {messagesLoading ? (
                         <div className="p-6 space-y-4">
                           {[1, 2, 3].map((i) => (
@@ -2298,7 +2417,7 @@ function DesktopMessagesList() {
                           ))}
                         </div>
                       ) : (
-                        <div className="p-6 space-y-3">
+                        <div className="px-4 py-3 space-y-3">
                           {/* Timeline única: mensagens, notas e marcos do CRM */}
                           {(() => {
                             const itemDateOf = (i: ChatItem) =>
@@ -2456,20 +2575,11 @@ function DesktopMessagesList() {
                                     ? `WhatsApp • ${providerShort}`
                                     : 'WhatsApp';
                                 blockHeader = (
-                                  <div className="pb-0">
-                                    <div className="flex items-center justify-center gap-1.5 text-[11px] leading-4">
-                                      <span className="font-medium text-foreground">{channelLine}</span>
-                                      {epAddress && (
-                                        <>
-                                          <span className="text-muted-foreground/50">•</span>
-                                          <span className="font-data text-muted-foreground">
-                                            {formatPhoneDisplay(epAddress)}
-                                          </span>
-                                        </>
-                                      )}
-                                    </div>
-                                    <div className="h-px bg-border/70 mt-1.5 mb-2" />
-                                  </div>
+                                  <TimelineEventMarker
+                                    label={channelLine}
+                                    value={epAddress ? formatPhoneDisplay(epAddress) : undefined}
+                                    className="my-1.5"
+                                  />
                                 );
 
                               }
@@ -2883,7 +2993,7 @@ function DesktopMessagesList() {
                                   messageNodes={segment.messageNodes}
                                   isCurrent={segment.key === currentBlockKey}
                                   locale={locale}
-                                  className="w-full rounded-lg border border-border/80 bg-muted/85 shadow-sm px-3 py-2.5 mt-2.5"
+                                  className="w-full pt-1"
                                 />
                               )
                             );
@@ -3168,6 +3278,41 @@ function DesktopMessagesList() {
               </div>
             )}
           </div>
+
+        {/* Ficha lateral do contato (desktop) */}
+        {selectedThread && (
+          <CommercialFichaPanel
+            open={fichaOpen}
+            contactId={selectedThread.contact_id}
+            onContactChanged={refetchThreads}
+            onClose={() => setFichaOpen(false)}
+            opportunities={contactOpportunities}
+            stages={pipelineStages}
+            onWon={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) setConfirmAction({ kind: 'won', opp: o }); }}
+            onLost={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) setConfirmAction({ kind: 'lost', opp: o }); }}
+            onMoveStage={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) { setMoveStageTargetId(o.pipeline_stage_id); setMoveStageOpp(o); } }}
+            onOpportunityUpdated={(id, patch) => setContactOpportunities((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))}
+            onOpportunityCreated={() => setOppReloadKey((k) => k + 1)}
+            onAddNote={addConversationNote}
+            inline={fichaInline}
+            conversation={{
+              status: selectedThread.status,
+              assignedUserId: selectedThread.assigned_user_id ?? null,
+              isAssignedToMe: !!selectedThread.assigned_user_id && selectedThread.assigned_user_id === userProfile?.id,
+              canAssign: threadPerms.canAssign,
+              canClose: threadPerms.canClose,
+              denyAssignReason: DENY_ASSIGN,
+              denyCloseReason: DENY_CLOSE,
+              showReturnToAI: !!selectedThread.needs_human_attention && !!hasAIAgent,
+              onTakeOver: () => handleTakeOver(selectedThread.id),
+              onAssign: (userId) => handleAssign(selectedThread.id, userId),
+              onResolve: () => handleResolve(selectedThread.id),
+              onReopen: () => handleReopen(selectedThread.id),
+              onReturnToAI: () => handleReturnToAI(selectedThread.id),
+              onHide: () => handleHideThread(selectedThread.id),
+            }}
+          />
+        )}
       </div>
 
 

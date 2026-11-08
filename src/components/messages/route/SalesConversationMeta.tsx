@@ -16,6 +16,8 @@ interface Props {
   endpointState: EndpointState;
   /** Chips de janela (24h / CTWA) renderizados ao final da linha 3. */
   windowChips?: ReactNode;
+  /** Enxuto: esconde o selo de rota quando está tudo ok (só aparece offline/sem rota). */
+  minimal?: boolean;
 }
 
 export function SalesConversationMeta({
@@ -25,6 +27,7 @@ export function SalesConversationMeta({
   provider,
   endpointState,
   windowChips,
+  minimal = false,
 }: Props) {
   // Subtexto de conversa legada só quando o resolver realmente não resolveu.
   const unresolved = endpointState === 'unresolved';
@@ -36,8 +39,10 @@ export function SalesConversationMeta({
         {assigneeName && <span> • {assigneeName}</span>}
       </p>
 
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        <RouteBadge address={address} provider={provider} state={endpointState} variant="split" />
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 empty:hidden">
+        {(!minimal || endpointState === 'offline' || endpointState === 'unresolved') && (
+          <RouteBadge address={address} provider={provider} state={endpointState} variant="split" />
+        )}
         {windowChips}
       </div>
 

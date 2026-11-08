@@ -12,8 +12,15 @@ export const SidebarNavigationSimple = ({
   featureCard,
   logo,
   userSection,
+  collapsed = false,
+  collapsedLogo,
+  collapsedUserSection,
 }: SidebarNavigationProps) => {
   const renderNavItem = (item: NavItemType) => {
+    // Recolhido: grupo vira um ícone que leva à página do grupo (sem submenu).
+    if (collapsed) {
+      return <SidebarNavItem key={item.href} item={item} collapsed />;
+    }
     if (item.items && item.items.length > 0) {
       return <SidebarNavGroup key={item.href} item={item} />;
     }
@@ -21,23 +28,23 @@ export const SidebarNavigationSimple = ({
   };
 
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-card">
+    <div className={cn("flex h-full flex-col border-r bg-card transition-[width] duration-200", collapsed ? "w-16" : "w-64")}>
       {/* Header / Logo */}
-      {logo && (
-        <div className="flex py-5 items-center justify-center px-4">
-          {logo}
+      {(collapsed ? collapsedLogo : logo) && (
+        <div className={cn("flex py-5 items-center justify-center", collapsed ? "px-2" : "px-4")}>
+          {collapsed ? collapsedLogo : logo}
         </div>
       )}
 
       {/* Main Navigation */}
-      <ScrollArea className="flex-1 px-3 py-4">
+      <ScrollArea className={cn("flex-1 py-4", collapsed ? "px-2" : "px-3")}>
         <nav className="space-y-1">
           {items.map(renderNavItem)}
         </nav>
       </ScrollArea>
 
       {/* Feature Card */}
-      {featureCard && (
+      {featureCard && !collapsed && (
         <div className="px-3 pb-3">
           {featureCard}
         </div>
@@ -47,10 +54,10 @@ export const SidebarNavigationSimple = ({
       {footerItems && footerItems.length > 0 && (
         <>
           <Separator />
-          <div className="px-3 py-3">
+          <div className={cn("py-3", collapsed ? "px-2" : "px-3")}>
             <nav className="space-y-1">
               {footerItems.map((item) => (
-                <SidebarNavItem key={item.href} item={item} />
+                <SidebarNavItem key={item.href} item={item} collapsed={collapsed} />
               ))}
             </nav>
           </div>
@@ -58,11 +65,11 @@ export const SidebarNavigationSimple = ({
       )}
 
       {/* User Section */}
-      {userSection && (
+      {(collapsed ? collapsedUserSection : userSection) && (
         <>
           <Separator />
-          <div className="p-3">
-            {userSection}
+          <div className={collapsed ? "p-2" : "p-3"}>
+            {collapsed ? collapsedUserSection : userSection}
           </div>
         </>
       )}

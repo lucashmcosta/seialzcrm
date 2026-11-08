@@ -1,5 +1,5 @@
 import { uiText, useUiLocale } from '@/lib/ui-locale';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -20,6 +20,8 @@ import {
   Headset,
   ChatsCircle,
   DeviceMobile,
+  CaretDoubleLeft,
+  CaretDoubleRight,
 } from '@phosphor-icons/react';
 import { useClientPortalChatFlag } from '@/hooks/useClientPortalChatFlag';
 import { useClientPortalUnreadCount } from '@/hooks/useClientPortalUnreadCount';
@@ -28,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useOrgLogoIcon } from '@/hooks/useOrgLogoIcon';
 import { usePermissions } from '@/hooks/usePermissions';
 import { areaAllowed } from '@/components/RequirePerm';
 import { useTranslation } from '@/lib/i18n';
@@ -58,6 +61,14 @@ export function Layout({ children }: LayoutProps) {
   const portalChatEnabled = useClientPortalChatFlag(organization?.id);
   const portalUnread = useClientPortalUnreadCount(organization?.id, !!portalChatEnabled);
   const { themePreset } = useTheme();
+  // Menu lateral recolhido (só ícones) — preferência por navegador.
+  const { data: orgLogoIcon } = useOrgLogoIcon(organization?.id);
+  const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
+    try { return window.localStorage.getItem('layout.sidebar.collapsed') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem('layout.sidebar.collapsed', navCollapsed ? '1' : '0'); } catch { /* storage indisponível */ }
+  }, [navCollapsed]);
 
   // ═══════════════════════════════════════
   // SEIALZ LAYOUT
@@ -243,6 +254,34 @@ export function Layout({ children }: LayoutProps) {
     </Link>
   );
 
+  const userInitial = userProfile?.full_name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || '?';
+  const collapsedLogo = (
+    <Link to="/dashboard" title={organization?.name || undefined} className="flex items-center justify-center">
+      {orgLogoIcon ? (
+        <img src={orgLogoIcon} alt={organization?.name} className="h-9 w-9 object-contain rounded-lg" />
+      ) : organization?.logo_url ? (
+        <img src={organization.logo_url} alt={organization.name} className="h-8 w-10 object-contain" />
+      ) : (
+        <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
+          <Buildings size={20} weight="light" className="text-primary-foreground" />
+        </div>
+      )}
+    </Link>
+  );
+  const collapsedUserSection = (
+    <div className="flex flex-col items-center gap-2">
+      <Link to="/profile" title={userProfile?.full_name || user?.email || uiText("Usuário")} className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center hover:ring-2 hover:ring-primary/30">
+        <span className="text-sm font-semibold text-primary">{userInitial}</span>
+      </Link>
+      <Button variant="ghost" size="icon" onClick={signOut} title={t('auth.signOut')} aria-label={t('auth.signOut')} className="h-8 w-8">
+        <SignOut size={16} weight="light" />
+      </Button>
+      <Button variant="ghost" size="icon" onClick={() => setNavCollapsed(false)} title={uiText('Expandir menu')} aria-label={uiText('Expandir menu')} aria-expanded={false} className="h-8 w-8">
+        <CaretDoubleRight size={16} />
+      </Button>
+    </div>
+  );
+
   // User section with skeleton
   const userSection = loading ? (
     <div className="space-y-2">
@@ -274,15 +313,28 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </div>
       </Link>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={signOut}
-        className="w-full"
-      >
-        <SignOut size={16} weight="light" className="mr-2" />
-        {t('auth.signOut')}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={signOut}
+          className="flex-1"
+        >
+          <SignOut size={16} weight="light" className="mr-2" />
+          {t('auth.signOut')}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setNavCollapsed(true)}
+          title={uiText('Recolher menu')}
+          aria-label={uiText('Recolher menu')}
+          aria-expanded
+          className="px-2"
+        >
+          <CaretDoubleLeft size={16} />
+        </Button>
+      </div>
     </div>
   );
 
@@ -298,11 +350,14 @@ export function Layout({ children }: LayoutProps) {
             footerItems={footerItems}
             logo={logoSection}
             userSection={userSection}
+            collapsed={navCollapsed}
+            collapsedLogo={collapsedLogo}
+            collapsedUserSection={collapsedUserSection}
           />
         </div>
 
         {/* Main content */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pl-64">
+        <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-[padding] duration-200 ${navCollapsed ? 'pl-16' : 'pl-64'}`}>
           <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
             {children}
           </main>

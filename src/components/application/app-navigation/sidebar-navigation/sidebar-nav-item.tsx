@@ -6,15 +6,19 @@ import type { NavItemType } from "../config";
 interface SidebarNavItemProps {
   item: NavItemType;
   isSubItem?: boolean;
+  collapsed?: boolean;
 }
 
-export const SidebarNavItem = ({ item, isSubItem = false }: SidebarNavItemProps) => {
+export const SidebarNavItem = ({ item, isSubItem = false, collapsed = false }: SidebarNavItemProps) => {
   const location = useLocation();
   const isActive = location.pathname === item.href;
   const Icon = item.icon;
 
   const renderBadge = () => {
     if (!item.badge) return null;
+    if (collapsed) {
+      return <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" aria-hidden />;
+    }
 
     if (typeof item.badge === "number") {
       return (
@@ -35,9 +39,12 @@ export const SidebarNavItem = ({ item, isSubItem = false }: SidebarNavItemProps)
   return (
     <Link
       to={item.href}
+      title={collapsed ? item.label : undefined}
+      aria-label={collapsed ? item.label : undefined}
       className={cn(
         "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-        isSubItem && "pl-10",
+        collapsed && "justify-center px-0",
+        isSubItem && !collapsed && "pl-10",
         isActive
           ? "bg-accent text-accent-foreground"
           : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
@@ -62,7 +69,7 @@ export const SidebarNavItem = ({ item, isSubItem = false }: SidebarNavItemProps)
         )}
       />
 
-      <span className="truncate">{item.label}</span>
+      {!collapsed && <span className="truncate">{item.label}</span>}
 
       {renderBadge()}
     </Link>

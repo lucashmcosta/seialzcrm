@@ -28,6 +28,8 @@ interface Props extends SalesRouteContextProps {
   actions?: ReactNode;
   detailsLabel?: string;
   onOpenDetails?: () => void;
+  /** Cabeçalho limpo: detalhes só como ícone e selos só quando pedem atenção. */
+  minimal?: boolean;
 }
 
 export function SalesConversationHeader(props: Props) {
@@ -63,8 +65,8 @@ export function SalesConversationHeader(props: Props) {
                   title={detailsLabel}
                   onClick={props.onOpenDetails}
                 >
-                  <Info size={16} className="xl:mr-1" />
-                  <span className="hidden xl:inline">{detailsLabel}</span>
+                  <Info size={16} className={props.minimal ? undefined : 'xl:mr-1'} />
+                  {!props.minimal && <span className="hidden xl:inline">{detailsLabel}</span>}
                 </Button>
               )}
               {props.actions}
@@ -78,6 +80,7 @@ export function SalesConversationHeader(props: Props) {
             provider={route.activeEndpoint?.provider ?? props.fallbackProvider ?? null}
             endpointState={endpointState}
             windowChips={props.windowChips}
+            minimal={props.minimal}
           />
         </div>
       </div>
