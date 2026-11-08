@@ -8,6 +8,7 @@ import { useTranslation } from '@/lib/i18n';
 import { useToast } from '@/hooks/use-toast';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { motion } from 'framer-motion';
+import { pickActiveMembership } from '@/lib/pick-active-membership';
 
 export default function SignIn() {
   const navigate = useNavigate();
@@ -61,24 +62,26 @@ export default function SignIn() {
             onConflict: 'user_id,device_id'
           });
 
-          const { data: membership } = await supabase
+          const { data: memberships, error: membershipError } = await supabase
             .from('user_organizations')
-            .select('organization_id')
+            .select('created_at, organization:organizations(id, onboarding_step)')
             .eq('user_id', userData.id)
-            .maybeSingle();
+            .eq('is_active', true);
 
-          if (membership) {
-            const { data: org } = await supabase
-              .from('organizations')
-              .select('onboarding_step')
-              .eq('id', membership.organization_id)
-              .maybeSingle();
+          if (membershipError) {
+            console.error('Erro ao buscar workspaces:', membershipError);
+            throw new Error('Erro ao carregar seu workspace. Tente novamente.');
+          }
 
-            if (org && org.onboarding_step !== 'completed') {
-              navigate('/onboarding');
-            } else {
-              navigate('/dashboard');
-            }
+          const membership = pickActiveMembership(memberships);
+          if (!membership?.organization) {
+            throw new Error('Nenhum workspace ativo encontrado para este usuário.');
+          }
+
+          if (membership.organization.onboarding_step !== 'completed') {
+            navigate('/onboarding');
+          } else {
+            navigate('/dashboard');
           }
         }
       }
