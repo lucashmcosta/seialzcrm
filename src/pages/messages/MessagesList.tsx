@@ -1,5 +1,5 @@
 import { NoWhatsAppNumberBanner } from "@/components/messages/NoWhatsAppNumberBanner";
-import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, Fragment } from 'react';
 import { useThreadPerms, DENY_CLOSE, DENY_ASSIGN } from '@/hooks/useThreadPerms';
 import { PermissionGate } from '@/components/permissions/PermissionGate';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
@@ -685,7 +685,6 @@ function DesktopMessagesList() {
       });
       
       setMessageText(result.content);
-      adjustTextareaHeight();
     } catch (error: any) {
       console.error('AI improvement error:', error);
       toast({ variant: 'destructive', description: error?.message || 'Não foi possível melhorar o texto.' });
@@ -1850,6 +1849,12 @@ function DesktopMessagesList() {
       textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
     }
   };
+
+  // Altura acompanha QUALQUER mudança do texto (IA, emoji, envio, restauração), já com o
+  // texto novo no campo. Medir logo após setMessageText pegaria o texto antigo.
+  useLayoutEffect(() => {
+    adjustTextareaHeight();
+  }, [messageText]);
 
   const renderStatusIcon = (message: Message) => (
     <MessageStatusIndicator

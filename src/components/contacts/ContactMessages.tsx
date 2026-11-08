@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { toErrorMessageString } from '@/lib/errorMessage';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { useOrganization } from '@/hooks/useOrganization';
@@ -246,6 +246,11 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
     }
   };
+
+  // Altura acompanha QUALQUER mudança do texto (IA, emoji, envio), já com o texto novo no campo.
+  useLayoutEffect(() => {
+    adjustTextareaHeight();
+  }, [messageText]);
 
   const fetchThread = async () => {
     if (!organization?.id) {
