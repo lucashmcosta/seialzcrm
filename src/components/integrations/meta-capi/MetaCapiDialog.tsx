@@ -147,7 +147,11 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
   // está ativa, o token de envio vem da Meta Connection — a capability não gerencia auth.
   const { canonicalActive } = useMetaConnection(organization?.id, "capi");
   const ca = (orgIntegration?.connected_account || {}) as any;
-  const isConnected = canonicalActive || !!orgIntegration?.is_enabled;
+  // "Conectado" só com Pixel salvo: com a conexão canônica ativa a credencial existe,
+  // mas sem Pixel nenhum evento sai. Nesse estado o card pede o Pixel (needsPixel).
+  const hasPixel = !!ca.pixel_id;
+  const isConnected = hasPixel && (canonicalActive || !!orgIntegration?.is_enabled);
+  const needsPixel = canonicalActive && !hasPixel;
   const isTestMode = !!ca.test_event_code;
 
   useEffect(() => {
@@ -227,7 +231,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
     if (!pid || !/^\d+$/.test(pid)) e.pixel_id = uiText("Pixel ID deve conter apenas dígitos.");
 
     const tok = (formValues.access_token || "").trim();
-    if (mode === "manual" && !isConnected && tok.length < 20) {
+    if (mode === "manual" && !isConnected && !canonicalActive && tok.length < 20) {
       e.access_token = uiText("Token muito curto. Confira se copiou completo.");
     }
     if (reconnectMode && tok.length > 0 && tok.length < 20) {
@@ -474,6 +478,10 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                       <Badge variant="outline" className="gap-1">
                         <CheckCircle className="h-3 w-3 text-green-500" />
                         {uiText("Conectado")}</Badge>
+                    ) : needsPixel ? (
+                      <Badge className="gap-1 bg-amber-500 text-white">
+                        <Warning className="h-3 w-3" />
+                        {uiText("Falta configurar o Pixel")}</Badge>
                     ) : (
                       <Badge variant="secondary">{uiText("Desconectado")}</Badge>
                     )}
