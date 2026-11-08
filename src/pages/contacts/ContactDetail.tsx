@@ -1,3 +1,4 @@
+import { CustomFieldsCard } from '@/components/custom-fields/CustomFieldsCard';
 import { CommercialAttributionPanel } from '@/components/commercial/CommercialAttributionPanel';
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -870,6 +871,8 @@ export default function ContactDetail() {
                   )}
                 </div>
               </Card>
+
+              <CustomFieldsCard module="contacts" recordId={contact.id} />
 
               {/* Endereço */}
               <Card className="p-6">

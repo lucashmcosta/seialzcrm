@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { SpinnerGap, Plus, PencilSimple, TrashSimple } from '@phosphor-icons/react';
+import { SpinnerGap, Plus, PencilSimple, TrashSimple, X } from '@phosphor-icons/react';
+import { selectOptions, slugFieldName, type FieldOption } from '@/lib/customFieldOptions';
 
 interface CustomField {
   id: string;
@@ -22,6 +23,7 @@ interface CustomField {
   field_type: string;
   is_required: boolean;
   order_index: number;
+  options?: unknown;
 }
 
 export function CustomFieldsSettings() {
@@ -39,6 +41,9 @@ export function CustomFieldsSettings() {
     field_type: 'text',
     is_required: false,
   });
+  // Opções da Lista: rótulo (aparece no Seialz) + texto no contrato (opcional).
+  const [options, setOptions] = useState<FieldOption[]>([]);
+  const emptyForm = () => { setFormData({ module: 'contacts', name: '', label: '', field_type: 'text', is_required: false }); setOptions([]); };
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -69,12 +74,28 @@ export function CustomFieldsSettings() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization?.id) return;
+    const name = slugFieldName(formData.name);
+    const label = formData.label.trim();
+    if (!name || !label) { toast({ variant: 'destructive', description: 'Preencha nome e rótulo.' }); return; }
+    const cleanOptions = options
+      .map((o) => ({ label: o.label.trim(), value: (o.value || o.label).trim(), contract_text: (o.contract_text ?? '').trim() }))
+      .filter((o) => o.label)
+      .map((o) => (o.contract_text ? o : { label: o.label, value: o.value }));
+    if (formData.field_type === 'select' && cleanOptions.length === 0) {
+      toast({ variant: 'destructive', description: 'Adicione pelo menos uma opção à lista.' });
+      return;
+    }
+    if (new Set(cleanOptions.map((o) => o.value)).size !== cleanOptions.length) {
+      toast({ variant: 'destructive', description: 'Há opções repetidas na lista.' });
+      return;
+    }
+    const optionsPayload = formData.field_type === 'select' ? { options: cleanOptions } : null;
 
     try {
       if (editingField) {
         const { error } = await supabase
           .from('custom_field_definitions')
-          .update({ label: formData.label, is_required: formData.is_required })
+          .update({ label, is_required: formData.is_required, ...(formData.field_type === 'select' ? { options: optionsPayload } : {}) })
           .eq('id', editingField.id);
 
         if (error) throw error;
@@ -86,6 +107,9 @@ export function CustomFieldsSettings() {
           .insert({
             organization_id: organization.id,
             ...formData,
+            name,
+            label,
+            options: optionsPayload,
             order_index: maxOrder + 1,
           });
 
@@ -95,7 +119,7 @@ export function CustomFieldsSettings() {
 
       setDialogOpen(false);
       setEditingField(null);
-      setFormData({ module: 'contacts', name: '', label: '', field_type: 'text', is_required: false });
+      emptyForm();
       fetchFields();
     } catch (error) {
       console.error('Error saving field:', error);
@@ -152,12 +176,12 @@ export function CustomFieldsSettings() {
             </div>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={() => { setEditingField(null); setFormData({ module: 'contacts', name: '', label: '', field_type: 'text', is_required: false }); }}>
+                <Button onClick={() => { setEditingField(null); emptyForm(); }}>
                   <Plus className="w-4 h-4 mr-2" />
                   {t('settings.addCustomField')}
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
                 <form onSubmit={handleSubmit}>
                   <DialogHeader>
                     <DialogTitle>{editingField ? t('common.edit') : t('settings.addCustomField')}</DialogTitle>
@@ -184,7 +208,8 @@ export function CustomFieldsSettings() {
                       <Input
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="custom_field_name"
+                        onBlur={(e) => setFormData({ ...formData, name: slugFieldName(e.target.value) })}
+                        placeholder="ex.: estado_civil"
                         disabled={!!editingField}
                         required
                       />
@@ -217,6 +242,34 @@ export function CustomFieldsSettings() {
                         </SelectContent>
                       </Select>
                     </div>
+                    {formData.field_type === 'select' && (
+                      <div className="space-y-2">
+                        <Label>Opções da lista</Label>
+                        <p className="text-xs text-muted-foreground">
+                          "Opção" é o que aparece no Seialz. "Texto no contrato" é opcional: se preenchido, é ele que entra no contrato no lugar da opção.
+                        </p>
+                        {options.map((o, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <Input
+                              value={o.label}
+                              placeholder="Opção (ex.: Nascimento)"
+                              onChange={(e) => setOptions(options.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                            />
+                            <Input
+                              value={o.contract_text ?? ''}
+                              placeholder="Texto no contrato (opcional)"
+                              onChange={(e) => setOptions(options.map((x, j) => (j === i ? { ...x, contract_text: e.target.value } : x)))}
+                            />
+                            <Button type="button" variant="ghost" size="icon" aria-label="Remover opção" onClick={() => setOptions(options.filter((_, j) => j !== i))}>
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button type="button" variant="outline" size="sm" onClick={() => setOptions([...options, { label: '', value: '' }])}>
+                          <Plus className="w-4 h-4 mr-1" /> Adicionar opção
+                        </Button>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <Label>{t('settings.customFieldRequired')}</Label>
                       <Switch
@@ -248,7 +301,10 @@ export function CustomFieldsSettings() {
               {fields.map((field) => (
                 <TableRow key={field.id}>
                   <TableCell className="capitalize">{field.module}</TableCell>
-                  <TableCell className="font-medium">{field.label}</TableCell>
+                  <TableCell className="font-medium">
+                    {field.label}
+                    <div className="text-xs text-muted-foreground font-mono">{field.name}</div>
+                  </TableCell>
                   <TableCell className="capitalize">{field.field_type}</TableCell>
                   <TableCell>{field.is_required ? 'Yes' : 'No'}</TableCell>
                   <TableCell className="text-right">
@@ -265,6 +321,7 @@ export function CustomFieldsSettings() {
                             field_type: field.field_type,
                             is_required: field.is_required,
                           });
+                          setOptions(selectOptions(field.options));
                           setDialogOpen(true);
                         }}
                       >
