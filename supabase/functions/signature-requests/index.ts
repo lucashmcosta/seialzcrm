@@ -7,6 +7,7 @@ import { handleSignatureWhatsApp } from "../_shared/signature-whatsapp.ts";
 import { encryptSecret } from "../_shared/crypto.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { resolveRequestedBy } from "./requested-by.ts";
+import { resolveDocxVariables, variableLabel, type CustomDef } from "../_shared/docx-variables.ts";
 const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
 import {
   canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, findUnresolvedPlaceholders, friendlyTemplateError, loadV2Credentials,
@@ -294,7 +295,7 @@ Deno.serve(async (req) => {
         // 2) CRM (paridade SendToSignatureButton)
         if (!opp.contact_id) return fail("contact_required", "Oportunidade sem contato");
         const { data: contact } = await userDb.from("contacts")
-          .select("id, full_name, first_name, last_name, email, phone, cpf, rg, rg_issuer, nationality, address_street, address_number, address_neighborhood, address_city, address_state, address_zip")
+          .select("id, full_name, first_name, last_name, email, phone, cpf, rg, rg_issuer, nationality, address_street, address_number, address_complement, address_neighborhood, address_city, address_state, address_zip")
           .eq("id", opp.contact_id).maybeSingle();
         if (!contact) return fail("contact_not_found", "Contato não encontrado", 404);
         const v = (s: unknown) => (typeof s === "string" ? s : s == null ? "" : String(s)).trim();
@@ -303,11 +304,16 @@ Deno.serve(async (req) => {
         const lastName = v(contact.last_name) || (parts.length > 1 ? parts.slice(1).join(" ") : "");
         const missing: string[] = [];
         const req = (label: string, val: unknown) => { if (!v(val)) missing.push(label); };
+        // Modelos em Word exigem só as variáveis que o próprio Word usa (checadas abaixo).
+        const onlyDocx = defs.every((d) => d.def?.source_format === "docx");
+        if (onlyDocx) { if (!firstName) missing.push("Nome"); req("E-mail", contact.email); }
+        else {
         if (!firstName) missing.push("Nome");
         req("Email", contact.email); req("Telefone", contact.phone); req("CPF", contact.cpf); req("RG", contact.rg);
         req("Órgão Emissor do RG", contact.rg_issuer); req("Nacionalidade", contact.nationality);
         req("Endereço", contact.address_street); req("Bairro", contact.address_neighborhood); req("Cidade", contact.address_city);
         req("Estado", contact.address_state); req("CEP", contact.address_zip);
+        }
         if (missing.length) return fail("missing_contact_fields", `Campos obrigatórios não preenchidos: ${missing.join(", ")}`, 422, { missing, contact_id: contact.id });
 
         const custom: Record<string, string> = { contact_id: contact.id };
@@ -323,6 +329,22 @@ Deno.serve(async (req) => {
         Object.assign(custom, buildDealCustom(opp));
         const client: CrmPerson = { first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}`.trim(), email: v(contact.email), phone: v(contact.phone) };
 
+        // 2b) Modelos em Word: variáveis {{...}} ligadas automaticamente aos campos do CRM.
+        let docxCtx: Any = null;
+        if (defs.some((d) => d.def?.source_format === "docx")) {
+          const [{ data: idp }, { data: cdefs }, { data: cvals }] = await Promise.all([
+            admin.from("contact_identity_profiles").select("birth_date").eq("contact_id", contact.id).maybeSingle(),
+            admin.from("custom_field_definitions").select("id, name, field_type, options, module").eq("organization_id", opp.organization_id),
+            admin.from("custom_field_values").select("field_definition_id, value").eq("organization_id", opp.organization_id).in("record_id", [contact.id, opp.id]),
+          ]);
+          docxCtx = {
+            contact, birthDate: idp?.birth_date ?? null,
+            customDefs: ((cdefs ?? []) as CustomDef[]).map((d) => ({ ...d, name: String(d.name ?? "").trim() })),
+            customValues: new Map(((cvals ?? []) as Any[]).map((r) => [r.field_definition_id, r.value])),
+            now: new Date(),
+          };
+        }
+
         // 3) roles → identidade REAL (contact:/user:/manual:), por template
         const extras: Record<string, { name?: string; email?: string }> = body.signers && typeof body.signers === "object" ? body.signers : {};
         const docInputs: Any[] = []; const unresolved: Any[] = []; const unresolvedVars: string[] = [];
@@ -331,6 +353,15 @@ Deno.serve(async (req) => {
           const r = resolveTemplateSignatories(def, { client, contactId: contact.id, contactCpf: v(contact.cpf) || null, me, extras });
           const resolved = r.resolved; const roleData = r.roleData;
           for (const u of r.unresolved) if (!unresolved.some((x) => x.ref === u.ref)) unresolved.push(u);
+          if (def.source_format === "docx") {
+            const names: string[] = Array.isArray(def.docx_variables) ? def.docx_variables : [];
+            const { values, missing: miss } = resolveDocxVariables(names, docxCtx);
+            for (const x of miss) unresolvedVars.push(`${name ?? id}: ${variableLabel(x)} ({{${x}}})`);
+            docInputs.push({ template_id: id, template_revision: def.template_revision, signing_order: def.signing_order, title: name ?? opp.title ?? "Contrato",
+              frozen_content: def.frozen_content, signatories: resolved, fields: def.fields ?? [], docx_variables: values,
+              meta: { id, name, layout_mode: def.layout_mode, coordinate_system: def.coordinate_system, source_format: "docx" } });
+            continue;
+          }
           const ctx = { roles: roleData, contact: client, deal: {}, custom, templateName: name ?? "", now };
           const frozen = fillFrozenContent(def.frozen_content, ctx);
           for (const x of findUnresolvedPlaceholders(frozen, Object.keys(roleData))) unresolvedVars.push(`${name ?? id}: ${x}`);
@@ -340,7 +371,7 @@ Deno.serve(async (req) => {
         const badFixed = unresolved.filter((u) => u.reason === "invalid_template_identity");
         if (badFixed.length) return fail("invalid_template_signatory", `Signatário fixo do modelo sem nome ou e-mail válido na SuvSign: ${badFixed.map((u) => u.display_name ?? u.ref).join(", ")}`, 422, { unresolved: badFixed });
         if (unresolved.length) return fail("signers_required", "Informe nome e e-mail dos demais signatários", 422, { unresolved });
-        if (unresolvedVars.length) return fail("unresolved_template_variables", `Variáveis do modelo sem valor: ${unresolvedVars.join(", ")}`, 422, { unresolved_variables: unresolvedVars });
+        if (unresolvedVars.length) return fail("unresolved_template_variables", `Preencha antes de enviar: ${unresolvedVars.join(", ")}`, 422, { unresolved_variables: unresolvedVars });
         let built: Any;
         try { built = buildMultiDocument(docInputs); }
         catch(e) { const code = e instanceof Error ? e.message : "participant_conflict"; return fail(code, automaticSigningError(code) || "O mesmo signatário aparece com e-mails diferentes entre os documentos", 422); }

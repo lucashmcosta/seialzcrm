@@ -11,6 +11,24 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowClockwise, ArrowLeft, Check, DownloadSimple, FileText, LinkSimple, Plus, WarningCircle, WhatsappLogo, Clock } from '@phosphor-icons/react';
 import { callSignatureRequests, SignatureApiError, SIGNATURE_STATUS_LABEL, PARTICIPANT_STATUS_LABEL } from '@/lib/signatureRequestsApi';
 import { FrozenDocumentPreview } from './FrozenDocumentPreview';
+
+// Modelo em Word: o PDF é gerado pela SuvSign no envio, idêntico ao Word. Aqui mostramos os dados que entram nele.
+function DocxVariablesPreview({ values }: { values: Record<string, string> }) {
+  const rows = Object.entries(values);
+  return (
+    <div className="rounded-md border p-4 space-y-3">
+      <p className="text-sm text-muted-foreground">Contrato em Word: o PDF sai igual ao modelo, com estes dados.</p>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+        {rows.map(([k, v]) => (
+          <div key={k} className="min-w-0">
+            <dt className="text-xs text-muted-foreground">{k.replace(/_/g, ' ')}</dt>
+            <dd className="break-words">{v || <span className="text-muted-foreground">(vazio)</span>}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
 import { SignatureWhatsAppDialog } from './SignatureWhatsAppDialog';
 
 interface Props { open: boolean; onOpenChange: (o: boolean) => void; opportunityId: string; canCreate: boolean }
@@ -509,7 +527,11 @@ export function SignatureV2Sheet({ open, onOpenChange, opportunityId, canCreate 
                   ))}
                 </div>
               </aside>
-              <FrozenDocumentPreview frozen={draftDocs[docTab]?.frozen_content} resetKey={`${draft.request_id}:${docTab}`} />
+              {draftDocs[docTab]?.docx_variables ? (
+                <DocxVariablesPreview values={draftDocs[docTab].docx_variables} />
+              ) : (
+                <FrozenDocumentPreview frozen={draftDocs[docTab]?.frozen_content} resetKey={`${draft.request_id}:${docTab}`} />
+              )}
             </div>
             <div className={footer}>
               <Button variant="ghost" onClick={() => setStep('data')}>Voltar</Button>
