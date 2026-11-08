@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { uiDateLocale, uiText, useUiLocale } from "@/lib/ui-locale";
 
 import { useOrganization } from "@/hooks/useOrganization";
 import {
@@ -48,9 +48,9 @@ interface Props {
 }
 
 const STATE_LABEL: Record<EvolutionConnectionState, string> = {
-  open: "Conectado",
-  connecting: "Conectando",
-  close: "Desconectado",
+  get open() { return uiText("Conectado"); },
+  get connecting() { return uiText("Conectando"); },
+  get close() { return uiText("Desconectado"); },
   unknown: "—",
 };
 
@@ -68,8 +68,9 @@ function StatusPill({
   state: EvolutionConnectionState | null;
   hasQr: boolean;
 }) {
+  useUiLocale();
   const s: EvolutionConnectionState = state ?? "unknown";
-  const label = s === "close" && hasQr ? "QR disponível" : STATE_LABEL[s];
+  const label = s === "close" && hasQr ? uiText("QR disponível") : STATE_LABEL[s];
   return (
     <Badge variant="outline" className={STATE_STYLE[s]}>
       {label}
@@ -87,6 +88,7 @@ function formatPhone(raw: string | null | undefined): string {
 }
 
 function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
+  const uiLocale = useUiLocale();
   const { data: endpoints } = useEvolutionEndpoints();
   const endpoint = endpoints?.find((e) => e.id === instance.endpoint_id);
 
@@ -110,12 +112,12 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
     try {
       return formatDistanceToNow(new Date(instance.last_state_checked_at), {
         addSuffix: true,
-        locale: ptBR,
+        locale: uiDateLocale(),
       });
     } catch {
       return "—";
     }
-  }, [instance.last_state_checked_at]);
+  }, [instance.last_state_checked_at, uiLocale]);
 
   const onGenerateQr = async () => {
     setQr(null);
@@ -123,11 +125,11 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
       const r = await connect.mutateAsync(instance.instance_name);
       setQr(r.base64 ?? null);
       if (!r.base64) {
-        toast.message("Já conectado", {
-          description: "Nenhum QR gerado — o WhatsApp já está pareado.",
+        toast.message(uiText("Já conectado"), {
+          description: uiText("Nenhum QR gerado — o WhatsApp já está pareado."),
         });
       } else {
-        toast.success("QR Code gerado");
+        toast.success(uiText("QR Code gerado"));
       }
     } catch (e) {
       toast.error((e as Error).message);
@@ -137,7 +139,7 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
   const onRefreshState = async () => {
     try {
       const r = await state.mutateAsync(instance.instance_name);
-      toast.message("Estado atualizado", { description: STATE_LABEL[r.state] });
+      toast.message(uiText("Estado atualizado"), { description: STATE_LABEL[r.state] });
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -147,7 +149,7 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
     try {
       await logout.mutateAsync(instance.instance_name);
       setQr(null);
-      toast.success("WhatsApp desconectado");
+      toast.success(uiText("WhatsApp desconectado"));
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -156,7 +158,7 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
   const onUpdateWebhook = async () => {
     try {
       await webhook.mutateAsync({ instanceName: instance.instance_name });
-      toast.success("Webhook atualizado");
+      toast.success(uiText("Webhook atualizado"));
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -174,7 +176,7 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
       if (data && typeof data === "object" && "error" in data) {
         setHealth(`⚠ ${(data as { error: string }).error}`);
       } else {
-        setHealth("✓ Comunicação com o servidor OK");
+        setHealth(uiText("✓ Comunicação com o servidor OK"));
       }
     } catch (e) {
       setHealth(`✗ ${(e as Error).message}`);
@@ -204,24 +206,24 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
                 </div>
                 <div className="text-sm text-muted-foreground mt-1">
                   {isOpen ? (
-                    <>Número conectado: <span className="font-medium text-foreground">{phone}</span></>
+                    <>{uiText("Número conectado:")} <span className="font-medium text-foreground">{phone}</span></>
                   ) : (
-                    <>Ainda não conectado. Gere um QR Code para vincular seu WhatsApp.</>
+                    <>{uiText("Ainda não conectado. Gere um QR Code para vincular seu WhatsApp.")}</>
                   )}
                 </div>
               </div>
             </div>
             <div className="text-right text-xs text-muted-foreground">
-              Última sincronização: {lastSyncLabel}
+              {uiText("Última sincronização: {0}", { 0: lastSyncLabel })}
             </div>
           </div>
 
           {isOpen && (
             <Alert className="mt-4 border-emerald-500/40 bg-emerald-500/5">
               <CheckCircle className="h-4 w-4 text-emerald-600" />
-              <AlertTitle>WhatsApp conectado com sucesso</AlertTitle>
+              <AlertTitle>{uiText("WhatsApp conectado com sucesso")}</AlertTitle>
               <AlertDescription className="text-sm">
-                Número: <span className="font-medium">{phone}</span> · Estado: <span className="font-mono">OPEN</span>
+                {uiText("Número:")} <span className="font-medium">{phone}</span> · {uiText("Estado:")} <span className="font-mono">OPEN</span>
               </AlertDescription>
             </Alert>
           )}
@@ -229,7 +231,7 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
           {!isOpen && qr && (
             <div className="mt-4 flex flex-col items-center gap-3 rounded-lg border bg-muted/30 p-6">
               <div className="text-xs text-muted-foreground text-center max-w-xs">
-                No seu WhatsApp, abra <span className="font-medium">Configurações → Aparelhos conectados → Conectar um aparelho</span> e aponte a câmera para o QR abaixo.
+                {uiText("No seu WhatsApp, abra")} <span className="font-medium">{uiText("Configurações → Aparelhos conectados → Conectar um aparelho")}</span> {uiText("e aponte a câmera para o QR abaixo.")}
               </div>
               <img
                 src={qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`}
@@ -243,7 +245,7 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
             <Alert className="mt-4">
               <Info className="h-4 w-4" />
               <AlertDescription>
-                Há um QR pendente no servidor. Clique em <span className="font-medium">Gerar QR</span> para exibi-lo.
+                {uiText("Há um QR pendente no servidor. Clique em")} <span className="font-medium">{uiText("Gerar QR")}</span> {uiText("para exibi-lo.")}
               </AlertDescription>
             </Alert>
           )}
@@ -259,7 +261,7 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
             ) : (
               <QrCode className="h-4 w-4 mr-2" />
             )}
-            {qr ? "Atualizar QR" : "Gerar QR Code"}
+            {qr ? uiText("Atualizar QR") : uiText("Gerar QR Code")}
           </Button>
         )}
         <Button variant="outline" onClick={onRefreshState} disabled={state.isPending}>
@@ -268,7 +270,7 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
           ) : (
             <ArrowsClockwise className="h-4 w-4 mr-2" />
           )}
-          Atualizar estado
+          {uiText("Atualizar estado")}
         </Button>
         <Button variant="outline" onClick={onUpdateWebhook} disabled={webhook.isPending}>
           {webhook.isPending ? (
@@ -276,7 +278,7 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
           ) : (
             <Broadcast className="h-4 w-4 mr-2" />
           )}
-          Atualizar webhook
+          {uiText("Atualizar webhook")}
         </Button>
         <Button variant="outline" onClick={onHealthCheck} disabled={healthLoading}>
           {healthLoading ? (
@@ -293,7 +295,7 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
             ) : (
               <Plug className="h-4 w-4 mr-2" />
             )}
-            Desconectar
+            {uiText("Desconectar")}
           </Button>
         )}
       </div>
@@ -304,21 +306,21 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
       {/* Metadata (business-friendly labels only) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
         <div>
-          <div className="text-xs text-muted-foreground">Número conectado</div>
-          <div className="font-medium">{isOpen ? phone : "Aguardando conexão"}</div>
+          <div className="text-xs text-muted-foreground">{uiText("Número conectado")}</div>
+          <div className="font-medium">{isOpen ? phone : uiText("Aguardando conexão")}</div>
         </div>
         <div>
-          <div className="text-xs text-muted-foreground">Estado</div>
+          <div className="text-xs text-muted-foreground">{uiText("Estado")}</div>
           <div className="font-medium">
             {isOpen ? "OPEN" : STATE_LABEL[connState]}
           </div>
         </div>
         <div>
-          <div className="text-xs text-muted-foreground">Última sincronização</div>
+          <div className="text-xs text-muted-foreground">{uiText("Última sincronização")}</div>
           <div className="font-medium">{lastSyncLabel}</div>
         </div>
         <div>
-          <div className="text-xs text-muted-foreground">Canal</div>
+          <div className="text-xs text-muted-foreground">{uiText("Canal")}</div>
           <div className="font-medium">
             {endpoint?.display_name || "WhatsApp"}
           </div>
@@ -329,6 +331,7 @@ function InstanceCard({ instance }: { instance: EvolutionInstanceRow }) {
 }
 
 export function EvolutionWhatsAppDialog({ open, onOpenChange }: Props) {
+  useUiLocale();
   const { organization } = useOrganization();
   const { data: instances, isLoading, error } = useEvolutionInstances();
 
@@ -352,7 +355,7 @@ export function EvolutionWhatsAppDialog({ open, onOpenChange }: Props) {
             Evolution WhatsApp
           </DialogTitle>
           <DialogDescription>
-            Conecte seu WhatsApp através da Evolution API. As credenciais e a infraestrutura são gerenciadas pela equipe Seialz.
+            {uiText("Conecte seu WhatsApp através da Evolution API. As credenciais e a infraestrutura são gerenciadas pela equipe Seialz.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -368,7 +371,7 @@ export function EvolutionWhatsAppDialog({ open, onOpenChange }: Props) {
           ) : error ? (
             <Alert variant="destructive">
               <WarningCircle className="h-4 w-4" />
-              <AlertTitle>Não foi possível carregar</AlertTitle>
+              <AlertTitle>{uiText("Não foi possível carregar")}</AlertTitle>
               <AlertDescription>{(error as Error).message}</AlertDescription>
             </Alert>
           ) : linkedInstances.length > 0 ? (

@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Phone, CheckCircle, XCircle, GearSix, ArrowSquareOut, SpinnerGap, ArrowsClockwise, Wrench, PencilSimple, UploadSimple, Users, Briefcase, Buildings, Clock, ArrowCounterClockwise, Plus } from '@phosphor-icons/react';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { getUiLocale, uiDateLocale, uiDatePattern, uiText, useUiLocale } from '@/lib/ui-locale';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { supabase } from '@/integrations/supabase/client';
 import { telephonySupabase } from '@/integrations/supabase/telephonyClient';
@@ -57,6 +57,7 @@ export function IntegrationDetailDialog({
   onConfigUpdated,
   onOpenMigration,
 }: IntegrationDetailDialogProps) {
+  useUiLocale();
   const { organization } = useOrganization();
   const configValues = orgIntegration?.config_values || {};
   const connectedAt = orgIntegration?.connected_at;
@@ -173,12 +174,12 @@ export function IntegrationDetailDialog({
 
       if (error) throw error;
 
-      toast.success('Configurações atualizadas com sucesso!');
+      toast.success(uiText('Configurações atualizadas com sucesso!'));
       setIsEditing(false);
       setEditValues({});
       onConfigUpdated?.();
     } catch (err: any) {
-      toast.error('Erro ao salvar: ' + (err.message || 'Erro desconhecido'));
+      toast.error(uiText('Erro ao salvar: ') + (err.message || uiText('Erro desconhecido')));
     } finally {
       setIsSaving(false);
     }
@@ -205,7 +206,7 @@ export function IntegrationDetailDialog({
       };
       setWebhookResult(result);
     } catch (err: any) {
-      toast.error('Erro ao verificar webhooks: ' + (err.message || 'Erro desconhecido'));
+      toast.error(uiText('Erro ao verificar webhooks: ') + (err.message || uiText('Erro desconhecido')));
     } finally {
       setCheckingWebhooks(false);
     }
@@ -223,10 +224,10 @@ export function IntegrationDetailDialog({
         },
       });
       if (error) throw error;
-      toast.success('Webhooks corrigidos com sucesso!');
+      toast.success(uiText('Webhooks corrigidos com sucesso!'));
       await handleCheckWebhooks();
     } catch (err: any) {
-      toast.error('Erro ao corrigir webhooks: ' + (err.message || 'Erro desconhecido'));
+      toast.error(uiText('Erro ao corrigir webhooks: ') + (err.message || uiText('Erro desconhecido')));
     } finally {
       setFixingWebhooks(false);
     }
@@ -241,7 +242,7 @@ export function IntegrationDetailDialog({
         ) : (
           <XCircle className="h-4 w-4 text-destructive" />
         )}
-        <span className="text-sm font-medium">{value || 'Não configurado'}</span>
+        <span className="text-sm font-medium">{value || uiText('Não configurado')}</span>
       </div>
     </div>
   );
@@ -259,7 +260,7 @@ export function IntegrationDetailDialog({
             value={editValues[field.key] ?? ''}
             onChange={(e) => setEditValues(prev => ({ ...prev, [field.key]: e.target.value }))}
           >
-            {!editValues[field.key] && <option value="">Selecione...</option>}
+            {!editValues[field.key] && <option value="">{uiText("Selecione...")}</option>}
             {field.options.map((opt: string) => (
               <option key={opt} value={opt}>{opt}</option>
             ))}
@@ -290,7 +291,7 @@ export function IntegrationDetailDialog({
           type={sensitive ? 'password' : 'text'}
           value={editValues[field.key] ?? ''}
           onChange={(e) => setEditValues(prev => ({ ...prev, [field.key]: e.target.value }))}
-          placeholder={sensitive ? 'Deixe em branco para manter a chave atual' : ''}
+          placeholder={sensitive ? uiText('Deixe em branco para manter a chave atual') : ''}
         />
         {field.description && <p className="text-xs text-muted-foreground">{field.description}</p>}
       </div>
@@ -320,7 +321,7 @@ export function IntegrationDetailDialog({
                 type={sensitive ? 'password' : 'text'}
                 value={editValues[key] ?? ''}
                 onChange={(e) => setEditValues(prev => ({ ...prev, [key]: e.target.value }))}
-                placeholder={sensitive ? 'Deixe em branco para manter a chave atual' : ''}
+                placeholder={sensitive ? uiText('Deixe em branco para manter a chave atual') : ''}
               />
             </div>
           );
@@ -344,45 +345,45 @@ export function IntegrationDetailDialog({
             <XCircle className="h-4 w-4 text-destructive" />
           )}
           <span className="text-sm">
-            {(configValues.auth_token_encrypted || configValues.auth_token) ? 'Protegido no backend' : 'Não configurado'}
+            {(configValues.auth_token_encrypted || configValues.auth_token) ? uiText('Protegido no backend') : uiText('Não configurado')}
           </span>
         </div>
       </div>
       <div className="space-y-2">
         <Label className="text-muted-foreground">TwiML App</Label>
         <p className="font-mono text-sm bg-muted px-3 py-2 rounded-md">
-          {configValues.twiml_app_sid ? `…${String(configValues.twiml_app_sid).slice(-8)}` : 'Será gerenciada automaticamente'}
+          {configValues.twiml_app_sid ? `…${String(configValues.twiml_app_sid).slice(-8)}` : uiText('Será gerenciada automaticamente')}
         </p>
       </div>
       <div className="space-y-2">
-        <Label className="text-muted-foreground">Números sincronizados ({twilioPhoneNumbers.length})</Label>
+        <Label className="text-muted-foreground">{uiText("Números sincronizados ({0})", { 0: twilioPhoneNumbers.length })}</Label>
         {twilioPhoneNumbers.length > 0 ? (
           <div className="space-y-2">
             {twilioPhoneNumbers.map((number) => (
               <div key={number.id} className="flex items-center gap-2 rounded-md bg-muted px-3 py-2">
                 <Phone className="h-4 w-4" />
                 <span className="flex-1 font-mono text-sm">{formatPhoneDisplay(number.phone_number)}</span>
-                <Badge variant={number.is_active ? 'default' : 'secondary'}>{number.assigned_user_id ? 'Individual' : 'Corporativo'}</Badge>
-                {number.is_default_outbound && <Badge variant="outline">Padrão</Badge>}
+                <Badge variant={number.is_active ? 'default' : 'secondary'}>{number.assigned_user_id ? uiText('Individual') : uiText('Corporativo')}</Badge>
+                {number.is_default_outbound && <Badge variant="outline">{uiText("Padrão")}</Badge>}
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Nenhum número sincronizado. Use a Central de Telefonia para importar ou comprar.</p>
+          <p className="text-sm text-muted-foreground">{uiText("Nenhum número sincronizado. Use a Central de Telefonia para importar ou comprar.")}</p>
         )}
       </div>
       <div className="space-y-2">
-        <Label className="text-muted-foreground">Gravação Automática</Label>
+        <Label className="text-muted-foreground">{uiText("Gravação Automática")}</Label>
         <div className="flex items-center gap-2">
           {configValues.enable_recording ? (
             <>
               <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="text-sm">Ativada</span>
+              <span className="text-sm">{uiText("Ativada")}</span>
             </>
           ) : (
             <>
               <XCircle className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">Desativada</span>
+              <span className="text-sm">{uiText("Desativada")}</span>
             </>
           )}
         </div>
@@ -394,7 +395,7 @@ export function IntegrationDetailDialog({
     <div className="space-y-4">
       <div className="divide-y">
         <StatusItem
-          label="Número Principal"
+          label={uiText("Número Principal")}
           value={formatPhoneDisplay(configValues.whatsapp_number)}
           success={!!configValues.whatsapp_number}
         />
@@ -405,14 +406,14 @@ export function IntegrationDetailDialog({
         />
         <StatusItem
           label="Webhooks"
-          value={configValues.webhooks_configured ? 'Configurados automaticamente' : 'Configuração manual necessária'}
+          value={configValues.webhooks_configured ? uiText('Configurados automaticamente') : uiText('Configuração manual necessária')}
           success={!!configValues.webhooks_configured}
         />
         {configValues.setup_completed_at && (
           <div className="flex items-center justify-between py-2">
-            <span className="text-sm text-muted-foreground">Configurado em</span>
+            <span className="text-sm text-muted-foreground">{uiText("Configurado em")}</span>
             <span className="text-sm text-muted-foreground">
-              {format(new Date(configValues.setup_completed_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              {format(new Date(configValues.setup_completed_at), uiDatePattern(true), { locale: uiDateLocale() })}
             </span>
           </div>
         )}
@@ -421,7 +422,7 @@ export function IntegrationDetailDialog({
       {!configValues.webhooks_configured && (
         <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
           <p className="text-sm text-amber-800 dark:text-amber-200">
-            <strong>Atenção:</strong> Os webhooks precisam ser configurados manualmente no Console do Twilio.
+            <strong>{uiText('Atenção:')}</strong> {uiText('Os webhooks precisam ser configurados manualmente no Console do Twilio.')}
           </p>
           <Button
             variant="link"
@@ -429,7 +430,7 @@ export function IntegrationDetailDialog({
             className="p-0 h-auto text-amber-600 dark:text-amber-400"
             onClick={() => window.open('https://console.twilio.com/us1/develop/sms/senders/whatsapp-senders', '_blank')}
           >
-            Abrir Console Twilio <ArrowSquareOut className="h-3 w-3 ml-1" />
+            {uiText('Abrir Console Twilio')} <ArrowSquareOut className="h-3 w-3 ml-1" />
           </Button>
         </div>
       )}
@@ -447,7 +448,7 @@ export function IntegrationDetailDialog({
           ) : (
              <ArrowsClockwise className="h-4 w-4 mr-2" />
           )}
-          Verificar Webhooks
+          {uiText('Verificar Webhooks')}
         </Button>
 
         {webhookResult && (
@@ -469,7 +470,7 @@ export function IntegrationDetailDialog({
                       ) : (
                         <XCircle className="h-3.5 w-3.5 text-destructive" />
                       )}
-                      <span className="text-xs">{sender.webhook_correct ? 'Correto' : 'Incorreto'}</span>
+                      <span className="text-xs">{sender.webhook_correct ? uiText('Correto') : uiText('Incorreto')}</span>
                     </div>
                   </div>
                   {sender.callback_url && (
@@ -480,7 +481,7 @@ export function IntegrationDetailDialog({
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground text-center">Nenhum WhatsApp Sender encontrado</p>
+              <p className="text-sm text-muted-foreground text-center">{uiText("Nenhum WhatsApp Sender encontrado")}</p>
             )}
 
             {!webhookResult.allCorrect && (
@@ -496,7 +497,7 @@ export function IntegrationDetailDialog({
                 ) : (
                   <Wrench className="h-4 w-4 mr-2" />
                 )}
-                Corrigir Webhooks
+                {uiText('Corrigir Webhooks')}
               </Button>
             )}
           </div>
@@ -511,10 +512,10 @@ export function IntegrationDetailDialog({
           onClick={() => setAddEndpointOpen(true)}
         >
           <Plus className="h-4 w-4 mr-2" />
-          Adicionar número WhatsApp
+          {uiText('Adicionar número WhatsApp')}
         </Button>
         <p className="text-xs text-muted-foreground mt-2 text-center">
-          Cadastre um sender WhatsApp adicional do Twilio para esta organização.
+          {uiText('Cadastre um sender WhatsApp adicional do Twilio para esta organização.')}
         </p>
       </div>
 
@@ -541,11 +542,11 @@ export function IntegrationDetailDialog({
   const renderKommoConfig = () => {
     const getStatusBadge = (status: string) => {
       switch (status) {
-        case 'completed': return <Badge className="text-[10px] bg-green-600">Concluída</Badge>;
-        case 'running': return <Badge variant="secondary" className="text-[10px]">Em andamento</Badge>;
-        case 'failed': return <Badge variant="destructive" className="text-[10px]">Falhou</Badge>;
-        case 'rolled_back': return <Badge variant="outline" className="text-[10px]">Desfeita</Badge>;
-        case 'cancelled': return <Badge variant="outline" className="text-[10px]">Cancelada</Badge>;
+        case 'completed': return <Badge className="text-[10px] bg-green-600">{uiText("Concluída")}</Badge>;
+        case 'running': return <Badge variant="secondary" className="text-[10px]">{uiText("Em andamento")}</Badge>;
+        case 'failed': return <Badge variant="destructive" className="text-[10px]">{uiText("Falhou")}</Badge>;
+        case 'rolled_back': return <Badge variant="outline" className="text-[10px]">{uiText("Desfeita")}</Badge>;
+        case 'cancelled': return <Badge variant="outline" className="text-[10px]">{uiText("Cancelada")}</Badge>;
         default: return <Badge variant="secondary" className="text-[10px]">{status}</Badge>;
       }
     };
@@ -554,9 +555,9 @@ export function IntegrationDetailDialog({
       <div className="space-y-4">
         {/* Connection info */}
         <div className="space-y-2">
-          <Label className="text-muted-foreground">Subdomínio</Label>
+          <Label className="text-muted-foreground">{uiText("Subdomínio")}</Label>
           <p className="text-sm bg-muted px-3 py-2 rounded-md">
-            {configValues.subdomain || configValues.account_name || 'Não configurado'}.kommo.com
+            {configValues.subdomain || configValues.account_name || uiText('Não configurado')}.kommo.com
           </p>
         </div>
         <div className="space-y-2">
@@ -567,9 +568,9 @@ export function IntegrationDetailDialog({
         {/* Token expiry */}
         {configValues.token_expires_at && (
           <div className="flex items-center justify-between">
-            <Label className="text-muted-foreground">Token expira em</Label>
+            <Label className="text-muted-foreground">{uiText("Token expira em")}</Label>
             <span className="text-sm">
-              {format(new Date(configValues.token_expires_at), "dd/MM/yyyy", { locale: ptBR })}
+              {format(new Date(configValues.token_expires_at), uiDatePattern(), { locale: uiDateLocale() })}
             </span>
           </div>
         )}
@@ -582,7 +583,7 @@ export function IntegrationDetailDialog({
             onClick={onOpenMigration}
           >
             <UploadSimple className="h-4 w-4 mr-2" />
-            Importar dados do Kommo
+            {uiText('Importar dados do Kommo')}
           </Button>
         )}
 
@@ -590,7 +591,7 @@ export function IntegrationDetailDialog({
         {kommoImportLogs && kommoImportLogs.length > 0 && (
           <div className="space-y-3">
             <div className="border-t pt-4">
-              <Label className="text-sm font-medium">Histórico de migrações</Label>
+              <Label className="text-sm font-medium">{uiText("Histórico de migrações")}</Label>
             </div>
             <ScrollArea className="max-h-64">
               <div className="space-y-2">
@@ -601,7 +602,7 @@ export function IntegrationDetailDialog({
                         <div className="flex items-center gap-2">
                           {getStatusBadge(log.status)}
                           <span className="text-xs text-muted-foreground">
-                            {log.created_at && format(new Date(log.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
+                            {log.created_at && format(new Date(log.created_at), getUiLocale() === 'en-US' ? 'MM/dd/yy h:mm a' : "dd/MM/yy HH:mm", { locale: uiDateLocale() })}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
@@ -625,18 +626,18 @@ export function IntegrationDetailDialog({
                           )}
                         </div>
                         {log.error_count > 0 && (
-                          <p className="text-[11px] text-destructive">{log.error_count} erro(s)</p>
+                          <p className="text-[11px] text-destructive">{uiText("{0} erro(s)", { 0: log.error_count })}</p>
                         )}
                       </div>
                       {log.status === 'completed' && log.rollback_available && !log.rollback_executed_at && (
                         <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0"
                           onClick={() => {
                             // Just inform - rollback happens via wizard
-                            toast.info('Use o wizard de migração para desfazer esta importação.');
+                            toast.info(uiText('Use o wizard de migração para desfazer esta importação.'));
                           }}
                         >
                           <ArrowCounterClockwise className="h-3 w-3 mr-1" />
-                          Desfazer
+                          {uiText('Desfazer')}
                         </Button>
                       )}
                     </div>
@@ -654,7 +655,7 @@ export function IntegrationDetailDialog({
     const entries = Object.entries(configValues);
     if (entries.length === 0) {
       return (
-        <p className="text-sm text-muted-foreground text-center py-4">Nenhuma configuração adicional disponível.</p>
+        <p className="text-sm text-muted-foreground text-center py-4">{uiText("Nenhuma configuração adicional disponível.")}</p>
       );
     }
     return (
@@ -663,7 +664,7 @@ export function IntegrationDetailDialog({
           <div key={key} className="space-y-2 min-w-0">
             <Label className="text-muted-foreground capitalize">{key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')}</Label>
             <p className="font-mono text-sm bg-muted px-3 py-2 rounded-md break-all overflow-hidden">
-              {isSensitiveField(key) ? maskSecret(String(value)) : String(value) || 'Não configurado'}
+              {isSensitiveField(key) ? maskSecret(String(value)) : String(value) || uiText('Não configurado')}
             </p>
           </div>
         ))}
@@ -696,7 +697,7 @@ export function IntegrationDetailDialog({
             <div>
               <DialogTitle>{integration?.name}</DialogTitle>
               <DialogDescription>
-                {isEditing ? 'Editando configurações' : 'Configurações da integração'}
+                {isEditing ? uiText('Editando configurações') : uiText('Configurações da integração')}
               </DialogDescription>
             </div>
           </div>
@@ -707,14 +708,14 @@ export function IntegrationDetailDialog({
           {!isEditing && (
             <>
               <div className="flex items-center justify-between">
-                <Label className="text-muted-foreground">Status</Label>
-                <Badge className="bg-green-500">Conectado</Badge>
+                <Label className="text-muted-foreground">{uiText("Status")}</Label>
+                <Badge className="bg-green-500">{uiText("Conectado")}</Badge>
               </div>
 
               {connectedAt && (
                 <div className="flex items-center justify-between">
-                  <Label className="text-muted-foreground">Conectado em</Label>
-                  <span className="text-sm">{format(new Date(connectedAt), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
+                  <Label className="text-muted-foreground">{uiText("Conectado em")}</Label>
+                  <span className="text-sm">{format(new Date(connectedAt), getUiLocale() === 'en-US' ? 'MMMM d, yyyy' : "dd 'de' MMMM 'de' yyyy", { locale: uiDateLocale() })}</span>
                 </div>
               )}
 
@@ -724,7 +725,7 @@ export function IntegrationDetailDialog({
 
           {isEditing && isGenericIntegration && (
             <div className="bg-muted/50 rounded-lg px-3 py-2 text-sm text-muted-foreground">
-              Campos sensíveis (chaves de API, tokens) podem ser deixados em branco para manter o valor atual.
+              {uiText('Campos sensíveis (chaves de API, tokens) podem ser deixados em branco para manter o valor atual.')}
             </div>
           )}
 
@@ -735,11 +736,11 @@ export function IntegrationDetailDialog({
           {isEditing ? (
             <>
               <Button variant="outline" className="flex-1" onClick={handleCancelEditing} disabled={isSaving}>
-                Cancelar
+                {uiText('Cancelar')}
               </Button>
               <Button className="flex-1" onClick={handleSave} disabled={isSaving}>
                 {isSaving ? <SpinnerGap className="h-4 w-4 mr-2 animate-spin" /> : null}
-                Salvar
+                {uiText('Salvar')}
               </Button>
             </>
           ) : (
@@ -747,14 +748,14 @@ export function IntegrationDetailDialog({
               {(isGenericIntegration || isKommo) && (
                 <Button variant="outline" onClick={handleStartEditing}>
                   <PencilSimple className="h-4 w-4 mr-2" />
-                  Editar
+                  {uiText('Editar')}
                 </Button>
               )}
               <Button variant="outline" className="flex-1" onClick={onReconfigure}>
-                Reconfigurar
+                {uiText('Reconfigurar')}
               </Button>
               <Button variant="destructive" className="flex-1" onClick={onDisconnect}>
-                Desconectar
+                {uiText('Desconectar')}
               </Button>
             </>
           )}

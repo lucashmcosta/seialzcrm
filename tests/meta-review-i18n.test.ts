@@ -9,7 +9,11 @@ const files=['src/pages/settings/MetaIntegrationPage.tsx','src/components/settin
   'src/components/settings/SettingsGrid.tsx','src/components/settings/IntegrationsSettings.tsx','src/components/settings/AIProviderCard.tsx',
   'src/components/settings/TelephonyAvailabilitySettings.tsx','src/components/integrations/evolution-whatsapp/EvolutionIntegrationCard.tsx',
   'src/pages/Dashboard.tsx','src/components/reports/DashboardTrendChart.tsx','src/components/reports/DashboardSingleMetricChart.tsx',
-  'src/components/reports/DashboardStatusDonut.tsx','src/components/reports/GranularityToggle.tsx','src/components/process-classification/DashboardCommissions.tsx'];
+  'src/components/reports/DashboardStatusDonut.tsx','src/components/reports/GranularityToggle.tsx','src/components/process-classification/DashboardCommissions.tsx',
+  // Diálogos de integração e Central de telefonia (item 6 das correções pós App Review)
+  'src/components/settings/IntegrationConnectDialog.tsx','src/components/settings/IntegrationDetailDialog.tsx','src/components/settings/AIProviderConfigDialog.tsx',
+  'src/components/settings/KommoMigrationDialog.tsx','src/components/integrations/nammux/NammuxDialog.tsx',
+  'src/components/integrations/evolution-whatsapp/EvolutionWhatsAppDialog.tsx','src/components/settings/PhoneNumberSettings.tsx'];
 function collect(dir:string){for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const f=path.join(dir,entry.name);if(entry.isDirectory())collect(f);else if(/\.tsx?$/.test(f))files.push(f);}}
 roots.forEach(collect);
 test('review routes have English translations for literal UI keys and no frozen locale values',()=>{
@@ -42,6 +46,7 @@ test('settings hub, integrations tabs and dashboard status catalogs have English
     'src/components/settings/IntegrationsSettings.tsx':/label: '([^']+)'/g,
     'src/components/settings/AIProviderCard.tsx':/label: '([^']+)'/g,
     'src/components/reports/DashboardStatusDonut.tsx':/label: '([^']+)'/g,
+    'src/components/settings/PhoneNumberSettings.tsx':/\['[a-z]+day', '([^']+)'\]/g,
   };
   const missing:string[]=[];
   for(const [file,re] of Object.entries(sources)){

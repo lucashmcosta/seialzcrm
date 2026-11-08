@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { CaretLeft, CaretRight, UploadSimple, WarningCircle, SpinnerGap, PlayCircle, XCircle } from '@phosphor-icons/react';
 
 import { useKommoMigration } from '@/hooks/useKommoMigration';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { KommoCredentialsStep } from './KommoCredentialsStep';
 import { KommoPipelineMappingStep } from './KommoPipelineMappingStep';
 import { KommoPreviewStep } from './KommoPreviewStep';
@@ -18,6 +19,7 @@ interface KommoMigrationDialogProps {
 }
 
 export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialogProps) {
+  useUiLocale();
   const {
     organization,
     step,
@@ -95,11 +97,11 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
   const canProceedFromStep4 = previewMutation.data !== undefined;
 
   const steps = [
-    { number: 1, title: 'Credenciais' },
+    { number: 1, title: uiText('Credenciais') },
     { number: 2, title: 'Pipeline' },
-    { number: 3, title: 'Usuários' },
+    { number: 3, title: uiText('Usuários') },
     { number: 4, title: 'Preview' },
-    { number: 5, title: 'Migração' },
+    { number: 5, title: uiText('Migração') },
   ];
 
   return (
@@ -108,10 +110,10 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UploadSimple className="h-5 w-5" />
-            Migrar dados do Kommo
+            {uiText('Migrar dados do Kommo')}
           </DialogTitle>
           <DialogDescription>
-            Importe seus contatos, oportunidades, empresas, tarefas e notas do Kommo.
+            {uiText('Importe seus contatos, oportunidades, empresas, tarefas e notas do Kommo.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -146,10 +148,10 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
         {pendingImport && step < 5 && (
           <Alert className="mx-1 border-warning/50 bg-warning/5">
             <WarningCircle className="h-4 w-4 text-warning" />
-            <AlertTitle>Migração em andamento</AlertTitle>
+            <AlertTitle>{uiText('Migração em andamento')}</AlertTitle>
             <AlertDescription className="flex flex-col gap-3">
               <span>
-                Há uma migração pausada ({pendingImport.progress_percent}% concluído, {pendingImport.imported_contacts} contatos importados).
+                {uiText('Há uma migração pausada ({0}% concluído, {1} contatos importados).', { 0: pendingImport.progress_percent, 1: pendingImport.imported_contacts })}
               </span>
               <div className="flex gap-2">
                 <Button 
@@ -160,12 +162,12 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
                   {isResuming ? (
                     <>
                       <SpinnerGap className="h-4 w-4 mr-1 animate-spin" />
-                      Retomando...
+                      {uiText('Retomando...')}
                     </>
                   ) : (
                     <>
                       <PlayCircle className="h-4 w-4 mr-1" />
-                      Continuar
+                      {uiText('Continuar')}
                     </>
                   )}
                 </Button>
@@ -176,7 +178,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
                   disabled={isResuming}
                 >
                   <XCircle className="h-4 w-4 mr-1" />
-                  Cancelar
+                  {uiText('Cancelar')}
                 </Button>
               </div>
             </AlertDescription>
@@ -249,7 +251,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
               disabled={step === 1}
             >
               <CaretLeft className="h-4 w-4 mr-1" />
-              Voltar
+              {uiText('Voltar')}
             </Button>
 
             {step === 4 ? (
@@ -257,7 +259,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
                 onClick={handleStartMigration}
                 disabled={!canProceedFromStep4 || startMigrationMutation.isPending}
               >
-                Iniciar Migração
+                {uiText('Iniciar Migração')}
                  <CaretRight className="h-4 w-4 ml-1" />
               </Button>
             ) : (
@@ -269,7 +271,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
                   (step === 3 && !canProceedFromStep3)
                 }
               >
-                Próximo
+                {uiText('Próximo')}
                 <CaretRight className="h-4 w-4 ml-1" />
               </Button>
             )}
