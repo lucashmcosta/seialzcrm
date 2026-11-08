@@ -120,8 +120,9 @@ export function CommercialFichaPanel({
                 canEdit={permissions.canEditContacts}
                 onSaved={onContactChanged}
                 onEditFull={() => setView('full')}
-              />
-              <CustomFieldsCard key={`cf-${contactId}`} module="contacts" recordId={contactId} title={uiText('Campos personalizados')} compact />
+              >
+                <CustomFieldsCard key={`cf-${contactId}`} module="contacts" recordId={contactId} compact bare />
+              </ContactQuickEdit>
               <OpportunitySection
                 contactId={contactId}
                 opportunities={opportunities}

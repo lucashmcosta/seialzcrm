@@ -164,6 +164,8 @@ function OpportunityCard({
         )}
       </div>
 
+      <CustomFieldsCard key={`cf-opp-${opp.id}`} module="opportunities" recordId={opp.id} compact bare />
+
       {canEdit && (
         <div className="grid grid-cols-3 gap-1.5">
           <Button type="button" variant="outline" size="sm" className="px-1 text-xs" onClick={onWon}>
@@ -186,7 +188,6 @@ function OpportunityCard({
         </div>
       )}
 
-      <CustomFieldsCard key={`cf-opp-${opp.id}`} module="opportunities" recordId={opp.id} title={uiText('Campos da oportunidade')} compact />
     </div>
   );
 }

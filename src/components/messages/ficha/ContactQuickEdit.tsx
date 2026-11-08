@@ -2,7 +2,7 @@
 // Salva campo a campo ao sair do campo (blur/Enter), com as MESMAS regras da tela
 // de edição (src/lib/contactRules.ts + contactUpdate.ts). Telefone é só leitura:
 // a conversa está ligada a ele; trocar por aqui poderia desligar o histórico.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,11 +33,14 @@ export function ContactQuickEdit({
   canEdit,
   onSaved,
   onEditFull,
+  children,
 }: {
   contactId: string;
   canEdit: boolean;
   onSaved?: () => void;
   onEditFull?: () => void;
+  /** Campos extras (ex.: personalizados) exibidos junto dos dados do contato. */
+  children?: ReactNode;
 }) {
   useUiLocale();
   const { organization, userProfile } = useOrganization();
@@ -219,6 +222,7 @@ export function ContactQuickEdit({
       </div>
       {field('email', 'E-mail', { placeholder: 'nome@exemplo.com', inputMode: 'email' })}
       {isBrazil && field('cpf', 'CPF', { placeholder: '000.000.000-00', inputMode: 'numeric' })}
+      {children}
       {!canEdit && (
         <p className="text-xs text-muted-foreground">{uiText('Você não tem permissão para editar contatos.')}</p>
       )}

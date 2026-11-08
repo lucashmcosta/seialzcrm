@@ -1326,7 +1326,6 @@ Object.assign(uiEnglish, {
   "Sem responsável": "No owner",
   "Ganho": "Won",
   "Perdido": "Lost",
-  "Campos da oportunidade": "Opportunity fields",
   "Atalhos": "Shortcuts",
   "Fechar atalhos": "Close shortcuts",
   "Conversa": "Conversation",
