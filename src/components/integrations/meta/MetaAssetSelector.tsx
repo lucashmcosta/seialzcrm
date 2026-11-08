@@ -32,6 +32,10 @@ export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: str
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Ativos já selecionados em outra org: a Meta lista tudo o que o usuário de sistema da
+  // empresa enxerga, sem dizer de qual org é cada um. Ficam escondidos, mas acessíveis.
+  const [elsewhere, setElsewhere] = useState<Set<string>>(new Set());
+  const [showElsewhere, setShowElsewhere] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,10 +45,16 @@ export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: str
       .eq('connection_id', connectionId)
       .order('asset_type');
     const list = (data ?? []) as MetaAsset[];
+    // Se a checagem falhar, mostra tudo (como antes): nada fica inacessível.
+    const inUse = organization?.id
+      ? await supabase.rpc('rpc_meta_assets_in_use_elsewhere' as never, { p_org: organization.id, p_connection: connectionId } as never)
+      : { data: [] };
+    setElsewhere(new Set(((inUse.data ?? []) as unknown as Array<string | { rpc_meta_assets_in_use_elsewhere: string }>)
+      .map((row) => typeof row === 'string' ? row : row.rpc_meta_assets_in_use_elsewhere)));
     setAssets(list);
     setSelected(Object.fromEntries(list.map((a) => [a.id, a.selection_state === 'selected'])));
     setLoading(false);
-  }, [connectionId]);
+  }, [connectionId, organization?.id]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -59,7 +69,14 @@ export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: str
       const { error } = await supabase.functions.invoke('meta-connect-select-assets', {
         body: { organization_id: organization.id, connection_id: connectionId, selections },
       });
-      if (error) throw error;
+      if (error) {
+        const detail = await (error as { context?: Response }).context?.clone?.().json?.().catch(() => null);
+        if (detail?.error === 'routed_connection_no_access') {
+          toast.error(uiText("A conexão em uso pela sincronização não tem acesso a um dos ativos marcados. Nada foi salvo."));
+          return;
+        }
+        throw error;
+      }
       toast.success(uiText("Ativos da organização salvos."));
       onSaved?.();
       void load();
@@ -84,10 +101,14 @@ export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: str
     );
   }
 
+  // O que já está marcado nesta org nunca some, mesmo sendo usado em outra.
+  const isHidden = (a: MetaAsset) => elsewhere.has(a.id) && !selected[a.id] && !showElsewhere;
+  const hiddenCount = assets.filter((a) => elsewhere.has(a.id) && !selected[a.id]).length;
+
   return (
     <div className="space-y-4">
       {GROUPS.map(([type, label]) => {
-        const items = assets.filter((a) => a.asset_type === type);
+        const items = assets.filter((a) => a.asset_type === type && !isHidden(a));
         if (!items.length) return null;
         return (
           <div key={type}>
@@ -102,12 +123,28 @@ export function MetaAssetSelector({ connectionId, onSaved }: { connectionId: str
                   />
                   <span>{a.name || a.external_id}</span>
                   <span className="text-xs text-muted-foreground">{a.external_id}</span>
+                  {elsewhere.has(a.id) && (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                      {uiText("Em uso em outra organização")}
+                    </span>
+                  )}
                 </Label>
               ))}
             </div>
           </div>
         );
       })}
+      {(hiddenCount > 0 || showElsewhere) && (
+        <button
+          type="button"
+          className="block text-xs text-primary hover:underline"
+          onClick={() => setShowElsewhere((v) => !v)}
+        >
+          {showElsewhere
+            ? uiText("Esconder ativos em uso em outra organização")
+            : `${uiText("Mostrar ativos em uso em outra organização")} (${hiddenCount})`}
+        </button>
+      )}
       <Button type="button" size="sm" disabled={saving} onClick={() => void save()}>
         {saving && <CircleNotch className="animate-spin" />}
         {saving ? uiText("Salvando…") : uiText("Salvar seleção")}

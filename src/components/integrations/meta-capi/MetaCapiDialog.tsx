@@ -21,6 +21,7 @@ import { ptBR } from "date-fns/locale";
 import { useMetaConnection } from "@/hooks/useMetaConnection";
 import { useOrgIntegration } from "@/hooks/useOrgIntegration";
 import { MetaConnectionBanner } from "@/components/integrations/meta/MetaConnectionBanner";
+import { MetaPixelPicker, type PixelListResponse } from "./MetaPixelPicker";
 
 interface Props {
   // Mantidos por compat; a capability agora renderiza inline na página Meta.
@@ -184,6 +185,34 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
     }
   }, [open, isConnected, hasMetaLeadAds]);
 
+  // Conexão Meta ativa: o Pixel vem de uma lista, não de um ID digitado.
+  const showPixelPicker = canonicalActive && (!isConnected || reconnectMode);
+  const { data: pixelList, isLoading: loadingPixels, isError: pixelsFailed } = useQuery({
+    queryKey: ["meta-capi-pixels", organization?.id],
+    enabled: !!organization?.id && open && showPixelPicker,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("meta-capi-list-pixels", {
+        body: { organization_id: organization!.id },
+      });
+      if (error) throw error;
+      return data as PixelListResponse;
+    },
+  });
+
+  // Primeira configuração: preenche o que a org já tem. Nunca sobrescreve valor existente.
+  useEffect(() => {
+    if (!pixelList || isConnected || !canonicalActive) return;
+    const only = pixelList.pixels.length === 1 ? pixelList.pixels[0].id : "";
+    setFormValues((prev) => ({
+      ...prev,
+      pixel_id: prev.pixel_id || only,
+      page_id: prev.page_id || pixelList.defaults?.page_id || "",
+      whatsapp_business_account_id: prev.whatsapp_business_account_id || pixelList.defaults?.whatsapp_business_account_id || "",
+    }));
+  }, [pixelList, isConnected, canonicalActive]);
+
   const { data: events, isLoading: loadingEvents, refetch: refetchEvents } = useQuery({
     queryKey: ["capi_event_log", organization?.id, filter],
     enabled: !!organization?.id && open && isConnected && tab === "events",
@@ -293,7 +322,9 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
       }
       if (data?.error) {
         const code = data.meta_error_code;
-        if (code === 190) toast.error(uiText("Token inválido ou expirado. Reconecte Meta Lead Ads ou gere um novo no Events Manager."));
+        if (code === 190) toast.error(canonicalActive
+          ? uiText("A conexão com a Meta expirou. Reconecte na aba Conexão.")
+          : uiText("Token inválido ou expirado. Reconecte Meta Lead Ads ou gere um novo no Events Manager."));
         else if (code === 100) toast.error(uiError(data.error || uiText("Pixel ID não encontrado. Confira o ID.")));
         else toast.error(uiError(data.error || uiText("Meta rejeitou a conexão.")));
         return;
@@ -413,6 +444,21 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
 
     // Credencial canônica: o token de envio vem da Meta Connection — nunca pedir aqui.
     if (isManualToken && canonicalActive) return null;
+    if (canonicalActive && field.key === "pixel_id") {
+      return (
+        <MetaPixelPicker
+          key={field.key}
+          value={value}
+          onChange={(id) => setField("pixel_id", id)}
+          error={err}
+          loading={loadingPixels}
+          failed={pixelsFailed}
+          data={pixelList}
+        />
+      );
+    }
+    // Preenchidos a partir de Ativos e do WhatsApp conectado.
+    if (canonicalActive && (field.key === "whatsapp_business_account_id" || field.key === "page_id")) return null;
     // Em modo reuse (não conectado), esconder access_token
     if (isManualToken && !isConnected && mode === "reuse" && !reconnectMode) return null;
 
@@ -587,7 +633,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                       }}
                     >
                       <ArrowsClockwise className="h-4 w-4 mr-1" />
-                      {uiText("Reconectar / Editar")}</Button>
+                      {canonicalActive ? uiText("Trocar Pixel / Editar") : uiText("Reconectar / Editar")}</Button>
                   </div>
                 </Card>
               ) : (
@@ -619,6 +665,9 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                     </div>
                   )}
 
+                  {canonicalActive ? (
+                    <div className="space-y-4">{fields.map(renderField)}</div>
+                  ) : (
                   <Tabs value={innerTab} onValueChange={setInnerTab}>
                     <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${groups.length}, minmax(0, 1fr))` }}>
                       {groups.map((g) => (
@@ -637,11 +686,14 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                       </TabsContent>
                     ))}
                   </Tabs>
+                  )}
 
                   <Alert>
                     <Warning className="h-4 w-4" />
                     <AlertDescription className="text-xs">
-                      {uiText("O token é validado com a Meta antes de salvar e armazenado criptografado server-side.")}</AlertDescription>
+                      {canonicalActive
+                        ? uiText("Antes de salvar, conferimos com a Meta se esta conexão tem acesso ao Pixel.")
+                        : uiText("O token é validado com a Meta antes de salvar e armazenado criptografado server-side.")}</AlertDescription>
                   </Alert>
 
                   <div className="flex justify-end gap-2">
@@ -650,7 +702,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                         {uiText("Cancelar")}</Button>
                     )}
                     <Button onClick={handleSubmit} disabled={submitting}>
-                      {submitting ? uiText("Validando...") : isConnected ? uiText("Salvar alterações") : uiText("Conectar")}
+                      {submitting ? uiText("Validando...") : isConnected ? uiText("Salvar alterações") : canonicalActive ? uiText("Salvar Pixel") : uiText("Conectar")}
                     </Button>
                   </div>
                 </Card>
