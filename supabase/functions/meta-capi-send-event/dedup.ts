@@ -46,6 +46,12 @@ export function resolveTestEventCode(p: {
   return typeof p.savedCode === "string" && p.savedCode.trim() ? p.savedCode.trim() : null;
 }
 
+// Teste sem código entraria no Pixel como evento real, e não dá para apagar da Meta.
+// Reenvio (logRow) não passa por aqui: segue a regra da própria linha.
+export function testNeedsCode(bodyTest: unknown, testEventCode: string | null, hasLogRow: boolean): boolean {
+  return !hasLogRow && (bodyTest === true || bodyTest === "true") && !testEventCode;
+}
+
 // Chave de negócio do evento. null = evento sem dedup (id legado).
 export function deterministicEventId(
   organizationId: string,

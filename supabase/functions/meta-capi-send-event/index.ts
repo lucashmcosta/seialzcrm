@@ -5,7 +5,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
 import { authorizeSendEvent } from "./auth.ts";
-import { claimLogRow, findSentDuplicate, isRealSentRow, isTestSend, resolveEventId, resolveTestEventCode } from "./dedup.ts";
+import { claimLogRow, findSentDuplicate, isRealSentRow, isTestSend, resolveEventId, resolveTestEventCode, testNeedsCode } from "./dedup.ts";
 
 const META_API_VERSION = Deno.env.get("META_GRAPH_API_VERSION") || "v25.0";
 
@@ -184,6 +184,10 @@ serve(async (req) => {
       savedCode: ca.test_event_code,
       logRowCode: logRow?.test_event_code,
     });
+    if (testNeedsCode(test, testEventCode, !!logRow)) {
+      // Status 200: é assim que a tela (inclusive aba antiga) mostra esta mensagem ao usuário.
+      return json({ error: "Atualize a página para testar. Nenhum evento foi enviado." });
+    }
     const isTest = isTestSend(test, testEventCode);
     const { eventId, dedup } = resolveEventId({
       logRow,
