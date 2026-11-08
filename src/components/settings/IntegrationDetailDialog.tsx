@@ -18,9 +18,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { telephonySupabase } from '@/integrations/supabase/telephonyClient';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SuvSignV2CredentialsCard } from './SuvSignV2CredentialsCard';
-import { SuvSignV2TemplateTypesCard } from './SuvSignV2TemplateTypesCard';
 
 interface IntegrationDetailDialogProps {
   open: boolean;
@@ -31,7 +28,6 @@ interface IntegrationDetailDialogProps {
   onReconfigure: () => void;
   onConfigUpdated?: () => void;
   onOpenMigration?: () => void;
-  canManageSuvSignV2?: boolean;
 }
 
 interface SenderDetail {
@@ -60,7 +56,6 @@ export function IntegrationDetailDialog({
   onReconfigure,
   onConfigUpdated,
   onOpenMigration,
-  canManageSuvSignV2 = false,
 }: IntegrationDetailDialogProps) {
   const { organization } = useOrganization();
   const configValues = orgIntegration?.config_values || {};
@@ -75,9 +70,6 @@ export function IntegrationDetailDialog({
   const [editValues, setEditValues] = useState<Record<string, any>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [addEndpointOpen, setAddEndpointOpen] = useState(false);
-  // SuvSign: abas V1/V2 apenas de apresentação; abre sempre em V1.
-  const [suvsignTab, setSuvsignTab] = useState<'v1' | 'v2'>('v1');
-  const showSuvSignTabs = integration?.slug === 'suvsign' && canManageSuvSignV2;
 
   const isKommo = integration?.slug === 'kommo';
 
@@ -690,7 +682,7 @@ export function IntegrationDetailDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { handleCancelEditing(); setSuvsignTab('v1'); } onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { handleCancelEditing(); } onOpenChange(v); }}>
       <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
@@ -710,23 +702,7 @@ export function IntegrationDetailDialog({
           </div>
         </DialogHeader>
 
-        {showSuvSignTabs && (
-          <Tabs value={suvsignTab} onValueChange={(v) => setSuvsignTab(v as 'v1' | 'v2')}>
-            <TabsList>
-              <TabsTrigger value="v1">V1 — Legado</TabsTrigger>
-              <TabsTrigger value="v2">V2 — Signing Engine</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        )}
-
-        {showSuvSignTabs && organization?.id && (
-          <div className={suvsignTab === 'v2' ? 'py-4' : 'hidden'}>
-            <SuvSignV2CredentialsCard organizationId={organization.id} />
-            <SuvSignV2TemplateTypesCard organizationId={organization.id} />
-          </div>
-        )}
-
-        <div className={showSuvSignTabs && suvsignTab === 'v2' ? 'hidden' : undefined}>
+        <div>
         <div className="space-y-6 py-4">
           {!isEditing && (
             <>

@@ -35,8 +35,7 @@ import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
 import { mensagemErroStatus, transitionOpportunityStage } from '@/lib/opportunityClose';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
-import { ContractSignatureEntry, useSignatureV2Pilot } from '@/components/signature/ContractSignatureEntry';
-import { PenNib } from '@phosphor-icons/react';
+import { ContractSignatureEntry } from '@/components/signature/ContractSignatureEntry';
 import { TagSelector } from '@/components/common/TagSelector';
 import { NammuxOpportunityTab } from '@/components/opportunities/NammuxOpportunityTab';
 import { ProcessClassificationSlot } from '@/components/process-classification/ProcessClassificationSlot';
@@ -65,7 +64,6 @@ interface PipelineStage {
 
 export default function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
-  const v2Pilot = useSignatureV2Pilot(id ?? '');
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { organization, locale } = useOrganization();
@@ -588,7 +586,6 @@ export default function OpportunityDetail() {
                             contactId={opportunity.contact_id}
                             opportunityId={opportunity.id}
                             size="icon"
-                            hidePilot
                           />
                         </span>
                       </TooltipTrigger>
@@ -628,15 +625,6 @@ export default function OpportunityDetail() {
                             Reabrir
                           </DropdownMenuItem>
                         )}
-                        {v2Pilot.available && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={v2Pilot.openSheet}>
-                              <PenNib className="h-4 w-4 mr-2" />
-                              Enviar contrato V2 (Piloto)
-                            </DropdownMenuItem>
-                          </>
-                        )}
                         {opportunity.status === 'won' && permissions.canManageIntegrations && (
                           <>
                             <DropdownMenuSeparator />
@@ -649,7 +637,6 @@ export default function OpportunityDetail() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
-                  {v2Pilot.sheet}
                   {organization && (
                     <WidgetsTrigger screen="opportunities"
                       context={{ screen: 'opportunities', organizationId: organization.id, opportunityId: opportunity.id }} />

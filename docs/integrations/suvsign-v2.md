@@ -1,6 +1,6 @@
 # SuvSign Signing Engine V2 no Seialz Web
 
-Estado: implementado e desligado (`signing.suvsign_v2` global OFF, nenhuma org habilitada). A V1 (`SendToSignatureButton` + `suvsign-webhook`) continua inalterada.
+Estado (2026-11-08): **V2 é o padrão.** Toda org com a SuvSign conectada (credencial V2 ativa) envia pelo V2. Org sem conexão V2 (ex.: Viagi) segue na V1 (`SendToSignatureButton` + `suvsign-webhook`), inalterada. As flags `signing.suvsign_v2` / `signing.suvsign_v2_pilot` continuam como override.
 
 ## Peças
 - Tabelas: `signature_requests`, `signature_request_participants` (usuário autenticado só consegue SELECT; a policy herda o acesso à oportunidade: responsável/view_all). `suvsign_v2_credentials` fica acessível só para o service_role; a API key e o webhook secret são guardados com AES-GCM (`META_TOKEN_ENCRYPTION_KEY`).
@@ -82,3 +82,10 @@ Validação: testes Deno de resolução de identidade, composição multidocumen
 - `send_for_signature` inclui `requested_by {external_user_id, name, email}` no `POST /signing-operations`, resolvido server-side a partir de `signature_requests.created_by` → `users` (full_name, email) com vínculo ativo em `user_organizations` da org da solicitação. Body do browser é ignorado.
 - Autor inválido (inexistente, fora da org, e-mail inválido) → 422 `invalid_request_author`, SuvSign não é chamada, sem fallback.
 - Retry usa sempre o autor original. Se `full_name`/`email` mudarem entre tentativas, a SuvSign devolve 409 `idempotency_conflict` (aceito; sem contorno).
+
+## Conectar em 1 passo (2026-11-08)
+- Tela: Configurações → Integrações → SuvSign (`SuvSignDialog`). O admin cola só a chave da conta SuvSign (SuvSign → Configurações → API e Integrações → Gerar Key).
+- Ação `connect` (`signature-requests`): gera o segredo do webhook, chama `POST /api-v2/integrations/seialz/connect` na SuvSign (registra/renova o webhook `…/suvsign-v2-webhook` da conta e liga a regra live `source=seialz`), grava a credencial cifrada e cria/atualiza o `organization_integrations` (card "Conectado", nome da conta em `connected_account.suvsign_account_name`).
+- Ação `disconnect`: chama `POST /api-v2/integrations/seialz/disconnect` (só desliga a regra live) e marca `suvsign_v2_credentials.disconnected_at`. A credencial não é apagada: operações já enviadas seguem recebendo eventos e podem ser canceladas/baixadas. Novos envios voltam para a V1 se a org tiver a V1 configurada.
+- Capability: `v2_enabled = credencial ativa || flag || piloto`. Não é mais preciso inserir flag, webhook ou regra live à mão.
+- Org na V1 com credencial V2 ausente vê um aviso na tela da SuvSign e o link "Ver configuração do envio antigo".
