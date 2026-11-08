@@ -65,6 +65,32 @@ serve(async (req) => {
       try { await metaGraphGet(`/${asset.external_id}`, {fields:'id'}, {accessToken:tokenValue,appSecret:facebookAppSecret()}); }
       catch { return json({error:'asset_access_not_confirmed'},400); }
     }
+    // A seleção é copiada para a conexão que a sincronização usa (rota fixada). Ativo novo
+    // lá precisa ser alcançável pelo token DELA, senão o sync falharia em silêncio.
+    const selectedIds = new Set(selections.filter((s: any) => s.selection_state === 'selected').map((s: any) => s.asset_id));
+    const { data: candidateAssets } = await admin.from('meta_assets').select('id,asset_type,external_id')
+      .eq('connection_id', connection_id).eq('organization_id', organization_id);
+    const { data: routes } = await admin.from('meta_operational_routes').select('route,connection_id')
+      .eq('organization_id', organization_id).eq('source', 'canonical').not('connection_id', 'is', null).neq('connection_id', connection_id);
+    for (const route of routes ?? []) {
+      if (!String(route.route).startsWith('asset:')) continue;
+      const type = String(route.route).slice('asset:'.length);
+      const wanted = (candidateAssets ?? []).filter((a: any) => a.asset_type === type && selectedIds.has(a.id));
+      if (!wanted.length) continue;
+      const { data: routedConn } = await admin.from('meta_connections').select('id')
+        .eq('id', route.connection_id).eq('organization_id', organization_id).eq('status', 'connected').maybeSingle();
+      if (!routedConn) continue;
+      const { data: already } = await admin.from('meta_assets').select('external_id')
+        .eq('connection_id', route.connection_id).eq('asset_type', type).eq('selection_state', 'selected');
+      const known = new Set((already ?? []).map((a: any) => a.external_id));
+      const fresh = wanted.filter((a: any) => !known.has(a.external_id));
+      if (!fresh.length) continue;
+      const routedToken = await resolveConnectionToken(admin, route.connection_id);
+      for (const asset of fresh) {
+        try { await metaGraphGet(`/${asset.external_id}`, {fields:'id'}, {accessToken:routedToken,appSecret:facebookAppSecret()}); }
+        catch { return json({error:'routed_connection_no_access', asset_id: asset.id},400); }
+      }
+    }
     const { data: updated, error: selectionError } = await admin.rpc('rpc_select_meta_assets', {
       p_org: organization_id, p_connection: connection_id, p_selections: selections,
     });

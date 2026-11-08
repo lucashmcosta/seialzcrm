@@ -79,7 +79,12 @@ serve(async (req) => {
         appSecret: resolved.source === "canonical" ? resolved.appSecret : undefined,
       });
       if (!res?.id) {
-        return json({ error: "Pixel ID não encontrado pelo token do Meta Lead Ads", meta_error_code: 100 }, 400);
+        return json({
+          error: resolved.source === "canonical"
+            ? "Pixel não encontrado com a conexão Meta desta organização."
+            : "Pixel ID não encontrado pelo token do Meta Lead Ads",
+          meta_error_code: 100,
+        }, 400);
       }
     } catch (e) {
       if (e instanceof MetaGraphError) {

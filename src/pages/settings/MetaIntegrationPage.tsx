@@ -249,7 +249,7 @@ export default function MetaIntegrationPage() {
           {section === 'assets' && (
             <Card className="p-4">
               <h3 className="text-base font-semibold">{uiText("Ativos")}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{uiText("Selecione quais Businesses, contas de anúncio, Páginas e Instagram pertencem à organização. Só os selecionados entram em sync.")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{uiText("Selecione as contas de anúncio, Páginas e Instagram desta organização. Só os selecionados são sincronizados.")}</p>
               <div className="mt-3">
                 {conn ? <MetaAssetSelector connectionId={conn.id} onSaved={() => {
                   for (const key of ['meta-conn', 'meta-assets-summary', 'meta-operational-routes', 'meta-capabilities'])

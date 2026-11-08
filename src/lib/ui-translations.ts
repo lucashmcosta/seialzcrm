@@ -1366,3 +1366,26 @@ Object.assign(uiEnglish, {
   "Ctrl/⌘ + Enter para salvar": "Ctrl/⌘ + Enter to save",
   "Adicionar nota": "Add note",
 });
+
+// Conversions API com lista de Pixels e separação de ativos entre orgs
+Object.assign(uiEnglish, {
+  'Não foi possível buscar os Pixels na Meta agora. Digite o ID ou tente de novo em instantes.': 'Could not fetch Pixels from Meta right now. Enter the ID or try again shortly.',
+  'Selecione uma conta de anúncio na aba Ativos para listar os Pixels.': 'Select an ad account in the Assets tab to list Pixels.',
+  'Conexão com a Meta indisponível. Verifique a aba Conexão.': 'Meta connection unavailable. Check the Connection tab.',
+  'Nenhum Pixel encontrado nas contas de anúncio selecionadas. Crie um no Gerenciador de Eventos ou digite o ID.': 'No Pixels found in the selected ad accounts. Create one in Events Manager or enter the ID.',
+  'Algumas contas de anúncio não responderam, então a lista pode estar incompleta.': 'Some ad accounts did not respond, so this list may be incomplete.',
+  'ID do Pixel': 'Pixel ID',
+  'Escolha o Pixel': 'Choose the Pixel',
+  'ainda sem eventos': 'no events yet',
+  'Escolher da lista': 'Choose from the list',
+  'Digitar o ID manualmente': 'Enter the ID manually',
+  'A conexão com a Meta expirou. Reconecte na aba Conexão.': 'The Meta connection has expired. Reconnect in the Connection tab.',
+  'Trocar Pixel / Editar': 'Change Pixel / Edit',
+  'Antes de salvar, conferimos com a Meta se esta conexão tem acesso ao Pixel.': 'Before saving, we check with Meta that this connection can access the Pixel.',
+  'Salvar Pixel': 'Save Pixel',
+  'A conexão em uso pela sincronização não tem acesso a um dos ativos marcados. Nada foi salvo.': 'The connection used for syncing cannot access one of the selected assets. Nothing was saved.',
+  'Em uso em outra organização': 'In use by another organization',
+  'Esconder ativos em uso em outra organização': 'Hide assets used by another organization',
+  'Mostrar ativos em uso em outra organização': 'Show assets used by another organization',
+  'Selecione as contas de anúncio, Páginas e Instagram desta organização. Só os selecionados são sincronizados.': 'Select this organization\'s ad accounts, Pages and Instagram accounts. Only selected assets are synced.',
+});
