@@ -1,4 +1,5 @@
 import { reloadForFacebookLocale } from '@/lib/facebook-sdk';
+import { pickActiveMembership } from '@/lib/pick-active-membership';
 import { setUiLocale } from '@/lib/ui-locale';
 import React, { useLayoutEffect, createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -92,10 +93,9 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       // Step 2: Fetch organization membership (needs user_id from step 1)
       const { data: membershipData, error: membershipError } = await supabase
         .from('user_organizations')
-        .select('organization:organizations(id, name, slug, logo_url, logo_size, default_currency, default_locale, operating_country_code, timezone, enable_companies_module, onboarding_step, onboarding_completed_at, duplicate_check_mode, duplicate_enforce_block, theme_primary_color, theme_sidebar_color, theme_dark_mode, cs_inbox_includes_service_endpoints)')
+        .select('created_at, organization:organizations(id, name, slug, logo_url, logo_size, default_currency, default_locale, operating_country_code, timezone, enable_companies_module, onboarding_step, onboarding_completed_at, duplicate_check_mode, duplicate_enforce_block, theme_primary_color, theme_sidebar_color, theme_dark_mode, cs_inbox_includes_service_endpoints)')
         .eq('user_id', profileData.id)
-        .eq('is_active', true)
-        .maybeSingle();
+        .eq('is_active', true);
 
       if (membershipError) {
         console.error('Error fetching organization membership:', membershipError);
@@ -103,8 +103,9 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         return;
       }
 
-      if (membershipData?.organization) {
-        setOrganization(membershipData.organization as Organization);
+      const membership = pickActiveMembership(membershipData);
+      if (membership?.organization) {
+        setOrganization(membership.organization as Organization);
       } else {
         console.warn('No active organization found for user:', profileData.id);
       }
