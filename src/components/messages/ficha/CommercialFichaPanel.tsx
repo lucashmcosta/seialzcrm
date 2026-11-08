@@ -3,7 +3,7 @@
 //  - resumo: edição rápida (nome, e-mail, CPF) + campos personalizados;
 //  - completo: o MESMO formulário da tela de contato (ContactFormView embedded),
 //    então as regras (CPF, duplicidade, endereço, verificação) são as mesmas.
-// Resumo também mostra as oportunidades abertas (Fase 2); nota/tarefa entram na Fase 3.
+// Resumo: contato, campos, oportunidades abertas (Fase 2), nota rápida e tarefas (Fase 3).
 // < 1536px abre como gaveta por cima do chat; ≥ 1536px fica ao lado (como no Atendimento).
 import { useEffect, useState } from 'react';
 import { ArrowLeft, X } from '@phosphor-icons/react';
@@ -14,6 +14,8 @@ import { ContactFormView } from '@/pages/contacts/ContactForm';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { ContactQuickEdit } from './ContactQuickEdit';
 import { OpportunitySection, type FichaOpp } from './OpportunitySection';
+import { NoteQuickAdd } from './NoteQuickAdd';
+import { ContactTasks } from '@/components/contacts/ContactTasks';
 
 type View = 'summary' | 'full';
 
@@ -28,6 +30,7 @@ export function CommercialFichaPanel({
   onLost,
   onMoveStage,
   onOpportunityUpdated,
+  onAddNote,
 }: {
   open: boolean;
   contactId: string | null | undefined;
@@ -39,6 +42,7 @@ export function CommercialFichaPanel({
   onLost: (opp: FichaOpp) => void;
   onMoveStage: (opp: FichaOpp) => void;
   onOpportunityUpdated: (id: string, patch: Partial<FichaOpp>) => void;
+  onAddNote: (text: string) => Promise<boolean>;
 }) {
   useUiLocale();
   const { permissions } = usePermissions();
@@ -119,6 +123,8 @@ export function CommercialFichaPanel({
                 onMoveStage={onMoveStage}
                 onUpdated={onOpportunityUpdated}
               />
+              <NoteQuickAdd onAddNote={onAddNote} />
+              <ContactTasks key={`tasks-${contactId}`} contactId={contactId} compact />
             </div>
           )}
         </div>

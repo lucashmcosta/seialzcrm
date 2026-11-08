@@ -1343,8 +1343,16 @@ function DesktopMessagesList() {
 
   const handleSendNote = async () => {
     if (!organization?.id || !messageText.trim() || !selectedThread) return;
-
     const noteText = messageText.trim();
+    setMessageText('');
+    setIsNoteMode(false);
+    await addConversationNote(noteText);
+  };
+
+  // Nota na conversa (activities type=note). Usada pelo composer (modo nota) e pela
+  // Ficha lateral — aparece na timeline do chat na hora (otimista).
+  const addConversationNote = async (noteText: string): Promise<boolean> => {
+    if (!organization?.id || !noteText.trim() || !selectedThread) return false;
     const tempId = `note-temp-${Date.now()}`;
     const tempNote: InlineNote = {
       id: tempId,
@@ -1355,8 +1363,6 @@ function DesktopMessagesList() {
     };
 
     setInlineNotes((prev) => [...prev, tempNote]);
-    setMessageText('');
-    setIsNoteMode(false);
     scrollToBottom();
 
     try {
@@ -1371,9 +1377,11 @@ function DesktopMessagesList() {
       });
       if (error) throw error;
       invalidateThreadLastEndpoint(selectedThreadId);
+      return true;
     } catch (err: any) {
       setInlineNotes((prev) => prev.filter((n) => n.id !== tempId));
       toast({ variant: 'destructive', description: 'Erro ao salvar nota' });
+      return false;
     }
   };
 
@@ -3201,6 +3209,7 @@ function DesktopMessagesList() {
             onLost={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) setConfirmAction({ kind: 'lost', opp: o }); }}
             onMoveStage={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) { setMoveStageTargetId(o.pipeline_stage_id); setMoveStageOpp(o); } }}
             onOpportunityUpdated={(id, patch) => setContactOpportunities((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))}
+            onAddNote={addConversationNote}
           />
         )}
       </div>

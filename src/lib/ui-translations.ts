@@ -1329,4 +1329,12 @@ Object.assign(uiEnglish, {
   "Ganho": "Won",
   "Perdido": "Lost",
   "Campos da oportunidade": "Opportunity fields",
+  "Crie uma nova tarefa para este contato": "Create a new task for this contact",
+  "Nenhuma tarefa ainda": "No tasks yet",
+  "Vence {quando}": "Due {quando}",
+  "Nota adicionada na conversa": "Note added to the conversation",
+  "Nota rápida": "Quick note",
+  "Escreva uma nota interna (o cliente não vê)": "Write an internal note (the customer can't see it)",
+  "Ctrl/⌘ + Enter para salvar": "Ctrl/⌘ + Enter to save",
+  "Adicionar nota": "Add note",
 });
