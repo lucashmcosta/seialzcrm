@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret, encryptSecret } from "../_shared/crypto.ts";
 import { metaGraphGet, MetaGraphError } from "../_shared/meta-graph.ts";
 import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
+import { authorizeOrgRequest } from "../_shared/auth/membership.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -16,19 +17,20 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
-
-    const userClient = createClient(
+    const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: authErr } = await userClient.auth.getClaims(token);
-    if (authErr || !claims?.claims) return json({ error: "Unauthorized" }, 401);
 
     const body = await req.json().catch(() => ({}));
+
+    // Usa a credencial JÁ guardada da org (legada ou Meta Connection) → exige membro ATIVO.
+    const authz = await authorizeOrgRequest(req, admin, body?.organization_id);
+    if (!authz.ok) {
+      return json({ error: authz.status === 401 ? "Unauthorized" : authz.error }, authz.status);
+    }
+    const authUserId = authz.caller.kind === "user" ? authz.caller.authUserId : null;
+
     const {
       organization_id,
       pixel_id,
@@ -41,20 +43,6 @@ serve(async (req) => {
     if (!organization_id || !pixel_id) {
       return json({ error: "organization_id e pixel_id são obrigatórios" }, 400);
     }
-
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-
-    // Usa a credencial JÁ guardada da org (legada ou Meta Connection) → exige membro da org.
-    const { data: caller } = await admin
-      .from("users").select("id").eq("auth_user_id", claims.claims.sub).maybeSingle();
-    if (!caller) return json({ error: "user_not_found" }, 403);
-    const { data: membership } = await admin
-      .from("user_organizations").select("id")
-      .eq("user_id", caller.id).eq("organization_id", organization_id).maybeSingle();
-    if (!membership) return json({ error: "forbidden_org" }, 403);
 
     // Fetch Meta Lead Ads token
     const { data: leadAds } = await admin
@@ -119,11 +107,9 @@ serve(async (req) => {
 
     const ca = (existing?.connected_account || {}) as any;
 
-    const { data: user } = await admin
-      .from("users")
-      .select("id")
-      .eq("auth_user_id", claims.claims.sub)
-      .maybeSingle();
+    const { data: user } = authUserId
+      ? await admin.from("users").select("id").eq("auth_user_id", authUserId).maybeSingle()
+      : { data: null };
 
     // Legado: re-encrypt the token into meta-capi's OWN access_token_encrypted slot.
     // CAPI is now autonomous at runtime — no cross-slug reads.

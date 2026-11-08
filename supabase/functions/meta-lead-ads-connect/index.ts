@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret, encryptSecret } from "../_shared/crypto.ts";
 import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
 import { metaGraphGet } from "../_shared/meta-graph.ts";
+import { authorizeOrgRequest } from "../_shared/auth/membership.ts";
 
 const DEFAULT_SETTINGS = {
   auto_create_contact: true,
@@ -20,34 +21,32 @@ const DEFAULT_SETTINGS = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return json({ error: "Unauthorized" }, 401);
-    }
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: authErr } = await supabase.auth.getClaims(token);
-    if (authErr || !claims?.claims) return json({ error: "Unauthorized" }, 401);
-
-    const body = await req.json();
-    const { organization_id, app_id, app_secret, system_user_token, business_id } = body;
-    if (!organization_id) {
-      return json({ error: "Missing required fields" }, 400);
-    }
-
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    const body = await req.json().catch(() => ({}));
+    const { organization_id, app_id, app_secret, system_user_token, business_id } = body || {};
+
+    // Os dois caminhos gravam a integração da org (e o sem-token usa a credencial já
+    // guardada dela) → usuário precisa ser membro ATIVO da org.
+    const authz = await authorizeOrgRequest(req, admin, organization_id);
+    if (!authz.ok) {
+      return json({ error: authz.status === 401 ? "Unauthorized" : authz.error }, authz.status);
+    }
+    const authUserId = authz.caller.kind === "user" ? authz.caller.authUserId : null;
+    // Repassado ao discover (fire-and-forget): mesmo chamador, já autorizado acima.
+    const authHeader = req.headers.get("Authorization")!;
+
+    if (!organization_id) {
+      return json({ error: "Missing required fields" }, 400);
+    }
+
     // Sem token manual: ativa Lead Generation pela regra única (resolveOrgMetaToken).
     // Legado = token já salvo no slug meta-lead-ads; canônico quando flag ON ou sem legado.
     if (!system_user_token) {
-      return await connectWithoutManualToken(admin, authHeader, claims.claims.sub, organization_id);
+      return await connectWithoutManualToken(admin, authHeader, authUserId, organization_id);
     }
 
     // Validate token via Meta Graph
@@ -70,11 +69,9 @@ serve(async (req) => {
     if (!integ) return json({ error: "meta-lead-ads not registered" }, 500);
 
     // Find user
-    const { data: user } = await admin
-      .from("users")
-      .select("id")
-      .eq("auth_user_id", claims.claims.sub)
-      .maybeSingle();
+    const { data: user } = authUserId
+      ? await admin.from("users").select("id").eq("auth_user_id", authUserId).maybeSingle()
+      : { data: null };
 
     const enc_token = await encryptSecret(system_user_token);
     const enc_secret = app_secret ? await encryptSecret(app_secret) : null;
@@ -168,18 +165,15 @@ function fireDiscover(authHeader: string, orgIntegrationId: string, organization
 async function connectWithoutManualToken(
   admin: any,
   authHeader: string,
-  authUserId: string,
+  authUserId: string | null,
   organization_id: string,
 ): Promise<Response> {
-  // Este caminho usa a credencial JÁ guardada da org (não um token trazido pelo
-  // chamador) → exige que o usuário seja membro da org (mesmo padrão do meta-connect-discover).
-  const { data: user } = await admin
-    .from("users").select("id").eq("auth_user_id", authUserId).maybeSingle();
-  if (!user) return json({ error: "user_not_found" }, 403);
-  const { data: membership } = await admin
-    .from("user_organizations").select("id")
-    .eq("user_id", user.id).eq("organization_id", organization_id).maybeSingle();
-  if (!membership) return json({ error: "forbidden_org" }, 403);
+  // Este caminho usa a credencial JÁ guardada da org; a membership ATIVA do usuário
+  // já foi exigida no handler (authorizeOrgRequest). Aqui só resolvemos o users.id
+  // p/ connected_by_user_id.
+  const { data: user } = authUserId
+    ? await admin.from("users").select("id").eq("auth_user_id", authUserId).maybeSingle()
+    : { data: null };
 
   const { data: integ } = await admin
     .from("admin_integrations").select("id").eq("slug", "meta-lead-ads").maybeSingle();
