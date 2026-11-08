@@ -102,9 +102,25 @@ Deno.serve(async (req) => {
     return json({ signing_url: l.body.signing_url, expires_at: l.body.expires_at ?? null });
   }
 
-  // Piloto: flag separada libera só novos envios V2, sem trocar o botão V1.
+  // V2 é o padrão: org com a SuvSign conectada (credencial V2) envia pelo V2.
+  // As flags antigas (signing.suvsign_v2 / _pilot) continuam valendo como override.
+  // Org sem credencial V2 (ex.: Viagi) segue no V1.
+  const hasV2Credentials = async (orgId: string) => {
+    const { data } = await admin.from("suvsign_v2_credentials").select("organization_id").eq("organization_id", orgId).is("disconnected_at", null).maybeSingle();
+    return !!data;
+  };
   const v2SendAllowed = async (orgId: string) =>
-    (await featureFlagEnabled(admin, SIGNING_V2_FLAG, orgId)) || (await featureFlagEnabled(admin, SIGNING_V2_PILOT_FLAG, orgId));
+    (await hasV2Credentials(orgId)) || (await featureFlagEnabled(admin, SIGNING_V2_FLAG, orgId)) || (await featureFlagEnabled(admin, SIGNING_V2_PILOT_FLAG, orgId));
+
+  // Registro da integração SuvSign na org (card "Conectado" em Integrações).
+  async function suvsignOrgIntegration(orgId: string) {
+    const { data: integ } = await admin.from("admin_integrations").select("id").eq("slug", "suvsign").maybeSingle();
+    if (!integ) return { integrationId: null as string | null, row: null as Any };
+    const { data: row } = await admin.from("organization_integrations").select("id, config_values, connected_account")
+      .eq("organization_id", orgId).eq("integration_id", integ.id).is("meta_waba_id", null).maybeSingle();
+    return { integrationId: integ.id as string, row };
+  }
+  const hasLegacyV1Config = (row: Any) => !!(row?.config_values && (row.config_values.connector_id || row.config_values.base_url));
 
   try {
     switch (action) {
@@ -112,8 +128,8 @@ Deno.serve(async (req) => {
       case "get_capability": {
         const opp = await loadOpp(body.opportunity_id);
         if (!opp) return fail("not_found", "Oportunidade não encontrada", 404);
-        const enabled = await featureFlagEnabled(admin, SIGNING_V2_FLAG, opp.organization_id);
-        const { data: cred } = await admin.from("suvsign_v2_credentials").select("organization_id").eq("organization_id", opp.organization_id).maybeSingle();
+        const enabled = await v2SendAllowed(opp.organization_id);
+        const cred = await hasV2Credentials(opp.organization_id);
         const { data: requests } = await userDb.from("signature_requests")
           .select("id, status, template_name, provider_operation_id, sent_at, completed_at, cancelled_at, created_at, last_error, provider_documents, signature_request_participants(id, ref, name, email, role, status, opened_at, signed_at, order_index, signing_mode, auto_error)")
           .eq("opportunity_id", opp.id).order("created_at", { ascending: false });
@@ -125,9 +141,13 @@ Deno.serve(async (req) => {
       case "get_credentials_status": {
         const orgId = await currentOrgFromBody();
         if (!orgId || !(await canManage(orgId))) return fail("forbidden", "Sem permissão", 403);
-        const { data } = await admin.from("suvsign_v2_credentials").select("api_key_last4, webhook_secret_ciphertext, base_url, last_test_at, last_test_ok, updated_at").eq("organization_id", orgId).maybeSingle();
-        const enabled = await featureFlagEnabled(admin, SIGNING_V2_FLAG, orgId);
+        const { data } = await admin.from("suvsign_v2_credentials").select("api_key_last4, webhook_secret_ciphertext, base_url, last_test_at, last_test_ok, updated_at, disconnected_at").eq("organization_id", orgId).is("disconnected_at", null).maybeSingle();
+        const enabled = await v2SendAllowed(orgId);
+        const { row } = await suvsignOrgIntegration(orgId);
         return json({
+          account_name: row?.connected_account?.suvsign_account_name ?? null,
+          connected_at: row?.connected_account?.suvsign_v2_connected_at ?? null,
+          legacy_v1: hasLegacyV1Config(row),
           configured: !!data, api_key_masked: data ? `••••${data.api_key_last4 ?? ""}` : null,
           has_webhook_secret: !!data?.webhook_secret_ciphertext, base_url: data?.base_url ?? DEFAULT_V2_BASE,
           last_test_at: data?.last_test_at ?? null, last_test_ok: data?.last_test_ok ?? null, v2_enabled: enabled,
@@ -144,12 +164,72 @@ Deno.serve(async (req) => {
         if (apiKey && apiKey.length > 512) return fail("invalid_api_key", "Chave inválida");
         if (whs && whs.length > 512) return fail("invalid_webhook_secret", "Segredo inválido");
         const patch: Record<string, unknown> = { organization_id: orgId, updated_by: me.id };
-        if (apiKey) { patch.api_key_ciphertext = await encryptSecret(apiKey); patch.api_key_last4 = apiKey.slice(-4); patch.last_test_at = null; patch.last_test_ok = null; }
+        if (apiKey) { patch.disconnected_at = null; patch.api_key_ciphertext = await encryptSecret(apiKey); patch.api_key_last4 = apiKey.slice(-4); patch.last_test_at = null; patch.last_test_ok = null; }
         if (whs) patch.webhook_secret_ciphertext = await encryptSecret(whs);
         const { error } = existing
           ? await admin.from("suvsign_v2_credentials").update(patch).eq("organization_id", orgId)
           : await admin.from("suvsign_v2_credentials").insert(patch);
         if (error) throw error;
+        return json({ ok: true });
+      }
+      // Conectar em 1 passo: só a chave. O Seialz gera o segredo do webhook e a
+      // SuvSign registra o webhook + liga a regra live da conta (api-v2 connect).
+      case "connect": {
+        const orgId = await currentOrgFromBody();
+        if (!orgId || !(await canManage(orgId))) return fail("forbidden", "Sem permissão", 403);
+        const apiKey = typeof body.api_key === "string" ? body.api_key.trim() : "";
+        if (!apiKey || apiKey.length > 512) return fail("api_key_required", "Cole a chave da sua conta SuvSign");
+        const secretBytes = crypto.getRandomValues(new Uint8Array(32));
+        const webhookSecret = Array.from(secretBytes, (b) => b.toString(16).padStart(2, "0")).join("");
+        const creds = { apiKey, webhookSecret, baseUrl: DEFAULT_V2_BASE };
+        const c = await suvsignFetch(creds, "api-v2", "/integrations/seialz/connect", {
+          method: "POST", body: JSON.stringify({ webhook_url: `${url}/functions/v1/suvsign-v2-webhook`, webhook_secret: webhookSecret }),
+        });
+        if (c.status === 401) return fail("invalid_api_key", "Essa chave não foi aceita pela SuvSign. Confira se copiou a chave inteira.", 400);
+        if (!c.ok) return fail("provider_error", "Não foi possível conectar com a SuvSign agora. Tente de novo em instantes.", 502, { provider_status: c.status });
+        const t = await suvsignFetch(creds, "api-handler", "/templates", { method: "GET" });
+        const now = new Date().toISOString();
+        const patch = {
+          organization_id: orgId, updated_by: me.id, base_url: DEFAULT_V2_BASE,
+          api_key_ciphertext: await encryptSecret(apiKey), api_key_last4: apiKey.slice(-4),
+          webhook_secret_ciphertext: await encryptSecret(webhookSecret), last_test_at: now, last_test_ok: t.ok, disconnected_at: null,
+        };
+        const { error } = await admin.from("suvsign_v2_credentials").upsert(patch, { onConflict: "organization_id" });
+        if (error) throw error;
+        const accountName = typeof c.body?.account_name === "string" ? c.body.account_name : null;
+        const { integrationId, row } = await suvsignOrgIntegration(orgId);
+        if (integrationId) {
+          const connected_account = { ...(row?.connected_account ?? {}), engine: "v2", suvsign_account_name: accountName, suvsign_v2_connected_at: now };
+          const { error: oiErr } = row
+            ? await admin.from("organization_integrations").update({ connected_account, is_enabled: true, updated_at: now }).eq("id", row.id)
+            : await admin.from("organization_integrations").insert({
+              organization_id: orgId, integration_id: integrationId, is_enabled: true, connected_account, config_values: {},
+              connected_at: now, connected_by_user_id: me.id, display_name: accountName,
+            });
+          if (oiErr) console.error("[signature-requests] org integration upsert", oiErr.code);
+        }
+        return json({ ok: true, account_name: accountName, templates: t.ok ? (t.body?.templates?.length ?? 0) : null });
+      }
+      case "disconnect": {
+        const orgId = await currentOrgFromBody();
+        if (!orgId || !(await canManage(orgId))) return fail("forbidden", "Sem permissão", 403);
+        const creds = await loadV2Credentials(admin, orgId);
+        if (creds) {
+          const d = await suvsignFetch(creds, "api-v2", "/integrations/seialz/disconnect", { method: "POST" });
+          if (!d.ok) console.error("[signature-requests] provider disconnect", d.status);
+        }
+        // Não apaga: operações já enviadas seguem recebendo eventos e podem ser canceladas/baixadas.
+        const { error } = await admin.from("suvsign_v2_credentials").update({ disconnected_at: new Date().toISOString(), updated_by: me.id }).eq("organization_id", orgId);
+        if (error) throw error;
+        const { row } = await suvsignOrgIntegration(orgId);
+        if (row) {
+          if (hasLegacyV1Config(row)) {
+            const { engine: _e, suvsign_account_name: _n, suvsign_v2_connected_at: _c, ...rest } = row.connected_account ?? {};
+            await admin.from("organization_integrations").update({ connected_account: rest }).eq("id", row.id);
+          } else {
+            await admin.from("organization_integrations").delete().eq("id", row.id);
+          }
+        }
         return json({ ok: true });
       }
       case "test_connection": {

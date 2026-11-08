@@ -90,15 +90,15 @@ export function SuvSignV2TemplateTypesCard({ organizationId }: { organizationId:
   return (
     <Card className="mt-4">
       <CardHeader>
-        <CardTitle className="text-base">Tipos de documento dos modelos</CardTitle>
+        <CardTitle className="text-base">Onde cada contrato assinado é guardado</CardTitle>
         <CardDescription>
-          Quando um documento deste modelo for assinado, ele entra no CRM com o tipo escolhido e conta para os documentos exigidos para fechar.
+          Escolha o tipo de documento de cada modelo. Quando o contrato for assinado, ele entra na oportunidade com esse tipo e já conta nos documentos exigidos para fechar.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         {templates.isLoading && <p className="text-sm text-muted-foreground">Carregando modelos...</p>}
         {templates.error && <p className="text-sm text-muted-foreground">{(templates.error as Error).message}</p>}
-        {templates.data?.templates.length === 0 && <p className="text-sm text-muted-foreground">Nenhum modelo na conta SuvSign.</p>}
+        {templates.data?.templates.length === 0 && <p className="text-sm text-muted-foreground">Nenhum modelo encontrado na sua conta SuvSign. Crie um modelo lá e ele aparece aqui.</p>}
         {templates.data?.templates.map((tpl) => (
           <div key={tpl.id} className="flex items-center justify-between gap-4 border-b border-border py-2 last:border-0">
             <span className="text-sm">{tpl.name}</span>

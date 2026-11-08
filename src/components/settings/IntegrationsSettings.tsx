@@ -19,6 +19,7 @@ import {
 } from '@phosphor-icons/react';
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
+import { SuvSignDialog } from '@/components/integrations/suvsign/SuvSignDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
 import { TelephonyAvailabilitySettings } from './TelephonyAvailabilitySettings';
 import { KommoMigrationDialog } from './KommoMigrationDialog';
@@ -79,6 +80,8 @@ export function IntegrationsSettings() {
   const { data: aiProviderMap = {} } = useAIProviders(organization?.id);
   const [selectedIntegration, setSelectedIntegration] = useState<any>(null);
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
+  // SuvSign: tela própria; a configuração antiga (V1) só abre a pedido (ex.: Viagi).
+  const [suvsignLegacyOpen, setSuvsignLegacyOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedOrgIntegration, setSelectedOrgIntegration] = useState<any>(null);
   const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
@@ -640,7 +643,7 @@ export function IntegrationsSettings() {
 
       </div>
 
-      {selectedIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud', 'evolution-whatsapp'].includes(selectedIntegration.slug) && (
+      {selectedIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud', 'evolution-whatsapp', 'suvsign'].includes(selectedIntegration.slug) && (
         <IntegrationConnectDialog
           open={connectDialogOpen}
           onOpenChange={setConnectDialogOpen}
@@ -648,16 +651,29 @@ export function IntegrationsSettings() {
         />
       )}
 
-      {selectedIntegration && selectedOrgIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud', 'evolution-whatsapp'].includes(selectedIntegration.slug) && (
+      {selectedIntegration?.slug === 'suvsign' && (
+        <SuvSignDialog
+          open={(detailDialogOpen || connectDialogOpen) && !suvsignLegacyOpen}
+          onOpenChange={(o) => {
+            if (!o) {
+              setDetailDialogOpen(false);
+              setConnectDialogOpen(false);
+            }
+          }}
+          integration={selectedIntegration}
+          onOpenLegacy={selectedOrgIntegration ? () => setSuvsignLegacyOpen(true) : undefined}
+        />
+      )}
+
+      {selectedIntegration && selectedOrgIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud', 'evolution-whatsapp'].includes(selectedIntegration.slug) && (selectedIntegration.slug !== 'suvsign' || suvsignLegacyOpen) && (
         <IntegrationDetailDialog
-          open={detailDialogOpen}
-          onOpenChange={setDetailDialogOpen}
+          open={selectedIntegration.slug === 'suvsign' ? suvsignLegacyOpen : detailDialogOpen}
+          onOpenChange={selectedIntegration.slug === 'suvsign' ? setSuvsignLegacyOpen : setDetailDialogOpen}
           integration={selectedIntegration}
           orgIntegration={selectedOrgIntegration}
           onDisconnect={() => handleDisconnectClick(selectedOrgIntegration.id)}
           onReconfigure={handleReconfigure}
           onConfigUpdated={() => queryClient.invalidateQueries({ queryKey: ['organization-integrations', organization?.id] })}
-          canManageSuvSignV2={!!canManageAI}
           onOpenMigration={selectedIntegration?.slug === 'kommo' ? () => {
             setDetailDialogOpen(false);
             setKommoMigrationOpen(true);
