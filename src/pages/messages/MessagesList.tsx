@@ -275,9 +275,14 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   lastMessageStatus?: string | null;
   /** Lista recolhida em trilho: só avatar (nome no title) + bolinha de não lida. */
   rail?: boolean;
+  /**
+   * Org com agente de IA ligado. Sem IA, os webhooks marcam needs_human_attention em
+   * todo inbound (o selo não diz nada) — então só mostramos o aviso com IA ligada.
+   */
+  aiEnabled?: boolean;
 }
 
-const ChatListItem = ({ value, locale, className, rail = false, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = false, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -357,12 +362,16 @@ const ChatListItem = ({ value, locale, className, rail = false, onHide, endpoint
           <span className={cn('text-[10px] font-medium shrink-0', status.color)}>
             {locale === 'pt-BR' ? status.label : status.labelEn}
           </span>
-          {value.needs_human_attention && (
+          {/* IA passou pra humano e ninguém assumiu ainda (só com agente de IA ligado). */}
+          {aiEnabled && value.needs_human_attention && !value.assigned_user_id && (
             <>
               <span className="text-[10px] text-muted-foreground/60 shrink-0">·</span>
-              <span className="inline-flex items-center gap-1 shrink-0 text-destructive">
-                <WarningCircle className="h-3 w-3" />
-                <span className="text-[10px] font-medium">Atenção</span>
+              <span
+                className="inline-flex items-center gap-1 shrink-0 text-destructive"
+                title={locale === 'pt-BR' ? 'O agente de IA passou a conversa para um humano e ninguém assumiu ainda' : 'The AI agent handed this conversation to a human and nobody has taken it yet'}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                <span className="text-[10px] font-medium">{locale === 'pt-BR' ? 'Pediu humano' : 'Needs human'}</span>
               </span>
             </>
           )}
@@ -1325,14 +1334,9 @@ function DesktopMessagesList() {
       // Marcos históricos do CRM (somente leitura, escopo da thread).
       // Puramente apresentacional: não altera mensagens, envio ou realtime.
       try {
+        // "Conversa criada" saiu: o cabeçalho do bloco (canal · número) já marca o início,
+        // numa linha só e discreta, no estilo da data do WhatsApp.
         const events: TimelineEvent[] = [];
-        if (thread?.created_at) {
-          events.push({
-            id: `created-${threadId}`,
-            occurred_at: thread.created_at,
-            label: locale === 'pt-BR' ? 'Conversa criada' : 'Conversation created',
-          });
-        }
         const { data: assignments } = await supabase
           .from('thread_assignment_history')
           .select('id, action_type, from_user_id, to_user_id, performed_by_user_id, created_at, from_user:from_user_id(full_name), to_user:to_user_id(full_name), performed_by:performed_by_user_id(full_name)')
@@ -2157,6 +2161,7 @@ function DesktopMessagesList() {
                         key={thread.id}
                         value={thread}
                         rail={listRail}
+                        aiEnabled={!!hasAIAgent}
                         locale={locale as 'pt-BR' | 'en-US'}
                         onHide={handleHideThread}
                         /* Badge visual: última mensagem -> primary_endpoint_id.
@@ -2570,20 +2575,11 @@ function DesktopMessagesList() {
                                     ? `WhatsApp • ${providerShort}`
                                     : 'WhatsApp';
                                 blockHeader = (
-                                  <div className="pb-0">
-                                    <div className="flex items-center justify-center gap-1.5 text-[11px] leading-4">
-                                      <span className="font-medium text-foreground">{channelLine}</span>
-                                      {epAddress && (
-                                        <>
-                                          <span className="text-muted-foreground/50">•</span>
-                                          <span className="font-data text-muted-foreground">
-                                            {formatPhoneDisplay(epAddress)}
-                                          </span>
-                                        </>
-                                      )}
-                                    </div>
-                                    <div className="h-px bg-border/70 mt-1.5 mb-2" />
-                                  </div>
+                                  <TimelineEventMarker
+                                    label={channelLine}
+                                    value={epAddress ? formatPhoneDisplay(epAddress) : undefined}
+                                    className="my-1.5"
+                                  />
                                 );
 
                               }
