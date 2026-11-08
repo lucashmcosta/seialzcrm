@@ -245,3 +245,27 @@ verify_jwt = false
 # Cotação Plamev (widget plamev_quote). JWT validado em código + org em PLAMEV_ORG_IDS.
 [functions.plamev-quote]
 verify_jwt = false
+
+[functions.backfill-attribution]
+verify_jwt = true
+
+[functions.ct-backfill-once]
+verify_jwt = true
+
+[functions.fix-orphan-opportunities]
+verify_jwt = true
+
+[functions.kommo-fix-owners]
+verify_jwt = true
+
+[functions.viagi-staging-loader]
+verify_jwt = true
+
+[functions.meta-lead-ads-recovery-viagi]
+verify_jwt = true
+
+[functions.meta-lead-ads-viagi-token-probe]
+verify_jwt = true
+
+[functions.meta-lead-ads-backfill-viagi]
+verify_jwt = true
