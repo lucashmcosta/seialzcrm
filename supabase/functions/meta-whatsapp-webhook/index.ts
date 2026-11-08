@@ -19,6 +19,7 @@ import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
 import { salesCanonicalInboundEnabled } from "../_shared/sales-canonical-gate.ts";
 import { resolveInboundSuggestedAssignee } from "../_shared/inbound-assignee.ts";
 import { autoCreateInboundOpportunity, type OpportunityTrigger } from "../_shared/inbound-opportunity.ts";
+import { buildReferralContactUpdate, type CtwaReferral, parseCloudApiReferral } from "../_shared/ctwa-referral.ts";
 
 import {
   resolveVerifyTokenForOi,
@@ -564,29 +565,12 @@ async function findOrCreateContact(
 async function saveReferralFields(
   supabase: any,
   contactId: string,
-  ref: {
-    source_url: string | null;
-    source_id: string | null;
-    source_type: string | null;
-    headline: string | null;
-    body: string | null;
-    media_url: string | null;
-    ctwa_clid: string | null;
-  },
+  ref: CtwaReferral,
 ): Promise<void> {
-  const { error } = await supabase.from("contacts").update({
-    ad_referral_source_url: ref.source_url,
-    ad_referral_headline: ref.headline,
-    ad_referral_body: ref.body,
-    ad_referral_media_url: ref.media_url,
-    ad_referral_source_id: ref.source_id,
-    ad_referral_source_type: ref.source_type,
-    ad_referral_ctwa_clid: ref.ctwa_clid,
-    ad_referral_captured_at: new Date().toISOString(),
-    source: "ctwa",
-    utm_source: "meta_ads",
-    utm_medium: "ctwa",
-  } as any).eq("id", contactId);
+  // Referral sem ctwa_clid (ex.: source_url wa.me) não apaga clid já capturado.
+  const { error } = await supabase.from("contacts")
+    .update(buildReferralContactUpdate(ref, new Date().toISOString()) as any)
+    .eq("id", contactId);
   if (error) {
     console.error("[meta-wa-webhook] referral save error", error);
   } else {
@@ -735,20 +719,8 @@ async function handleInbound(
   }));
 
   // 2) Parse CTWA referral
-  const ref = msg?.referral;
-  const referral = ref ? {
-    source_url: ref.source_url ?? null,
-    source_id: ref.source_id ?? null,
-    source_type: ref.source_type ?? null,
-    headline: ref.headline ?? null,
-    body: ref.body ?? null,
-    media_url: ref.image_url ?? ref.video_url ?? ref.thumbnail_url ?? null,
-    ctwa_clid: ref.ctwa_clid ?? null,
-  } : null;
-  const hasReferral = !!(referral && (
-    referral.source_url || referral.source_id || referral.ctwa_clid ||
-    referral.headline || referral.body
-  ));
+  const referral = parseCloudApiReferral(msg);
+  const hasReferral = !!referral;
   if (hasReferral) {
     console.log("[meta-wa-webhook] CTWA referral detected", JSON.stringify({
       has_source_id: !!referral!.source_id,

@@ -781,7 +781,8 @@ serve(async (req) => {
           ad_referral_media_url: referralMediaUrl,
           ad_referral_source_id: referralSourceId,
           ad_referral_source_type: referralSourceType,
-          ad_referral_ctwa_clid: referralCtwaClid,
+          // Referral sem clid não apaga clid já capturado (ver _shared/ctwa-referral.ts).
+          ...(referralCtwaClid ? { ad_referral_ctwa_clid: referralCtwaClid } : {}),
           ad_referral_captured_at: new Date().toISOString(),
           source: 'ctwa',
           utm_source: 'meta_ads',
