@@ -2164,17 +2164,19 @@ function DesktopMessagesList() {
                         size="sm"
                         className="hidden lg:inline-flex"
                         onClick={() => setFichaOpen((v) => !v)}
-                        title={locale === 'pt-BR' ? (fichaOpen ? 'Fechar ficha' : 'Abrir ficha do contato') : (fichaOpen ? 'Close profile panel' : 'Open contact panel')}
+                        title={locale === 'pt-BR' ? (fichaOpen ? 'Fechar atalhos' : 'Abrir atalhos') : (fichaOpen ? 'Close shortcuts' : 'Open shortcuts')}
                         aria-pressed={fichaOpen}
                       >
                         <IdentificationCard className="w-4 h-4 xl:mr-1" />
-                        <span className="hidden xl:inline">{locale === 'pt-BR' ? 'Ficha' : 'Profile'}</span>
+                        <span className="hidden xl:inline">{locale === 'pt-BR' ? 'Atalhos' : 'Shortcuts'}</span>
                       </Button>
                       {organization?.id && (
                         <WidgetsTrigger screen="commercial" context={{ screen: 'commercial', organizationId: organization.id, threadId: selectedThread.id, contactId: selectedThread.contact_id ?? null }} />
                       )}
 
 
+                      {/* Menu Ações só abaixo de 1024px; a partir daí tudo está no painel Atalhos. */}
+                      <div className="lg:hidden">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="outline" size="sm" title={locale === 'pt-BR' ? 'Ações' : 'Actions'}>
@@ -2270,6 +2272,7 @@ function DesktopMessagesList() {
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
+                      </div>
                     </>
                   }
                 />
@@ -3210,6 +3213,22 @@ function DesktopMessagesList() {
             onMoveStage={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) { setMoveStageTargetId(o.pipeline_stage_id); setMoveStageOpp(o); } }}
             onOpportunityUpdated={(id, patch) => setContactOpportunities((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))}
             onAddNote={addConversationNote}
+            conversation={{
+              status: selectedThread.status,
+              assignedUserId: selectedThread.assigned_user_id ?? null,
+              isAssignedToMe: !!selectedThread.assigned_user_id && selectedThread.assigned_user_id === userProfile?.id,
+              canAssign: threadPerms.canAssign,
+              canClose: threadPerms.canClose,
+              denyAssignReason: DENY_ASSIGN,
+              denyCloseReason: DENY_CLOSE,
+              showReturnToAI: !!selectedThread.needs_human_attention && !!hasAIAgent,
+              onTakeOver: () => handleTakeOver(selectedThread.id),
+              onAssign: (userId) => handleAssign(selectedThread.id, userId),
+              onResolve: () => handleResolve(selectedThread.id),
+              onReopen: () => handleReopen(selectedThread.id),
+              onReturnToAI: () => handleReturnToAI(selectedThread.id),
+              onHide: () => handleHideThread(selectedThread.id),
+            }}
           />
         )}
       </div>

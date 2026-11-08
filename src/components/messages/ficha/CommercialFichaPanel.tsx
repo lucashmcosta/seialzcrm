@@ -1,4 +1,5 @@
-// Ficha lateral do Comercial: tudo do contato da conversa aberta, sem sair do chat.
+// Painel Atalhos do Comercial (componente CommercialFichaPanel): tudo da conversa e do
+// contato aberto, sem sair do chat. Substitui o menu "Ações" do cabeçalho em telas ≥ 1024px.
 // Duas visões no mesmo painel:
 //  - resumo: edição rápida (nome, e-mail, CPF) + campos personalizados;
 //  - completo: o MESMO formulário da tela de contato (ContactFormView embedded),
@@ -15,6 +16,7 @@ import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { ContactQuickEdit } from './ContactQuickEdit';
 import { OpportunitySection, type FichaOpp } from './OpportunitySection';
 import { NoteQuickAdd } from './NoteQuickAdd';
+import { ConversationActions, type ConversationActionsProps } from './ConversationActions';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 
 type View = 'summary' | 'full';
@@ -31,6 +33,7 @@ export function CommercialFichaPanel({
   onMoveStage,
   onOpportunityUpdated,
   onAddNote,
+  conversation,
 }: {
   open: boolean;
   contactId: string | null | undefined;
@@ -43,6 +46,7 @@ export function CommercialFichaPanel({
   onMoveStage: (opp: FichaOpp) => void;
   onOpportunityUpdated: (id: string, patch: Partial<FichaOpp>) => void;
   onAddNote: (text: string) => Promise<boolean>;
+  conversation: ConversationActionsProps;
 }) {
   useUiLocale();
   const { permissions } = usePermissions();
@@ -84,28 +88,32 @@ export function CommercialFichaPanel({
                 </button>
               )}
               <h2 className="text-sm font-semibold truncate">
-                {view === 'full' ? uiText('Cadastro completo') : uiText('Ficha')}
+                {view === 'full' ? uiText('Cadastro completo') : uiText('Atalhos')}
               </h2>
             </div>
             <button
               type="button"
               onClick={onClose}
               className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label={uiText('Fechar ficha')}
-              title={uiText('Fechar ficha')}
+              aria-label={uiText('Fechar atalhos')}
+              title={uiText('Fechar atalhos')}
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
           {!contactId ? (
-            <p className="px-4 py-5 text-xs text-muted-foreground">{uiText('Esta conversa não tem contato vinculado.')}</p>
+            <div className="px-4 py-5 space-y-6">
+              <ConversationActions {...conversation} />
+              <p className="text-xs text-muted-foreground">{uiText('Esta conversa não tem contato vinculado.')}</p>
+            </div>
           ) : view === 'full' ? (
             <div className="px-4 py-5">
               <ContactFormView key={`full-${contactId}`} contactId={contactId} embedded onDone={backFromFull} />
             </div>
           ) : (
             <div className="px-4 py-5 space-y-6">
+              <ConversationActions {...conversation} />
               <ContactQuickEdit
                 key={contactId}
                 contactId={contactId}
@@ -115,6 +123,7 @@ export function CommercialFichaPanel({
               />
               <CustomFieldsCard key={`cf-${contactId}`} module="contacts" recordId={contactId} title={uiText('Campos personalizados')} compact />
               <OpportunitySection
+                contactId={contactId}
                 opportunities={opportunities}
                 stages={stages}
                 canEdit={permissions.canEditOpportunities}

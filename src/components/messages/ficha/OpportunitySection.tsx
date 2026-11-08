@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { CustomFieldsCard } from '@/components/custom-fields/CustomFieldsCard';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
+import { ContractSignatureEntry } from '@/components/signature/ContractSignatureEntry';
 
 export type FichaOpp = {
   id: string;
@@ -25,6 +26,7 @@ export type FichaOpp = {
 };
 
 export function OpportunitySection({
+  contactId,
   opportunities,
   stages,
   canEdit,
@@ -33,6 +35,7 @@ export function OpportunitySection({
   onMoveStage,
   onUpdated,
 }: {
+  contactId: string;
   opportunities: FichaOpp[];
   stages: Array<{ id: string; name: string }>;
   canEdit: boolean;
@@ -53,6 +56,7 @@ export function OpportunitySection({
           <OpportunityCard
             key={opp.id}
             opp={opp}
+            contactId={contactId}
             stageName={stages.find((s) => s.id === opp.pipeline_stage_id)?.name ?? '—'}
             canEdit={canEdit}
             onWon={() => onWon(opp)}
@@ -68,6 +72,7 @@ export function OpportunitySection({
 
 function OpportunityCard({
   opp,
+  contactId,
   stageName,
   canEdit,
   onWon,
@@ -76,6 +81,7 @@ function OpportunityCard({
   onUpdated,
 }: {
   opp: FichaOpp;
+  contactId: string;
   stageName: string;
   canEdit: boolean;
   onWon: () => void;
@@ -169,6 +175,14 @@ function OpportunityCard({
           <Button type="button" variant="outline" size="sm" className="px-1 text-xs" onClick={onMoveStage}>
             <ArrowsLeftRight className="h-3.5 w-3.5 mr-1" />{uiText('Etapa')}
           </Button>
+        </div>
+      )}
+
+      {/* Gerador de contrato: mesmo botão da tela da oportunidade. Só aparece para
+          orgs com a SuvSign conectada (V2) ou com a integração antiga (V1). */}
+      {canEdit && contactId && (
+        <div className="flex flex-wrap gap-1.5 [&_button]:text-xs">
+          <ContractSignatureEntry contactId={contactId} opportunityId={opp.id} size="sm" />
         </div>
       )}
 
