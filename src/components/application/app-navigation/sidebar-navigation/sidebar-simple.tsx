@@ -1,9 +1,7 @@
 import type { ReactNode } from "react";
-import { CaretDoubleLeft, CaretDoubleRight } from "@phosphor-icons/react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { uiText } from "@/lib/ui-locale";
 import type { NavItemType, SidebarNavigationProps } from "../config";
 import { SidebarNavItem } from "./sidebar-nav-item";
 import { SidebarNavGroup } from "./sidebar-nav-group";
@@ -15,7 +13,6 @@ export const SidebarNavigationSimple = ({
   logo,
   userSection,
   collapsed = false,
-  onToggleCollapsed,
   collapsedLogo,
   collapsedUserSection,
 }: SidebarNavigationProps) => {
@@ -36,20 +33,6 @@ export const SidebarNavigationSimple = ({
       {(collapsed ? collapsedLogo : logo) && (
         <div className={cn("flex py-5 items-center justify-center", collapsed ? "px-2" : "px-4")}>
           {collapsed ? collapsedLogo : logo}
-        </div>
-      )}
-      {onToggleCollapsed && (
-        <div className={cn("flex px-3", collapsed ? "justify-center" : "justify-end")}>
-          <button
-            type="button"
-            onClick={onToggleCollapsed}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-            title={collapsed ? uiText("Expandir menu") : uiText("Recolher menu")}
-            aria-label={collapsed ? uiText("Expandir menu") : uiText("Recolher menu")}
-            aria-expanded={!collapsed}
-          >
-            {collapsed ? <CaretDoubleRight size={16} /> : <CaretDoubleLeft size={16} />}
-          </button>
         </div>
       )}
 

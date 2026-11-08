@@ -16,7 +16,6 @@ export interface SidebarNavigationProps {
   userSection?: ReactNode;
   /** Modo recolhido: só ícones (64px), nome no title/hover. */
   collapsed?: boolean;
-  onToggleCollapsed?: () => void;
   collapsedLogo?: ReactNode;
   collapsedUserSection?: ReactNode;
 }

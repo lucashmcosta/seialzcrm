@@ -20,6 +20,8 @@ import {
   Headset,
   ChatsCircle,
   DeviceMobile,
+  CaretDoubleLeft,
+  CaretDoubleRight,
 } from '@phosphor-icons/react';
 import { useClientPortalChatFlag } from '@/hooks/useClientPortalChatFlag';
 import { useClientPortalUnreadCount } from '@/hooks/useClientPortalUnreadCount';
@@ -270,6 +272,9 @@ export function Layout({ children }: LayoutProps) {
       <Button variant="ghost" size="icon" onClick={signOut} title={t('auth.signOut')} aria-label={t('auth.signOut')} className="h-8 w-8">
         <SignOut size={16} weight="light" />
       </Button>
+      <Button variant="ghost" size="icon" onClick={() => setNavCollapsed(false)} title={uiText('Expandir menu')} aria-label={uiText('Expandir menu')} aria-expanded={false} className="h-8 w-8">
+        <CaretDoubleRight size={16} />
+      </Button>
     </div>
   );
 
@@ -304,15 +309,28 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </div>
       </Link>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={signOut}
-        className="w-full"
-      >
-        <SignOut size={16} weight="light" className="mr-2" />
-        {t('auth.signOut')}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={signOut}
+          className="flex-1"
+        >
+          <SignOut size={16} weight="light" className="mr-2" />
+          {t('auth.signOut')}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setNavCollapsed(true)}
+          title={uiText('Recolher menu')}
+          aria-label={uiText('Recolher menu')}
+          aria-expanded
+          className="px-2"
+        >
+          <CaretDoubleLeft size={16} />
+        </Button>
+      </div>
     </div>
   );
 
@@ -329,7 +347,6 @@ export function Layout({ children }: LayoutProps) {
             logo={logoSection}
             userSection={userSection}
             collapsed={navCollapsed}
-            onToggleCollapsed={() => setNavCollapsed((v) => !v)}
             collapsedLogo={collapsedLogo}
             collapsedUserSection={collapsedUserSection}
           />
