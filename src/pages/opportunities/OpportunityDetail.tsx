@@ -40,6 +40,7 @@ import { TagSelector } from '@/components/common/TagSelector';
 import { NammuxOpportunityTab } from '@/components/opportunities/NammuxOpportunityTab';
 import { ProcessClassificationSlot } from '@/components/process-classification/ProcessClassificationSlot';
 import { EmpresaDoCasoSlot } from '@/components/opportunities/EmpresaDoCasoSlot';
+import { CustomFieldsCard } from '@/components/custom-fields/CustomFieldsCard';
 import { WidgetsTrigger } from '@/widgets/WidgetsTrigger';
 
 interface Opportunity {
@@ -402,6 +403,7 @@ export default function OpportunityDetail() {
               <EmpresaDoCasoSlot opportunityId={opportunity.id} contactId={opportunity.contact_id} />
               <ProcessClassificationSlot opportunityId={opportunity.id} />
               <CommercialAttributionPanel key={opportunity.id} entityType="opportunity" entityId={opportunity.id} contactId={opportunity.contact_id} />
+              <CustomFieldsCard module="opportunities" recordId={opportunity.id} />
               <Card>
                 <CardContent className="pt-6 space-y-4">
                   <div>
@@ -685,6 +687,7 @@ export default function OpportunityDetail() {
               <EmpresaDoCasoSlot opportunityId={opportunity.id} contactId={opportunity.contact_id} />
               <ProcessClassificationSlot opportunityId={opportunity.id} />
               <CommercialAttributionPanel key={opportunity.id} entityType="opportunity" entityId={opportunity.id} contactId={opportunity.contact_id} />
+              <CustomFieldsCard module="opportunities" recordId={opportunity.id} />
               <Card>
                 <CardContent className="pt-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
