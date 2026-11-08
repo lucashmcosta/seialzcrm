@@ -27,7 +27,7 @@ import {
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { getUiLocale, uiDateLocale, uiText, useUiLocale } from "@/lib/ui-locale";
 
 interface Props {
   open: boolean;
@@ -76,7 +76,7 @@ async function invokeAuthenticatedFunction(functionName: string, body: Record<st
     error: sessionError,
   } = await supabase.auth.getSession();
   if (sessionError || !session?.access_token) {
-    throw new Error("Sua sessão expirou. Entre novamente antes de configurar a integração.");
+    throw new Error(uiText("Sua sessão expirou. Entre novamente antes de configurar a integração."));
   }
   // Sem header manual: o supabase-js anexa o access token já renovado automaticamente.
   return supabase.functions.invoke(functionName, { body });
@@ -115,18 +115,19 @@ async function functionFailureMessage(
 
 const jobStatusBadge = (s: string) => {
   const map: Record<string, { label: string; cls: string }> = {
-    success: { label: "Sucesso", cls: "bg-green-600 text-white" },
-    pending: { label: "Pendente", cls: "bg-muted text-foreground" },
-    running: { label: "Em execução", cls: "bg-blue-600 text-white" },
-    retrying: { label: "Em retry", cls: "bg-amber-500 text-white" },
-    failed: { label: "Falhou", cls: "bg-destructive text-destructive-foreground" },
-    permanent_failure: { label: "Falha permanente", cls: "bg-destructive text-destructive-foreground" },
+    success: { label: uiText("Sucesso"), cls: "bg-green-600 text-white" },
+    pending: { label: uiText("Pendente"), cls: "bg-muted text-foreground" },
+    running: { label: uiText("Em execução"), cls: "bg-blue-600 text-white" },
+    retrying: { label: uiText("Em retry"), cls: "bg-amber-500 text-white" },
+    failed: { label: uiText("Falhou"), cls: "bg-destructive text-destructive-foreground" },
+    permanent_failure: { label: uiText("Falha permanente"), cls: "bg-destructive text-destructive-foreground" },
   };
   const m = map[s] || { label: s, cls: "bg-muted text-foreground" };
   return <Badge className={`text-[10px] ${m.cls}`}>{m.label}</Badge>;
 };
 
 export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: initialOrgIntegration }: Props) {
+  useUiLocale();
   const { organization } = useOrganization();
   const qc = useQueryClient();
 
@@ -155,10 +156,10 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
     try {
       await navigator.clipboard.writeText(value);
       setCopied(key);
-      toast.success("Copiado");
+      toast.success(uiText("Copiado"));
       setTimeout(() => setCopied(null), 2000);
     } catch {
-      toast.error("Falha ao copiar");
+      toast.error(uiText("Falha ao copiar"));
     }
   };
 
@@ -189,7 +190,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
       });
       if (error) {
         throw new Error(
-          await functionFailureMessage(error, data, "Falha ao consultar a credencial"),
+          await functionFailureMessage(error, data, uiText("Falha ao consultar a credencial")),
         );
       }
       return data as {
@@ -280,23 +281,23 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!organization || !integration) throw new Error("Sem organização");
+      if (!organization || !integration) throw new Error(uiText("Sem organização"));
       const url = form.webhook_url.trim();
       if (form.enabled && url && !/^https:\/\//i.test(url)) {
-        throw new Error("Webhook URL deve usar HTTPS");
+        throw new Error(uiText("Webhook URL deve usar HTTPS"));
       }
       let contactFieldMapping: Record<string, string>;
       try {
         contactFieldMapping = JSON.parse(mappingJson || "{}") as Record<string, string>;
       } catch {
-        throw new Error("O mapeamento de campos personalizados não é um JSON válido.");
+        throw new Error(uiText("O mapeamento de campos personalizados não é um JSON válido."));
       }
       if (
         !contactFieldMapping ||
         Array.isArray(contactFieldMapping) ||
         Object.values(contactFieldMapping).some((value) => typeof value !== "string")
       ) {
-        throw new Error("O mapeamento deve ser um objeto: campo_seialz → campo_nammux.");
+        throw new Error(uiText("O mapeamento deve ser um objeto: campo_seialz → campo_nammux."));
       }
       const config_values = {
         webhook_url: url,
@@ -333,7 +334,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
           internalUserId = internal?.id ?? null;
         }
         if (!internalUserId) {
-          throw new Error("Usuário interno não encontrado para esta conta.");
+          throw new Error(uiText("Usuário interno não encontrado para esta conta."));
         }
         const { error } = await supabase.from("organization_integrations").insert({
           organization_id: organization.id,
@@ -356,7 +357,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
         });
         if (error || !data?.ok) {
           throw new Error(
-            await functionFailureMessage(error, data, "Falha ao salvar credencial"),
+            await functionFailureMessage(error, data, uiText("Falha ao salvar credencial")),
           );
         }
         setIssuedCredential({ key_id: data.key_id, secret });
@@ -365,12 +366,12 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
       }
     },
     onSuccess: () => {
-      toast.success("Configuração salva!");
+      toast.success(uiText("Configuração salva!"));
       qc.invalidateQueries({ queryKey: ["org-integration", "nammux"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       refetchCredentialStatus();
     },
-    onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
+    onError: (e: any) => toast.error(e.message || uiText("Erro ao salvar")),
   });
 
   const disconnect = useMutation({
@@ -383,12 +384,12 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Nammux desconectado");
+      toast.success(uiText("Nammux desconectado"));
       qc.invalidateQueries({ queryKey: ["org-integration", "nammux"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       setDisconnectOpen(false);
     },
-    onError: (e: any) => toast.error(e.message || "Erro ao desconectar"),
+    onError: (e: any) => toast.error(e.message || uiText("Erro ao desconectar")),
   });
 
   const handleSave = async () => {
@@ -406,7 +407,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
     setIssuedCredential(null);
     setForm((current) => ({ ...current, webhook_secret: draft.secret }));
     setShowSecret(true);
-    toast.success("Credencial segura gerada. Salve para ativá-la.");
+    toast.success(uiText("Credencial segura gerada. Salve para ativá-la."));
   };
 
   const copyCredentialPackage = () => {
@@ -441,14 +442,14 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
         organization_id: organization.id,
       });
       if (error) {
-        throw new Error(await functionFailureMessage(error, data, "Falha no teste"));
+        throw new Error(await functionFailureMessage(error, data, uiText("Falha no teste")));
       }
       setTestResult(data);
-      if (data?.ok) toast.success("✅ Conexão validada");
-      else toast.error(`❌ ${data?.error || "Falha no teste"}`);
+      if (data?.ok) toast.success(uiText("✅ Conexão validada"));
+      else toast.error(`❌ ${data?.error || uiText("Falha no teste")}`);
     } catch (e: any) {
       setTestResult({ ok: false, error: e.message });
-      toast.error(e.message || "Falha no teste");
+      toast.error(e.message || uiText("Falha no teste"));
     } finally {
       setTesting(false);
     }
@@ -474,14 +475,14 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
               <div>
                 <DialogTitle>Nammux</DialogTitle>
                 <p className="text-xs text-muted-foreground">
-                  Envia eventos do Seialz para o sistema jurídico Nammux.
+                  {uiText("Envia eventos do Seialz para o sistema jurídico Nammux.")}
                 </p>
               </div>
               <div className="ml-auto">
                 {isConnected ? (
-                  <Badge className="bg-green-600 text-white">Conectado</Badge>
+                  <Badge className="bg-green-600 text-white">{uiText("Conectado")}</Badge>
                 ) : (
-                  <Badge variant="secondary">Desconectado</Badge>
+                  <Badge variant="secondary">{uiText("Desconectado")}</Badge>
                 )}
               </div>
             </div>
@@ -489,7 +490,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
 
           <Tabs value={tab} onValueChange={setTab} className="mt-2">
             <TabsList>
-              <TabsTrigger value="config">Configuração</TabsTrigger>
+              <TabsTrigger value="config">{uiText("Configuração")}</TabsTrigger>
               <TabsTrigger value="status">Status</TabsTrigger>
               <TabsTrigger value="logs">Logs</TabsTrigger>
             </TabsList>
@@ -499,11 +500,11 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
               {/* Mapeamento de Organização */}
               <section className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">Mapeamento de Organização</h3>
+                  <h3 className="text-sm font-semibold">{uiText("Mapeamento de Organização")}</h3>
                   {form.nammux_organization_id.trim() ? (
-                    <Badge className="bg-green-600 text-white">🟢 Configurado</Badge>
+                    <Badge className="bg-green-600 text-white">{uiText("🟢 Configurado")}</Badge>
                   ) : (
-                    <Badge className="bg-amber-500 text-white">🟠 Não configurado</Badge>
+                    <Badge className="bg-amber-500 text-white">{uiText("🟠 Não configurado")}</Badge>
                   )}
                 </div>
 
@@ -537,22 +538,21 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                     onChange={(e) =>
                       setForm((p) => ({ ...p, nammux_organization_id: e.target.value }))
                     }
-                    placeholder="Cole aqui o Organization ID do escritório no Nammux"
+                    placeholder={uiText("Cole aqui o Organization ID do escritório no Nammux")}
                     className="font-mono text-xs"
                   />
                   {!form.nammux_organization_id.trim() && (
                     <Alert className="border-amber-500/50 bg-amber-500/5">
                       <Warning className="h-4 w-4 text-amber-600" />
                       <AlertDescription className="text-xs">
-                        Configure o Nammux Organization ID para concluir o mapeamento entre as
-                        organizações.
+                        {uiText("Configure o Nammux Organization ID para concluir o mapeamento entre as organizações.")}
                       </AlertDescription>
                     </Alert>
                   )}
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="nammux_app_url">URL do aplicativo Nammux</Label>
+                  <Label htmlFor="nammux_app_url">{uiText("URL do aplicativo Nammux")}</Label>
                   <Input
                     id="nammux_app_url"
                     value={form.app_url}
@@ -562,18 +562,18 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                     placeholder="https://nammux.lovable.app"
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Usada pelo botão “Abrir no Nammux” na oportunidade.
+                    {uiText("Usada pelo botão “Abrir no Nammux” na oportunidade.")}
                   </p>
                 </div>
               </section>
 
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold">Geral</h3>
+                <h3 className="text-sm font-semibold">{uiText("Geral")}</h3>
                 <div className="flex items-center justify-between rounded-md border p-3">
                   <div>
-                    <p className="text-sm font-medium">Ativar integração</p>
+                    <p className="text-sm font-medium">{uiText("Ativar integração")}</p>
                     <p className="text-xs text-muted-foreground">
-                      Quando desativada, nenhum evento é enviado ao Nammux.
+                      {uiText("Quando desativada, nenhum evento é enviado ao Nammux.")}
                     </p>
                   </div>
                   <Switch
@@ -595,7 +595,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <Label htmlFor="webhook_secret">
-                      {activeCredential ? "Rotacionar credencial" : "Credencial compartilhada *"}
+                      {activeCredential ? uiText("Rotacionar credencial") : uiText("Credencial compartilhada *")}
                     </Label>
                     {(generatedKeyId || activeCredential?.key_id) && (
                       <Badge variant="secondary" className="font-mono text-[10px]">
@@ -615,8 +615,8 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                       }}
                       placeholder={
                         activeCredential
-                          ? "Deixe vazio para manter a credencial atual"
-                          : "Mínimo de 32 caracteres; cadastre o mesmo valor no Nammux"
+                          ? uiText("Deixe vazio para manter a credencial atual")
+                          : uiText("Mínimo de 32 caracteres; cadastre o mesmo valor no Nammux")
                       }
                       className="pr-10"
                     />
@@ -629,8 +629,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                     </button>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    O valor é enviado somente ao backend e nunca pode ser consultado depois.
-                    A rotação mantém a chave anterior válida por 24 horas.
+                    {uiText("O valor é enviado somente ao backend e nunca pode ser consultado depois. A rotação mantém a chave anterior válida por 24 horas.")}
                   </p>
                   <Button
                     type="button"
@@ -638,19 +637,19 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                     size="sm"
                     onClick={handleGenerateCredential}
                   >
-                    Gerar credencial segura
+                    {uiText("Gerar credencial segura")}
                   </Button>
                   {issuedCredential && (
                     <Alert>
                       <AlertDescription className="space-y-2">
                         <span>
-                          Credencial salva. Copie o pacote uma única vez para cadastrar no Nammux.
+                          {uiText("Credencial salva. Copie o pacote uma única vez para cadastrar no Nammux.")}
                         </span>
                         <Input
                           readOnly
                           value={credentialPackage}
                           className="font-mono text-[11px]"
-                          aria-label="Pacote de credencial do Nammux"
+                          aria-label={uiText("Pacote de credencial do Nammux")}
                           onFocus={(event) => event.currentTarget.select()}
                         />
                         <div className="flex flex-wrap gap-2">
@@ -665,7 +664,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                             ) : (
                               <Copy size={16} className="mr-1.5" />
                             )}
-                            Copiar pacote
+                            {uiText("Copiar pacote")}
                           </Button>
                           <Button type="button" variant="outline" size="sm" asChild>
                             <a
@@ -673,7 +672,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                               target="_blank"
                               rel="noreferrer"
                             >
-                              Abrir Nammux em nova aba
+                              {uiText("Abrir Nammux em nova aba")}
                             </a>
                           </Button>
                         </div>
@@ -684,20 +683,20 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
               </section>
 
               <section className="space-y-2">
-                <h3 className="text-sm font-semibold">Eventos</h3>
+                <h3 className="text-sm font-semibold">{uiText("Eventos")}</h3>
                 <ToggleRow
-                  label="Enviar opportunity.won"
-                  description="Quando uma oportunidade for marcada como ganha, dispara evento ao Nammux."
+                  label={uiText("Enviar opportunity.won")}
+                  description={uiText("Quando uma oportunidade for marcada como ganha, dispara evento ao Nammux.")}
                   checked={form.send_opportunity_won}
                   onChange={(v) => setForm((p) => ({ ...p, send_opportunity_won: v }))}
                 />
               </section>
 
               <section className="space-y-2">
-                <h3 className="text-sm font-semibold">Campos personalizados do contato</h3>
+                <h3 className="text-sm font-semibold">{uiText("Campos personalizados do contato")}</h3>
                 <p className="text-xs text-muted-foreground">
-                  JSON no formato <code>{`{"campo_no_seialz":"campo_no_nammux"}`}</code>.
-                  Somente campos jurídicos permitidos são aplicados; campos bancários são ignorados.
+                  {uiText("JSON no formato")} <code>{`{"campo_no_seialz":"campo_no_nammux"}`}</code>
+                  {uiText(". Somente campos jurídicos permitidos são aplicados; campos bancários são ignorados.")}
                 </p>
                 <textarea
                   value={mappingJson}
@@ -709,25 +708,25 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
               </section>
 
               <section className="space-y-2">
-                <h3 className="text-sm font-semibold">Documentos</h3>
+                <h3 className="text-sm font-semibold">{uiText("Documentos")}</h3>
                 <p className="text-xs text-muted-foreground">
-                  Controla os documentos enviados ao ganhar e os novos anexos da oportunidade enviados depois da venda.
+                  {uiText("Controla os documentos enviados ao ganhar e os novos anexos da oportunidade enviados depois da venda.")}
                 </p>
                 <ToggleRow
-                  label="Incluir Contact Attachments"
-                  description="Anexos vinculados ao contato no payload."
+                  label={uiText("Incluir Contact Attachments")}
+                  description={uiText("Anexos vinculados ao contato no payload.")}
                   checked={form.include_contact_attachments}
                   onChange={(v) => setForm((p) => ({ ...p, include_contact_attachments: v }))}
                 />
                 <ToggleRow
-                  label="Incluir Opportunity Attachments"
-                  description="Inclui anexos da oportunidade e sincroniza automaticamente novos anexos após a venda."
+                  label={uiText("Incluir Opportunity Attachments")}
+                  description={uiText("Inclui anexos da oportunidade e sincroniza automaticamente novos anexos após a venda.")}
                   checked={form.include_opportunity_attachments}
                   onChange={(v) => setForm((p) => ({ ...p, include_opportunity_attachments: v }))}
                 />
                 <ToggleRow
-                  label="Incluir Document Submissions aprovados"
-                  description="Apenas submissions com status approved."
+                  label={uiText("Incluir Document Submissions aprovados")}
+                  description={uiText("Apenas submissions com status approved.")}
                   checked={form.include_document_submissions}
                   onChange={(v) => setForm((p) => ({ ...p, include_document_submissions: v }))}
                 />
@@ -750,10 +749,10 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                   <AlertDescription className="text-xs">
                     {testResult.ok ? (
                       <>
-                        Conexão validada — HTTP {testResult.http_status} em {testResult.duration_ms}ms
+                        {uiText("Conexão validada — HTTP {0} em {1}ms", { 0: testResult.http_status ?? "", 1: testResult.duration_ms ?? "" })}
                       </>
                     ) : (
-                      <>{testResult.error || "Falha"}</>
+                      <>{testResult.error || uiText("Falha")}</>
                     )}
                   </AlertDescription>
                 </Alert>
@@ -766,7 +765,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                     onClick={() => setDisconnectOpen(true)}
                     className="mr-auto"
                   >
-                    Desconectar
+                    {uiText("Desconectar")}
                   </Button>
                 )}
                 <Button
@@ -779,10 +778,10 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                   }
                 >
                   <PaperPlaneTilt size={16} className="mr-1.5" />
-                  {testing ? "Testando..." : "Testar conexão"}
+                  {testing ? uiText("Testando...") : uiText("Testar conexão")}
                 </Button>
                 <Button onClick={handleSave} disabled={saving}>
-                  {saving ? "Salvando..." : "Salvar"}
+                  {saving ? uiText("Salvando...") : uiText("Salvar")}
                 </Button>
               </div>
             </TabsContent>
@@ -791,22 +790,22 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
             <TabsContent value="status" className="space-y-4 mt-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <StatCard label="Total" value={stats?.total ?? 0} />
-                <StatCard label="Sucesso" value={stats?.success ?? 0} tone="success" />
-                <StatCard label="Erros" value={stats?.failed ?? 0} tone="error" />
+                <StatCard label={uiText("Sucesso")} value={stats?.success ?? 0} tone="success" />
+                <StatCard label={uiText("Erros")} value={stats?.failed ?? 0} tone="error" />
                 <StatCard label="Retries" value={stats?.retries ?? 0} tone="warning" />
               </div>
 
               <Card className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold">Última atividade</h4>
+                  <h4 className="text-sm font-semibold">{uiText("Última atividade")}</h4>
                   <Button size="sm" variant="ghost" onClick={() => refetchJobs()}>
                     <ArrowsClockwise size={14} className="mr-1" />
-                    Atualizar
+                    {uiText("Atualizar")}
                   </Button>
                 </div>
-                <StatusRow label="Último envio" job={lastJob} />
-                <StatusRow label="Último sucesso" job={lastSuccess} />
-                <StatusRow label="Último erro" job={lastError} errorMode />
+                <StatusRow label={uiText("Último envio")} job={lastJob} />
+                <StatusRow label={uiText("Último sucesso")} job={lastSuccess} />
+                <StatusRow label={uiText("Último erro")} job={lastError} errorMode />
               </Card>
             </TabsContent>
 
@@ -814,19 +813,19 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
             <TabsContent value="logs" className="space-y-2 mt-4">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
-                  Últimos {jobs?.length ?? 0} eventos enviados.
+                  {uiText("Últimos {0} eventos enviados.", { 0: jobs?.length ?? 0 })}
                 </p>
                 <Button size="sm" variant="ghost" onClick={() => refetchJobs()}>
                   <ArrowsClockwise size={14} className="mr-1" />
-                  Atualizar
+                  {uiText("Atualizar")}
                 </Button>
               </div>
 
               {loadingJobs ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">Carregando...</p>
+                <p className="text-sm text-muted-foreground py-6 text-center">{uiText("Carregando...")}</p>
               ) : (jobs?.length ?? 0) === 0 ? (
                 <p className="text-sm text-muted-foreground py-6 text-center">
-                  Nenhum evento enviado ainda.
+                  {uiText("Nenhum evento enviado ainda.")}
                 </p>
               ) : (
                 <div className="border rounded-md divide-y">
@@ -840,7 +839,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                           onClick={() => setExpandedJobId(expanded ? null : j.id)}
                         >
                           <div className="text-muted-foreground w-32 shrink-0">
-                            {format(new Date(j.created_at), "dd/MM HH:mm:ss", { locale: ptBR })}
+                            {format(new Date(j.created_at), getUiLocale() === "en-US" ? "MM/dd h:mm:ss a" : "dd/MM HH:mm:ss", { locale: uiDateLocale() })}
                           </div>
                           <div className="flex-1 min-w-0 truncate font-mono">{j.target_action}</div>
                           <div className="shrink-0">{jobStatusBadge(j.status)}</div>
@@ -883,7 +882,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                             </div>
                             <div>
                               <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
-                                Resposta externa
+                                {uiText("Resposta externa")}
                               </div>
                               <pre className="bg-muted/50 p-2 rounded text-[11px] overflow-auto max-h-64">
                                 {prettyJson(j.external_response)}
@@ -908,9 +907,9 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
       <ConfirmDialog
         open={disconnectOpen}
         onOpenChange={setDisconnectOpen}
-        title="Desconectar Nammux"
-        description="A integração será desativada e nenhum evento será mais enviado. A configuração permanecerá salva."
-        confirmText="Desconectar"
+        title={uiText("Desconectar Nammux")}
+        description={uiText("A integração será desativada e nenhum evento será mais enviado. A configuração permanecerá salva.")}
+        confirmText={uiText("Desconectar")}
         variant="destructive"
         onConfirm={() => disconnect.mutate()}
         loading={disconnect.isPending}
@@ -990,7 +989,7 @@ function StatusRow({
       <div className="flex items-center gap-2 min-w-0">
         {!errorMode && jobStatusBadge(job.status)}
         <span className="text-muted-foreground">
-          {format(new Date(when), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+          {format(new Date(when), getUiLocale() === "en-US" ? "MM/dd/yyyy h:mm a" : "dd/MM/yyyy HH:mm", { locale: uiDateLocale() })}
         </span>
         {errorMode && job.last_error && (
           <span className="text-destructive truncate max-w-[260px]" title={job.last_error}>

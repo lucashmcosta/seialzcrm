@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { SpinnerGap, Info } from '@phosphor-icons/react';
+import { uiText, useUiLocale } from '@/lib/ui-locale';
 
 interface IntegrationConnectDialogProps {
   open: boolean;
@@ -60,6 +61,7 @@ export function IntegrationConnectDialog({
   onOpenChange,
   integration,
 }: IntegrationConnectDialogProps) {
+  useUiLocale();
   const { organization } = useOrganization();
   const queryClient = useQueryClient();
   const [configValues, setConfigValues] = useState<Record<string, any>>({});
@@ -238,10 +240,10 @@ export function IntegrationConnectDialog({
       // For Twilio Voice, run automatic setup
       if (isTwilioVoice) {
         if (!configValues.account_sid) {
-          throw new Error('Account SID é obrigatório');
+          throw new Error(uiText('Account SID é obrigatório'));
         }
         if (!configValues.auth_token && !voiceSetupStatus?.credentialsAvailable) {
-          throw new Error('Informe o Auth Token para concluir a configuração');
+          throw new Error(uiText('Informe o Auth Token para concluir a configuração'));
         }
         
         setSetupPhase('configuring');
@@ -265,12 +267,12 @@ export function IntegrationConnectDialog({
           console.error('Twilio Voice setup error:', setupError);
           throw new Error(await edgeFunctionErrorMessage(
             setupError,
-            'Erro ao configurar Twilio Voice. Verifique suas credenciais.',
+            uiText('Erro ao configurar Twilio Voice. Verifique suas credenciais.'),
           ));
         }
 
         if (!setupData?.success) {
-          throw new Error(setupData?.error || 'Erro na configuração do Twilio Voice');
+          throw new Error(setupData?.error || uiText('Erro na configuração do Twilio Voice'));
         }
 
         console.log('Twilio Voice setup completed:', setupData);
@@ -279,7 +281,7 @@ export function IntegrationConnectDialog({
       // For Twilio WhatsApp, run automatic setup with full automation
       if (isTwilioWhatsApp) {
         if (!configValues.account_sid || !configValues.auth_token) {
-          throw new Error('Credenciais do Twilio são obrigatórias (Account SID e Auth Token)');
+          throw new Error(uiText('Credenciais do Twilio são obrigatórias (Account SID e Auth Token)'));
         }
 
         setSetupPhase('configuring');
@@ -303,26 +305,26 @@ export function IntegrationConnectDialog({
 
         if (setupError) {
           console.error('Twilio WhatsApp setup error:', setupError);
-          throw new Error('Erro ao configurar WhatsApp. Verifique suas credenciais.');
+          throw new Error(uiText('Erro ao configurar WhatsApp. Verifique suas credenciais.'));
         }
 
         if (!setupData?.success) {
-          throw new Error(setupData?.error || 'Erro na configuração do WhatsApp');
+          throw new Error(setupData?.error || uiText('Erro na configuração do WhatsApp'));
         }
 
         console.log('Twilio WhatsApp setup completed:', setupData);
         
         // Show additional info about the setup
         if (setupData.messagingServiceSid) {
-          toast.success(`Messaging Service criado: ${setupData.messagingServiceSid.slice(-8)}`);
+          toast.success(uiText('Messaging Service criado: {0}', { 0: setupData.messagingServiceSid.slice(-8) }));
         }
         if (setupData.templatesImported > 0) {
-          toast.info(`${setupData.templatesImported} templates sincronizados`);
+          toast.info(uiText('{0} templates sincronizados', { 0: setupData.templatesImported }));
         }
       }
     },
     onSuccess: async () => {
-      toast.success(`${integration.name} conectado com sucesso!`);
+      toast.success(uiText('{0} conectado com sucesso!', { 0: integration.name }));
       // Force refresh all integration-related queries
       await queryClient.invalidateQueries({ queryKey: ['organization-integrations'] });
       await queryClient.invalidateQueries({ queryKey: ['whatsapp-integration'] });
@@ -333,7 +335,7 @@ export function IntegrationConnectDialog({
       setSetupPhase('form');
     },
     onError: (error: any) => {
-      toast.error(`Erro ao conectar: ${error.message}`);
+      toast.error(uiText('Erro ao conectar: {0}', { 0: error.message }));
       setSetupPhase('form');
     },
   });
@@ -356,7 +358,7 @@ export function IntegrationConnectDialog({
 
     const fieldDescription = (description || canReuseVoiceSecret) && (
       <p className="text-xs text-muted-foreground break-words">
-        {canReuseVoiceSecret ? 'Deixe em branco para reutilizar o token já protegido no backend.' : description}
+        {canReuseVoiceSecret ? uiText('Deixe em branco para reutilizar o token já protegido no backend.') : description}
       </p>
     );
 
@@ -372,7 +374,7 @@ export function IntegrationConnectDialog({
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione..." />
+                <SelectValue placeholder={uiText("Selecione...")} />
               </SelectTrigger>
               <SelectContent>
                 {options?.map((option: string) => (
@@ -440,7 +442,7 @@ export function IntegrationConnectDialog({
             <Input
               id={key}
               type={type || 'text'}
-              placeholder={canReuseVoiceSecret ? 'Token atual será reutilizado' : placeholder}
+              placeholder={canReuseVoiceSecret ? uiText('Token atual será reutilizado') : placeholder}
               required={fieldRequired}
               value={configValues[key] || ''}
               onChange={(e) =>
@@ -460,9 +462,9 @@ export function IntegrationConnectDialog({
       <DialogContent className="sm:max-w-[500px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Conectar {integration.name}</DialogTitle>
+            <DialogTitle>{uiText('Conectar {0}', { 0: integration.name })}</DialogTitle>
             <DialogDescription className="break-words">
-              {integration.description || 'Configure os parâmetros de conexão abaixo.'}
+              {integration.description || uiText('Configure os parâmetros de conexão abaixo.')}
             </DialogDescription>
           </DialogHeader>
 
@@ -470,10 +472,10 @@ export function IntegrationConnectDialog({
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
               <SpinnerGap className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">
-                Configurando {integration.name} automaticamente...
+                {uiText('Configurando {0} automaticamente...', { 0: integration.name })}
               </p>
               <p className="text-xs text-muted-foreground">
-                Isso pode levar alguns segundos
+                {uiText('Isso pode levar alguns segundos')}
               </p>
             </div>
           ) : (
@@ -483,7 +485,7 @@ export function IntegrationConnectDialog({
                 <Alert className="bg-primary/10 border-primary/20">
                   <Info className="h-4 w-4" />
                   <AlertDescription>
-                    Credenciais detectadas da integração Twilio Voice. Selecione o número para WhatsApp abaixo.
+                    {uiText('Credenciais detectadas da integração Twilio Voice. Selecione o número para WhatsApp abaixo.')}
                   </AlertDescription>
                 </Alert>
               )}
@@ -492,9 +494,10 @@ export function IntegrationConnectDialog({
                 <Alert className="bg-primary/10 border-primary/20">
                   <Info className="h-4 w-4" />
                   <AlertDescription>
-                    Configuração existente detectada. O número, a TwiML App
-                    {voiceSetupStatus.twimlAppSidSuffix ? ` …${voiceSetupStatus.twimlAppSidSuffix}` : ''} e o Auth Token protegido serão reutilizados.
-                    Webhook atual: {voiceSetupStatus.webhookMode === 'telephony_v2' ? 'Telefonia V2' : 'legado'}.
+                    {uiText('Configuração existente detectada. O número, a TwiML App{0} e o Auth Token protegido serão reutilizados. Webhook atual: {1}.', {
+                      0: voiceSetupStatus.twimlAppSidSuffix ? ` …${voiceSetupStatus.twimlAppSidSuffix}` : '',
+                      1: voiceSetupStatus.webhookMode === 'telephony_v2' ? uiText('Telefonia V2') : uiText('legado'),
+                    })}
                   </AlertDescription>
                 </Alert>
               )}
@@ -503,7 +506,7 @@ export function IntegrationConnectDialog({
                 <Alert>
                   <Info className="h-4 w-4" />
                   <AlertDescription>
-                    Informe o Account SID e o Auth Token. O número é opcional: depois você poderá importar todos os números da conta ou comprar novas linhas na Central de Telefonia.
+                    {uiText('Informe o Account SID e o Auth Token. O número é opcional: depois você poderá importar todos os números da conta ou comprar novas linhas na Central de Telefonia.')}
                   </AlertDescription>
                 </Alert>
               )}
@@ -511,17 +514,17 @@ export function IntegrationConnectDialog({
               {/* WhatsApp number selector */}
               {isTwilioWhatsApp && credentialsFromVoice && (
                 <div className="space-y-2">
-                  <Label>Número para WhatsApp <span className="text-destructive">*</span></Label>
+                  <Label>{uiText("Número para WhatsApp")} <span className="text-destructive">*</span></Label>
                   {loadingNumbers ? (
                     <div className="flex items-center gap-2 py-2">
                       <SpinnerGap className="h-4 w-4 animate-spin" />
-                      <span className="text-sm text-muted-foreground">Buscando números da conta Twilio...</span>
+                      <span className="text-sm text-muted-foreground">{uiText("Buscando números da conta Twilio...")}</span>
                     </div>
                   ) : availableNumbers.length > 0 ? (
                     <>
                       <Select value={selectedWhatsAppNumber} onValueChange={setSelectedWhatsAppNumber}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecione o número..." />
+                          <SelectValue placeholder={uiText("Selecione o número...")} />
                         </SelectTrigger>
                         <SelectContent>
                           {availableNumbers.map((num) => (
@@ -532,12 +535,12 @@ export function IntegrationConnectDialog({
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        Números marcados como "WhatsApp Sender" já estão configurados no Twilio.
+                        {uiText('Números marcados como "WhatsApp Sender" já estão configurados no Twilio.')}
                       </p>
                     </>
                   ) : (
                     <p className="text-sm text-destructive">
-                      Nenhum número encontrado na conta Twilio.
+                      {uiText('Nenhum número encontrado na conta Twilio.')}
                     </p>
                   )}
                 </div>
@@ -547,7 +550,7 @@ export function IntegrationConnectDialog({
                 fields.map((field: any) => renderField(field))
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Esta integração não requer configuração adicional.
+                  {uiText('Esta integração não requer configuração adicional.')}
                 </p>
               )}
             </div>
@@ -560,13 +563,13 @@ export function IntegrationConnectDialog({
               onClick={() => onOpenChange(false)}
               disabled={connectMutation.isPending}
             >
-              Cancelar
+              {uiText('Cancelar')}
             </Button>
             <Button 
               type="submit" 
               disabled={connectMutation.isPending || setupPhase === 'configuring' || (isTwilioVoice && loadingVoiceStatus)}
             >
-              {connectMutation.isPending ? 'Conectando...' : 'Conectar'}
+              {connectMutation.isPending ? uiText('Conectando...') : uiText('Conectar')}
             </Button>
           </DialogFooter>
         </form>

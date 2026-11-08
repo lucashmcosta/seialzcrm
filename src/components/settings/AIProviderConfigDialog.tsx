@@ -17,6 +17,7 @@ import {
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Eye, EyeSlash, ArrowsClockwise, Trash } from '@phosphor-icons/react';
 import { toast } from 'sonner';
+import { getUiLocale, uiText, useUiLocale } from '@/lib/ui-locale';
 import {
   AIProviderId,
   AIProviderInfo,
@@ -28,7 +29,7 @@ const PROVIDER_META: Record<AIProviderId, { name: string; docsUrl: string; place
   anthropic:  { name: 'Anthropic',      docsUrl: 'https://console.anthropic.com/settings/keys',  placeholder: 'sk-ant-…' },
   gemini:     { name: 'Google Gemini',  docsUrl: 'https://aistudio.google.com/app/apikey',       placeholder: 'AIza…' },
   elevenlabs: { name: 'ElevenLabs',     docsUrl: 'https://elevenlabs.io/app/settings/api-keys',  placeholder: 'sk_…' },
-  deepgram:   { name: 'Deepgram',       docsUrl: 'https://console.deepgram.com/',               placeholder: 'chave do projeto' },
+  deepgram:   { name: 'Deepgram',       docsUrl: 'https://console.deepgram.com/',               get placeholder() { return uiText('chave do projeto'); } },
 };
 
 async function unwrapFunctionError(error: Error): Promise<Error> {
@@ -51,7 +52,7 @@ async function unwrapFunctionError(error: Error): Promise<Error> {
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
-  try { return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); }
+  try { return new Date(iso).toLocaleString(getUiLocale(), { dateStyle: 'short', timeStyle: 'short' }); }
   catch { return '—'; }
 }
 
@@ -75,6 +76,7 @@ export function AIProviderConfigDialog({
   hasLegacyKey,
   canManage,
 }: AIProviderConfigDialogProps) {
+  useUiLocale();
   const meta = PROVIDER_META[providerId];
   const exists = !!currentInfo;
   const invalidate = useInvalidateAIProviders();
@@ -94,7 +96,7 @@ export function AIProviderConfigDialog({
     mutationFn: async () => {
       const monthly = budget.trim() === '' ? null : Number(budget);
       if (monthly != null && (!Number.isFinite(monthly) || monthly < 0)) {
-        throw new Error('Limite mensal inválido');
+        throw new Error(uiText('Limite mensal inválido'));
       }
       const fn = exists ? 'byok-rotate-key' : 'byok-set-key';
       const payload: Record<string, unknown> = {
@@ -112,15 +114,15 @@ export function AIProviderConfigDialog({
       return data;
     },
     onSuccess: () => {
-      toast.success(exists ? 'Chave rotacionada com sucesso' : 'Chave salva e testada com sucesso');
+      toast.success(exists ? uiText('Chave rotacionada com sucesso') : uiText('Chave salva e testada com sucesso'));
       refresh();
       onOpenChange(false);
     },
     onError: (e: Error) => {
       toast.error(e.message === 'key_test_failed'
-        ? 'A chave foi rejeitada pelo provider. Verifique e tente novamente.'
+        ? uiText('A chave foi rejeitada pelo provider. Verifique e tente novamente.')
         : e.message === 'encryption_unavailable'
-        ? 'A criptografia do servidor está indisponível agora. Tente novamente em instantes.'
+        ? uiText('A criptografia do servidor está indisponível agora. Tente novamente em instantes.')
         : e.message);
     },
   });
@@ -135,8 +137,8 @@ export function AIProviderConfigDialog({
       return data;
     },
     onSuccess: (data: any) => {
-      if (data?.ok) toast.success('Chave válida — provider respondeu.');
-      else toast.error(`Provider rejeitou a chave (status ${data?.status ?? '?'}).`);
+      if (data?.ok) toast.success(uiText('Chave válida — provider respondeu.'));
+      else toast.error(uiText('Provider rejeitou a chave (status {0}).', { 0: data?.status ?? '?' }));
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -158,7 +160,7 @@ export function AIProviderConfigDialog({
       return data;
     },
     onSuccess: () => {
-      toast.success('Políticas atualizadas.');
+      toast.success(uiText('Políticas atualizadas.'));
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -174,7 +176,7 @@ export function AIProviderConfigDialog({
       return data;
     },
     onSuccess: () => {
-      toast.success(`Chave do ${meta.name} revogada.`);
+      toast.success(uiText('Chave do {0} revogada.', { 0: meta.name }));
       refresh();
       setConfirmRevoke(false);
       onOpenChange(false);
@@ -192,33 +194,31 @@ export function AIProviderConfigDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{exists ? `Gerenciar — ${meta.name}` : `Configurar ${meta.name}`}</DialogTitle>
+            <DialogTitle>{exists ? uiText('Gerenciar — {0}', { 0: meta.name }) : uiText('Configurar {0}', { 0: meta.name })}</DialogTitle>
             <DialogDescription>
-              Modo BYOK: a chave é testada contra o provider antes de ser salva, armazenada criptografada (AES-GCM)
-              e nunca retornada ao frontend.
+              {uiText('Modo BYOK: a chave é testada contra o provider antes de ser salva, armazenada criptografada (AES-GCM) e nunca retornada ao frontend.')}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5">
             {hasLegacyKey && !exists && (
               <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300">
-                Esta integração usa um formato antigo de armazenamento. Para maior segurança, salve novamente a
-                chave como <strong>Chave Própria criptografada</strong>. A chave antiga permanece intacta até você
-                confirmar a migração.
+                {uiText('Esta integração usa um formato antigo de armazenamento. Para maior segurança, salve novamente a chave como')}{' '}
+                <strong>{uiText('Chave Própria criptografada')}</strong>{uiText('. A chave antiga permanece intacta até você confirmar a migração.')}
               </div>
             )}
             {exists && (
               <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
                 <div className="flex items-center justify-between">
-                  <span>Chave atual</span>
+                  <span>{uiText('Chave atual')}</span>
                   <span className="font-mono">•••• {currentInfo?.last4 ?? '????'}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>Verificada em</span>
+                  <span>{uiText('Verificada em')}</span>
                   <span>{formatDate(currentInfo?.verified_at ?? null)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>Origem</span>
+                  <span>{uiText('Origem')}</span>
                   <span>Customer key (BYOK)</span>
                 </div>
               </div>
@@ -226,7 +226,7 @@ export function AIProviderConfigDialog({
 
             <div className="space-y-1.5">
               <Label htmlFor="api-key">
-                {exists ? 'Nova chave (substitui a atual)' : 'Chave de API'}
+                {exists ? uiText('Nova chave (substitui a atual)') : uiText('Chave de API')}
               </Label>
               <div className="relative">
                 <Input
@@ -244,16 +244,15 @@ export function AIProviderConfigDialog({
                   type="button"
                   onClick={() => setShowKey((s) => !s)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showKey ? 'Esconder' : 'Mostrar'}
+                  aria-label={showKey ? uiText('Esconder') : uiText('Mostrar')}
                 >
                   {showKey ? <EyeSlash size={16} /> : <Eye size={16} />}
                 </button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                A chave é enviada apenas para a Edge Function BYOK via HTTPS. Não é armazenada em
-                localStorage/sessionStorage e nunca aparece em logs.{' '}
+                {uiText('A chave é enviada apenas para a Edge Function BYOK via HTTPS. Não é armazenada em localStorage/sessionStorage e nunca aparece em logs.')}{' '}
                 <a href={meta.docsUrl} target="_blank" rel="noreferrer" className="underline hover:text-foreground">
-                  Obter chave ↗
+                  {uiText('Obter chave ↗')}
                 </a>
               </p>
             </div>
@@ -261,24 +260,24 @@ export function AIProviderConfigDialog({
             <div className="space-y-3 rounded-md border border-border p-3">
               <div className="flex items-start justify-between gap-3 opacity-60">
                 <div>
-                  <Label className="text-sm">Fallback para managed</Label>
+                  <Label className="text-sm">{uiText("Fallback para managed")}</Label>
                   <p className="text-[11px] text-muted-foreground">
-                    Em breve: usar a infra do Seialz quando sua chave falhar.
+                    {uiText('Em breve: usar a infra do Seialz quando sua chave falhar.')}
                   </p>
                 </div>
                 <Switch checked={fallbackToManaged} onCheckedChange={setFallbackToManaged} disabled />
               </div>
               <div className="flex items-start justify-between gap-3 opacity-60">
                 <div>
-                  <Label className="text-sm">Fallback em rate-limit</Label>
+                  <Label className="text-sm">{uiText("Fallback em rate-limit")}</Label>
                   <p className="text-[11px] text-muted-foreground">
-                    Em breve: usar managed temporariamente quando o provider retornar 429.
+                    {uiText('Em breve: usar managed temporariamente quando o provider retornar 429.')}
                   </p>
                 </div>
                 <Switch checked={fallbackOnRateLimit} onCheckedChange={setFallbackOnRateLimit} disabled />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="budget" className="text-sm">Limite mensal (US$)</Label>
+                <Label htmlFor="budget" className="text-sm">{uiText("Limite mensal (US$)")}</Label>
                 <Input
                   id="budget"
                   type="number"
@@ -286,12 +285,12 @@ export function AIProviderConfigDialog({
                   step="0.01"
                   value={budget}
                   onChange={(e) => setBudget(e.target.value)}
-                  placeholder="ex.: 50.00"
+                  placeholder={uiText("ex.: 50.00")}
                   disabled={!canManage}
                   className="font-mono"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Em branco = sem limite. Quando ultrapassado, novos jobs BYOK são bloqueados.
+                  {uiText('Em branco = sem limite. Quando ultrapassado, novos jobs BYOK são bloqueados.')}
                 </p>
               </div>
             </div>
@@ -304,7 +303,7 @@ export function AIProviderConfigDialog({
                 className="text-destructive hover:text-destructive"
               >
                 <Trash size={14} weight="bold" className="mr-1.5" />
-                Revogar chave permanentemente
+                {uiText('Revogar chave permanentemente')}
               </Button>
             )}
           </div>
@@ -313,7 +312,7 @@ export function AIProviderConfigDialog({
             {exists && (
               <>
                 <Button variant="outline" size="sm" onClick={() => testMut.mutate()} disabled={testMut.isPending}>
-                  {testMut.isPending ? 'Testando…' : 'Testar conexão'}
+                  {testMut.isPending ? uiText('Testando…') : uiText('Testar conexão')}
                 </Button>
                 <Button
                   variant="outline"
@@ -321,17 +320,17 @@ export function AIProviderConfigDialog({
                   onClick={() => policyMut.mutate()}
                   disabled={!canManage || policyMut.isPending}
                 >
-                  {policyMut.isPending ? 'Salvando…' : 'Salvar políticas'}
+                  {policyMut.isPending ? uiText('Salvando…') : uiText('Salvar políticas')}
                 </Button>
               </>
             )}
             <div className="flex-1" />
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>Fechar</Button>
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>{uiText('Fechar')}</Button>
             {(canManage && (apiKey.length > 0 || !exists)) && (
               <Button onClick={() => saveMut.mutate()} disabled={!canSave}>
                 {saveMut.isPending
-                  ? (exists ? 'Rotacionando…' : 'Testando e salvando…')
-                  : (exists ? <><ArrowsClockwise size={14} className="mr-1.5" />Rotacionar chave</> : 'Salvar & Testar')}
+                  ? (exists ? uiText('Rotacionando…') : uiText('Testando e salvando…'))
+                  : (exists ? <><ArrowsClockwise size={14} className="mr-1.5" />{uiText('Rotacionar chave')}</> : uiText('Salvar & Testar'))}
               </Button>
             )}
           </DialogFooter>
@@ -341,9 +340,9 @@ export function AIProviderConfigDialog({
       <ConfirmDialog
         open={confirmRevoke}
         onOpenChange={setConfirmRevoke}
-        title={`Revogar chave do ${meta.name}?`}
-        description="A chave criptografada será apagada. Jobs subsequentes não poderão mais usar esta chave. Esta ação não pode ser desfeita — você terá que cadastrar uma nova chave para reativar o BYOK."
-        confirmText={revokeMut.isPending ? 'Revogando…' : 'Revogar'}
+        title={uiText('Revogar chave do {0}?', { 0: meta.name })}
+        description={uiText("A chave criptografada será apagada. Jobs subsequentes não poderão mais usar esta chave. Esta ação não pode ser desfeita — você terá que cadastrar uma nova chave para reativar o BYOK.")}
+        confirmText={revokeMut.isPending ? uiText('Revogando…') : uiText('Revogar')}
         variant="destructive"
         onConfirm={() => revokeMut.mutate()}
       />
