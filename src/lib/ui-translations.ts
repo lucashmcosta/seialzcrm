@@ -1401,3 +1401,32 @@ Object.assign(uiEnglish, {
   'Enviando teste...': 'Sending test...',
   'Teste': 'Test',
 });
+
+// Provedores de IA: gasto estimado da chave própria
+Object.assign(uiEnglish, {
+  'Melhorar texto': 'Improve text',
+  'Sugerir resposta': 'Suggest reply',
+  'Resumo de contato': 'Contact summary',
+  'Análise de oportunidade': 'Opportunity analysis',
+  'Gerar e-mail': 'Generate email',
+  'Criar prompt do agente': 'Create agent prompt',
+  'Ajustar prompt do agente': 'Refine agent prompt',
+  'Análise de mensagens': 'Message analysis',
+  'Transcrição de áudios': 'Audio transcription',
+  'Transcrição de ligações': 'Call transcription',
+  'Análise de áudios (piloto)': 'Audio analysis (pilot)',
+  'Transcrição de áudios (piloto)': 'Audio transcription (pilot)',
+  'Resumo da jornada (piloto)': 'Journey summary (pilot)',
+  '{0} de {1} este mês': '{0} of {1} this month',
+  '{0} este mês': '{0} this month',
+  'Estimativa': 'Estimate',
+  'Calculando gasto...': 'Calculating spend...',
+  'Não foi possível carregar o gasto agora.': 'Could not load spend right now.',
+  'Gasto estimado do mês': 'Estimated spend this month',
+  'Esconder detalhes': 'Hide details',
+  'Ver por função': 'View by feature',
+  '1 chamada': '1 call',
+  '{0} chamadas': '{0} calls',
+  '{0} chamadas sem custo estimado não entram neste valor.': '{0} calls without an estimated cost are not included in this amount.',
+  'Estimativa por uso. A fatura do provedor pode ser um pouco diferente.': 'Usage-based estimate. Your provider invoice may differ slightly.',
+});

@@ -19,6 +19,8 @@ import {
   useInvalidateAIProviders,
 } from '@/hooks/useAIProviders';
 import { AIProviderConfigDialog } from './AIProviderConfigDialog';
+import { useAiSpend } from '@/hooks/useAiSpend';
+import { AISpendLine } from './AISpendSummary';
 
 const STATUS_MAP: Record<AIProviderStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; Icon: typeof CheckCircle }> = {
   not_configured:    { label: 'Não configurado',          variant: 'outline',     Icon: Lock },
@@ -56,6 +58,7 @@ export function AIProviderCard({
   const hasLegacyKey = !!legacyConnection?.config_values?.api_key && !info;
   const status = statusOfProvider(info, hasLegacyKey);
   const hasNewKey = !!info;
+  const spend = useAiSpend(organizationId, canManage && hasNewKey);
 
   const toggleMut = useMutation({
     mutationFn: async (nextActive: boolean) => {
@@ -206,6 +209,12 @@ export function AIProviderCard({
               </dd>
             </div>
           </dl>
+        )}
+
+        {hasNewKey && canManage && spend.isSuccess && providerId && (
+          <div className="pl-[52px]">
+            <AISpendLine spend={spend.data[providerId]} budget={info?.monthly_budget_usd} />
+          </div>
         )}
 
         <div className="flex items-center justify-end gap-2">
