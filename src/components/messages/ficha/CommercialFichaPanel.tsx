@@ -5,7 +5,7 @@
 //  - completo: o MESMO formulário da tela de contato (ContactFormView embedded),
 //    então as regras (CPF, duplicidade, endereço, verificação) são as mesmas.
 // Resumo: contato, campos, oportunidades abertas (Fase 2), nota rápida e tarefas (Fase 3).
-// Fica ao lado do chat quando sobra espaço (≥ ~400px de conversa); senão abre como gaveta por cima.
+// Ao lado do chat ou gaveta por cima: decidido pela regra de espaço do MessagesList (prop inline).
 import { useEffect, useState } from 'react';
 import { ArrowLeft, X } from '@phosphor-icons/react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -83,7 +83,7 @@ export function CommercialFichaPanel({
 
   return (
     <aside
-      className={`${open ? `${width} border-l ${inline ? '' : 'shadow-xl'}` : 'w-0 border-l-0'} hidden lg:block ${inline ? 'static' : 'absolute right-0 top-0 bottom-0 z-30'} border-border overflow-hidden flex-shrink-0 transition-[width] duration-200 ease-in-out bg-background`}
+      className={`${open ? `${width} border-l ${inline ? '' : 'shadow-xl'}` : 'w-0 border-l-0'} block ${inline ? 'static' : 'absolute right-0 top-0 bottom-0 z-30'} border-border overflow-hidden flex-shrink-0 transition-[width] duration-200 ease-in-out bg-background`}
       aria-hidden={!open}
     >
       {open && (

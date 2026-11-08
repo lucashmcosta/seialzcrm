@@ -73,7 +73,7 @@ import { resolveComposerCapability } from '@/lib/composerCapability';
 import { useEndpointNumbers } from '@/hooks/useEndpointNumbers';
 import { pickPreferredEndpoint } from '@/lib/composerEndpoint';
 import { isSalesPurpose } from '@/lib/endpointPurpose';
-import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown, IdentificationCard } from '@phosphor-icons/react';
+import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown, IdentificationCard, CaretDoubleRight } from '@phosphor-icons/react';
 import { CommercialFichaPanel } from '@/components/messages/ficha/CommercialFichaPanel';
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -273,12 +273,36 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   /** Metadados da última mensagem (preview) — resolvidos em lote. */
   lastMessageMediaType?: string | null;
   lastMessageStatus?: string | null;
+  /** Lista recolhida em trilho: só avatar (nome no title) + bolinha de não lida. */
+  rail?: boolean;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, rail = false, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
+
+  if (rail) {
+    return (
+      <ListBoxItem
+        {...otherProps}
+        id={value.id}
+        textValue={value.contact_name}
+        className={(state) =>
+          cn(
+            'relative flex items-center justify-center border-b border-border/60 py-2.5 select-none cursor-pointer',
+            state.isFocused && 'outline-2 -outline-offset-2 outline-ring',
+            state.isSelected && 'bg-accent',
+          )
+        }
+      >
+        <span title={value.contact_name} className="relative inline-flex">
+          <Avatar fallbackText={value.contact_name} size="md" />
+          {value.unread && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-card" />}
+        </span>
+      </ListBoxItem>
+    );
+  }
 
   return (
     <ListBoxItem
@@ -393,14 +417,32 @@ function DesktopMessagesList() {
   }, [fichaOpen]);
   // Atalhos ao lado do chat só se sobrar conversa legível: lista 400 + painel 360 + chat ≥ 400.
   const commercialRowRef = useRef<HTMLDivElement | null>(null);
-  const [fichaInline, setFichaInline] = useState(false);
+  const [rowWidth, setRowWidth] = useState(0);
   useEffect(() => {
     const el = commercialRowRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(([entry]) => setFichaInline(entry.contentRect.width >= 1160));
+    const ro = new ResizeObserver(([entry]) => setRowWidth(entry.contentRect.width));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  // Regra de espaço (a conversa nunca é espremida abaixo de CHAT_MIN):
+  //  1) cabe tudo → lista 400 + conversa + Atalhos 360
+  //  2) aperta → a lista encolhe até 320
+  //  3) aperta mais → a lista vira trilho de avatares (76px)
+  //  4) nem assim → Atalhos abre por cima (gaveta)
+  // Com Atalhos fechado: lista 400 (320 em telas estreitas).
+  const LIST_MAX = 400, LIST_MIN = 320, LIST_RAIL = 76, PANEL_W = 360, CHAT_MIN = 440;
+  const commercialLayout = (() => {
+    const w = rowWidth || 1600;
+    if (!fichaOpen) return { listWidth: w - LIST_MAX >= CHAT_MIN ? LIST_MAX : LIST_MIN, rail: false, fichaInline: false };
+    const roomForList = w - PANEL_W - CHAT_MIN;
+    if (roomForList >= LIST_MAX) return { listWidth: LIST_MAX, rail: false, fichaInline: true };
+    if (roomForList >= LIST_MIN) return { listWidth: Math.floor(roomForList), rail: false, fichaInline: true };
+    if (roomForList >= LIST_RAIL) return { listWidth: LIST_RAIL, rail: true, fichaInline: true };
+    return { listWidth: LIST_RAIL, rail: true, fichaInline: false };
+  })();
+  const fichaInline = commercialLayout.fichaInline;
+  const listRail = commercialLayout.rail;
   const [selectedThreadOverride, setSelectedThreadOverride] = useState<(ChatThread & { primary_endpoint_id?: string | null }) | null>(null);
   const selectedThreadWaProvider = useWhatsAppProvider({ threadId: selectedThreadId });
   // Endpoint EFETIVO de envio: se o primary da thread está desconectado, resolve
@@ -1966,7 +2008,25 @@ function DesktopMessagesList() {
     <Layout>
       <div ref={commercialRowRef} className="h-screen overflow-hidden flex relative">
         {/* Left Panel - Chat List (fixed width) */}
-        <div className="w-[400px] flex-shrink-0 border-r border-border flex flex-col bg-card h-full overflow-hidden">
+        <div
+          className="flex-shrink-0 border-r border-border flex flex-col bg-card h-full overflow-hidden transition-[width] duration-200"
+          style={{ width: commercialLayout.listWidth }}
+        >
+            {listRail ? (
+              // Trilho: a lista cedeu espaço pros Atalhos. O botão devolve a lista (fecha os Atalhos).
+              <div className="flex flex-col items-center gap-2 py-3 border-b border-border">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setFichaOpen(false)}
+                  title={locale === 'pt-BR' ? 'Mostrar lista completa (fecha os Atalhos)' : 'Show full list (closes Shortcuts)'}
+                  aria-label={locale === 'pt-BR' ? 'Mostrar lista completa' : 'Show full list'}
+                >
+                  <CaretDoubleRight className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (<>
             <NoWhatsAppNumberBanner />
             {/* Header */}
             <div className="p-4 border-b border-border">
@@ -2037,6 +2097,7 @@ function DesktopMessagesList() {
                 />
               </div>
             </div>
+            </>)}
 
             {/* Chat List */}
             <ScrollArea className="flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
@@ -2095,6 +2156,7 @@ function DesktopMessagesList() {
                       <ChatListItem
                         key={thread.id}
                         value={thread}
+                        rail={listRail}
                         locale={locale as 'pt-BR' | 'en-US'}
                         onHide={handleHideThread}
                         /* Badge visual: última mensagem -> primary_endpoint_id.
@@ -2173,7 +2235,7 @@ function DesktopMessagesList() {
                       <Button
                         variant={fichaOpen ? 'secondary' : 'outline'}
                         size="sm"
-                        className="hidden lg:inline-flex"
+                        className="inline-flex"
                         onClick={() => setFichaOpen((v) => !v)}
                         title={locale === 'pt-BR' ? (fichaOpen ? 'Fechar atalhos' : 'Abrir atalhos') : (fichaOpen ? 'Close shortcuts' : 'Open shortcuts')}
                         aria-pressed={fichaOpen}
@@ -2186,8 +2248,8 @@ function DesktopMessagesList() {
                       )}
 
 
-                      {/* Menu Ações só abaixo de 1024px; a partir daí tudo está no painel Atalhos. */}
-                      <div className="lg:hidden">
+                      {/* Menu Ações substituído pelo painel Atalhos no desktop (o celular usa MobileMessagesList). */}
+                      <div className="md:hidden">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="outline" size="sm" title={locale === 'pt-BR' ? 'Ações' : 'Actions'}>
