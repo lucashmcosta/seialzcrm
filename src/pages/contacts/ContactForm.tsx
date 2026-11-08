@@ -33,6 +33,7 @@ import {
   type OperatingCountryCode,
 } from '@/lib/regional';
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { classifyContactDbError, cpfInputError } from '@/lib/contactRules';
 
 /**
  * Porta em TS a função public.normalize_phone_br do banco.
@@ -523,15 +524,10 @@ export default function ContactForm() {
       return;
     }
     if (isBrazil && formData.cpf) {
-      const cpfDigits = digits(formData.cpf);
-      if (cpfDigits.length !== 11) {
+      const cpfError = cpfInputError(formData.cpf);
+      if (cpfError) {
         setCpfVerification((current) => ({ ...current, status: 'invalid' }));
-        toast.error('O CPF deve ter exatamente 11 dígitos.');
-        return;
-      }
-      if (!isValidCpf(cpfDigits)) {
-        setCpfVerification((current) => ({ ...current, status: 'invalid' }));
-        toast.error('CPF inválido. Confira os dígitos informados.');
+        toast.error(cpfError);
         return;
       }
     }
@@ -580,31 +576,27 @@ export default function ContactForm() {
     };
 
     const handleDbError = async (error: unknown) => {
-      const dbError = error as { code?: string; message?: string };
-      // Postgres unique violation
-      if (dbError.code === '23505') {
-        const msg = String(dbError.message || '');
-        const duplicateCpfId = msg.match(/duplicate_cpf:([0-9a-f-]{36})/i)?.[1];
-        if (duplicateCpfId) {
-          toast.error('Este CPF já pertence a outro contato. Abrindo o cadastro existente.');
-          navigate(`/contacts/${duplicateCpfId}`);
-          return;
-        }
-        if (msg.includes('phone_normalized') || msg.includes('phone')) {
-          const dups = await checkPhoneUniqueness();
-          if (dups.length > 0) {
-            setDuplicates(dups);
-            setShowDuplicateWarning(true);
-          }
-          toast.error('Já existe um contato com este telefone nesta organização');
-          return;
-        }
-        if (msg.includes('email')) {
-          toast.error('Já existe um contato com este e-mail nesta organização');
-          return;
-        }
+      // Postgres unique violation (23505) e trigger duplicate_cpf — regra compartilhada.
+      const classified = classifyContactDbError(error);
+      if (classified.kind === 'duplicate_cpf') {
+        toast.error('Este CPF já pertence a outro contato. Abrindo o cadastro existente.');
+        navigate(`/contacts/${classified.contactId}`);
+        return;
       }
-      toast.error(dbError.message || t('common.error'));
+      if (classified.kind === 'duplicate_phone') {
+        const dups = await checkPhoneUniqueness();
+        if (dups.length > 0) {
+          setDuplicates(dups);
+          setShowDuplicateWarning(true);
+        }
+        toast.error('Já existe um contato com este telefone nesta organização');
+        return;
+      }
+      if (classified.kind === 'duplicate_email') {
+        toast.error('Já existe um contato com este e-mail nesta organização');
+        return;
+      }
+      toast.error(classified.message || t('common.error'));
     };
 
     if (isEdit) {

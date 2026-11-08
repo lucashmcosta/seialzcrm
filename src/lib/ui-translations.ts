@@ -1297,3 +1297,23 @@ Object.assign(uiEnglish, {
   "Sábado": "Saturday",
   "Domingo": "Sunday",
 });
+
+// Ficha lateral do Comercial (Fase 1)
+Object.assign(uiEnglish, {
+  "Este CPF já pertence a outro contato.": "This CPF already belongs to another contact.",
+  "Abrir cadastro": "Open record",
+  "Já existe um contato com este e-mail nesta organização": "A contact with this email already exists in this organization",
+  "Não foi possível salvar o contato.": "Could not save the contact.",
+  "Contato atualizado": "Contact updated",
+  "Informe o nome do contato.": "Enter the contact's name.",
+  "E-mail inválido.": "Invalid email.",
+  "Salvar mesmo assim": "Save anyway",
+  "O CPF deve ter exatamente 11 dígitos.": "The CPF must have exactly 11 digits.",
+  "CPF inválido. Confira os dígitos informados.": "Invalid CPF. Check the digits entered.",
+  "Contato não encontrado.": "Contact not found.",
+  "Nome": "Name",
+  "Você não tem permissão para editar contatos.": "You don't have permission to edit contacts.",
+  "Editar cadastro completo": "Edit full record",
+  "Campos personalizados": "Custom fields",
+  "Esta conversa não tem contato vinculado.": "This conversation has no linked contact.",
+});

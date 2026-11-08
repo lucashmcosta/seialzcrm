@@ -18,7 +18,8 @@ const CLEAR = '__clear__';
 
 // Campos personalizados da org para um contato ou uma oportunidade: ver e editar no lugar.
 // Valor salvo em custom_field_values (RLS: membros da org). Lista guarda o "value" da opção.
-export function CustomFieldsCard({ module, recordId, title = 'Campos personalizados' }: { module: Module; recordId: string; title?: string }) {
+// compact: versão de coluna única sem moldura de Card (Ficha lateral do Comercial, 320px).
+export function CustomFieldsCard({ module, recordId, title = 'Campos personalizados', compact = false }: { module: Module; recordId: string; title?: string; compact?: boolean }) {
   const { organization } = useOrganization();
   const orgId = organization?.id;
   const qc = useQueryClient();
@@ -61,6 +62,17 @@ export function CustomFieldsCard({ module, recordId, title = 'Campos personaliza
   };
 
   if (!defs.data?.length) return null;
+
+  if (compact) {
+    return (
+      <section className="space-y-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
+        {defs.data.map((def) => (
+          <FieldEditor key={def.id} def={def} value={values.data?.get(def.id) ?? null} onSave={(v) => save(def, v)} />
+        ))}
+      </section>
+    );
+  }
 
   return (
     <Card className="mb-4">

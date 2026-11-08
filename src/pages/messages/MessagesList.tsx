@@ -73,7 +73,8 @@ import { resolveComposerCapability } from '@/lib/composerCapability';
 import { useEndpointNumbers } from '@/hooks/useEndpointNumbers';
 import { pickPreferredEndpoint } from '@/lib/composerEndpoint';
 import { isSalesPurpose } from '@/lib/endpointPurpose';
-import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown } from '@phosphor-icons/react';
+import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown, IdentificationCard } from '@phosphor-icons/react';
+import { CommercialFichaPanel } from '@/components/messages/ficha/CommercialFichaPanel';
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
@@ -383,6 +384,13 @@ function DesktopMessagesList() {
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  // Ficha lateral (contato/campos) ao lado do chat; preferência salva por navegador.
+  const [fichaOpen, setFichaOpen] = useState<boolean>(() => {
+    try { return window.localStorage.getItem('commercial.ficha.open') !== '0'; } catch { return true; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem('commercial.ficha.open', fichaOpen ? '1' : '0'); } catch { /* storage indisponível */ }
+  }, [fichaOpen]);
   const [selectedThreadOverride, setSelectedThreadOverride] = useState<(ChatThread & { primary_endpoint_id?: string | null }) | null>(null);
   const selectedThreadWaProvider = useWhatsAppProvider({ threadId: selectedThreadId });
   // Endpoint EFETIVO de envio: se o primary da thread está desconectado, resolve
@@ -2143,6 +2151,17 @@ function DesktopMessagesList() {
                   }
                   actions={
                     <>
+                      <Button
+                        variant={fichaOpen ? 'secondary' : 'outline'}
+                        size="sm"
+                        className="hidden xl:inline-flex"
+                        onClick={() => setFichaOpen((v) => !v)}
+                        title={locale === 'pt-BR' ? (fichaOpen ? 'Fechar ficha' : 'Abrir ficha do contato') : (fichaOpen ? 'Close profile panel' : 'Open contact panel')}
+                        aria-pressed={fichaOpen}
+                      >
+                        <IdentificationCard className="w-4 h-4 xl:mr-1" />
+                        <span className="hidden xl:inline">{locale === 'pt-BR' ? 'Ficha' : 'Profile'}</span>
+                      </Button>
                       {organization?.id && (
                         <WidgetsTrigger screen="commercial" context={{ screen: 'commercial', organizationId: organization.id, threadId: selectedThread.id, contactId: selectedThread.contact_id ?? null }} />
                       )}
@@ -3168,6 +3187,15 @@ function DesktopMessagesList() {
               </div>
             )}
           </div>
+
+        {/* Ficha lateral do contato (desktop) */}
+        {selectedThread && (
+          <CommercialFichaPanel
+            open={fichaOpen}
+            contactId={selectedThread.contact_id}
+            onContactChanged={refetchThreads}
+          />
+        )}
       </div>
 
 
