@@ -147,11 +147,18 @@ serve(async (req) => {
 
     const accessToken = await resolveConnectionToken(admin, connection_id);
     const appSecret = facebookAppSecret();
-    const deadline = Date.now() + TIME_BUDGET_MS;
+    // Orçamento JUSTO por ativo: antes havia um único deadline p/ todos, e o 1º ativo
+    // (ex.: IG com refresh por tiers) consumia tudo → os seguintes (ex.: Página FB em
+    // backfill) rodavam com o prazo já vencido, 0 páginas, para sempre. Agora cada ativo
+    // recebe (tempo restante / ativos restantes); sobra de quem termina cedo passa adiante.
+    const globalDeadline = Date.now() + TIME_BUDGET_MS;
     const results: any[] = [];
     let anyPending = false; // algum asset ainda não terminou → auto-continua
 
-    for (const asset of assets) {
+    for (let i = 0; i < assets.length; i++) {
+      const asset = assets[i];
+      const remainingMs = Math.max(0, globalDeadline - Date.now());
+      const deadline = Date.now() + Math.floor(remainingMs / (assets.length - i));
       // Carrega checkpoint existente do asset.
       const { data: st } = await admin.from("meta_sync_state")
         .select("cursor").eq("asset_id", asset.id).eq("kind", "organic").maybeSingle();
