@@ -5,6 +5,9 @@
 // Aqui só se edita valor e responsável (update direto, igual ao OpportunityDialog).
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import { uiDateLocale, uiDatePattern } from '@/lib/ui-locale';
 import { TrendUp, TrendDown, ArrowsLeftRight, Plus } from '@phosphor-icons/react';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { OpportunityReadinessCard } from '@/components/opportunities/OpportunityReadinessCard';
@@ -103,6 +106,7 @@ export function OpportunitySection({
           />
         ))
       )}
+      <ClosedOpportunities contactId={contactId} reloadKey={`${reloadKey}-${opportunities.length}`} onOpenDocuments={onOpenDocuments} />
     </section>
   );
 }
@@ -260,4 +264,63 @@ function OwnerSelectorReadOnly({ value }: { value: string | null }) {
     return () => { alive = false; };
   }, [value]);
   return <p className="text-sm">{name || uiText('Sem responsável')}</p>;
+}
+
+// Oportunidades fechadas (ganhas/perdidas) do contato: só consulta, mais recentes primeiro.
+// Recarrega quando uma aberta é fechada (a contagem de abertas muda) ou ao voltar de subtelas.
+function ClosedOpportunities({ contactId, reloadKey, onOpenDocuments }: {
+  contactId: string;
+  reloadKey: string;
+  onOpenDocuments: (opportunityId: string) => void;
+}) {
+  const { organization } = useOrganization();
+  const { data: closed = [] } = useQuery({
+    queryKey: ['ficha-closed-opps', contactId, reloadKey],
+    enabled: !!organization?.id && !!contactId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('opportunities')
+        .select('id, title, status, amount, currency, close_date, updated_at')
+        .eq('organization_id', organization!.id)
+        .eq('contact_id', contactId)
+        .in('status', ['won', 'lost'])
+        .is('deleted_at', null)
+        .order('close_date', { ascending: false, nullsFirst: false })
+        .limit(10);
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; title: string; status: 'won' | 'lost'; amount: number | null; currency: string | null; close_date: string | null }>;
+    },
+  });
+
+  if (closed.length === 0) return null;
+
+  return (
+    <div className="space-y-2 pt-1">
+      <p className="text-xs font-medium text-muted-foreground">{uiText('Fechadas')}</p>
+      {closed.map((o) => {
+        const won = o.status === 'won';
+        const date = o.close_date ? format(new Date(`${o.close_date.slice(0, 10)}T12:00:00`), uiDatePattern(), { locale: uiDateLocale() }) : null;
+        const amount = Number(o.amount ?? 0);
+        return (
+          <div key={o.id} className="rounded-lg border border-border/70 bg-muted/30 p-2.5 space-y-1.5">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-xs font-medium leading-snug min-w-0 break-words" title={o.title}>{o.title}</p>
+              <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${won ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-destructive/10 text-destructive'}`}>
+                {won ? uiText('Ganha') : uiText('Perdida')}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+              <span>
+                {date ?? '—'}
+                {amount > 0 && ` · ${amount.toLocaleString(undefined, { style: 'currency', currency: o.currency || organization?.default_currency || 'BRL' })}`}
+              </span>
+              <button type="button" className="text-primary hover:underline" onClick={() => onOpenDocuments(o.id)}>
+                {uiText('Documentos')}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
