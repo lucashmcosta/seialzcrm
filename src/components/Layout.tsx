@@ -1,5 +1,5 @@
 import { uiText, useUiLocale } from '@/lib/ui-locale';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -58,6 +58,13 @@ export function Layout({ children }: LayoutProps) {
   const portalChatEnabled = useClientPortalChatFlag(organization?.id);
   const portalUnread = useClientPortalUnreadCount(organization?.id, !!portalChatEnabled);
   const { themePreset } = useTheme();
+  // Menu lateral recolhido (só ícones) — preferência por navegador.
+  const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
+    try { return window.localStorage.getItem('layout.sidebar.collapsed') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem('layout.sidebar.collapsed', navCollapsed ? '1' : '0'); } catch { /* storage indisponível */ }
+  }, [navCollapsed]);
 
   // ═══════════════════════════════════════
   // SEIALZ LAYOUT
@@ -243,6 +250,29 @@ export function Layout({ children }: LayoutProps) {
     </Link>
   );
 
+  const userInitial = userProfile?.full_name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || '?';
+  const collapsedLogo = (
+    <Link to="/dashboard" title={organization?.name || undefined} className="flex items-center justify-center">
+      {organization?.logo_url ? (
+        <img src={organization.logo_url} alt={organization.name} className="h-8 w-10 object-contain" />
+      ) : (
+        <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
+          <Buildings size={20} weight="light" className="text-primary-foreground" />
+        </div>
+      )}
+    </Link>
+  );
+  const collapsedUserSection = (
+    <div className="flex flex-col items-center gap-2">
+      <Link to="/profile" title={userProfile?.full_name || user?.email || uiText("Usuário")} className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center hover:ring-2 hover:ring-primary/30">
+        <span className="text-sm font-semibold text-primary">{userInitial}</span>
+      </Link>
+      <Button variant="ghost" size="icon" onClick={signOut} title={t('auth.signOut')} aria-label={t('auth.signOut')} className="h-8 w-8">
+        <SignOut size={16} weight="light" />
+      </Button>
+    </div>
+  );
+
   // User section with skeleton
   const userSection = loading ? (
     <div className="space-y-2">
@@ -298,11 +328,15 @@ export function Layout({ children }: LayoutProps) {
             footerItems={footerItems}
             logo={logoSection}
             userSection={userSection}
+            collapsed={navCollapsed}
+            onToggleCollapsed={() => setNavCollapsed((v) => !v)}
+            collapsedLogo={collapsedLogo}
+            collapsedUserSection={collapsedUserSection}
           />
         </div>
 
         {/* Main content */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pl-64">
+        <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-[padding] duration-200 ${navCollapsed ? 'pl-16' : 'pl-64'}`}>
           <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
             {children}
           </main>

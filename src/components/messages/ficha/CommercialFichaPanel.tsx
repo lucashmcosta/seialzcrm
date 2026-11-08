@@ -5,13 +5,14 @@
 //  - completo: o MESMO formulário da tela de contato (ContactFormView embedded),
 //    então as regras (CPF, duplicidade, endereço, verificação) são as mesmas.
 // Resumo: contato, campos, oportunidades abertas (Fase 2), nota rápida e tarefas (Fase 3).
-// < 1536px abre como gaveta por cima do chat; ≥ 1536px fica ao lado (como no Atendimento).
+// Fica ao lado do chat quando sobra espaço (≥ ~400px de conversa); senão abre como gaveta por cima.
 import { useEffect, useState } from 'react';
 import { ArrowLeft, X } from '@phosphor-icons/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CustomFieldsCard } from '@/components/custom-fields/CustomFieldsCard';
 import { ContactFormView } from '@/pages/contacts/ContactForm';
+import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { ContactQuickEdit } from './ContactQuickEdit';
 import { OpportunitySection, type FichaOpp } from './OpportunitySection';
@@ -19,7 +20,7 @@ import { NoteQuickAdd } from './NoteQuickAdd';
 import { ConversationActions, type ConversationActionsProps } from './ConversationActions';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 
-type View = 'summary' | 'full';
+type View = 'summary' | 'full' | { docs: string };
 
 export function CommercialFichaPanel({
   open,
@@ -32,32 +33,45 @@ export function CommercialFichaPanel({
   onLost,
   onMoveStage,
   onOpportunityUpdated,
+  onOpportunityCreated,
   onAddNote,
   conversation,
+  inline,
 }: {
   open: boolean;
   contactId: string | null | undefined;
   onContactChanged?: () => void;
   onClose: () => void;
   opportunities: FichaOpp[];
-  stages: Array<{ id: string; name: string }>;
+  stages: Array<{ id: string; name: string; type?: string | null }>;
   onWon: (opp: FichaOpp) => void;
   onLost: (opp: FichaOpp) => void;
   onMoveStage: (opp: FichaOpp) => void;
   onOpportunityUpdated: (id: string, patch: Partial<FichaOpp>) => void;
+  onOpportunityCreated: () => void;
   onAddNote: (text: string) => Promise<boolean>;
   conversation: ConversationActionsProps;
+  /** true: coluna ao lado do chat; false: gaveta por cima (quando não há espaço). */
+  inline: boolean;
 }) {
   useUiLocale();
   const { permissions } = usePermissions();
   const qc = useQueryClient();
   const [view, setView] = useState<View>('summary');
+  // Volta de "cadastro completo"/"documentos" reavalia as pendências das oportunidades.
+  const [reloadKey, setReloadKey] = useState(0);
+  const isDocs = typeof view === 'object';
 
   // Trocar de conversa volta pro resumo (não deixa o formulário de outro contato aberto).
   useEffect(() => { setView('summary'); }, [contactId]);
 
-  const backFromFull = () => {
+  const backToSummary = () => {
     setView('summary');
+    setReloadKey((k) => k + 1);
+  };
+
+  const backFromFull = () => {
+    backToSummary();
     if (contactId) {
       void qc.invalidateQueries({ queryKey: ['ficha-contact', contactId] });
       void qc.invalidateQueries({ queryKey: ['custom-field-values', 'contacts', contactId] });
@@ -65,21 +79,21 @@ export function CommercialFichaPanel({
     onContactChanged?.();
   };
 
-  const width = view === 'full' ? 'w-[420px]' : 'w-[320px]';
+  const width = view === 'full' || isDocs ? 'w-[420px]' : 'w-[320px]';
 
   return (
     <aside
-      className={`${open ? `${width} border-l shadow-xl 2xl:shadow-none` : 'w-0 border-l-0'} hidden lg:block absolute right-0 top-0 bottom-0 z-30 2xl:static 2xl:z-auto border-border overflow-hidden flex-shrink-0 transition-[width] duration-200 ease-in-out bg-background`}
+      className={`${open ? `${width} border-l ${inline ? '' : 'shadow-xl'}` : 'w-0 border-l-0'} hidden lg:block ${inline ? 'static' : 'absolute right-0 top-0 bottom-0 z-30'} border-border overflow-hidden flex-shrink-0 transition-[width] duration-200 ease-in-out bg-background`}
       aria-hidden={!open}
     >
       {open && (
         <div className={`${width} h-full overflow-y-auto`}>
           <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border sticky top-0 bg-background z-10">
             <div className="flex items-center gap-1 min-w-0">
-              {view === 'full' && (
+              {view !== 'summary' && (
                 <button
                   type="button"
-                  onClick={() => setView('summary')}
+                  onClick={backToSummary}
                   className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                   aria-label={uiText('Voltar')}
                   title={uiText('Voltar')}
@@ -88,7 +102,7 @@ export function CommercialFichaPanel({
                 </button>
               )}
               <h2 className="text-sm font-semibold truncate">
-                {view === 'full' ? uiText('Cadastro completo') : uiText('Atalhos')}
+                {view === 'full' ? uiText('Cadastro completo') : isDocs ? uiText('Documentos') : uiText('Atalhos')}
               </h2>
             </div>
             <button
@@ -106,6 +120,10 @@ export function CommercialFichaPanel({
             <div className="px-4 py-5 space-y-6">
               <ConversationActions {...conversation} />
               <p className="text-xs text-muted-foreground">{uiText('Esta conversa não tem contato vinculado.')}</p>
+            </div>
+          ) : isDocs ? (
+            <div className="px-4 py-5">
+              <DocumentsPanel key={`docs-${view.docs}`} contactId={contactId} opportunityId={view.docs} />
             </div>
           ) : view === 'full' ? (
             <div className="px-4 py-5">
@@ -132,6 +150,10 @@ export function CommercialFichaPanel({
                 onLost={onLost}
                 onMoveStage={onMoveStage}
                 onUpdated={onOpportunityUpdated}
+                onCreated={onOpportunityCreated}
+                onEditContact={() => setView('full')}
+                onOpenDocuments={(oppId) => setView({ docs: oppId })}
+                reloadKey={reloadKey}
               />
               <NoteQuickAdd onAddNote={onAddNote} />
               <ContactTasks key={`tasks-${contactId}`} contactId={contactId} compact />

@@ -3,9 +3,11 @@
 // menu ⋯ do MessagesList, que abrem os diálogos existentes (política de fechamento,
 // documentos exigidos, data de fechamento, bloqueio por pedido de correção).
 // Aqui só se edita valor e responsável (update direto, igual ao OpportunityDialog).
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { TrendUp, TrendDown, ArrowsLeftRight } from '@phosphor-icons/react';
+import { TrendUp, TrendDown, ArrowsLeftRight, Plus } from '@phosphor-icons/react';
+import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
+import { OpportunityReadinessCard } from '@/components/opportunities/OpportunityReadinessCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { Input } from '@/components/ui/input';
@@ -34,10 +36,18 @@ export function OpportunitySection({
   onLost,
   onMoveStage,
   onUpdated,
+  onCreated,
+  onEditContact,
+  onOpenDocuments,
+  reloadKey,
 }: {
+  onEditContact: () => void;
+  onOpenDocuments: (opportunityId: string) => void;
+  reloadKey: number;
   contactId: string;
   opportunities: FichaOpp[];
-  stages: Array<{ id: string; name: string }>;
+  stages: Array<{ id: string; name: string; type?: string | null }>;
+  onCreated: () => void;
   canEdit: boolean;
   onWon: (opp: FichaOpp) => void;
   onLost: (opp: FichaOpp) => void;
@@ -45,10 +55,34 @@ export function OpportunitySection({
   onUpdated: (id: string, patch: Partial<FichaOpp>) => void;
 }) {
   useUiLocale();
+  const { organization } = useOrganization();
+  const [createOpen, setCreateOpen] = useState(false);
+  // Criação: mesmo formulário da tela do contato (OpportunityDialog), com o contato
+  // já preenchido; só etapas abertas (ganho/perdido seguem pelos diálogos de fechamento).
+  const openStages = useMemo(
+    () => stages.filter((s) => s.type !== 'won' && s.type !== 'lost').map((s) => ({ id: s.id, name: s.name, type: s.type ?? undefined })),
+    [stages],
+  );
 
   return (
     <section className="space-y-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{uiText('Oportunidades')}</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{uiText('Oportunidades')}</h3>
+        {canEdit && openStages.length > 0 && (
+          <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1" />{uiText('Nova')}
+          </Button>
+        )}
+      </div>
+      {createOpen && (
+        <OpportunityDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          stages={openStages}
+          opportunity={{ title: '', amount: 0, currency: organization?.default_currency || 'BRL', contact_id: contactId, pipeline_stage_id: openStages[0]?.id || '', close_date: null }}
+          onSuccess={() => { setCreateOpen(false); onCreated(); }}
+        />
+      )}
       {opportunities.length === 0 ? (
         <p className="text-xs text-muted-foreground">{uiText('Nenhuma oportunidade aberta para este contato.')}</p>
       ) : (
@@ -63,6 +97,9 @@ export function OpportunitySection({
             onLost={() => onLost(opp)}
             onMoveStage={() => onMoveStage(opp)}
             onUpdated={(patch) => onUpdated(opp.id, patch)}
+            onEditContact={onEditContact}
+            onOpenDocuments={() => onOpenDocuments(opp.id)}
+            reloadKey={reloadKey}
           />
         ))
       )}
@@ -79,7 +116,13 @@ function OpportunityCard({
   onLost,
   onMoveStage,
   onUpdated,
+  onEditContact,
+  onOpenDocuments,
+  reloadKey,
 }: {
+  onEditContact: () => void;
+  onOpenDocuments: () => void;
+  reloadKey: number;
   opp: FichaOpp;
   contactId: string;
   stageName: string;
@@ -165,6 +208,19 @@ function OpportunityCard({
       </div>
 
       <CustomFieldsCard key={`cf-opp-${opp.id}`} module="opportunities" recordId={opp.id} compact bare />
+
+      {/* Pendências para ganhar (documentos, dados do contato, classificação): mesma
+          avaliação do diálogo de fechamento. Some quando a org não usa política (mode off). */}
+      {organization?.id && (
+        <OpportunityReadinessCard
+          organizationId={organization.id}
+          opportunityId={opp.id}
+          compact
+          reloadKey={reloadKey}
+          onEditContact={onEditContact}
+          onGoToDocuments={onOpenDocuments}
+        />
+      )}
 
       {canEdit && (
         <div className="grid grid-cols-3 gap-1.5">

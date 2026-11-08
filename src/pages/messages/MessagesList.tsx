@@ -391,6 +391,16 @@ function DesktopMessagesList() {
   useEffect(() => {
     try { window.localStorage.setItem('commercial.ficha.open', fichaOpen ? '1' : '0'); } catch { /* storage indisponível */ }
   }, [fichaOpen]);
+  // Atalhos ao lado do chat só se sobrar conversa legível: lista 400 + painel 320 + chat ≥ 400.
+  const commercialRowRef = useRef<HTMLDivElement | null>(null);
+  const [fichaInline, setFichaInline] = useState(false);
+  useEffect(() => {
+    const el = commercialRowRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => setFichaInline(entry.contentRect.width >= 1120));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [selectedThreadOverride, setSelectedThreadOverride] = useState<(ChatThread & { primary_endpoint_id?: string | null }) | null>(null);
   const selectedThreadWaProvider = useWhatsAppProvider({ threadId: selectedThreadId });
   // Endpoint EFETIVO de envio: se o primary da thread está desconectado, resolve
@@ -514,6 +524,7 @@ function DesktopMessagesList() {
   // Opportunities for current contact (mark as won/lost from chat)
   type ChatOpp = { id: string; title: string; pipeline_stage_id: string; close_date: string | null; contact_id: string | null; amount?: number | null; currency?: string | null; owner_user_id?: string | null };
   const [contactOpportunities, setContactOpportunities] = useState<ChatOpp[]>([]);
+  const [oppReloadKey, setOppReloadKey] = useState(0); // recarrega após criar oportunidade pelo painel Atalhos
   const [pipelineStages, setPipelineStages] = useState<Array<{ id: string; name: string; type: string | null; order_index: number | null }>>([]);
   const [confirmAction, setConfirmAction] = useState<{ kind: 'won' | 'lost'; opp: ChatOpp } | null>(null);
   const [pendingCloseDate, setPendingCloseDate] = useState<{ kind: 'won' | 'lost'; opp: ChatOpp } | null>(null);
@@ -1047,7 +1058,7 @@ function DesktopMessagesList() {
         .is('deleted_at', null);
       setContactOpportunities((data as ChatOpp[]) || []);
     })();
-  }, [organization?.id, selectedThread?.contact_id]);
+  }, [organization?.id, selectedThread?.contact_id, oppReloadKey]);
 
   const handleMarkOpportunity = async (kind: 'won' | 'lost', opp: ChatOpp, closeDateOverride?: string) => {
     if (!organization?.id) return;
@@ -1953,7 +1964,7 @@ function DesktopMessagesList() {
 
   return (
     <Layout>
-      <div className="h-screen overflow-hidden flex relative">
+      <div ref={commercialRowRef} className="h-screen overflow-hidden flex relative">
         {/* Left Panel - Chat List (fixed width) */}
         <div className="w-[400px] flex-shrink-0 border-r border-border flex flex-col bg-card h-full overflow-hidden">
             <NoWhatsAppNumberBanner />
@@ -3212,7 +3223,9 @@ function DesktopMessagesList() {
             onLost={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) setConfirmAction({ kind: 'lost', opp: o }); }}
             onMoveStage={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) { setMoveStageTargetId(o.pipeline_stage_id); setMoveStageOpp(o); } }}
             onOpportunityUpdated={(id, patch) => setContactOpportunities((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))}
+            onOpportunityCreated={() => setOppReloadKey((k) => k + 1)}
             onAddNote={addConversationNote}
+            inline={fichaInline}
             conversation={{
               status: selectedThread.status,
               assignedUserId: selectedThread.assigned_user_id ?? null,
