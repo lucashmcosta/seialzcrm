@@ -5,6 +5,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
 import { authorizeSendEvent } from "./auth.ts";
+import { claimLogRow, findSentDuplicate, isRealSentRow, isTestSend, resolveEventId } from "./dedup.ts";
 
 const META_API_VERSION = Deno.env.get("META_GRAPH_API_VERSION") || "v25.0";
 
@@ -174,6 +175,45 @@ serve(async (req) => {
     const pixelId = ca.pixel_id;
     if (!pixelId) return json({ error: "Pixel ID não configurado" }, 400);
 
+    // ── Dedup (ver dedup.ts) ── antes de resolver token / chamar a Meta.
+    const eventTime = Math.floor(Date.now() / 1000);
+    const isTest = isTestSend(test, ca.test_event_code);
+    const { eventId, dedup } = resolveEventId({
+      logRow,
+      organizationId: organization_id,
+      eventName: event_name,
+      contactId: contact_id,
+      opportunityId: opportunity_id,
+      isTest,
+      eventTime,
+    });
+    if (dedup) {
+      if (logRow && isRealSentRow(logRow)) {
+        return json({ skipped: "duplicate", capi_event_log_id: logRow.id });
+      }
+      const dup = await findSentDuplicate(admin, {
+        organizationId: organization_id,
+        eventName: event_name,
+        eventId,
+        contactId: contact_id,
+        opportunityId: opportunity_id,
+        excludeId: logRow?.id ?? null,
+      });
+      if (dup) {
+        if (logRow) {
+          // Retry de linha legada cujo evento já foi enviado por outra linha: encerra o retry
+          // (senão o retry-cron reprocessa para sempre) sem chamar a Meta.
+          await admin.from("capi_event_log").update({
+            status: "permanent_failure",
+            next_retry_at: null,
+            meta_error: JSON.stringify({ message: "duplicate_skipped", duplicate_of: dup.id }),
+          }).eq("id", logRow.id);
+        }
+        console.log("[capi] duplicate skipped", { event_name, capi_event_log_id: dup.id });
+        return json({ skipped: "duplicate", capi_event_log_id: dup.id });
+      }
+    }
+
     const accessToken = await getAccessToken(admin, organization_id, ca);
     if (!accessToken) {
       return json({
@@ -205,9 +245,6 @@ serve(async (req) => {
       opportunity = data;
     }
 
-    const eventTime = Math.floor(Date.now() / 1000);
-    const eventId = logRow?.event_id ||
-      `${organization_id}:${event_name}:${contact_id || "x"}:${opportunity_id || "x"}:${eventTime}`;
     const sourceUrl = ca.default_event_source_url || undefined;
     const userData = await buildUserData(contact);
 
@@ -269,6 +306,7 @@ serve(async (req) => {
     if (ca.test_event_code) requestBody.test_event_code = ca.test_event_code;
 
     let logId = logRow?.id as string | undefined;
+    let attempts = (logRow?.attempt_count || 0) + 1;
     // Payload persistido SEM access_token
     const persistedPayload = { ...requestBody, access_token: "***" };
     const baseLog = {
@@ -293,18 +331,15 @@ serve(async (req) => {
         meta_response: null,
       }).eq("id", logId);
     } else {
-      const { data: ins, error } = await admin
-        .from("capi_event_log")
-        .insert({
-          ...baseLog,
-          status: "pending",
-          attempt_count: 1,
-          last_attempt_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      logId = ins.id;
+      // INSERT protegido pelo índice único (organization_id, event_id): numa corrida só um
+      // request "possui" a linha e chama a Meta; o outro devolve skipped.
+      const claim = await claimLogRow(admin, baseLog);
+      if (claim.kind === "skip") {
+        console.log("[capi] skipped on claim", { event_name, reason: claim.reason, capi_event_log_id: claim.id });
+        return json({ skipped: claim.reason, capi_event_log_id: claim.id });
+      }
+      logId = claim.id;
+      attempts = claim.attemptCount;
     }
 
     const url = `https://graph.facebook.com/${META_API_VERSION}/${pixelId}/events`;
@@ -323,7 +358,6 @@ serve(async (req) => {
       // 100 = invalid params (geralmente permanente), 190 = token inválido, 17 = rate limit (transitório)
       const isPermanent = errCode === 100 || errCode === 190;
       const isRateLimit = errCode === 17 || errCode === 4 || errCode === 32;
-      const attempts = (logRow?.attempt_count || 0) + 1;
       const giveUp = isPermanent || attempts >= 5;
 
       const enrichedError = {
