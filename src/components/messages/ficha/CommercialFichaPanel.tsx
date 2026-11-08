@@ -3,7 +3,7 @@
 //  - resumo: edição rápida (nome, e-mail, CPF) + campos personalizados;
 //  - completo: o MESMO formulário da tela de contato (ContactFormView embedded),
 //    então as regras (CPF, duplicidade, endereço, verificação) são as mesmas.
-// Fases seguintes (oportunidade, nota/tarefa) entram como novas seções do resumo.
+// Resumo também mostra as oportunidades abertas (Fase 2); nota/tarefa entram na Fase 3.
 // < 1536px abre como gaveta por cima do chat; ≥ 1536px fica ao lado (como no Atendimento).
 import { useEffect, useState } from 'react';
 import { ArrowLeft, X } from '@phosphor-icons/react';
@@ -13,6 +13,7 @@ import { CustomFieldsCard } from '@/components/custom-fields/CustomFieldsCard';
 import { ContactFormView } from '@/pages/contacts/ContactForm';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { ContactQuickEdit } from './ContactQuickEdit';
+import { OpportunitySection, type FichaOpp } from './OpportunitySection';
 
 type View = 'summary' | 'full';
 
@@ -21,11 +22,23 @@ export function CommercialFichaPanel({
   contactId,
   onContactChanged,
   onClose,
+  opportunities,
+  stages,
+  onWon,
+  onLost,
+  onMoveStage,
+  onOpportunityUpdated,
 }: {
   open: boolean;
   contactId: string | null | undefined;
   onContactChanged?: () => void;
   onClose: () => void;
+  opportunities: FichaOpp[];
+  stages: Array<{ id: string; name: string }>;
+  onWon: (opp: FichaOpp) => void;
+  onLost: (opp: FichaOpp) => void;
+  onMoveStage: (opp: FichaOpp) => void;
+  onOpportunityUpdated: (id: string, patch: Partial<FichaOpp>) => void;
 }) {
   useUiLocale();
   const { permissions } = usePermissions();
@@ -97,6 +110,15 @@ export function CommercialFichaPanel({
                 onEditFull={() => setView('full')}
               />
               <CustomFieldsCard key={`cf-${contactId}`} module="contacts" recordId={contactId} title={uiText('Campos personalizados')} compact />
+              <OpportunitySection
+                opportunities={opportunities}
+                stages={stages}
+                canEdit={permissions.canEditOpportunities}
+                onWon={onWon}
+                onLost={onLost}
+                onMoveStage={onMoveStage}
+                onUpdated={onOpportunityUpdated}
+              />
             </div>
           )}
         </div>

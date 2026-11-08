@@ -512,7 +512,7 @@ function DesktopMessagesList() {
   const [isExporting, setIsExporting] = useState(false);
 
   // Opportunities for current contact (mark as won/lost from chat)
-  type ChatOpp = { id: string; title: string; pipeline_stage_id: string; close_date: string | null; contact_id: string | null };
+  type ChatOpp = { id: string; title: string; pipeline_stage_id: string; close_date: string | null; contact_id: string | null; amount?: number | null; currency?: string | null; owner_user_id?: string | null };
   const [contactOpportunities, setContactOpportunities] = useState<ChatOpp[]>([]);
   const [pipelineStages, setPipelineStages] = useState<Array<{ id: string; name: string; type: string | null; order_index: number | null }>>([]);
   const [confirmAction, setConfirmAction] = useState<{ kind: 'won' | 'lost'; opp: ChatOpp } | null>(null);
@@ -1040,7 +1040,7 @@ function DesktopMessagesList() {
     (async () => {
       const { data } = await supabase
         .from('opportunities')
-        .select('id, title, pipeline_stage_id, close_date, contact_id')
+        .select('id, title, pipeline_stage_id, close_date, contact_id, amount, currency, owner_user_id')
         .eq('organization_id', organization.id)
         .eq('contact_id', contactId)
         .eq('status', 'open')
@@ -3195,6 +3195,12 @@ function DesktopMessagesList() {
             contactId={selectedThread.contact_id}
             onContactChanged={refetchThreads}
             onClose={() => setFichaOpen(false)}
+            opportunities={contactOpportunities}
+            stages={pipelineStages}
+            onWon={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) setConfirmAction({ kind: 'won', opp: o }); }}
+            onLost={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) setConfirmAction({ kind: 'lost', opp: o }); }}
+            onMoveStage={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) { setMoveStageTargetId(o.pipeline_stage_id); setMoveStageOpp(o); } }}
+            onOpportunityUpdated={(id, patch) => setContactOpportunities((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))}
           />
         )}
       </div>
