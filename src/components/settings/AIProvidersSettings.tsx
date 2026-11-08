@@ -1,3 +1,6 @@
+import { useAiSpend } from '@/hooks/useAiSpend';
+import type { AiProviderSpend } from '@/lib/aiSpend';
+import { AISpendSummary } from './AISpendSummary';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -162,6 +165,7 @@ export function AIProvidersSettings() {
   const { permissions } = usePermissions();
   const canManage = permissions.canManageIntegrations;
   const { data: providerMap = {}, isLoading, refetch } = useProviderKeys(organization?.id);
+  const spend = useAiSpend(organization?.id, canManage);
 
   const [editing, setEditing] = useState<ProviderId | null>(null);
   const [confirmingRevoke, setConfirmingRevoke] = useState<ProviderId | null>(null);
@@ -196,6 +200,9 @@ export function AIProvidersSettings() {
               status={status}
               loading={isLoading}
               canManage={canManage}
+              spend={spend.data?.[p.id]}
+              spendLoading={spend.isLoading}
+              spendFailed={spend.isError}
               onConfigure={() => setEditing(p.id)}
               onRevoke={() => setConfirmingRevoke(p.id)}
             />
@@ -229,13 +236,16 @@ export function AIProvidersSettings() {
 // Card
 // ---------------------------------------------------------------------------
 function ProviderCard({
-  meta, info, status, loading, canManage, onConfigure, onRevoke,
+  meta, info, status, loading, canManage, spend, spendLoading, spendFailed, onConfigure, onRevoke,
 }: {
   meta: ProviderMeta;
   info?: ProviderInfo;
   status: ProviderStatus;
   loading: boolean;
   canManage: boolean;
+  spend?: AiProviderSpend;
+  spendLoading: boolean;
+  spendFailed: boolean;
   onConfigure: () => void;
   onRevoke: () => void;
 }) {
@@ -287,6 +297,10 @@ function ProviderCard({
             </dd>
           </div>
         </dl>
+
+        {canManage && status !== 'not_configured' && (
+          <AISpendSummary spend={spend} budget={info?.monthly_budget_usd} loading={spendLoading} failed={spendFailed} />
+        )}
 
         {showFallbackWarning && (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
