@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/integrations/supabase/client';
@@ -67,9 +67,37 @@ function normalizePhoneBR(input: string | null | undefined): string | null {
 }
 
 
+// Página (/contacts/new, /contacts/:id/edit). O mesmo formulário é usado embutido
+// na Ficha lateral do Comercial (ContactFormView com embedded), sem sair do chat.
 export default function ContactForm() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  return <ContactFormView />;
+}
+
+export function ContactFormView({
+  contactId,
+  embedded = false,
+  onDone,
+}: {
+  contactId?: string;
+  /** Sem Layout/cabeçalho, coluna única; ao salvar/cancelar chama onDone em vez de navegar. */
+  embedded?: boolean;
+  onDone?: () => void;
+} = {}) {
+  const params = useParams();
+  const id = contactId ?? params.id;
+  const routerNavigate = useNavigate();
+  // Embutido: nunca trocar de tela. Saída normal → onDone; abrir outro contato → nova aba.
+  const navigate = (to: string) => {
+    if (!embedded) { routerNavigate(to); return; }
+    if (/^\/contacts\/[0-9a-f-]{36}$/i.test(to) && to !== `/contacts/${id}`) {
+      window.open(to, '_blank', 'noopener');
+      return;
+    }
+    if (to.startsWith('/contacts')) { onDone?.(); return; }
+    window.open(to, '_blank', 'noopener');
+  };
+  const md2 = embedded ? '' : 'md:grid-cols-2';
+  const Shell = embedded ? EmbeddedShell : Layout;
   const { user } = useAuth();
   const { organization, userProfile, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
@@ -657,7 +685,7 @@ export default function ContactForm() {
 
   if (organization && !organization.operating_country_code) {
     return (
-      <Layout>
+      <Shell>
         <div className="p-6">
           <Card className="mx-auto max-w-xl p-6">
             <h1 className="text-xl font-semibold">Escolha o país operacional</h1>
@@ -669,14 +697,14 @@ export default function ContactForm() {
             </Button>
           </Card>
         </div>
-      </Layout>
+      </Shell>
     );
   }
 
   return (
-    <Layout>
+    <Shell>
       <div className="flex flex-col h-full">
-        <div className="border-b bg-background/95 backdrop-blur">
+        {!embedded && <div className="border-b bg-background/95 backdrop-blur">
           <div className="flex items-center gap-4 px-6 py-4">
             <Link to={isEdit ? `/contacts/${id}` : '/contacts'}>
               <Button color="ghost" size="icon">
@@ -687,10 +715,10 @@ export default function ContactForm() {
               {isEdit ? t('contacts.editContact') : t('contacts.newContact')}
             </h1>
           </div>
-        </div>
+        </div>}
 
-        <div className="flex-1 overflow-auto p-6">
-          <Card className="max-w-2xl mx-auto p-6">
+        <div className={embedded ? '' : 'flex-1 overflow-auto p-6'}>
+          <Card className={embedded ? 'border-0 shadow-none p-0' : 'max-w-2xl mx-auto p-6'}>
             {showDuplicateWarning && duplicates.length > 0 && (() => {
               const hasPhoneDup = duplicates.some((d) => d.phone && d.phone === formData.phone);
               return (
@@ -827,7 +855,7 @@ export default function ContactForm() {
               {/* Documentos brasileiros */}
               {isBrazil && <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-foreground border-b pb-2">Documentos</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`grid grid-cols-1 ${md2} gap-4`}>
                   <div>
                     <Label htmlFor="cpf">CPF</Label>
                     <div className="relative">
@@ -996,7 +1024,7 @@ export default function ContactForm() {
                 {cpfVerification.status === 'verified' && (
                   <div className="rounded-lg border bg-muted/30 p-4">
                     <p className="text-sm font-medium">Verificação cadastral</p>
-                    <dl className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+                    <dl className={`mt-3 grid grid-cols-1 gap-3 text-sm ${md2}`}>
                       <div>
                         <dt className="text-muted-foreground">Situação cadastral</dt>
                         <dd>{cpfVerification.registrationStatus || 'Não informada'}</dd>
@@ -1013,7 +1041,7 @@ export default function ContactForm() {
               {/* Endereço */}
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-foreground border-b pb-2">Endereço</h3>
-                <div className={`grid grid-cols-1 gap-4 ${isBrazil ? 'md:grid-cols-[1fr_140px]' : ''}`}>
+                <div className={`grid grid-cols-1 gap-4 ${isBrazil && !embedded ? 'md:grid-cols-[1fr_140px]' : ''}`}>
                   <div>
                     <Label htmlFor="address_street">{isBrazil ? 'Logradouro' : 'Street address'}</Label>
                     <Input
@@ -1039,7 +1067,7 @@ export default function ContactForm() {
                     onChange={(e) => setFormData({ ...formData, address_complement: e.target.value })}
                   />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`grid grid-cols-1 ${md2} gap-4`}>
                   {isBrazil && <div>
                     <Label htmlFor="address_neighborhood">Bairro</Label>
                     <Input
@@ -1135,6 +1163,10 @@ export default function ContactForm() {
           </Card>
         </div>
       </div>
-    </Layout>
+    </Shell>
   );
+}
+
+function EmbeddedShell({ children }: { children: ReactNode }) {
+  return <div className="text-sm">{children}</div>;
 }

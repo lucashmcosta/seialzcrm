@@ -1318,4 +1318,5 @@ Object.assign(uiEnglish, {
   "Esta conversa não tem contato vinculado.": "This conversation has no linked contact.",
   "Ficha": "Profile",
   "Fechar ficha": "Close profile panel",
+  "Cadastro completo": "Full record",
 });

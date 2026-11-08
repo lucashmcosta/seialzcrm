@@ -1,12 +1,20 @@
-// Ficha lateral do Comercial: dados do contato da conversa aberta, editáveis sem
-// sair do chat. Fase 1: contato + campos personalizados. Fases seguintes
-// (oportunidade, nota/tarefa) entram como novas seções aqui.
-// Mesmo padrão visual do painel lateral do Atendimento (InboxThreadDetail).
-import { X } from '@phosphor-icons/react';
+// Ficha lateral do Comercial: tudo do contato da conversa aberta, sem sair do chat.
+// Duas visões no mesmo painel:
+//  - resumo: edição rápida (nome, e-mail, CPF) + campos personalizados;
+//  - completo: o MESMO formulário da tela de contato (ContactFormView embedded),
+//    então as regras (CPF, duplicidade, endereço, verificação) são as mesmas.
+// Fases seguintes (oportunidade, nota/tarefa) entram como novas seções do resumo.
+// < 1536px abre como gaveta por cima do chat; ≥ 1536px fica ao lado (como no Atendimento).
+import { useEffect, useState } from 'react';
+import { ArrowLeft, X } from '@phosphor-icons/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CustomFieldsCard } from '@/components/custom-fields/CustomFieldsCard';
+import { ContactFormView } from '@/pages/contacts/ContactForm';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { ContactQuickEdit } from './ContactQuickEdit';
+
+type View = 'summary' | 'full';
 
 export function CommercialFichaPanel({
   open,
@@ -21,18 +29,47 @@ export function CommercialFichaPanel({
 }) {
   useUiLocale();
   const { permissions } = usePermissions();
+  const qc = useQueryClient();
+  const [view, setView] = useState<View>('summary');
+
+  // Trocar de conversa volta pro resumo (não deixa o formulário de outro contato aberto).
+  useEffect(() => { setView('summary'); }, [contactId]);
+
+  const backFromFull = () => {
+    setView('summary');
+    if (contactId) {
+      void qc.invalidateQueries({ queryKey: ['ficha-contact', contactId] });
+      void qc.invalidateQueries({ queryKey: ['custom-field-values', 'contacts', contactId] });
+    }
+    onContactChanged?.();
+  };
+
+  const width = view === 'full' ? 'w-[420px]' : 'w-[320px]';
 
   return (
     <aside
-      // < 1536px: gaveta por cima do lado direito do chat (não espreme a conversa).
-      // ≥ 1536px (2xl): coluna fixa ao lado do chat, como no Atendimento.
-      className={`${open ? 'w-[320px] border-l shadow-xl 2xl:shadow-none' : 'w-0 border-l-0'} hidden lg:block absolute right-0 top-0 bottom-0 z-30 2xl:static 2xl:z-auto border-border overflow-hidden flex-shrink-0 transition-[width] duration-200 ease-in-out bg-background`}
+      className={`${open ? `${width} border-l shadow-xl 2xl:shadow-none` : 'w-0 border-l-0'} hidden lg:block absolute right-0 top-0 bottom-0 z-30 2xl:static 2xl:z-auto border-border overflow-hidden flex-shrink-0 transition-[width] duration-200 ease-in-out bg-background`}
       aria-hidden={!open}
     >
       {open && (
-        <div className="w-[320px] h-full overflow-y-auto">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border sticky top-0 bg-background z-10">
-            <h2 className="text-sm font-semibold">{uiText('Ficha')}</h2>
+        <div className={`${width} h-full overflow-y-auto`}>
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border sticky top-0 bg-background z-10">
+            <div className="flex items-center gap-1 min-w-0">
+              {view === 'full' && (
+                <button
+                  type="button"
+                  onClick={() => setView('summary')}
+                  className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label={uiText('Voltar')}
+                  title={uiText('Voltar')}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              )}
+              <h2 className="text-sm font-semibold truncate">
+                {view === 'full' ? uiText('Cadastro completo') : uiText('Ficha')}
+              </h2>
+            </div>
             <button
               type="button"
               onClick={onClose}
@@ -43,21 +80,25 @@ export function CommercialFichaPanel({
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="px-4 py-5 space-y-6">
-            {contactId ? (
-              <>
-                <ContactQuickEdit
-                  key={contactId}
-                  contactId={contactId}
-                  canEdit={permissions.canEditContacts}
-                  onSaved={onContactChanged}
-                />
-                <CustomFieldsCard key={`cf-${contactId}`} module="contacts" recordId={contactId} title={uiText('Campos personalizados')} compact />
-              </>
-            ) : (
-              <p className="text-xs text-muted-foreground">{uiText('Esta conversa não tem contato vinculado.')}</p>
-            )}
-          </div>
+
+          {!contactId ? (
+            <p className="px-4 py-5 text-xs text-muted-foreground">{uiText('Esta conversa não tem contato vinculado.')}</p>
+          ) : view === 'full' ? (
+            <div className="px-4 py-5">
+              <ContactFormView key={`full-${contactId}`} contactId={contactId} embedded onDone={backFromFull} />
+            </div>
+          ) : (
+            <div className="px-4 py-5 space-y-6">
+              <ContactQuickEdit
+                key={contactId}
+                contactId={contactId}
+                canEdit={permissions.canEditContacts}
+                onSaved={onContactChanged}
+                onEditFull={() => setView('full')}
+              />
+              <CustomFieldsCard key={`cf-${contactId}`} module="contacts" recordId={contactId} title={uiText('Campos personalizados')} compact />
+            </div>
+          )}
         </div>
       )}
     </aside>

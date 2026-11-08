@@ -3,7 +3,6 @@
 // de edição (src/lib/contactRules.ts + contactUpdate.ts). Telefone é só leitura:
 // a conversa está ligada a ele; trocar por aqui poderia desligar o histórico.
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,10 +32,12 @@ export function ContactQuickEdit({
   contactId,
   canEdit,
   onSaved,
+  onEditFull,
 }: {
   contactId: string;
   canEdit: boolean;
   onSaved?: () => void;
+  onEditFull?: () => void;
 }) {
   useUiLocale();
   const { organization, userProfile } = useOrganization();
@@ -221,9 +222,11 @@ export function ContactQuickEdit({
       {!canEdit && (
         <p className="text-xs text-muted-foreground">{uiText('Você não tem permissão para editar contatos.')}</p>
       )}
-      <Link to={`/contacts/${contactId}/edit`} className="inline-block text-xs text-primary hover:underline">
-        {uiText('Editar cadastro completo')}
-      </Link>
+      {canEdit && onEditFull && (
+        <button type="button" onClick={onEditFull} className="inline-block text-xs text-primary hover:underline">
+          {uiText('Editar cadastro completo')}
+        </button>
+      )}
     </section>
   );
 }
