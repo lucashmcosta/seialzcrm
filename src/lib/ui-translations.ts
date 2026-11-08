@@ -267,6 +267,7 @@ export const uiEnglish: Record<string, string> = {
   "Falha no teste": "Test failed",
   "Modo teste — eventos não contam": "Test mode — events are not counted",
   "Desconectado": "Disconnected",
+  "Falta configurar o Pixel": "Pixel not configured yet",
   "Testar agora": "Test now",
   "Desconectar": "Disconnect",
   "Eventos enviados": "Events sent",
