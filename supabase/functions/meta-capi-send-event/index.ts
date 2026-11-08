@@ -4,6 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
+import { authorizeSendEvent } from "./auth.ts";
 
 const META_API_VERSION = Deno.env.get("META_GRAPH_API_VERSION") || "v25.0";
 
@@ -120,15 +121,18 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Invalid auth" }, 401);
-
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
     const body = await req.json().catch(() => ({}));
+
+    // Token validado (service/internal/usuário) + usuário só na própria org ativa.
+    const authz = await authorizeSendEvent(req, admin, body);
+    if (!authz.ok) {
+      return json({ error: authz.status === 401 ? "Invalid auth" : authz.error }, authz.status);
+    }
     let {
       organization_id,
       event_name,

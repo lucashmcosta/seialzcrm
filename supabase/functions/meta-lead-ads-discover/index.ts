@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret, encryptSecret } from "../_shared/crypto.ts";
 import { metaGraphGet } from "../_shared/meta-graph.ts";
 import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
+import { authorizeOrgRequest } from "../_shared/auth/membership.ts";
 
 // Auto-mapping: known Meta field keys → contact standard fields
 const AUTO_MAP: Record<string, string> = {
@@ -73,27 +74,23 @@ async function smoketestLeadsEdge(
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
-
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: authErr } = await userClient.auth.getClaims(token);
-    if (authErr || !claims?.claims) return json({ error: "Unauthorized" }, 401);
-
-    const { organization_integration_id, organization_id } = await req.json();
-    if (!organization_integration_id || !organization_id) {
-      return json({ error: "Missing required fields" }, 400);
-    }
-
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+
+    const { organization_integration_id, organization_id } = await req.json().catch(() => ({}));
+
+    // Usa o token Meta da org → usuário precisa ser membro ATIVO dela. A integração
+    // pertencer a essa org é verificado logo abaixo (404 se não pertencer).
+    const authz = await authorizeOrgRequest(req, admin, organization_id);
+    if (!authz.ok) {
+      return json({ error: authz.status === 401 ? "Unauthorized" : authz.error }, authz.status);
+    }
+
+    if (!organization_integration_id || !organization_id) {
+      return json({ error: "Missing required fields" }, 400);
+    }
 
     const { data: orgIntegration } = await admin
       .from("organization_integrations")

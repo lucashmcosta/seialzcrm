@@ -68,3 +68,30 @@ export async function callerCanAccessOrg(
   if (caller.kind !== "user") return true;
   return await isActiveOrgMember(admin, caller.authUserId, organizationId);
 }
+
+export type OrgRequestDecision =
+  | { ok: true; caller: Extract<OrgCaller, { ok: true }> }
+  | { ok: false; status: 401 | 403; error: string };
+
+/**
+ * Decisão completa p/ funções que recebem `organization_id`:
+ *   token ausente/inválido (inclui anon key) → 401
+ *   service/internal                         → ok (crons/triggers/funções)
+ *   usuário membro ATIVO da org              → ok
+ *   usuário sem membership ativa             → 403 forbidden_org
+ * Sem `organizationId` → ok: o handler devolve o 400 de campo obrigatório
+ * (nenhuma leitura/escrita de dados de org acontece sem org).
+ */
+export async function authorizeOrgRequest(
+  req: Request,
+  admin: AdminClient,
+  organizationId: string | null | undefined,
+): Promise<OrgRequestDecision> {
+  const caller = await resolveCaller(req, admin);
+  if (!caller.ok) return { ok: false, status: 401, error: caller.error };
+  if (!organizationId) return { ok: true, caller };
+  if (!(await callerCanAccessOrg(admin, caller, String(organizationId)))) {
+    return { ok: false, status: 403, error: "forbidden_org" };
+  }
+  return { ok: true, caller };
+}
