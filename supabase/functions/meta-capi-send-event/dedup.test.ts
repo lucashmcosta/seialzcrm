@@ -6,6 +6,7 @@ import {
   isRealSentRow,
   isTestSend,
   resolveTestEventCode,
+  testNeedsCode,
   type LogRow,
   resolveEventId,
 } from "./dedup.ts";
@@ -260,4 +261,12 @@ Deno.test("código de teste: vale só em envio de teste e nunca vira evento real
   assertEquals(resolveTestEventCode({ bodyTest: undefined, bodyCode: undefined, savedCode: "SALVO" }), "SALVO");
   // Reenvio de linha de teste mantém o código da linha.
   assertEquals(resolveTestEventCode({ bodyTest: undefined, bodyCode: undefined, savedCode: null, logRowCode: "TEST9" }), "TEST9");
+});
+
+Deno.test("teste sem código é recusado; evento normal, reenvio e teste com código passam", () => {
+  assertEquals(testNeedsCode(true, null, false), true);
+  assertEquals(testNeedsCode("true", null, false), true);
+  assertEquals(testNeedsCode(true, "TEST1", false), false);
+  assertEquals(testNeedsCode(undefined, null, false), false);
+  assertEquals(testNeedsCode(true, null, true), false);
 });
