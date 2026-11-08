@@ -12,14 +12,16 @@ import { useOrganization } from '@/hooks/useOrganization';
 
 const NONE = '__none__';
 
-type T = { id: string; name: string };
+type T = { id: string; name: string; code?: string; is_enabled?: boolean };
+// Tipos de contrato do catálogo aparecem primeiro, como sugestão (mesmo ainda não habilitados na org).
+const isContractType = (t: T) => /contrat/i.test(`${t.code ?? ''} ${t.name}`) && !/social|trabalho|distrato/i.test(`${t.code ?? ''} ${t.name}`);
 const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-function TypePicker({ value, contactTypes, oppTypes, onChange }: {
-  value: string; contactTypes: T[]; oppTypes: T[]; onChange: (v: string) => void;
+function TypePicker({ value, suggested, contactTypes, oppTypes, onChange }: {
+  value: string; suggested: T[]; contactTypes: T[]; oppTypes: T[]; onChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const label = value === NONE ? 'Sem tipo' : [...contactTypes, ...oppTypes].find((t) => t.id === value)?.name ?? 'Sem tipo';
+  const label = value === NONE ? 'Escolher tipo de documento' : [...suggested, ...contactTypes, ...oppTypes].find((t) => t.id === value)?.name ?? 'Escolher tipo de documento';
   const pick = (v: string) => { setOpen(false); if (v !== value) onChange(v); };
   const item = (t: T) => (
     <CommandItem key={t.id} value={`${t.name} ${t.id}`} onSelect={() => pick(t.id)}>{t.name}</CommandItem>
@@ -37,8 +39,9 @@ function TypePicker({ value, contactTypes, oppTypes, onChange }: {
           <CommandList>
             <CommandEmpty>Nenhum tipo encontrado</CommandEmpty>
             <CommandGroup>
-              <CommandItem value="Sem tipo" onSelect={() => pick(NONE)}>Sem tipo</CommandItem>
+              <CommandItem value="Sem tipo" onSelect={() => pick(NONE)}>Sem tipo (guarda no contato, sem tipo)</CommandItem>
             </CommandGroup>
+            {suggested.length > 0 && <CommandGroup heading="Sugeridos (contratos)">{suggested.map(item)}</CommandGroup>}
             {contactTypes.length > 0 && <CommandGroup heading="Do contato">{contactTypes.map(item)}</CommandGroup>}
             {oppTypes.length > 0 && <CommandGroup heading="Da oportunidade">{oppTypes.map(item)}</CommandGroup>}
           </CommandList>
@@ -52,8 +55,9 @@ function TypePicker({ value, contactTypes, oppTypes, onChange }: {
 export function SuvSignV2TemplateTypesCard({ organizationId }: { organizationId: string }) {
   const qc = useQueryClient();
   const { userProfile } = useOrganization();
-  const { catalog } = useDocumentCatalog();
-  const types = catalog.filter((t) => t.is_enabled);
+  const { catalog, setEnabled } = useDocumentCatalog();
+  // Mostra o catálogo inteiro: escolher um tipo ainda não habilitado já o habilita na org.
+  const types = catalog as unknown as (T & { owner_type: string })[];
   const templates = useQuery({
     queryKey: ['suvsign-v2-templates-admin', organizationId],
     queryFn: () => callSignatureRequests<{ templates: { id: string; name: string }[] }>('list_templates_admin', { organization_id: organizationId }),
@@ -72,6 +76,11 @@ export function SuvSignV2TemplateTypesCard({ organizationId }: { organizationId:
 
 
   const change = async (tpl: { id: string; name: string }, value: string) => {
+    const chosen = types.find((t) => t.id === value);
+    if (chosen && !chosen.is_enabled) {
+      try { await setEnabled.mutateAsync({ typeId: chosen.id, enabled: true }); }
+      catch { toast.error('Não foi possível habilitar o tipo no catálogo de documentos'); return; }
+    }
     const table = supabase.from('suvsign_v2_template_document_types' as any);
     const { error } = value === NONE
       ? await table.delete().eq('organization_id', organizationId).eq('template_id', tpl.id)
@@ -80,12 +89,14 @@ export function SuvSignV2TemplateTypesCard({ organizationId }: { organizationId:
           created_by: userProfile?.id ?? null, updated_by: userProfile?.id ?? null,
         } as any, { onConflict: 'organization_id,template_id' });
     if (error) { toast.error('Não foi possível salvar'); return; }
-    toast.success('Tipo salvo');
+    toast.success(chosen && !chosen.is_enabled ? `Tipo salvo e habilitado no catálogo: ${chosen.name}` : 'Tipo salvo');
     qc.invalidateQueries({ queryKey: mapKey });
   };
 
-  const contactTypes = types.filter((t) => t.owner_type === 'contact');
-  const oppTypes = types.filter((t) => t.owner_type === 'opportunity');
+  const byEnabled = (a: T, b: T) => Number(!!b.is_enabled) - Number(!!a.is_enabled) || a.name.localeCompare(b.name, 'pt-BR');
+  const suggested = types.filter(isContractType).sort(byEnabled);
+  const contactTypes = types.filter((t) => t.owner_type === 'contact' && !isContractType(t)).sort(byEnabled);
+  const oppTypes = types.filter((t) => t.owner_type === 'opportunity' && !isContractType(t)).sort(byEnabled);
 
   return (
     <Card className="mt-4">
@@ -104,6 +115,7 @@ export function SuvSignV2TemplateTypesCard({ organizationId }: { organizationId:
             <span className="text-sm">{tpl.name}</span>
             <TypePicker
               value={mappings.data?.get(tpl.id) ?? NONE}
+              suggested={suggested}
               contactTypes={contactTypes}
               oppTypes={oppTypes}
               onChange={(v) => change(tpl, v)}
