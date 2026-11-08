@@ -538,6 +538,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       setMessageText(result.content);
     } catch (error: any) {
       console.error('AI improvement error:', error);
+      toast({ variant: 'destructive', description: error?.message || 'Não foi possível melhorar o texto.' });
     } finally {
       setAiImproving(false);
     }

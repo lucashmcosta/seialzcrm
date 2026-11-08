@@ -637,7 +637,9 @@ export function MobileMessagesList() {
     try {
       const result = await generateAI({ action: 'improve_text', context: { text: messageText, mode } });
       setMessageText(result.content);
-    } catch { /* ignore */ } finally { setAiImproving(false); }
+    } catch (e) {
+      toast({ variant: 'destructive', description: (e as Error)?.message || 'Não foi possível melhorar o texto.' });
+    } finally { setAiImproving(false); }
   };
 
   const renderStatusIcon = (message: Message) => (

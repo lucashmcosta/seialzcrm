@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { decryptSecret } from "../_shared/crypto.ts";
+import { byokBudgetExceeded, markByokInvalid, readSecretPayload } from "../_shared/intelligence/resolve-provider.ts";
+import { pickTextAiCredential, type LegacyAiRow } from "../_shared/intelligence/text-ai-credential.ts";
+import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
+import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +15,8 @@ interface AIRequest {
   action: "summarize_contact" | "suggest_reply" | "analyze_opportunity" | "generate_email" | "improve_text" | "generate_agent_prompt" | "refine_agent_prompt" | "custom";
   prompt?: string;
   context?: Record<string, any>;
+  /** Org aberta na tela. Sem ela (aba antiga), vale a primeira org do usuário. */
+  organization_id?: string;
 }
 
 serve(async (req) => {
@@ -62,8 +69,18 @@ serve(async (req) => {
       );
     }
 
-    const organizationId = userOrg.user_organizations[0].organization_id;
+    const { action, prompt, context, organization_id: requestedOrg }: AIRequest = await req.json();
+    const memberships = userOrg.user_organizations as Array<{ organization_id: string }>;
+    if (requestedOrg && !memberships.some((m) => m.organization_id === requestedOrg)) {
+      return new Response(
+        JSON.stringify({ error: "forbidden_org" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const organizationId = requestedOrg || memberships[0].organization_id;
     const userId = userOrg.id;
+    // Sem o token do usuário: a chave BYOK só é lida com service_role.
+    const admin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Find active AI integration (Claude or OpenAI)
     const { data: aiIntegrations, error: intError } = await supabase
@@ -73,26 +90,42 @@ serve(async (req) => {
       .eq("is_enabled", true)
       .in("integration.slug", ["claude-ai", "openai-gpt"]);
 
-    if (intError || !aiIntegrations || aiIntegrations.length === 0) {
+    if (intError) throw intError;
+
+    // BYOK primeiro, mantendo a preferência pelo Claude (text-ai-credential.ts).
+    const legacyRows: LegacyAiRow[] = (aiIntegrations ?? []).map((i) => ({
+      slug: i.integration.slug,
+      config_values: i.config_values as Record<string, any> | null,
+    }));
+    const credential = pickTextAiCredential(await readSecretPayload(admin, organizationId), legacyRows);
+    if (!credential) {
       return new Response(
-        JSON.stringify({ error: "Nenhuma integração de IA configurada. Conecte o Claude ou ChatGPT em Configurações > Integrações." }),
+        JSON.stringify({ error: "Nenhuma chave de IA configurada. Conecte o Claude ou ChatGPT em Configurações > Integrações." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    // Prefer Claude if both are configured
-    const aiIntegration = aiIntegrations.find(i => i.integration.slug === "claude-ai") || aiIntegrations[0];
-    const integrationSlug = aiIntegration.integration.slug;
-    const configValues = aiIntegration.config_values as Record<string, any>;
-
-    if (!configValues?.api_key) {
-      return new Response(
-        JSON.stringify({ error: "API key não configurada para a integração de IA." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const integrationSlug = credential.slug;
+    let configValues: Record<string, any>;
+    if (credential.kind === "byok") {
+      const budget = Number(credential.entry.monthly_budget_usd ?? 0);
+      if (budget > 0 && await byokBudgetExceeded(admin, organizationId, credential.provider, budget)) {
+        return new Response(
+          JSON.stringify({ error: "O limite mensal da chave de IA desta organização foi atingido." }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      configValues = {
+        api_key: await decryptSecret(credential.entry.api_key_encrypted!),
+        default_model: credential.entry.preferred_model || undefined,
+      };
+    } else {
+      configValues = credential.config;
     }
-
-    const { action, prompt, context }: AIRequest = await req.json();
+    const byokRejected = async (status: number) => {
+      if (credential.kind === "byok" && status === 401) {
+        await markByokInvalid(admin, organizationId, credential.provider, "invalid_key");
+      }
+    };
 
     // Build system prompt based on action
     let systemPrompt = "Você é um assistente de CRM inteligente. Responda de forma clara, profissional e concisa em português.";
@@ -263,6 +296,7 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
       if (!claudeResponse.ok) {
         const errorText = await claudeResponse.text();
         console.error("Claude API error:", claudeResponse.status, errorText);
+        await byokRejected(claudeResponse.status);
         let userMessage = `Erro na API do Claude: ${claudeResponse.status}`;
         if (claudeResponse.status === 529 || claudeResponse.status === 503) {
           userMessage = "O serviço de IA está temporariamente sobrecarregado. Tente novamente em alguns segundos.";
@@ -282,7 +316,7 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
 
       const claudeData = await claudeResponse.json();
       response = {
-        content: claudeData.content?.[0]?.text || "",
+        content: claudeData.content?.find((b: { type?: string }) => b.type === "text")?.text || "",
         model: claudeData.model,
       };
       tokensUsed = {
@@ -321,9 +355,12 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
 
       if (!openaiResponse.ok) {
         const errorText = await openaiResponse.text();
-        console.error("OpenAI API error:", openaiResponse.status, errorText);
+        console.error("OpenAI API error:", openaiResponse.status);
+        await byokRejected(openaiResponse.status);
         return new Response(
-          JSON.stringify({ error: `Erro na API do OpenAI: ${openaiResponse.status}` }),
+          JSON.stringify({ error: openaiResponse.status === 401
+            ? "A OpenAI recusou a chave desta organização. Atualize a chave em Configurações > Integrações."
+            : `Erro na API do OpenAI: ${openaiResponse.status}` }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -340,8 +377,24 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
       };
     }
 
-    // Log usage
-    await supabase.from("ai_usage_logs").insert({
+    // Log usage. BYOK entra com custo e origem, que é o que o limite mensal soma.
+    if (credential.kind === "byok") {
+      await logAiUsage(admin, {
+        organization_id: organizationId,
+        user_id: userId,
+        provider: credential.provider,
+        model: modelUsed,
+        source: "customer_key",
+        action,
+        integration_slug: integrationSlug,
+        prompt_tokens: tokensUsed.prompt,
+        completion_tokens: tokensUsed.completion,
+        total_tokens: tokensUsed.total,
+        estimated_cost_usd: await estimateTextCostUsd(admin, credential.provider, modelUsed, tokensUsed.prompt, tokensUsed.completion),
+        entity_type: context?.entity_type,
+        entity_id: context?.entity_id,
+      });
+    } else await supabase.from("ai_usage_logs").insert({
       organization_id: organizationId,
       user_id: userId,
       integration_slug: integrationSlug,

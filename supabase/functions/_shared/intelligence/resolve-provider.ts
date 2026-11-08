@@ -75,7 +75,7 @@ interface SecretEntry {
   preferred_model?: string | null;
 }
 
-async function readSecretPayload(
+export async function readSecretPayload(
   admin: SupabaseClient,
   orgId: string,
 ): Promise<Record<string, SecretEntry>> {
@@ -96,7 +96,7 @@ async function readSecretPayload(
   return merged;
 }
 
-async function byokBudgetExceeded(
+export async function byokBudgetExceeded(
   admin: SupabaseClient,
   orgId: string,
   provider: string,
