@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useOrgLogoIcon } from '@/hooks/useOrgLogoIcon';
 import { usePermissions } from '@/hooks/usePermissions';
 import { areaAllowed } from '@/components/RequirePerm';
 import { useTranslation } from '@/lib/i18n';
@@ -61,6 +62,7 @@ export function Layout({ children }: LayoutProps) {
   const portalUnread = useClientPortalUnreadCount(organization?.id, !!portalChatEnabled);
   const { themePreset } = useTheme();
   // Menu lateral recolhido (só ícones) — preferência por navegador.
+  const { data: orgLogoIcon } = useOrgLogoIcon(organization?.id);
   const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
     try { return window.localStorage.getItem('layout.sidebar.collapsed') === '1'; } catch { return false; }
   });
@@ -255,7 +257,9 @@ export function Layout({ children }: LayoutProps) {
   const userInitial = userProfile?.full_name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || '?';
   const collapsedLogo = (
     <Link to="/dashboard" title={organization?.name || undefined} className="flex items-center justify-center">
-      {organization?.logo_url ? (
+      {orgLogoIcon ? (
+        <img src={orgLogoIcon} alt={organization?.name} className="h-9 w-9 object-contain rounded-lg" />
+      ) : organization?.logo_url ? (
         <img src={organization.logo_url} alt={organization.name} className="h-8 w-10 object-contain" />
       ) : (
         <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">

@@ -18,6 +18,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { SimpleLogoUploader } from '@/components/settings/SimpleLogoUploader';
+import { useQueryClient } from '@tanstack/react-query';
+import { useOrgLogoIcon, orgLogoIconKey } from '@/hooks/useOrgLogoIcon';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +42,9 @@ export function GeneralSettings() {
   const [logoDialogOpen, setLogoDialogOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState('');
   const [logoSize, setLogoSize] = useState(40);
+  const [iconDialogOpen, setIconDialogOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const { data: logoIconUrl } = useOrgLogoIcon(organization?.id);
   const [copiedOrgId, setCopiedOrgId] = useState(false);
   const [cpfLookupEnabled, setCpfLookupEnabled] = useState(false);
   const [cpfPurpose, setCpfPurpose] = useState('');
@@ -111,6 +116,19 @@ export function GeneralSettings() {
       title: t('common.success'),
       description: t('settings.logoUpdated'),
     });
+  };
+
+  const handleIconSave = async (newIconUrl: string) => {
+    if (!organization?.id) return;
+    const { error } = await (supabase.from('organizations') as any)
+      .update({ logo_icon_url: newIconUrl || null })
+      .eq('id', organization.id);
+    if (error) {
+      toast({ variant: 'destructive', title: uiText('Erro'), description: uiText('Não foi possível salvar o ícone.') });
+      throw error;
+    }
+    await queryClient.invalidateQueries({ queryKey: orgLogoIconKey(organization.id) });
+    toast({ title: t('common.success'), description: uiText('Ícone atualizado') });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -254,6 +272,27 @@ export function GeneralSettings() {
                   {t('settings.logoSize')}: {logoSize}px
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* Ícone do menu recolhido */}
+          <div className="space-y-2">
+            <Label>{uiText("Ícone do menu recolhido")}</Label>
+            <p className="text-sm text-muted-foreground">
+              {uiText("Aparece no lugar do logo quando o menu lateral está recolhido. Use uma imagem quadrada.")}
+            </p>
+            <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
+              {logoIconUrl ? (
+                <img src={logoIconUrl} alt={uiText("Ícone da organização")} className="h-9 w-9 object-contain rounded-lg bg-background p-0.5" />
+              ) : (
+                <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
+                  <ImageSquare className="w-1/2 h-1/2 text-primary-foreground" />
+                </div>
+              )}
+              <Button type="button" variant="outline" onClick={() => setIconDialogOpen(true)}>
+                <PencilSimple className="w-4 h-4 mr-2" />
+                {logoIconUrl ? uiText("Trocar ícone") : uiText("Enviar ícone")}
+              </Button>
             </div>
           </div>
 
@@ -474,6 +513,15 @@ export function GeneralSettings() {
         currentLogoUrl={logoUrl}
         currentSize={logoSize}
         onSave={handleLogoSave}
+        organizationSlug={organization?.slug || 'org'}
+      />
+      <SimpleLogoUploader
+        variant="icon"
+        open={iconDialogOpen}
+        onOpenChange={setIconDialogOpen}
+        currentLogoUrl={logoIconUrl || ''}
+        currentSize={36}
+        onSave={(url) => handleIconSave(url)}
         organizationSlug={organization?.slug || 'org'}
       />
     </Card>

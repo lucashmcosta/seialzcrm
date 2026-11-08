@@ -24,6 +24,8 @@ interface SimpleLogoUploaderProps {
   currentSize: number;
   onSave: (logoUrl: string, size: number) => Promise<void>;
   organizationSlug: string;
+  /** 'icon': ícone quadrado do menu recolhido (sem ajuste de tamanho). */
+  variant?: 'logo' | 'icon';
 }
 
 export function SimpleLogoUploader({
@@ -33,7 +35,9 @@ export function SimpleLogoUploader({
   currentSize,
   onSave,
   organizationSlug,
+  variant = 'logo',
 }: SimpleLogoUploaderProps) {
+  const isIcon = variant === 'icon';
   useUiLocale();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -89,7 +93,7 @@ export function SimpleLogoUploader({
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${organizationSlug}-${Date.now()}.${fileExt}`;
+      const fileName = `${organizationSlug}-${isIcon ? 'icon-' : ''}${Date.now()}.${fileExt}`;
       const filePath = `${fileName}`;
 
       const { error: uploadError } = await supabase.storage
@@ -155,9 +159,11 @@ export function SimpleLogoUploader({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{uiText("Logo da Organização")}</DialogTitle>
+          <DialogTitle>{isIcon ? uiText("Ícone do menu recolhido") : uiText("Logo da Organização")}</DialogTitle>
           <DialogDescription>
-            {uiText("Faça upload de uma imagem ou cole uma URL. Ajuste o tamanho para a sidebar.")}</DialogDescription>
+            {isIcon
+              ? uiText("Imagem quadrada (ex.: 128×128 px) exibida no lugar do logo quando o menu lateral está recolhido.")
+              : uiText("Faça upload de uma imagem ou cole uma URL. Ajuste o tamanho para a sidebar.")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -222,8 +228,8 @@ export function SimpleLogoUploader({
                 <img
                   src={previewUrl}
                   alt={uiText("Preview do logo")}
-                  style={{ height: logoSize }}
-                  className="object-contain"
+                  style={isIcon ? { width: 36, height: 36 } : { height: logoSize }}
+                  className={isIcon ? 'object-contain rounded-lg' : 'object-contain'}
                   onError={() => {
                     toast({
                       variant: 'destructive',
@@ -236,18 +242,18 @@ export function SimpleLogoUploader({
               ) : (
                 <div 
                   className="bg-primary rounded-lg flex items-center justify-center"
-                  style={{ width: logoSize, height: logoSize }}
+                  style={isIcon ? { width: 36, height: 36 } : { width: logoSize, height: logoSize }}
                 >
                   <ImageSquare className="w-1/2 h-1/2 text-primary-foreground" />
                 </div>
               )}
-              <span className="text-sm text-muted-foreground">
-                {logoSize}{uiText("px de altura")}</span>
+              {!isIcon && <span className="text-sm text-muted-foreground">
+                {logoSize}{uiText("px de altura")}</span>}
             </div>
           </div>
 
           {/* Size Slider */}
-          <div className="space-y-3">
+          {!isIcon && <div className="space-y-3">
             <div className="flex justify-between">
               <Label>{uiText("Tamanho na Sidebar")}</Label>
               <span className="text-sm text-muted-foreground">{logoSize}px</span>
@@ -264,7 +270,7 @@ export function SimpleLogoUploader({
               <span>24px</span>
               <span>64px</span>
             </div>
-          </div>
+          </div>}
 
           {previewUrl && (
             <Button
