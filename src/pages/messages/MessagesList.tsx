@@ -386,7 +386,7 @@ function DesktopMessagesList() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   // Ficha lateral (contato/campos) ao lado do chat; preferência salva por navegador.
   const [fichaOpen, setFichaOpen] = useState<boolean>(() => {
-    try { return window.localStorage.getItem('commercial.ficha.open') !== '0'; } catch { return true; }
+    try { return window.localStorage.getItem('commercial.ficha.open') === '1'; } catch { return false; }
   });
   useEffect(() => {
     try { window.localStorage.setItem('commercial.ficha.open', fichaOpen ? '1' : '0'); } catch { /* storage indisponível */ }
@@ -1945,7 +1945,7 @@ function DesktopMessagesList() {
 
   return (
     <Layout>
-      <div className="h-screen overflow-hidden flex">
+      <div className="h-screen overflow-hidden flex relative">
         {/* Left Panel - Chat List (fixed width) */}
         <div className="w-[400px] flex-shrink-0 border-r border-border flex flex-col bg-card h-full overflow-hidden">
             <NoWhatsAppNumberBanner />
@@ -2154,7 +2154,7 @@ function DesktopMessagesList() {
                       <Button
                         variant={fichaOpen ? 'secondary' : 'outline'}
                         size="sm"
-                        className="hidden xl:inline-flex"
+                        className="hidden lg:inline-flex"
                         onClick={() => setFichaOpen((v) => !v)}
                         title={locale === 'pt-BR' ? (fichaOpen ? 'Fechar ficha' : 'Abrir ficha do contato') : (fichaOpen ? 'Close profile panel' : 'Open contact panel')}
                         aria-pressed={fichaOpen}
@@ -3194,6 +3194,7 @@ function DesktopMessagesList() {
             open={fichaOpen}
             contactId={selectedThread.contact_id}
             onContactChanged={refetchThreads}
+            onClose={() => setFichaOpen(false)}
           />
         )}
       </div>

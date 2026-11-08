@@ -1316,4 +1316,6 @@ Object.assign(uiEnglish, {
   "Editar cadastro completo": "Edit full record",
   "Campos personalizados": "Custom fields",
   "Esta conversa não tem contato vinculado.": "This conversation has no linked contact.",
+  "Ficha": "Profile",
+  "Fechar ficha": "Close profile panel",
 });
