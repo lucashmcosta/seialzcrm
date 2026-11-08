@@ -9,31 +9,13 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { encryptSecret } from "../_shared/crypto.ts";
 import { resolveOrgAdsAccess } from "../_shared/meta/ads-access.ts";
+import { callerCanAccessOrg, resolveCaller } from "../_shared/auth/membership.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-async function validateAuth(
-  req: Request,
-  admin: ReturnType<typeof createClient>,
-): Promise<{ ok: boolean; error?: string }> {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return { ok: false, error: "Missing Bearer token" };
-  const token = authHeader.replace("Bearer ", "").trim();
-  if (token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) return { ok: true };
-  try {
-    const { data: internal } = await admin.rpc("get_internal_function_auth_token");
-    if (internal && token === internal) return { ok: true };
-  } catch (_e) { /* ignore */ }
-  try {
-    const { data, error } = await admin.auth.getClaims(token);
-    if (!error && data?.claims?.sub) return { ok: true };
-  } catch (_e) { /* ignore */ }
-  return { ok: false, error: "Invalid token" };
 }
 
 function looksEncrypted(s: string | null | undefined): boolean {
@@ -48,7 +30,7 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const auth = await validateAuth(req, admin);
+  const auth = await resolveCaller(req, admin);
   if (!auth.ok) return json({ success: false, error: auth.error }, 401);
 
   let body: {
@@ -67,6 +49,10 @@ serve(async (req) => {
   const orgId = body.organization_id;
   if (!orgId || !/^[0-9a-f-]{36}$/i.test(orgId)) {
     return json({ success: false, error: "organization_id (uuid) required" }, 400);
+  }
+  // JWT de usuário só grava na org da qual é membro ativo (service/internal: inalterado).
+  if (!(await callerCanAccessOrg(admin, auth, orgId))) {
+    return json({ success: false, error_code: "forbidden_org", error: "forbidden_org" }, 403);
   }
   let adAccountId = (body.ad_account_id || "").trim();
   if (!adAccountId) return json({ success: false, error: "ad_account_id required" }, 400);

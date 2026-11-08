@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { appSecretProof } from "../_shared/meta-graph.ts";
 import { normalizeAdAccountId, resolveOrgAdsAccess } from "../_shared/meta/ads-access.ts";
+import { callerCanAccessOrg, resolveCaller } from "../_shared/auth/membership.ts";
 
 const API_VERSION = "v25.0";
 const GRAPH_TIMEOUT_MS = 30000;
@@ -47,40 +48,6 @@ async function graphGet(path: string, token: string, fields?: string, appSecret?
   }
 }
 
-async function validateAuth(
-  req: Request,
-  admin: ReturnType<typeof createClient>,
-): Promise<{ ok: boolean; error?: string }> {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return { ok: false, error: "Missing Bearer token" };
-  }
-  const token = authHeader.replace("Bearer ", "").trim();
-
-  // 1) service_role env match
-  if (token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
-    return { ok: true };
-  }
-
-  // 2) internal function auth token from Vault
-  try {
-    const { data: internal } = await admin.rpc("get_internal_function_auth_token");
-    if (internal && token === internal) return { ok: true };
-  } catch (_e) {
-    // ignore
-  }
-
-  // 3) JWT (user) — verify via getClaims
-  try {
-    const { data, error } = await admin.auth.getClaims(token);
-    if (!error && data?.claims?.sub) return { ok: true };
-  } catch (_e) {
-    // ignore
-  }
-
-  return { ok: false, error: "Invalid token" };
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -89,7 +56,7 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const auth = await validateAuth(req, admin);
+  const auth = await resolveCaller(req, admin);
   if (!auth.ok) {
     return json({ success: false, error_code: "unauthorized", error_message: auth.error }, 401);
   }
@@ -105,6 +72,10 @@ serve(async (req) => {
   const autoSave = body.auto_save_if_single === true;
   if (!orgId || !/^[0-9a-f-]{36}$/i.test(orgId)) {
     return errorResponse("invalid_body", "organization_id (uuid) required", undefined, 400);
+  }
+  // JWT de usuário só acessa org da qual é membro ativo (service/internal: crons, inalterado).
+  if (!(await callerCanAccessOrg(admin, auth, orgId))) {
+    return errorResponse("forbidden_org", "Usuário não pertence à organização", undefined, 403);
   }
 
   // Credencial: mesma regra única (canônico se flag ON ou sem legado; senão legado).

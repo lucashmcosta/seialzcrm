@@ -61,8 +61,9 @@ export function AdsManagerConfig({ enabled }: { enabled: boolean }) {
     queryKey: ['meta-cred', organization?.id],
     enabled: enabled && !!organization?.id,
     queryFn: async () => {
-      const { data } = await supabase.rpc('get_meta_credentials', { p_org_id: organization!.id });
-      return (data?.[0] || null) as any;
+      // Só campos não-secretos + checagem de membership (get_meta_credentials é service_role-only).
+      const { data } = await supabase.rpc('get_meta_ads_settings', { p_org_id: organization!.id });
+      return data?.[0] ?? null;
     },
   });
 

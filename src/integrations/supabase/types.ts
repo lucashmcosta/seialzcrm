@@ -16054,6 +16054,14 @@ export type Database = {
           spend_brl: number
         }[]
       }
+      get_meta_ads_settings: {
+        Args: { p_org_id: string }
+        Returns: {
+          ad_account_id: string
+          feature_ads_manager_sync: boolean
+          is_connected: boolean
+        }[]
+      }
       get_meta_credentials: {
         Args: { p_org_id: string }
         Returns: {

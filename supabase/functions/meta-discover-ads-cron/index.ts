@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { appSecretProof } from "../_shared/meta-graph.ts";
 import { listCanonicalAdsOrgIds, resolveOrgAdsAccess, syncAdAccountIds } from "../_shared/meta/ads-access.ts";
+import { callerCanAccessOrg, resolveCaller } from "../_shared/auth/membership.ts";
 
 const API_VERSION = "v25.0";
 const GRAPH_TIMEOUT_MS = 30000;
@@ -22,25 +23,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-async function validateAuth(
-  req: Request,
-  admin: ReturnType<typeof createClient>,
-): Promise<boolean> {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return false;
-  const token = authHeader.replace("Bearer ", "").trim();
-  if (token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) return true;
-  try {
-    const { data: internal } = await admin.rpc("get_internal_function_auth_token");
-    if (internal && token === internal) return true;
-  } catch (_e) { /* ignore */ }
-  try {
-    const { data, error } = await admin.auth.getClaims(token);
-    if (!error && data?.claims?.sub) return true;
-  } catch (_e) { /* ignore */ }
-  return false;
 }
 
 interface MetaAd {
@@ -261,7 +243,8 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  if (!(await validateAuth(req, admin))) {
+  const caller = await resolveCaller(req, admin);
+  if (!caller.ok) {
     return json({ success: false, error_code: "unauthorized" }, 401);
   }
 
@@ -270,6 +253,15 @@ serve(async (req) => {
     body = await req.json();
   } catch {
     body = {};
+  }
+
+  // JWT de usuário: só a própria org (membro ativo) e nunca o modo "todas as orgs"
+  // (sem organization_id), que é exclusivo do cron (service/internal — inalterado).
+  if (caller.kind === "user") {
+    const reqOrg = typeof body.organization_id === "string" ? body.organization_id : "";
+    if (!reqOrg || !(await callerCanAccessOrg(admin, caller, reqOrg))) {
+      return json({ success: false, error_code: "forbidden_org" }, 403);
+    }
   }
 
   const orgs: { id: string }[] = [];
