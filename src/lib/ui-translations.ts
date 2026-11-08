@@ -1389,3 +1389,15 @@ Object.assign(uiEnglish, {
   'Mostrar ativos em uso em outra organização': 'Show assets used by another organization',
   'Selecione as contas de anúncio, Páginas e Instagram desta organização. Só os selecionados são sincronizados.': 'Select this organization\'s ad accounts, Pages and Instagram accounts. Only selected assets are synced.',
 });
+
+// Conversions API: teste com código da Meta
+Object.assign(uiEnglish, {
+  'Testar eventos': 'Test events',
+  'Os eventos aparecem em Test events, no Gerenciador de Eventos, e não contam nos seus resultados nem nas campanhas.': 'Events appear under Test events in Events Manager and do not count toward your results or campaigns.',
+  'Abrir Test events deste Pixel': 'Open Test events for this Pixel',
+  'Código de teste': 'Test code',
+  'Copie o código na aba Test events. Ele vale só para este envio e não fica salvo.': 'Copy the code from the Test events tab. It applies to this send only and is not saved.',
+  'Enviar teste': 'Send test',
+  'Enviando teste...': 'Sending test...',
+  'Teste': 'Test',
+});

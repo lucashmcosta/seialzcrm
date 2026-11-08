@@ -5,6 +5,7 @@ import {
   IN_FLIGHT_MS,
   isRealSentRow,
   isTestSend,
+  resolveTestEventCode,
   type LogRow,
   resolveEventId,
 } from "./dedup.ts";
@@ -246,4 +247,17 @@ Deno.test("conflito com linha sent real → duplicate", async () => {
   const db = fakeLogDb([{ id: "s", organization_id: ORG, event_id: "E", event_name: "Lead", status: "sent", test_event_code: null, payload: {} }]);
   const r = await claimLogRow(db, { organization_id: ORG, event_id: "E", event_name: "Lead", payload: {} });
   assertEquals(r, { kind: "skip", reason: "duplicate", id: "s" });
+});
+
+Deno.test("código de teste: vale só em envio de teste e nunca vira evento real no reenvio", () => {
+  const base = { savedCode: null };
+  assertEquals(resolveTestEventCode({ ...base, bodyTest: true, bodyCode: " TEST123 " }), "TEST123");
+  // Evento normal ignora código vindo no body.
+  assertEquals(resolveTestEventCode({ ...base, bodyTest: undefined, bodyCode: "TEST123" }), null);
+  // Formato inválido é descartado.
+  assertEquals(resolveTestEventCode({ ...base, bodyTest: true, bodyCode: "a b;c" }), null);
+  // Código salvo na org segue valendo (comportamento anterior).
+  assertEquals(resolveTestEventCode({ bodyTest: undefined, bodyCode: undefined, savedCode: "SALVO" }), "SALVO");
+  // Reenvio de linha de teste mantém o código da linha.
+  assertEquals(resolveTestEventCode({ bodyTest: undefined, bodyCode: undefined, savedCode: null, logRowCode: "TEST9" }), "TEST9");
 });

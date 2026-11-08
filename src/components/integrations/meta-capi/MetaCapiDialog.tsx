@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CheckCircle, Plug, Warning, Eye, EyeSlash, ArrowsClockwise, LinkSimple, CaretDown, CaretUp } from "@phosphor-icons/react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
@@ -59,6 +60,7 @@ type EventRow = {
   attempt_count: number;
   created_at: string;
   payload?: Record<string, unknown> | null;
+  test_event_code?: string | null;
   meta_response?: Record<string, unknown> | null;
 };
 
@@ -107,6 +109,9 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
   const [reconnectMode, setReconnectMode] = useState(false);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testCode, setTestCode] = useState("");
+  const [testing, setTesting] = useState(false);
 
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -219,7 +224,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
     queryFn: async () => {
       let q: any = supabase
         .from("capi_event_log" as any)
-        .select("id, event_name, event_time, status, contact_id, opportunity_id, meta_error, attempt_count, created_at, payload, meta_response")
+        .select("id, event_name, event_time, status, contact_id, opportunity_id, meta_error, attempt_count, created_at, payload, test_event_code, meta_response")
         .eq("organization_id", organization!.id)
         .order("created_at", { ascending: false })
         .limit(20);
@@ -250,6 +255,12 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
       };
     },
   });
+
+  // Lista e contadores sempre juntos, senão os totais ficam defasados da lista.
+  const refreshEvents = () => {
+    void refetchEvents();
+    void qc.invalidateQueries({ queryKey: ["capi_event_stats", organization?.id] });
+  };
 
   const setField = (key: string, value: string) =>
     setFormValues((prev) => ({ ...prev, [key]: value }));
@@ -372,13 +383,18 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
     }
   };
 
+  const trimmedTestCode = testCode.trim();
+  const testCodeValid = /^[A-Za-z0-9_-]{1,64}$/.test(trimmedTestCode);
+
   const sendTest = async () => {
+    if (!testCodeValid) return;
+    setTesting(true);
     try {
       const eventNames = ["PageView", "Lead", "Purchase"] as const;
       const results = await Promise.all(
         eventNames.map(async (event_name) => {
           const { data, error } = await supabase.functions.invoke("meta-capi-send-event", {
-            body: { organization_id: organization?.id, test: true, event_name },
+            body: { organization_id: organization?.id, test: true, test_event_code: trimmedTestCode, event_name },
           });
 
           if (error) {
@@ -404,6 +420,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
       );
 
       setTestResults(results);
+      setTestOpen(false);
 
       const failed = results.filter((result) => !result.ok);
 
@@ -417,10 +434,12 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
         toast.success(uiText("3 eventos de teste enviados. Verifique 'Test events' no Events Manager."));
       }
 
-      refetchEvents();
+      refreshEvents();
     } catch (e: any) {
       setTestResults([]);
       toast.error(uiError(e.message || uiText("Falha no teste")));
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -459,6 +478,9 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
     }
     // Preenchidos a partir de Ativos e do WhatsApp conectado.
     if (canonicalActive && (field.key === "whatsapp_business_account_id" || field.key === "page_id")) return null;
+    // Salvo aqui, o código põe TODOS os eventos em teste. O botão "Testar agora" dispensa isso;
+    // o campo só aparece para quem já tem um salvo poder removê-lo.
+    if (canonicalActive && field.key === "test_event_code" && !ca.test_event_code) return null;
     // Em modo reuse (não conectado), esconder access_token
     if (isManualToken && !isConnected && mode === "reuse" && !reconnectMode) return null;
 
@@ -545,7 +567,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
               </div>
               {isConnected && (
                 <div className="flex gap-2 shrink-0">
-                  <Button variant="outline" size="sm" onClick={sendTest}>
+                  <Button variant="outline" size="sm" onClick={() => { setTestCode(ca.test_event_code || ""); setTestOpen(true); }}>
                     {uiText("Testar agora")}</Button>
                   <Button variant="outline" size="sm" onClick={() => setDisconnectOpen(true)}>
                     {uiText("Desconectar")}</Button>
@@ -772,7 +794,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                     {f === "all" ? uiText("Todos") : f}
                   </Button>
                 ))}
-                <Button variant="ghost" size="sm" onClick={() => refetchEvents()} className="ml-auto">
+                <Button variant="ghost" size="sm" onClick={refreshEvents} className="ml-auto">
                   <ArrowsClockwise className="h-4 w-4" />
                 </Button>
               </div>
@@ -797,6 +819,7 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-medium">{ev.event_name}</span>
                                 {statusBadge(ev.status)}
+                                {ev.test_event_code && <Badge variant="outline" className="text-[10px]">{uiText("Teste")}</Badge>}
                                 {ev.attempt_count > 1 && (
                                   <span className="text-[10px] text-muted-foreground">
                                     {uiText("tentativa")}{ev.attempt_count}
@@ -859,6 +882,47 @@ export function MetaCapiDialog({ open = true, integration, orgIntegration: initi
             </TabsContent>
           </Tabs>
       </div>
+
+      <Dialog open={testOpen} onOpenChange={(v) => { if (!testing) setTestOpen(v); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{uiText("Testar eventos")}</DialogTitle>
+            <DialogDescription>
+              {uiText("Os eventos aparecem em Test events, no Gerenciador de Eventos, e não contam nos seus resultados nem nas campanhas.")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <a
+              href={`https://business.facebook.com/events_manager2/list/dataset/${encodeURIComponent(ca.pixel_id || "")}/test_events`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            >
+              <LinkSimple className="h-4 w-4" />
+              {uiText("Abrir Test events deste Pixel")}
+            </a>
+            <div className="space-y-1.5">
+              <Label htmlFor="capi-test-code">{uiText("Código de teste")}</Label>
+              <Input
+                id="capi-test-code"
+                value={testCode}
+                onChange={(e) => setTestCode(e.target.value)}
+                placeholder="TEST12345"
+                autoComplete="off"
+              />
+              <p className="text-xs text-muted-foreground">
+                {uiText("Copie o código na aba Test events. Ele vale só para este envio e não fica salvo.")}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" disabled={testing} onClick={() => setTestOpen(false)}>{uiText("Cancelar")}</Button>
+            <Button disabled={!testCodeValid || testing} onClick={() => void sendTest()}>
+              {testing ? uiText("Enviando teste...") : uiText("Enviar teste")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={disconnectOpen}
