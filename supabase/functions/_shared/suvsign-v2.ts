@@ -164,6 +164,7 @@ export interface ResolvedSignatory {
 }
 export interface TemplateDocInput {
   template_id: string; template_revision?: string; signing_order?: string; title: string; frozen_content: Any; signatories: ResolvedSignatory[]; fields: Any[];
+  docx_variables?: Record<string, string>;
 }
 export function buildMultiDocument(docs: TemplateDocInput[]) {
   const byIdentity = new Map<string, Any>();
@@ -196,7 +197,7 @@ export function buildMultiDocument(docs: TemplateDocInput[]) {
     orders.push({ signing_order: d.signing_order, participant_refs: [...refMap.values()] });
     return { ref: `d${di + 1}`, title: d.title, template_id: d.template_id,
       ...(d.template_revision ? { template_revision: d.template_revision, signatory_map: Object.fromEntries(refMap) } : {}),
-      frozen_content: d.frozen_content, fields };
+      frozen_content: d.frozen_content, fields, ...(d.docx_variables ? { docx_variables: d.docx_variables } : {}) };
   });
   const order = resolveSigningOrder(participants, orders);
   participants.forEach(p => { p.order_index = order.refs.indexOf(p.ref); });
