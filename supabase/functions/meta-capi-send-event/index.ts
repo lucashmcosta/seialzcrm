@@ -5,7 +5,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
 import { authorizeSendEvent } from "./auth.ts";
-import { claimLogRow, findSentDuplicate, isRealSentRow, isTestSend, resolveEventId } from "./dedup.ts";
+import { claimLogRow, findSentDuplicate, isRealSentRow, isTestSend, resolveEventId, resolveTestEventCode } from "./dedup.ts";
 
 const META_API_VERSION = Deno.env.get("META_GRAPH_API_VERSION") || "v25.0";
 
@@ -141,6 +141,7 @@ serve(async (req) => {
       opportunity_id,
       capi_event_log_id,
       test,
+      test_event_code: bodyTestEventCode,
     } = body || {};
 
     let logRow: any = null;
@@ -177,7 +178,13 @@ serve(async (req) => {
 
     // ── Dedup (ver dedup.ts) ── antes de resolver token / chamar a Meta.
     const eventTime = Math.floor(Date.now() / 1000);
-    const isTest = isTestSend(test, ca.test_event_code);
+    const testEventCode = resolveTestEventCode({
+      bodyTest: test,
+      bodyCode: bodyTestEventCode,
+      savedCode: ca.test_event_code,
+      logRowCode: logRow?.test_event_code,
+    });
+    const isTest = isTestSend(test, testEventCode);
     const { eventId, dedup } = resolveEventId({
       logRow,
       organizationId: organization_id,
@@ -303,7 +310,7 @@ serve(async (req) => {
       data: [eventPayload],
       access_token: accessToken,
     };
-    if (ca.test_event_code) requestBody.test_event_code = ca.test_event_code;
+    if (testEventCode) requestBody.test_event_code = testEventCode;
 
     let logId = logRow?.id as string | undefined;
     let attempts = (logRow?.attempt_count || 0) + 1;
@@ -318,7 +325,7 @@ serve(async (req) => {
       contact_id: contact_id || null,
       opportunity_id: opportunity_id || null,
       payload: persistedPayload,
-      test_event_code: ca.test_event_code || null,
+      test_event_code: testEventCode,
     };
 
     if (logId) {

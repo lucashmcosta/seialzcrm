@@ -29,6 +29,23 @@ export function isTestSend(bodyTest: unknown, testEventCode: unknown): boolean {
   return bodyTest === true || bodyTest === "true" || !!testEventCode;
 }
 
+// Código de teste vale só para este envio: nunca é salvo na configuração da org.
+// Reenvio de uma linha de teste mantém o código dela, senão a falha de um teste seria
+// reenviada como evento real. Código digitado só vale em envio marcado como teste.
+export function resolveTestEventCode(p: {
+  bodyTest: unknown;
+  bodyCode: unknown;
+  savedCode: unknown;
+  logRowCode?: unknown;
+}): string | null {
+  const rowCode = typeof p.logRowCode === "string" ? p.logRowCode.trim() : "";
+  if (rowCode) return rowCode;
+  const isTest = p.bodyTest === true || p.bodyTest === "true";
+  const code = isTest && typeof p.bodyCode === "string" ? p.bodyCode.trim() : "";
+  if (/^[A-Za-z0-9_-]{1,64}$/.test(code)) return code;
+  return typeof p.savedCode === "string" && p.savedCode.trim() ? p.savedCode.trim() : null;
+}
+
 // Chave de negócio do evento. null = evento sem dedup (id legado).
 export function deterministicEventId(
   organizationId: string,
