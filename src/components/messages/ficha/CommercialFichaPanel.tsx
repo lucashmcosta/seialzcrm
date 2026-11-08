@@ -79,7 +79,7 @@ export function CommercialFichaPanel({
     onContactChanged?.();
   };
 
-  const width = view === 'full' || isDocs ? 'w-[420px]' : 'w-[320px]';
+  const width = view === 'full' || isDocs ? 'w-[460px]' : 'w-[360px]';
 
   return (
     <aside

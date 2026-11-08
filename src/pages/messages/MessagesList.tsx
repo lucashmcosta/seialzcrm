@@ -391,13 +391,13 @@ function DesktopMessagesList() {
   useEffect(() => {
     try { window.localStorage.setItem('commercial.ficha.open', fichaOpen ? '1' : '0'); } catch { /* storage indisponível */ }
   }, [fichaOpen]);
-  // Atalhos ao lado do chat só se sobrar conversa legível: lista 400 + painel 320 + chat ≥ 400.
+  // Atalhos ao lado do chat só se sobrar conversa legível: lista 400 + painel 360 + chat ≥ 400.
   const commercialRowRef = useRef<HTMLDivElement | null>(null);
   const [fichaInline, setFichaInline] = useState(false);
   useEffect(() => {
     const el = commercialRowRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(([entry]) => setFichaInline(entry.contentRect.width >= 1120));
+    const ro = new ResizeObserver(([entry]) => setFichaInline(entry.contentRect.width >= 1160));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -2329,7 +2329,8 @@ function DesktopMessagesList() {
                   </div>
                 ) : (
                   <>
-                    <ScrollArea className="flex-1">
+                    {/* Área da conversa estilo WhatsApp: fundo ocupa tudo, sem cartão/margem branca. */}
+                    <ScrollArea className="flex-1 bg-muted/85">
                       {messagesLoading ? (
                         <div className="p-6 space-y-4">
                           {[1, 2, 3].map((i) => (
@@ -2339,7 +2340,7 @@ function DesktopMessagesList() {
                           ))}
                         </div>
                       ) : (
-                        <div className="p-6 space-y-3">
+                        <div className="px-4 py-3 space-y-3">
                           {/* Timeline única: mensagens, notas e marcos do CRM */}
                           {(() => {
                             const itemDateOf = (i: ChatItem) =>
@@ -2924,7 +2925,7 @@ function DesktopMessagesList() {
                                   messageNodes={segment.messageNodes}
                                   isCurrent={segment.key === currentBlockKey}
                                   locale={locale}
-                                  className="w-full rounded-lg border border-border/80 bg-muted/85 shadow-sm px-3 py-2.5 mt-2.5"
+                                  className="w-full pt-1"
                                 />
                               )
                             );
