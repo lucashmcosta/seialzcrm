@@ -62,3 +62,7 @@ Leem o header (possível passthrough para RLS ou validação implícita). `[INCE
 5. Aposentar os one-shots concluídos (`ct-backfill-once`, `*-viagi`, `backfill-attribution`) em vez de blindá-los.
 
 > Qualquer patch de código dos itens acima será proposto separadamente para revisão — não incluído nesta rodada.
+
+## Funções de uso único desativadas (08/11/2026)
+
+`backfill-attribution`, `ct-backfill-once`, `fix-orphan-opportunities`, `kommo-fix-owners`, `viagi-staging-loader`, `meta-lead-ads-recovery-viagi`, `meta-lead-ads-viagi-token-probe` e `meta-lead-ads-backfill-viagi` viraram stubs que respondem 410 e não executam nada, com `verify_jwt = true` no `config.toml`. Antes da troca, nenhuma tinha referência no código, cron, função do banco ou chamada nos logs. O código original está no histórico do git. O stub fica no repo, não só em produção, porque o deploy em massa a partir do `main` (07/11 23:23) já tinha desfeito o stub que só existia em produção (`meta-lead-ads-backfill-viagi`).
