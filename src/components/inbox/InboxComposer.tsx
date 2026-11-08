@@ -133,7 +133,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
       if (result?.content) setText(result.content);
     } catch (e) {
       console.error('[inbox-composer] AI improvement error', e);
-      toast({ variant: 'destructive', description: 'Erro ao melhorar texto.' });
+      toast({ variant: 'destructive', description: (e as Error)?.message || 'Erro ao melhorar texto.' });
     } finally {
       setAiImproving(false);
     }
