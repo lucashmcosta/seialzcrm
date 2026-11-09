@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { appSecretProof } from "../_shared/meta-graph.ts";
 import { listCanonicalAdsOrgIds, resolveOrgAdsAccess, syncAdAccountIds } from "../_shared/meta/ads-access.ts";
 import { callerCanAccessOrg, resolveCaller } from "../_shared/auth/membership.ts";
+import { converterGasto, lerPtax, ptaxUrl, type FxRate } from "../_shared/fx/ptax.ts";
 
 const API_VERSION = "v25.0";
 const GRAPH_TIMEOUT_MS = 30000;
@@ -49,7 +50,7 @@ async function graphFetchInsights(
 ): Promise<{ ok: boolean; status: number; body: any }> {
   let url: string | null =
     `https://graph.facebook.com/${API_VERSION}/${adId}/insights` +
-    `?fields=spend,impressions,reach,clicks,inline_link_clicks,actions` +
+    `?fields=spend,account_currency,impressions,reach,clicks,inline_link_clicks,actions` +
     `&time_range=${encodeURIComponent(JSON.stringify({ since, until }))}` +
     `&time_increment=1` +
     `&access_token=${encodeURIComponent(token)}` +
@@ -100,7 +101,7 @@ function ymd(d: Date): string {
 
 async function processAd(
   admin: ReturnType<typeof createClient>,
-  org: { id: string },
+  org: { id: string; currency: string },
   ad: { id: string; external_id: string; spend_currency: string | null },
   token: string,
   daysBack: number,
@@ -155,14 +156,27 @@ async function processAd(
     return { days_inserted: 0, status: "success" };
   }
 
-  const rows = data.map((d): any => {
+  // A Meta informa a moeda da conta em cada linha: é ela que vale, não o padrão do cadastro.
+  const moedaConta = String(data[0]?.account_currency ?? ad.spend_currency ?? org.currency).toUpperCase();
+  const cotacoes = moedaConta === org.currency ? [] : await cotacoesDe(admin, moedaConta, data.map((d) => d.date_start));
+
+  const rows: any[] = [];
+  for (const d of data) {
     const dailySpendCents = Math.round(parseFloat(d.spend ?? "0") * 100);
-    return {
+    const conversao = converterGasto({
+      centavos: dailySpendCents, moedaConta, moedaOrg: org.currency, data: d.date_start, cotacoes,
+    });
+    // Sem cotação não grava: a linha fica como está e a próxima rodada tenta de novo.
+    if (!conversao.ok) return { days_inserted: 0, status: "failed", error: `fx_${conversao.motivo}_${moedaConta}` };
+    rows.push({
       organization_id: org.id,
       marketing_campaign_id: ad.id,
       date: d.date_start,
-      spend_cents: dailySpendCents,
-      spend_currency: ad.spend_currency ?? "BRL",
+      spend_cents: conversao.spend_cents,
+      spend_currency: moedaConta,
+      spend_original_cents: dailySpendCents,
+      fx_rate: conversao.fx_rate,
+      fx_rate_date: conversao.fx_rate_date,
       impressions: parseInt(d.impressions ?? "0", 10) || 0,
       reach: parseInt(d.reach ?? "0", 10) || 0,
       clicks: parseInt(d.clicks ?? "0", 10) || 0,
@@ -170,8 +184,12 @@ async function processAd(
       conversations_started: extractConversations(d.actions),
       source_data: d,
       synced_at: new Date().toISOString(),
-    };
-  });
+    });
+  }
+
+  if (ad.spend_currency !== moedaConta) {
+    await admin.from("marketing_campaigns").update({ spend_currency: moedaConta }).eq("id", ad.id);
+  }
 
   const { error: upErr } = await admin
     .from("marketing_campaign_insights_daily")
@@ -196,6 +214,43 @@ async function processAd(
   );
 
   return { days_inserted: rows.length, status: "success" };
+}
+
+// Cotações por rodada: várias linhas e anúncios usam os mesmos dias.
+const cotacoesEmMemoria = new Map<string, FxRate[]>();
+
+/** Busca no Banco Central e guarda em fx_rates. Se ele não responder, usa o que já está guardado. */
+async function cotacoesDe(admin: any, moeda: string, datas: string[]): Promise<FxRate[]> {
+  const ate = datas.reduce((a, b) => (a > b ? a : b));
+  const inicio = new Date(`${datas.reduce((a, b) => (a < b ? a : b))}T00:00:00Z`);
+  inicio.setUTCDate(inicio.getUTCDate() - 7);
+  const de = inicio.toISOString().slice(0, 10);
+  const chave = `${moeda}|${de}|${ate}`;
+  const pronta = cotacoesEmMemoria.get(chave);
+  if (pronta) return pronta;
+
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), GRAPH_TIMEOUT_MS);
+    const res = await fetch(ptaxUrl(moeda, de, ate), { signal: ctrl.signal }).finally(() => clearTimeout(timer));
+    if (!res.ok) throw new Error(`bcb_${res.status}`);
+    const novas = lerPtax(await res.json());
+    if (novas.length > 0) {
+      const { error } = await admin.from("fx_rates").upsert(
+        novas.map((c) => ({ currency: moeda, ...c, fetched_at: new Date().toISOString() })),
+        { onConflict: "currency,rate_date" },
+      );
+      if (error) console.warn("[insights-sync] fx_rates upsert", error.message);
+    }
+  } catch (e) {
+    console.warn("[insights-sync] ptax", moeda, (e as Error).message);
+  }
+
+  const { data } = await admin.from("fx_rates").select("rate_date, rate_brl")
+    .eq("currency", moeda).gte("rate_date", de).lte("rate_date", ate);
+  const cotacoes = ((data ?? []) as any[]).map((c) => ({ rate_date: c.rate_date, rate_brl: Number(c.rate_brl) }));
+  if (cotacoes.length > 0) cotacoesEmMemoria.set(chave, cotacoes);
+  return cotacoes;
 }
 
 async function recalcLeadsForOrg(
@@ -336,6 +391,8 @@ serve(async (req) => {
       .not("external_id", "is", null);
     if (body.only_active === true) adsQuery = adsQuery.eq("status", "active");
     const { data: ads, error: adsErr } = await adsQuery.limit(limit);
+    const { data: orgRow } = await admin.from("organizations").select("default_currency").eq("id", org.id).maybeSingle();
+    const moedaOrg = String((orgRow as any)?.default_currency ?? "BRL").toUpperCase();
 
     if (adsErr) {
       errors.push({ org_id: org.id, error: `ads: ${adsErr.message}` });
@@ -344,7 +401,7 @@ serve(async (req) => {
 
     let tokenInvalid = false;
     for (const ad of (ads ?? []) as any[]) {
-      const result = await processAd(admin, org, ad, token, daysBack, proofSecret);
+      const result = await processAd(admin, { id: org.id, currency: moedaOrg }, ad, token, daysBack, proofSecret);
       if (result.status === "success") {
         adsProcessed++;
         daysInserted += result.days_inserted;

@@ -9,6 +9,8 @@ import { ChartSkeleton, TableSkeleton } from './_components/Skeletons';
 import { SyncStatusCard } from './_components/SyncStatusCard';
 import { useMarketingPeriod } from './_hooks/useMarketingPeriod';
 import { useOverviewWithCompare, useTimeSeries } from './_hooks/useOverview';
+import { useSpendOriginal } from './_hooks/useSpendOriginal';
+import { ConvertedSpendNote } from './_components/ConvertedSpendNote';
 import { useAdPerformance } from './_hooks/useAdPerformance';
 import { fmtBRL, fmtInt, fmtPct, fmtRoas } from './_lib/format';
 import {
@@ -23,6 +25,7 @@ export default function MarketingOverview() {
   const { preset, setPreset, custom, setCustom, range } = useMarketingPeriod('last_30');
 
   const { current, previous } = useOverviewWithCompare(orgId, range.from, range.to);
+  const original = useSpendOriginal(orgId, range.from, range.to);
   const ts = useTimeSeries(orgId, range.from, range.to);
   const topAds = useAdPerformance(orgId);
 
@@ -36,6 +39,8 @@ export default function MarketingOverview() {
     <MarketingLayout>
       <SyncStatusCard orgId={orgId} />
       <PeriodFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
+
+      <ConvertedSpendNote original={original.data} />
 
       {/* KPI grid 3x2 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

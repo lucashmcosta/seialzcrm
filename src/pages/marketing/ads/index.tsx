@@ -9,6 +9,9 @@ import { useAdPerformance, useCampaignsList, type AdPerfRow } from '../_hooks/us
 import { useMarketingPeriod } from '../_hooks/useMarketingPeriod';
 import { PeriodFilter } from '../_components/PeriodFilter';
 import { fmtBRL, fmtInt, fmtPct, fmtRoas } from '../_lib/format';
+import { useSpendOriginal } from '../_hooks/useSpendOriginal';
+import { ConvertedSpendNote } from '../_components/ConvertedSpendNote';
+import { fmtOriginal } from '../_lib/originalSpend';
 import { Input } from '@/components/ui/input';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
@@ -67,6 +70,7 @@ export default function MarketingAds() {
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'spend_brl', dir: 'desc' });
   const period = useMarketingPeriod('last_30');
 
+  const original = useSpendOriginal(orgId, period.range.from, period.range.to);
   const ads = useAdPerformance(orgId, {
     status,
     campaignId: campaign,
@@ -160,6 +164,7 @@ export default function MarketingAds() {
 
   return (
     <MarketingLayout title={uiText("Performance por Ad")}>
+      <ConvertedSpendNote original={original.data} />
       <div className="flex flex-wrap items-center gap-3">
         <PeriodFilter
           preset={period.preset}
@@ -265,7 +270,14 @@ export default function MarketingAds() {
                               {ad.ad_status || '—'}
                             </Badge>
                           </td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{fmtBRL(ad.spend_brl)}</td>
+                          <td
+                            className="py-2 px-3 text-right font-mono text-xs"
+                            title={original.data?.byCampaign.has(ad.marketing_campaign_id)
+                              ? fmtOriginal(original.data.byCampaign.get(ad.marketing_campaign_id)!, original.data.currency)
+                              : undefined}
+                          >
+                            {fmtBRL(ad.spend_brl)}
+                          </td>
                           <td className="py-2 px-3 text-right font-mono text-xs">{fmtInt(ad.impressions)}</td>
                           <td className="py-2 px-3 text-right font-mono text-xs">{fmtInt(ad.clicks)}</td>
                           <td className="py-2 px-3 text-right font-mono text-xs">{ctr != null ? fmtPct(ctr, 2) : '—'}</td>
