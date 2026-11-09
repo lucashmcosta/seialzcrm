@@ -1,3 +1,4 @@
+import { AI_MODELS, currentAiModel } from '@/lib/aiModels';
 import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -144,34 +145,6 @@ const AI_PROVIDERS = [
   { value: 'claude-ai', label: 'Claude (Anthropic)', description: 'Excelente raciocínio e nuance' },
   { value: 'openai-gpt', label: 'GPT (OpenAI)', description: 'Versátil e poderoso' },
 ];
-
-const AI_MODELS: Record<string, { value: string; label: string }[]> = {
-  'lovable-ai': [
-    { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (Recomendado)' },
-    { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-    { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro (Mais preciso)' },
-  ],
-  'claude-ai': [
-    { value: 'claude-sonnet-4-20250514', label: 'Sonnet 4 (Recomendado)' },
-    { value: 'claude-3-5-sonnet-20241022', label: 'Sonnet 3.5' },
-    { value: 'claude-3-5-haiku-20241022', label: 'Haiku 3.5 (Mais rápido)' },
-  ],
-  'openai-gpt': [
-    { value: 'gpt-5.2-pro', label: 'GPT-5.2 Pro (Último lançamento)' },
-    { value: 'gpt-5.2-mini', label: 'GPT-5.2 Mini' },
-    { value: 'gpt-5', label: 'GPT-5' },
-    { value: 'gpt-5-mini', label: 'GPT-5 Mini' },
-    { value: 'o3', label: 'o3 (Raciocínio Superior)' },
-    { value: 'o3-mini', label: 'o3-mini (Raciocínio Rápido)' },
-    { value: 'o1', label: 'o1 (Raciocínio Complexo)' },
-    { value: 'o1-mini', label: 'o1-mini' },
-    { value: 'gpt-4.5-preview', label: 'GPT-4.5 Preview' },
-    { value: 'gpt-4o', label: 'GPT-4o' },
-    { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Econômico)' },
-    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo (128k contexto)' },
-    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (Mais barato)' },
-  ],
-};
 
 const AVAILABLE_TOOLS = [
   { id: 'update_contact', name: 'Atualizar Contato', description: 'Permite corrigir nome, email, telefone e empresa do contato' },
@@ -550,7 +523,7 @@ export function SDRAgentWizard({
     existingAgent?.enabled_tools || ['update_contact', 'transfer_to_human']
   );
   const [aiProvider, setAiProvider] = useState<string>(existingAgent?.ai_provider || 'auto');
-  const [aiModel, setAiModel] = useState<string>(existingAgent?.ai_model || '');
+  const [aiModel, setAiModel] = useState<string>(currentAiModel(existingAgent?.ai_model));
   const [maxMessages, setMaxMessages] = useState<number>(existingAgent?.max_messages_per_conversation ?? 10);
   const [agentName, setAgentName] = useState<string>(existingAgent?.name || '');
   const [newFeedback, setNewFeedback] = useState('');
@@ -613,7 +586,7 @@ export function SDRAgentWizard({
       setFeedbackHistory(existingAgent?.feedback_history || []);
       setEnabledTools(existingAgent?.enabled_tools || ['update_contact', 'transfer_to_human']);
       setAiProvider(existingAgent?.ai_provider || 'auto');
-      setAiModel(existingAgent?.ai_model || '');
+      setAiModel(currentAiModel(existingAgent?.ai_model));
       setMaxMessages(existingAgent?.max_messages_per_conversation ?? 10);
       setAgentName(existingAgent?.name || '');
       setFeedbackRules((existingAgent?.feedback_rules as FeedbackRule[]) || []);
@@ -1000,7 +973,7 @@ export function SDRAgentWizard({
     setEnabledTools(version.enabled_tools || ['update_contact', 'transfer_to_human']);
     setFeedbackRules(version.feedback_rules || []);
     setAiProvider(version.ai_provider || 'auto');
-    setAiModel(version.ai_model || '');
+    setAiModel(currentAiModel(version.ai_model));
     
     toast.success(`Restaurado para versão ${version.version_number}. Salve para confirmar.`);
     setShowVersionHistory(false);

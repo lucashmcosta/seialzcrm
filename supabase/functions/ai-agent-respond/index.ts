@@ -2,6 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
 import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
+import { decryptSecret } from "../_shared/crypto.ts";
+import { byokBudgetExceeded, markByokInvalid, readSecretPayload } from "../_shared/intelligence/resolve-provider.ts";
+import { currentAiModel, pickAgentAiCredential } from "../_shared/intelligence/agent-ai-credential.ts";
+import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
+import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1715,8 +1720,17 @@ serve(async (req) => {
       .eq('is_enabled', true)
       .in('integration.slug', ['claude-ai', 'openai-gpt']);
 
-    if (!aiIntegrations || aiIntegrations.length === 0) {
-      console.error('No AI integration configured');
+    // Check if agent has specific AI provider configured
+    const agentProvider = agent.ai_provider as string | null;
+    const agentModel = agent.ai_model as string | null;
+    
+    let integrationSlug: string;
+    let configValues: Record<string, any>;
+    // Preenchido quando a chave é de Provedores de IA: o uso entra no gasto e no limite mensal.
+    let byokProvider: 'anthropic' | 'openai' | null = null;
+
+    const agentFailure = async (error: string, status: number) => {
+      console.error(error);
       await supabase.from('ai_agent_logs').insert({
         organization_id: organizationId,
         agent_id: agentId,
@@ -1725,61 +1739,50 @@ serve(async (req) => {
         input_message: message,
         output_message: '',
         status: 'error',
-        error_message: 'No AI integration configured',
+        error_message: error,
         response_time_ms: Date.now() - startTime,
       });
-      return new Response(
-        JSON.stringify({ error: 'No AI integration configured' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+      return new Response(JSON.stringify({ error }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    };
 
-    // Check if agent has specific AI provider configured
-    const agentProvider = agent.ai_provider as string | null;
-    const agentModel = agent.ai_model as string | null;
-    
-    let integrationSlug: string;
-    let configValues: Record<string, any>;
-    let useAgentSpecificProvider = false;
-    
-    if (agentProvider && agentProvider !== 'auto') {
-      // Use agent-specific provider
-      useAgentSpecificProvider = true;
-      integrationSlug = agentProvider;
-      
-      if (agentProvider === 'lovable-ai') {
-        // Lovable AI uses LOVABLE_API_KEY from environment
-        const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-        if (!lovableApiKey) {
-          console.error('LOVABLE_API_KEY not configured');
-          return new Response(
-            JSON.stringify({ error: 'Lovable AI not configured' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        configValues = { api_key: lovableApiKey, default_model: agentModel || 'google/gemini-3-flash-preview' };
-      } else {
-        // For claude-ai and openai-gpt, still need org integration for API key
-        const specificIntegration = aiIntegrations.find(i => i.integration.slug === agentProvider);
-        if (!specificIntegration) {
-          console.error(`Agent requires ${agentProvider} but not configured`);
-          return new Response(
-            JSON.stringify({ error: `${agentProvider} integration not configured` }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        configValues = specificIntegration.config_values as Record<string, any>;
-        // Override model if agent specifies one
-        if (agentModel) {
-          configValues = { ...configValues, default_model: agentModel };
-        }
-      }
+    if (agentProvider === 'lovable-ai') {
+      const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+      if (!lovableApiKey) return await agentFailure('Lovable AI not configured', 400);
+      integrationSlug = 'lovable-ai';
+      configValues = { api_key: lovableApiKey, default_model: agentModel || 'google/gemini-3-flash-preview' };
     } else {
-      // Prefer Claude (original behavior)
-      const aiIntegration = aiIntegrations.find(i => i.integration.slug === 'claude-ai') || aiIntegrations[0];
-      integrationSlug = aiIntegration.integration.slug;
-      configValues = aiIntegration.config_values as Record<string, any>;
+      const credential = pickAgentAiCredential(
+        agentProvider,
+        await readSecretPayload(supabase as any, organizationId) as any,
+        (aiIntegrations ?? []).map((i: any) => ({ slug: i.integration.slug, config_values: i.config_values })),
+      );
+      if (!credential) {
+        return await agentFailure(
+          agentProvider && agentProvider !== 'auto' ? `${agentProvider} integration not configured` : 'No AI integration configured',
+          400,
+        );
+      }
+      integrationSlug = credential.slug;
+      if (credential.kind === 'byok') {
+        const budget = Number(credential.entry.monthly_budget_usd ?? 0);
+        if (budget > 0 && await byokBudgetExceeded(supabase as any, organizationId, credential.provider, budget)) {
+          return await agentFailure('Monthly AI budget reached', 402);
+        }
+        byokProvider = credential.provider;
+        configValues = {
+          api_key: await decryptSecret(credential.entry.api_key_encrypted!),
+          default_model: credential.entry.preferred_model || undefined,
+        };
+      } else {
+        configValues = credential.config as Record<string, any>;
+      }
+      // Modelo escolhido no próprio agente vale sobre o padrão da chave.
+      if (agentProvider && agentProvider !== 'auto' && agentModel) {
+        configValues = { ...configValues, default_model: agentModel };
+      }
     }
+    // Agente salvo com modelo desligado roda no substituto em vez de falhar.
+    configValues = { ...configValues, default_model: currentAiModel(configValues.default_model) };
 
     if (!configValues?.api_key) {
       console.error('API key not configured');
@@ -1878,11 +1881,30 @@ serve(async (req) => {
 
     let aiResponse: string = '';
     let tokensUsed = 0;
+    let promptTokens = 0;
+    let completionTokens = 0;
+    const logByokUsage = async () => {
+      if (!byokProvider) return;
+      await logAiUsage(supabase as any, {
+        organization_id: organizationId,
+        provider: byokProvider,
+        model: modelUsed,
+        source: 'customer_key',
+        action: 'ai_agent_respond',
+        integration_slug: integrationSlug,
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: tokensUsed,
+        estimated_cost_usd: await estimateTextCostUsd(supabase as any, byokProvider, modelUsed, promptTokens, completionTokens),
+        entity_type: 'message',
+        entity_id: threadId,
+      });
+    };
     let modelUsed = '';
     const toolsExecuted: string[] = [];
 
     if (integrationSlug === 'claude-ai') {
-      const model = configValues.default_model || 'claude-sonnet-4-6';
+      const model = configValues.default_model || 'claude-sonnet-5-5';
       const maxTokens = 1024;
       modelUsed = model;
 
@@ -1921,6 +1943,7 @@ serve(async (req) => {
       if (!claudeResponse.ok) {
         const errorText = await claudeResponse.text();
         console.error('Claude API error:', claudeResponse.status, errorText);
+        if (claudeResponse.status === 401 && byokProvider) await markByokInvalid(supabase as any, organizationId, byokProvider, 'invalid_key');
         
         // Retry on rate limit (429)
         if (claudeResponse.status === 429) {
@@ -1949,6 +1972,8 @@ serve(async (req) => {
 
       let claudeData = await claudeResponse.json();
       tokensUsed = (claudeData.usage?.input_tokens || 0) + (claudeData.usage?.output_tokens || 0);
+      promptTokens += claudeData.usage?.input_tokens || 0;
+      completionTokens += claudeData.usage?.output_tokens || 0;
 
       // Handle tool calls with max iterations to prevent infinite loops
       const MAX_TOOL_ITERATIONS = 5;
@@ -2034,6 +2059,8 @@ serve(async (req) => {
 
         claudeData = await claudeResponse.json();
         tokensUsed += (claudeData.usage?.input_tokens || 0) + (claudeData.usage?.output_tokens || 0);
+        promptTokens += claudeData.usage?.input_tokens || 0;
+        completionTokens += claudeData.usage?.output_tokens || 0;
       }
 
       if (toolIterations >= MAX_TOOL_ITERATIONS) {
@@ -2074,6 +2101,8 @@ serve(async (req) => {
         if (retryResponse.ok) {
           const retryData = await retryResponse.json();
           tokensUsed += (retryData.usage?.input_tokens || 0) + (retryData.usage?.output_tokens || 0);
+          promptTokens += retryData.usage?.input_tokens || 0;
+          completionTokens += retryData.usage?.output_tokens || 0;
           const retryTextBlock = retryData.content?.find((c: any) => c.type === 'text');
           aiResponse = retryTextBlock?.text || '';
           console.log('Claude retry response received:', aiResponse ? 'success' : 'still empty');
@@ -2130,11 +2159,14 @@ serve(async (req) => {
       if (!openaiResponse.ok) {
         const errorText = await openaiResponse.text();
         console.error('OpenAI API error:', openaiResponse.status, errorText);
+        if (openaiResponse.status === 401 && byokProvider) await markByokInvalid(supabase as any, organizationId, byokProvider, 'invalid_key');
         throw new Error(`OpenAI API error: ${openaiResponse.status}`);
       }
 
       let openaiData = await openaiResponse.json();
       tokensUsed = openaiData.usage?.total_tokens || 0;
+      promptTokens += openaiData.usage?.prompt_tokens || 0;
+      completionTokens += openaiData.usage?.completion_tokens || 0;
 
       let responseMessage = openaiData.choices?.[0]?.message;
 
@@ -2190,6 +2222,8 @@ serve(async (req) => {
 
         openaiData = await openaiResponse.json();
         tokensUsed += openaiData.usage?.total_tokens || 0;
+        promptTokens += openaiData.usage?.prompt_tokens || 0;
+        completionTokens += openaiData.usage?.completion_tokens || 0;
         responseMessage = openaiData.choices?.[0]?.message;
       }
 
@@ -2356,6 +2390,7 @@ serve(async (req) => {
 
     // 7. Check if this is test mode - don't send to WhatsApp, just return response
     if (isTestMode) {
+      await logByokUsage();
       console.log(`AI Agent TEST MODE response - ${responseTime}ms, ${tokensUsed} tokens, tools: ${toolsExecuted.join(', ') || 'none'}`);
       
       return new Response(
@@ -2413,7 +2448,8 @@ serve(async (req) => {
     });
 
     // 10. Log to ai_usage_logs for billing/analytics
-    await supabase.from('ai_usage_logs').insert({
+    if (byokProvider) await logByokUsage();
+    else await supabase.from('ai_usage_logs').insert({
       organization_id: organizationId,
       integration_slug: integrationSlug,
       model_used: modelUsed,
