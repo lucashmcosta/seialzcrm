@@ -5,8 +5,6 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
-  ANALYSIS_SYSTEM_PROMPT,
-  ANALYSIS_TOOL,
   ANALYSIS_VERSION,
   preLlmFilter,
   type MessageAnalysisPayload,
@@ -22,6 +20,7 @@ import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { getIntelligenceSettings, shouldAnalyze } from "../_shared/intelligence/settings.ts";
 import { ANALYSIS_EVENT_TYPES, effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
+import { buildAnalysisPrompt, buildAnalysisTool, normalizeProfile, profileKey } from "../_shared/intelligence/analysis-profile.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -56,13 +55,11 @@ Deno.serve(async (req) => {
 
   const { data: existing } = await admin
     .from("message_analyses")
-    .select("id, source:raw_response->>_content_source")
+    .select("id, promptKey:raw_response->>_prompt_key")
     .eq("message_id", message_id)
     .eq("analysis_version", ANALYSIS_VERSION)
     .maybeSingle();
-  if (existing && (!reanalyzing || (existing as { source?: string | null }).source === "transcript")) {
-    return json({ ok: true, skipped: "already_analyzed" });
-  }
+  if (existing && !reanalyzing) return json({ ok: true, skipped: "already_analyzed" });
 
   const { data: msg, error: msgErr } = await admin
     .from("messages")
@@ -88,6 +85,12 @@ Deno.serve(async (req) => {
 
   // Settings gating; derive contact/opportunity from thread
   const settings = await getIntelligenceSettings(admin, organization_id);
+  const profile = normalizeProfile(settings.analysis_profile);
+  const promptKey = profileKey(profile);
+  // Reanálise repetida com o mesmo critério e o mesmo texto não paga a IA de novo.
+  if (
+    existing && (existing as { promptKey?: string | null }).promptKey === promptKey
+  ) return json({ ok: true, skipped: "already_analyzed" });
   const { data: thr } = await admin
     .from("message_threads")
     .select("channel, opportunity_id, contact_id")
@@ -183,10 +186,10 @@ content: ${messageText.slice(0, 2000)}`;
       body: JSON.stringify({
         model: modelFor(p.provider, p.model),
         messages: [
-          { role: "system", content: ANALYSIS_SYSTEM_PROMPT },
+          { role: "system", content: buildAnalysisPrompt(profile) },
           { role: "user", content: userPrompt },
         ],
-        tools: [ANALYSIS_TOOL],
+        tools: [buildAnalysisTool(profile)],
         tool_choice: { type: "function", function: { name: "record_message_analysis" } },
       }),
     });
@@ -306,7 +309,7 @@ content: ${messageText.slice(0, 2000)}`;
     message_quality_score: analysis.message_quality_score,
     reasoning: analysis.reasoning,
     tokens_used: totalTokens,
-    raw_response: { ...rawResponseAugmented, _content_source: contentSource },
+    raw_response: { ...rawResponseAugmented, _content_source: contentSource, _prompt_key: promptKey },
   }, { onConflict: "message_id,analysis_version" });
 
   if (analysisError) {
