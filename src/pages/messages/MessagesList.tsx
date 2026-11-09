@@ -75,6 +75,7 @@ import { pickPreferredEndpoint } from '@/lib/composerEndpoint';
 import { isSalesPurpose } from '@/lib/endpointPurpose';
 import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown, IdentificationCard, CaretDoubleRight } from '@phosphor-icons/react';
 import { CommercialFichaPanel } from '@/components/messages/ficha/CommercialFichaPanel';
+import { AdOriginCard } from '@/components/contacts/AdOriginCard';
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
@@ -2411,6 +2412,7 @@ function DesktopMessagesList() {
                         </div>
                       ) : (
                         <div className="px-4 py-3 space-y-3">
+                          <AdOriginCard contactId={selectedThread.contact_id} className="max-w-md mx-auto" />
                           {/* Timeline única: mensagens, notas e marcos do CRM */}
                           {(() => {
                             const itemDateOf = (i: ChatItem) =>
