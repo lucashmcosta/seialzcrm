@@ -20,6 +20,8 @@ type Insights = {
 };
 
 const PERIODS = [7, 30, 90];
+// Com poucos negócios fechados, a comparação engana mais do que ajuda.
+const MIN_CLOSED_FOR_TABLE = 10;
 const number = (v: number) => v.toLocaleString('pt-BR');
 
 function Bar({ label, value, percent, detail, title }: { label: string; value: string; percent: number; detail?: string; title: string }) {
@@ -127,12 +129,13 @@ export function IntelligenceInsights({ organizationId }: { organizationId: strin
   const maxObjection = data.objections[0]?.count ?? 0;
   const maxStage = Math.max(0, ...stages.map((s) => s.percent));
   const signalRate = ratePercent(data.totals.signals, data.totals.analyzed);
-  const hasDeals = !!(data.outcomes.won || data.outcomes.lost);
+  const closedDeals = (data.outcomes.won?.deals ?? 0) + (data.outcomes.lost?.deals ?? 0);
+  const hasDeals = closedDeals >= MIN_CLOSED_FOR_TABLE;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">O que seus clientes estão dizendo</h2>
+        <h2 className="text-lg font-semibold">O que seus clientes estão dizendo (análise por IA)</h2>
         {periodPicker}
       </div>
 
@@ -209,7 +212,9 @@ export function IntelligenceInsights({ organizationId }: { organizationId: strin
         <CardContent>
           {hasDeals
             ? <OutcomeTable won={data.outcomes.won} lost={data.outcomes.lost} />
-            : <p className="text-sm text-muted-foreground">Nenhum negócio fechado neste período.</p>}
+            : <p className="text-sm text-muted-foreground">
+                {closedDeals === 0 ? 'Nenhum negócio fechado neste período.' : `Só ${number(closedDeals)} negócios fechados neste período. A comparação aparece a partir de ${MIN_CLOSED_FOR_TABLE}, marcando ganhos e perdidos no funil.`}
+              </p>}
         </CardContent>
       </Card>
     </div>
