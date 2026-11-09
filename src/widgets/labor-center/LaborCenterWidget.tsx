@@ -6,8 +6,8 @@ import { cn } from '@/lib/utils';
 import type { WidgetContext } from '../types';
 import {
   brl, calcularCaso, caseSummaryText, CONFIDENCE_LABEL, FACT_BY_KEY, FACTS, fmtDate, fmtNum, normalizeFact, parseNum, toDate, todayYMD,
-  TERMINATION_LABEL,
-  type CaseResult, type FactKey, type Facts, type PedidoKey, type PedidoResult, type Peek, type Termination,
+  severanceClientText, TERMINATION_LABEL,
+  type CaseResult, type SeveranceSimulation, type FactKey, type Facts, type PedidoKey, type PedidoResult, type Peek, type Termination,
 } from './calc';
 import { FactInput, type RawValue } from './ui/FactInput';
 import { Check, Field, LinesCard, Notice, Row, type Tone } from './ui/fields';
@@ -22,13 +22,16 @@ interface TabDef {
   pedidos: PedidoKey[];
 }
 
+/** Se recebeu a rescisão: não muda o "deveria ter recebido", só o que entra no Resumo (processo). */
+const RECEIVED: FactKey[] = ['rescisao_recebida', 'valor_recebido', 'rescisao_no_prazo'];
+
 /** Dados do contrato: compartilhados entre as abas. */
 const CONTRACT: FactKey[] = ['salario', 'remuneracao_variavel', 'admissao', 'ainda_trabalha', 'quer_rescisao_indireta', 'saida', 'desligamento'];
 
 const TABS: TabDef[] = [
   {
     key: 'rescisao', label: 'Rescisão',
-    facts: ['aviso', 'rescisao_recebida', 'valor_recebido', 'rescisao_no_prazo', 'ferias_vencidas', 'saldo_fgts'],
+    facts: ['aviso', 'ferias_vencidas', 'saldo_fgts'],
     pedidos: ['rescisorias'],
   },
   {
@@ -98,14 +101,15 @@ export function LaborCenterWidget(_: { context: WidgetContext }) {
   const pendingIn = (keys: FactKey[]) => res.pending.filter((q) => keys.includes(q.key));
   const notTerminated = peek('ainda_trabalha') === true && peek('quer_rescisao_indireta') !== true;
 
-  const copy = async () => {
+  const copyText = async (text: string, ok: string) => {
     try {
-      await navigator.clipboard.writeText(caseSummaryText(res, peek('empresa') as string | undefined));
-      toast({ title: 'Resumo copiado' });
+      await navigator.clipboard.writeText(text);
+      toast({ title: ok });
     } catch {
       toast({ title: 'Não foi possível copiar', variant: 'destructive' });
     }
   };
+  const copy = () => copyText(caseSummaryText(res, peek('empresa') as string | undefined), 'Resumo copiado');
 
   return (
     <div className="space-y-4">
@@ -129,13 +133,24 @@ export function LaborCenterWidget(_: { context: WidgetContext }) {
             ? <Notice>Rescisão só vale para quem saiu da empresa ou vai pedir rescisão indireta (marque nos dados do contrato).</Notice>
             : <div className="space-y-3">{fields(current.facts)}</div>}
 
-          {current.pedidos.map((k) => {
+          {tab === 'rescisao' && !notTerminated && (
+            <>
+              <SeveranceCard sim={res.severance}
+                onCopy={(sim) => copyText(severanceClientText(sim, peek('empresa') as string | undefined), 'Mensagem copiada. É só colar para o cliente.')} />
+              <details className="rounded-[6px] border border-border p-2.5 text-xs">
+                <summary className="cursor-pointer font-medium text-muted-foreground">Ele recebeu a rescisão? (para o Resumo)</summary>
+                <div className="mt-3 space-y-3">{fields(RECEIVED)}</div>
+              </details>
+            </>
+          )}
+
+          {tab !== 'rescisao' && current.pedidos.map((k) => {
             const pd = res.pedidos.find((x) => x.key === k);
             return pd ? <PedidoCard key={k} pd={pd} /> : null;
           })}
 
           <TabPremises items={res.premises.filter((p) => !p.asked && [...CONTRACT, ...current.facts].includes(p.key))} />
-          <PendingList items={pendingIn([...CONTRACT, ...current.facts])} />
+          <PendingList items={pendingIn([...CONTRACT, ...current.facts, ...(tab === 'rescisao' ? RECEIVED : [])])} />
         </>
       )}
 
@@ -179,6 +194,24 @@ function ContractBlock({ res, peek, complete, children }: { res: CaseResult; pee
       <div className="border-t border-border p-1.5">
         <Notice tone={eligibilityTone(res)}>{res.eligibility.message}</Notice>
       </div>
+    </div>
+  );
+}
+
+/** Rescisão: quanto deveria ter recebido + mensagem pronta para o cliente. */
+function SeveranceCard({ sim, onCopy }: { sim: SeveranceSimulation | null; onCopy: (sim: SeveranceSimulation) => void }) {
+  if (!sim) return <Notice>Preencha salário, admissão, saída e como saiu para ver a rescisão.</Notice>;
+  return (
+    <div className="space-y-2 rounded-[6px] border border-border p-2.5">
+      <div className="text-sm font-medium">Quanto deveria ter recebido</div>
+      <LinesCard lines={sim.lines} total={sim.total} totalLabel="Deveria ter recebido" />
+      <p className="text-[11px] text-muted-foreground">
+        FGTS e multa do FGTS vão para a conta do FGTS. Valores brutos, antes de INSS e IR.
+        {sim.fgtsEstimated && ' Saldo do FGTS estimado pelo salário.'}
+      </p>
+      <Button type="button" className="w-full gap-2" onClick={() => onCopy(sim)}>
+        <Copy size={14} /> Copiar para o cliente
+      </Button>
     </div>
   );
 }
