@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, ReactNode } from 'react';
 import { reportAudioFailure, isValidHttpUrl } from '@/lib/audioErrorReport';
+import { AudioTranscript } from './AudioTranscript';
 
 interface AudioMessagePlayerProps {
   src: string;
@@ -249,6 +250,7 @@ export function AudioMessagePlayer({
             </a>
           </div>
         )}
+        {messageId && <AudioTranscript messageId={messageId} />}
       </div>
     );
   }
@@ -376,6 +378,7 @@ export function AudioMessagePlayer({
           </span>
         )}
       </div>
+      {messageId && <AudioTranscript messageId={messageId} />}
     </div>
   );
 }

@@ -76,7 +76,7 @@ export function IntelligenceSettings() {
         supabase.from('message_analyses').select('id', { count: 'exact', head: true })
           .eq('organization_id', orgId!).gte('created_at', sevenDaysAgo),
         supabase.from('audio_transcriptions').select('id', { count: 'exact', head: true })
-          .eq('organization_id', orgId!).gte('created_at', sevenDaysAgo),
+          .eq('organization_id', orgId!).neq('transcript', '').gte('created_at', sevenDaysAgo),
         supabase.from('opportunity_behavior_snapshot').select('final_status', { count: 'exact' })
           .eq('organization_id', orgId!),
         supabase.from('sales_events').select('id', { count: 'exact', head: true })

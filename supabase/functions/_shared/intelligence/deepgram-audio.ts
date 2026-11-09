@@ -20,21 +20,32 @@ export function audioContentType(blobType: string | null | undefined): string {
   return type.startsWith("audio/") || type.startsWith("video/") ? blobType! : "audio/ogg";
 }
 
+// Abaixo disto o texto costuma ser inventado a partir de ruído (38% em áudio inaudível,
+// 96% em áudio limpo). Fica fora da tela e da análise, e o player continua lá.
+export const MIN_AUDIO_CONFIDENCE = 0.6;
+
+export function isLowConfidence(confidence: number | null | undefined): boolean {
+  return typeof confidence === "number" && confidence < MIN_AUDIO_CONFIDENCE;
+}
+
 export function parseDeepgramAudio(raw: unknown, requestedModel: string): {
   text: string;
   durationSec: number;
   model: string;
+  confidence: number | null;
 } {
   const r = raw as {
     metadata?: { duration?: number; model_info?: Record<string, { name?: string }> };
-    results?: { channels?: { alternatives?: { transcript?: string }[] }[] };
+    results?: { channels?: { alternatives?: { transcript?: string; confidence?: number }[] }[] };
   };
+  const alternative = r?.results?.channels?.[0]?.alternatives?.[0];
   // O Deepgram responde o modelo que usou de fato (ex.: general-nova-3), e é por esse nome
   // que o custo é calculado.
   const names = Object.values(r?.metadata?.model_info ?? {}).map((m) => m?.name).filter(Boolean);
   return {
-    text: (r?.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? "").trim(),
+    text: (alternative?.transcript ?? "").trim(),
     durationSec: Number(r?.metadata?.duration) || 0,
     model: names[0] || requestedModel,
+    confidence: typeof alternative?.confidence === "number" ? alternative.confidence : null,
   };
 }
