@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { SquaresFour, Buildings, FileText, Shield, Users, Flag, UserCheck, CreditCard, Ticket, Plug, BookOpen, Heartbeat } from '@phosphor-icons/react';
+import { SquaresFour, Buildings, FileText, Shield, Users, Flag, UserCheck, CreditCard, Ticket, Plug, BookOpen, Heartbeat, PawPrint } from '@phosphor-icons/react';
 
 const menuItems = [
   { icon: SquaresFour, label: 'Dashboard', href: '/admin' },
@@ -10,6 +10,7 @@ const menuItems = [
   { icon: Plug, label: 'Integrações', href: '/admin/integrations' },
   { icon: Heartbeat, label: 'Integration Health', href: '/admin/integration-health' },
   { icon: BookOpen, label: 'Documentação', href: '/admin/documentation' },
+  { icon: PawPrint, label: 'Materiais Plamev', href: '/admin/plamev-materiais' },
   { icon: Users, label: 'Administradores', href: '/admin/users' },
   { icon: UserCheck, label: 'Impersonations', href: '/admin/impersonations' },
   { icon: Flag, label: 'Feature Flags', href: '/admin/feature-flags' },

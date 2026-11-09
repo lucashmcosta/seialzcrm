@@ -47,7 +47,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     // Cada org cola o próprio token da API da Plamev em "Configurar" (plamev_credentials, cifrado).
     key: 'plamev_quote',
     name: 'Plamev',
-    description: 'Cota planos pet da Plamev com campanhas e cupom, acompanha o pagamento e busca a rede credenciada para enviar ao cliente.',
+    description: 'Cota planos pet da Plamev com campanhas e cupom, acompanha o pagamento e envia ao cliente a rede credenciada e os materiais de apoio.',
     icon: PawPrint,
     contextMode: 'none',
     Component: PlamevQuoteWidget,

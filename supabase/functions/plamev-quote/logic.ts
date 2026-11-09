@@ -4,7 +4,7 @@
 export const MODULE_KEY = "plamev_quote";
 
 export const ACTIONS = [
-  "estados", "cidades", "racas", "planos", "campanhas", "cupom", "simular", "solicitar", "contexto", "rede", "pagamento",
+  "estados", "cidades", "racas", "planos", "campanhas", "cupom", "simular", "solicitar", "contexto", "rede", "pagamento", "materiais",
   "config_get", "config_set", "config_delete", "config_opcoes",
 ] as const;
 export type Action = typeof ACTIONS[number];
@@ -437,4 +437,10 @@ export function notaPagamento(numeroCotacao: string, c: ReturnType<typeof conver
       ...(ganha ? ["Oportunidade marcada como ganha automaticamente."] : []),
     ].join("\n"),
   };
+}
+
+/** URL pública de um material (bucket plamev-materiais), com cada parte do caminho codificada. */
+export function urlMaterial(supabaseUrl: string, storagePath: string): string {
+  const caminho = storagePath.split("/").map(encodeURIComponent).join("/");
+  return `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/plamev-materiais/${caminho}`;
 }

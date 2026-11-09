@@ -250,3 +250,10 @@ Deno.test("conversão: sem venda, venda pendente e adesão paga", () => {
     "Oportunidade marcada como ganha automaticamente.",
   ].join("\n"));
 });
+
+Deno.test("material: URL pública com o nome do arquivo codificado", () => {
+  assertEquals(
+    L.urlMaterial("https://x.supabase.co/", "0b1c/Coberturas ADVANCE (2026).pdf"),
+    "https://x.supabase.co/storage/v1/object/public/plamev-materiais/0b1c/Coberturas%20ADVANCE%20(2026).pdf",
+  );
+});

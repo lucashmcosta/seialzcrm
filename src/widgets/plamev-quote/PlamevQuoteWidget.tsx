@@ -16,17 +16,22 @@ const RedeCredenciada = lazy(() => import('./RedeCredenciada').then((m) => {
   if (!m) throw new Error('Failed to fetch dynamically imported module: RedeCredenciada');
   return { default: m.RedeCredenciada };
 }));
+const MateriaisPlamev = lazy(() => import('./MateriaisPlamev').then((m) => {
+  if (!m) throw new Error('Failed to fetch dynamically imported module: MateriaisPlamev');
+  return { default: m.MateriaisPlamev };
+}));
 
 const ABAS = [
   { id: 'cotacao', nome: 'Cotação' },
   { id: 'rede', nome: 'Rede credenciada' },
+  { id: 'materiais', nome: 'Materiais' },
 ] as const;
 type Aba = typeof ABAS[number]['id'];
 
 /**
  * Plamev na janela do Workspace. Funciona em qualquer tela (contextMode 'none'); numa oportunidade preenche com o
  * contato dela e salva a cotação nela; numa conversa/contato só preenche e mostra as cotações do contato. Dentro da
- * conversa, a rede credenciada pode ir direto para o cliente.
+ * conversa, a rede credenciada e os materiais de apoio vão direto para o cliente.
  */
 export function PlamevQuoteWidget({ context }: { context: WidgetContext }) {
   const { organization } = useOrganization();
@@ -62,6 +67,11 @@ export function PlamevQuoteWidget({ context }: { context: WidgetContext }) {
           <div className={aba === 'rede' ? undefined : 'hidden'}>
             <RedeCredenciada key={chave} organizationId={organization.id} opportunityId={opportunityId} contactId={contactId}
               conversa={conversaDoContexto(context)} />
+          </div>
+        )}
+        {abertas.has('materiais') && (
+          <div className={aba === 'materiais' ? undefined : 'hidden'}>
+            <MateriaisPlamev organizationId={organization.id} conversa={conversaDoContexto(context)} />
           </div>
         )}
       </Suspense>
