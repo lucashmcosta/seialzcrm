@@ -40,10 +40,17 @@ export function splitIntoBubbles(text: string, max = 3): string[] {
 /** Junta o texto escrito antes das ferramentas com a resposta final, sem repetir. */
 export function joinAgentText(before: string[], final: string): string {
   const seen = new Set<string>();
-  return [...before, final].map((t) => (t ?? "").trim()).filter((t) => {
+  const parts = [...before, final].map((t) => (t ?? "").trim()).filter((t) => {
     if (!t || seen.has(t)) return false;
     seen.add(t);
     return true;
+  });
+  const squash = (t: string) => t.replace(/\s+/g, " ");
+  // O modelo às vezes repete no fim, em um texto só, o que já escreveu antes da ferramenta.
+  return parts.filter((t, i) => {
+    const earlier = parts.slice(0, i);
+    if (earlier.length === 0) return true;
+    return !squash(earlier.join(" ")).includes(squash(t));
   }).join("\n\n");
 }
 

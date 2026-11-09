@@ -43,6 +43,8 @@ Deno.test("texto antes da ferramenta não se perde nem repete", () => {
   assertEquals(joinAgentText(["Isso não é golpe."], "Qual seu nome?"), "Isso não é golpe.\n\nQual seu nome?");
   assertEquals(joinAgentText(["Oi"], "Oi"), "Oi");
   assertEquals(joinAgentText([], ""), "");
+  assertEquals(joinAgentText(["Obrigada.\n\nVocê recebe?"], "Obrigada.  Você recebe?"), "Obrigada.\n\nVocê recebe?");
+  assertEquals(joinAgentText(["Obrigada, Ana."], "Você recebe?"), "Obrigada, Ana.\n\nVocê recebe?");
 });
 Deno.test("mensagem atual não aparece duas vezes", () => {
   const h = [{ role: "assistant", content: "Oi" }, { role: "user", content: "5 de maio" }];
