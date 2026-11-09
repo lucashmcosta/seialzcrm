@@ -11,6 +11,7 @@
 // - Dispara AI agent SDR ou marca needs_human_attention
 //
 // Mídia, outbound, templates e handleStatus permanecem inalterados.
+import { inboundEventKey, isDuplicateAuditError } from "./audit-key.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -1064,9 +1065,7 @@ async function recordInboundEvent(
   },
 ): Promise<string | null> {
   try {
-    const idemKey = params.kind === "status"
-      ? `meta:${params.wamid ?? "no-wamid"}:status`
-      : `meta:${params.wamid ?? crypto.randomUUID()}`;
+    const idemKey = inboundEventKey({ kind: params.kind, wamid: params.wamid, messageType: params.messageType });
 
     const { data, error } = await supabase
       .from("integration_inbound_events")
@@ -1103,7 +1102,9 @@ async function recordInboundEvent(
       .single();
 
     if (error) {
-      console.error("[meta-wa-webhook] audit_insert_error", { error, wamid: params.wamid });
+      if (!isDuplicateAuditError(error)) {
+        console.error("[meta-wa-webhook] audit_insert_error", { error, wamid: params.wamid });
+      }
       return null;
     }
     return data?.id ?? null;
