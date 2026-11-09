@@ -56,3 +56,25 @@ export function isValidCategory(category: string): category is KnowledgeCategory
 export function getCategoryLabel(category: string): string {
   return CATEGORY_LABELS[category as KnowledgeCategory] || category;
 }
+
+// Tipos que a geração de documentos devolve e não existem na tabela de conhecimento.
+const GENERATED_DOC_CATEGORY: Record<string, KnowledgeCategory> = {
+  product: 'product_service',
+  policy: 'policies',
+  faq_only: 'faq',
+};
+
+/** Categoria válida para gravar um documento gerado; o que não for conhecido vira "general". */
+export function categoryForGeneratedDoc(docType: string | null | undefined): KnowledgeCategory {
+  if (docType && GENERATED_DOC_CATEGORY[docType]) return GENERATED_DOC_CATEGORY[docType];
+  return VALID_CATEGORIES.includes(docType as KnowledgeCategory) ? (docType as KnowledgeCategory) : 'general';
+}
+
+/** Categoria que o Wizard já gerou e salvou: sair não pode trocar esse texto pelas respostas cruas. */
+export function isCategoryAlreadySaved(
+  savedItems: Array<{ category: string; productId?: string }>,
+  category: string,
+  productId?: string,
+): boolean {
+  return savedItems.some((item) => item.category === category && (item.productId ?? null) === (productId ?? null));
+}

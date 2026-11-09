@@ -100,7 +100,8 @@ import {
   VALID_CATEGORIES, 
   GLOBAL_CATEGORIES, 
   PRODUCT_CATEGORIES,
-  isValidCategory 
+  isValidCategory,
+  isCategoryAlreadySaved,
 } from '@/lib/knowledge-categories';
 
 // Auto-save after this many messages in same category
@@ -416,6 +417,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
       for (const [category, content] of Object.entries(state.globalKnowledge)) {
         if (content && content.length > 10) {
           const validCategory = validateCategory(category);
+          if (isCategoryAlreadySaved(state.savedItems, validCategory)) continue;
           const savedItem = await saveKnowledgeItem(
             CATEGORY_LABELS[validCategory] || validCategory,
             content,
@@ -432,6 +434,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
         for (const [category, content] of Object.entries(categories)) {
           if (content && content.length > 10) {
             const validCategory = validateCategory(category);
+            if (isCategoryAlreadySaved(state.savedItems, validCategory, product?.id)) continue;
             const savedItem = await saveKnowledgeItem(
               `${CATEGORY_LABELS[validCategory] || validCategory} - ${productName}`,
               content,
@@ -452,9 +455,15 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
 
   // Handle cancel with save prompt
   const handleCancel = useCallback(async () => {
-    const hasProgress = Object.keys(state.globalKnowledge).length > 0 || 
-                        Object.keys(state.productKnowledge).length > 0 ||
-                        state.products.length > 0;
+    // Só pergunta se há algo ainda não salvo; o que já foi gerado fica como está.
+    const hasProgress =
+      Object.entries(state.globalKnowledge).some(([category, content]) =>
+        content && content.length > 10 && !isCategoryAlreadySaved(state.savedItems, validateCategory(category))) ||
+      Object.entries(state.productKnowledge).some(([productName, categories]) => {
+        const product = state.products.find((p) => p.name === productName);
+        return Object.entries(categories).some(([category, content]) =>
+          content && content.length > 10 && !isCategoryAlreadySaved(state.savedItems, validateCategory(category), product?.id));
+      });
 
     if (hasProgress) {
       const shouldSave = window.confirm(
