@@ -1,3 +1,4 @@
+import { displayThreadStatus } from '@/lib/threadStatus';
 import { NoWhatsAppNumberBanner } from "@/components/messages/NoWhatsAppNumberBanner";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, Fragment } from 'react';
 import { useThreadPerms, DENY_CLOSE, DENY_ASSIGN } from '@/hooks/useThreadPerms';
@@ -264,6 +265,7 @@ type ChatItem =
 
 const statusConfig: Record<string, { label: string; labelEn: string; color: string; dotColor: string }> = {
   open: { label: 'Aberta', labelEn: 'Open', color: 'text-green-700 dark:text-green-400', dotColor: 'bg-green-500' },
+  reply: { label: 'Responder', labelEn: 'Reply', color: 'text-green-700 dark:text-green-400', dotColor: 'bg-green-500' },
   in_progress: { label: 'Em atendimento', labelEn: 'In progress', color: 'text-blue-700 dark:text-blue-400', dotColor: 'bg-blue-500' },
   awaiting_client: { label: 'Aguardando', labelEn: 'Awaiting', color: 'text-amber-700 dark:text-amber-400', dotColor: 'bg-amber-500' },
   resolved: { label: 'Resolvida', labelEn: 'Resolved', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
@@ -298,7 +300,7 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
 const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = false, agentName = null, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
-  const status = statusConfig[value.status] || statusConfig.open;
+  const status = statusConfig[displayThreadStatus(value.status, value.last_message_direction)] || statusConfig.open;
 
   if (rail) {
     return (
@@ -904,6 +906,9 @@ function DesktopMessagesList() {
   const hookedThreadBusinessContext = useThreadBusinessContext(selectedThreadId);
   const selectedThreadBusinessContext: ThreadBusinessContext =
     hookedThreadBusinessContext ?? 'sales';
+  const selectedThreadStatus = selectedThread
+    ? statusConfig[displayThreadStatus(selectedThread.status, selectedThread.last_message_direction)] ?? null
+    : null;
   const threadPerms = useThreadPerms(selectedThread ? { assigned_user_id: selectedThread.assigned_user_id ?? null, business_context: selectedThreadBusinessContext } : null);
 
   // ---------------------------------------------------------------------------
@@ -2253,15 +2258,11 @@ function DesktopMessagesList() {
                   contactProfileTitle={locale === 'pt-BR' ? 'Ver perfil do contato' : 'View contact profile'}
                   assigneeName={selectedThread.assigned_user_name ?? null}
                   statusLabel={
-                    selectedThread.status && statusConfig[selectedThread.status]
-                      ? (locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn)
+                    selectedThreadStatus
+                      ? (locale === 'pt-BR' ? selectedThreadStatus.label : selectedThreadStatus.labelEn)
                       : null
                   }
-                  statusClassName={
-                    selectedThread.status && statusConfig[selectedThread.status]
-                      ? statusConfig[selectedThread.status].color
-                      : undefined
-                  }
+                  statusClassName={selectedThreadStatus?.color}
                   fallbackAddress={selectedThreadEndpoint?.external_address ?? null}
                   fallbackProvider={selectedThreadEndpoint?.provider ?? null}
                   detailsLabel={locale === 'pt-BR' ? 'Detalhes da rota' : 'Route details'}
@@ -2417,8 +2418,8 @@ function DesktopMessagesList() {
                       />
                     }
                     statusLabel={
-                      selectedThread.status && statusConfig[selectedThread.status]
-                        ? (locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn)
+                      selectedThreadStatus
+                        ? (locale === 'pt-BR' ? selectedThreadStatus.label : selectedThreadStatus.labelEn)
                         : null
                     }
                   />
