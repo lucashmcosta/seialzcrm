@@ -4,7 +4,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { metaGraphGet } from "../_shared/meta-graph.ts";
-import { audit, resolveConnectionToken, facebookAppSecret } from "../_shared/meta/connection.ts";
+import { audit, resolveConnectionToken, facebookAppId, facebookAppSecret } from "../_shared/meta/connection.ts";
+import { ensurePageSubscribed } from "../_shared/meta/page-subscription.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -28,6 +29,20 @@ async function syncAdsNow(organizationId: string, authHeader: string) {
     if (!insights.ok) throw new Error(`insights_${insights.status}`);
   } catch (e) {
     console.warn("meta-connect-select-assets sync_now_failed", (e as Error).message);
+  }
+}
+
+// Falha aqui não desfaz a seleção: o Social tenta de novo ao abrir e avisa se não conseguir.
+async function subscribePages(pageIds: string[], accessToken: string) {
+  const appSecret = facebookAppSecret();
+  for (const pageId of pageIds) {
+    try {
+      const page = await metaGraphGet(`/${pageId}`, { fields: "access_token" }, { accessToken, appSecret });
+      if (!page?.access_token) throw new Error("no_page_token");
+      await ensurePageSubscribed(pageId, { pageToken: page.access_token, appId: facebookAppId(), appSecret });
+    } catch (e) {
+      console.warn("meta-connect-select-assets page_subscribe_failed", (e as Error).message);
+    }
   }
 }
 
@@ -124,6 +139,10 @@ serve(async (req) => {
     // porque a resposta da tela não depende disso e, se falhar, a próxima rodada do dia resolve.
     const adAccountSelected = (candidateAssets ?? []).some((a: any) => a.asset_type === 'ad_account' && selectedIds.has(a.id));
     if (adAccountSelected) EdgeRuntime.waitUntil(syncAdsNow(organization_id, authHeader));
+
+    // Página selecionada: já passa a receber mensagens, sem passo extra.
+    const pageIds = (candidateAssets ?? []).filter((a: any) => a.asset_type === 'page' && selectedIds.has(a.id)).map((a: any) => a.external_id);
+    if (pageIds.length) EdgeRuntime.waitUntil(subscribePages(pageIds, tokenValue));
 
     return json({ success: true, updated });
   } catch (e) {

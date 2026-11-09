@@ -6,7 +6,8 @@ import { profileCacheFresh, normalizeSocialProfile } from "../_shared/meta/socia
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { facebookAppSecret, resolveConnectionToken, resolveConnectionWithAsset } from "../_shared/meta/connection.ts";
+import { facebookAppId, facebookAppSecret, resolveConnectionToken, resolveConnectionWithAsset } from "../_shared/meta/connection.ts";
+import { ensurePageSubscribed } from "../_shared/meta/page-subscription.ts";
 import { metaGraphGet, metaGraphPost, MetaGraphError } from "../_shared/meta-graph.ts";
 
 function json(body: unknown, status = 200): Response {
@@ -17,6 +18,8 @@ const errMsg = (e: unknown): string =>
 
 // Cache do page token por isolate (chave = pageId). Evita 1 chamada Graph por request.
 const pageTokenCache = new Map<string, { token: string; exp: number }>();
+// Página cuja assinatura já foi confirmada neste isolate: evita chamada à Meta a cada 30s.
+const pageSubscribedUntil = new Map<string, number>();
 
 // Normaliza os anexos de uma mensagem (imagem/vídeo/áudio/arquivo/compartilhamento)
 // num formato simples pro front: { type, url, name?, mime? }.
@@ -66,7 +69,12 @@ serve(async (req) => {
     }
 
     const resolved = await resolveConnectionWithAsset(admin, organization_id, 'page');
-    if (!resolved) return json({error:'no_page'},404);
+    if (!resolved) {
+      if (action === "conversations") {
+        return json({ ok: true, conversations: [], channels: {}, setup: { has_page: false, has_instagram: false, has_messenger_permission: false, receiving: null } });
+      }
+      return json({error:'no_page'},404);
+    }
     const connection_id = resolved.connection_id;
     const pageId = resolved.assets.page;
 
@@ -222,6 +230,24 @@ serve(async (req) => {
     if (action === "conversations") {
       // DB-first: serve do store (instantâneo) e atualiza por trás com a Graph.
       // O endpoint do Instagram é ~8s (latência da Meta); assim o usuário não espera.
+      // Orgs conectadas antes da assinatura automática se resolvem aqui, ao abrir o Social.
+      const ensureReceiving = async (): Promise<boolean> => {
+        if ((pageSubscribedUntil.get(pageId) ?? 0) > Date.now()) return true;
+        try {
+          await ensurePageSubscribed(pageId, { pageToken: pageToken!, appId: facebookAppId(), appSecret });
+          pageSubscribedUntil.set(pageId, Date.now() + 60 * 60_000);
+          return true;
+        } catch (e) {
+          console.warn("[social-inbox] page_subscribe_failed", errMsg(e));
+          return false;
+        }
+      };
+      const { data: connection } = await admin.from("meta_connections").select("granted_scopes").eq("id", connection_id).maybeSingle();
+      const setupWith = (receiving: boolean | null) => ({
+        has_page: true, has_instagram: Boolean(igId),
+        has_messenger_permission: (connection?.granted_scopes ?? []).includes("pages_messaging"),
+        receiving,
+      });
       const only = String(body.platform ?? "");
       const wanted: ("instagram" | "messenger")[] = (only === "instagram" || only === "messenger")
         ? [only] : ["instagram", "messenger"];
@@ -235,12 +261,13 @@ serve(async (req) => {
       }));
       if (fromDb.length > 0) {
         bg(fetchAndEnrich(wanted).then(({ out }) => upsertConversations(out)));
-        return json({ ok: true, conversations: fromDb, channels: {}, source: "db" });
+        bg(ensureReceiving());
+        return json({ ok: true, conversations: fromDb, channels: {}, source: "db", setup: setupWith(null) });
       }
       // Cold start (store vazio): busca ao vivo, persiste e devolve.
-      const { out, channels } = await fetchAndEnrich(wanted);
+      const [{ out, channels }, receiving] = await Promise.all([fetchAndEnrich(wanted), ensureReceiving()]);
       await upsertConversations(out);
-      return json({ ok: true, conversations: out, channels, source: "live" });
+      return json({ ok: true, conversations: out, channels, source: "live", setup: setupWith(receiving) });
     }
 
     if (action === "messages") {

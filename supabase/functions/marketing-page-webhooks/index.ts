@@ -6,6 +6,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { facebookAppSecret, resolveConnectionToken, resolveConnectionWithAsset } from "../_shared/meta/connection.ts";
 import { metaGraphGet, metaGraphPost, MetaGraphError } from "../_shared/meta-graph.ts";
+import { PAGE_WEBHOOK_FIELDS } from "../_shared/meta/page-subscription.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -14,7 +15,7 @@ const errMsg = (e: unknown): string =>
   e instanceof MetaGraphError ? (e.error?.message || `Meta error ${e.status}`) : (e as Error)?.message || "erro";
 
 // Campos que o Seialz assina para receber eventos da Página em tempo real.
-const DEFAULT_FIELDS = "feed,mention,messages,messaging_postbacks,message_reactions";
+const DEFAULT_FIELDS = PAGE_WEBHOOK_FIELDS.join(",");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });

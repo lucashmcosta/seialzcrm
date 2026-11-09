@@ -1,6 +1,7 @@
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { SocialSetup } from './socialSetup';
 
 export type SocialPlatform = 'instagram' | 'messenger';
 
@@ -43,7 +44,7 @@ export function useSocialConversations(orgId?: string, platform?: SocialPlatform
     staleTime: 20_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
-    queryFn: async (): Promise<{ conversations: SocialConversation[]; channels: Record<string, string | null> }> => {
+    queryFn: async (): Promise<{ conversations: SocialConversation[]; channels: Record<string, string | null>; setup: SocialSetup | null }> => {
       const { data, error } = await supabase.functions.invoke('social-inbox', {
         body: { organization_id: orgId, action: 'conversations', ...(platform ? { platform } : {}) },
       });
@@ -51,6 +52,7 @@ export function useSocialConversations(orgId?: string, platform?: SocialPlatform
       return {
         conversations: (data?.conversations ?? []) as SocialConversation[],
         channels: (data?.channels ?? {}) as Record<string, string | null>,
+        setup: (data?.setup ?? null) as SocialSetup | null,
       };
     },
   });
