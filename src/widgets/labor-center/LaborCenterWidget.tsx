@@ -1,17 +1,49 @@
-import { useMemo, useState } from 'react';
-import { ArrowCounterClockwise, Copy } from '@phosphor-icons/react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { ArrowCounterClockwise, CaretDown, Copy, PencilSimple } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { WidgetContext } from '../types';
 import {
-  brl, calcularCaso, caseSummaryText, CONFIDENCE_LABEL, FACT_BY_KEY, FACT_GROUP_LABEL, FACTS, fmtNum, normalizeFact, parseNum, todayYMD,
-  type CaseResult, type FactDef, type FactGroup, type FactKey, type Facts, type PedidoKey, type Peek,
+  brl, calcularCaso, caseSummaryText, CONFIDENCE_LABEL, FACT_BY_KEY, FACTS, fmtDate, fmtNum, normalizeFact, parseNum, toDate, todayYMD,
+  TERMINATION_LABEL,
+  type CaseResult, type FactKey, type Facts, type PedidoKey, type PedidoResult, type Peek, type Termination,
 } from './calc';
 import { FactInput, type RawValue } from './ui/FactInput';
-import { Check, Field, LinesCard, Notice, Row, Section, type Tone } from './ui/fields';
+import { Check, Field, LinesCard, Notice, Row, type Tone } from './ui/fields';
 
-type Tab = 'ficha' | 'perguntas' | 'resultado';
+type TabKey = 'rescisao' | 'horas' | 'adicionais' | 'fgts' | 'resumo';
+
+interface TabDef {
+  key: TabKey;
+  label: string;
+  /** Campos próprios da aba (os do contrato ficam no bloco do topo, compartilhado). */
+  facts: FactKey[];
+  pedidos: PedidoKey[];
+}
+
+/** Dados do contrato: compartilhados entre as abas. */
+const CONTRACT: FactKey[] = ['salario', 'remuneracao_variavel', 'admissao', 'ainda_trabalha', 'quer_rescisao_indireta', 'saida', 'desligamento'];
+
+const TABS: TabDef[] = [
+  {
+    key: 'rescisao', label: 'Rescisão',
+    facts: ['aviso', 'rescisao_recebida', 'valor_recebido', 'rescisao_no_prazo', 'ferias_vencidas', 'saldo_fgts'],
+    pedidos: ['rescisorias'],
+  },
+  {
+    key: 'horas', label: 'Horas extras',
+    facts: ['jornada_contratual', 'entrada', 'saida_expediente', 'intervalo', 'dias_semana', 'domingos_feriados', 'he_pagas', 'noturno_pago'],
+    pedidos: ['horas_extras', 'intervalo', 'adicional_noturno'],
+  },
+  {
+    key: 'adicionais', label: 'Adicionais',
+    facts: ['insalubridade', 'insalubridade_paga', 'periculosidade', 'periculosidade_paga'],
+    pedidos: ['insalubridade_periculosidade'],
+  },
+  { key: 'fgts', label: 'FGTS', facts: ['fgts_depositado', 'meses_sem_fgts'], pedidos: ['fgts'] },
+  { key: 'resumo', label: 'Resumo', facts: [], pedidos: [] },
+];
 
 interface State {
   values: Partial<Record<FactKey, RawValue>>;
@@ -24,7 +56,6 @@ interface State {
 
 const initial = (): State => ({ values: {}, unknown: {}, filing: todayYMD(), minimumWage: '', monthsOverride: '', exclude: [] });
 
-/** Estado da tela → fatos do motor. */
 function toFacts(s: State): Facts {
   const facts: Facts = {};
   for (const def of FACTS) {
@@ -34,13 +65,10 @@ function toFacts(s: State): Facts {
   return facts;
 }
 
-/**
- * Central Trabalhista: ficha de fatos (o que o lead respondeu), perguntas pendentes e resultado
- * com faixa de valor. Motor em ./calc.
- */
+/** Central Trabalhista: uma aba por cálculo, dados do contrato compartilhados, resumo com o total. */
 export function LaborCenterWidget(_: { context: WidgetContext }) {
   const [s, setS] = useState<State>(initial);
-  const [tab, setTab] = useState<Tab>('ficha');
+  const [tab, setTab] = useState<TabKey>('rescisao');
 
   const facts = useMemo(() => toFacts(s), [s]);
   const res = useMemo(() => calcularCaso({
@@ -54,14 +82,21 @@ export function LaborCenterWidget(_: { context: WidgetContext }) {
   }), [facts, s.exclude, s.filing, s.minimumWage, s.monthsOverride]);
 
   const peek: Peek = (k) => (facts[k]?.status === 'nao_sabe' ? undefined : normalizeFact(FACT_BY_KEY.get(k)!, facts[k]?.value));
-  const premiseOf = (def: FactDef) => def.premise?.(peek).label;
+  const relevant = (k: FactKey) => FACT_BY_KEY.get(k)!.relevant?.(peek) ?? true;
 
   const setValue = (k: FactKey, v: RawValue) => setS((p) => ({ ...p, values: { ...p.values, [k]: v }, unknown: { ...p.unknown, [k]: false } }));
   const setUnknown = (k: FactKey, v: boolean) => setS((p) => ({ ...p, unknown: { ...p.unknown, [k]: v } }));
-  const input = (def: FactDef, showQuestion: boolean) => (
-    <FactInput key={def.key} def={def} value={s.values[def.key]} unknown={!!s.unknown[def.key]} premise={premiseOf(def)}
-      onChange={(v) => setValue(def.key, v)} onUnknown={(v) => setUnknown(def.key, v)} showQuestion={showQuestion} />
-  );
+  const fields = (keys: FactKey[]) => keys.filter(relevant).map((k) => {
+    const def = FACT_BY_KEY.get(k)!;
+    return (
+      <FactInput key={k} def={def} value={s.values[k]} unknown={!!s.unknown[k]} premise={def.premise?.(peek).label}
+        onChange={(v) => setValue(k, v)} onUnknown={(v) => setUnknown(k, v)} showQuestion={false} />
+    );
+  });
+
+  const current = TABS.find((t) => t.key === tab)!;
+  const pendingIn = (keys: FactKey[]) => res.pending.filter((q) => keys.includes(q.key));
+  const notTerminated = peek('ainda_trabalha') === true && peek('quer_rescisao_indireta') !== true;
 
   const copy = async () => {
     try {
@@ -72,124 +107,39 @@ export function LaborCenterWidget(_: { context: WidgetContext }) {
     }
   };
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'ficha', label: 'Ficha' },
-    { key: 'perguntas', label: `Perguntas${res.pending.length ? ` (${res.pending.length})` : ''}` },
-    { key: 'resultado', label: 'Resultado' },
-  ];
-
   return (
     <div className="space-y-4">
-      <div className="flex gap-1" role="tablist">
-        {tabs.map((t) => (
-          <Button key={t.key} type="button" role="tab" aria-selected={tab === t.key} size="sm"
-            variant={tab === t.key ? 'default' : 'outline'} className="h-7 flex-1 px-2 text-xs" onClick={() => setTab(t.key)}>
+      <div className="flex border-b border-border" role="tablist">
+        {TABS.map((t) => (
+          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}
+            className={cn('-mb-px flex-1 whitespace-nowrap border-b-2 px-1 pb-2 pt-1 text-xs transition-colors',
+              tab === t.key ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
             {t.label}
-          </Button>
+          </button>
         ))}
       </div>
 
-      <StatusBar res={res} onOpen={() => setTab('resultado')} />
-
-      {tab === 'ficha' && (
+      {tab !== 'resumo' && (
         <>
-          {(Object.keys(FACT_GROUP_LABEL) as FactGroup[]).map((g) => {
-            const defs = FACTS.filter((d) => d.group === g && (d.relevant?.(peek) ?? true));
-            if (!defs.length) return null;
-            return <Section key={g} title={FACT_GROUP_LABEL[g]}>{defs.map((d) => input(d, false))}</Section>;
+          <ContractBlock res={res} peek={peek} complete={pendingIn(CONTRACT).every((q) => !q.required)}>
+            {fields(CONTRACT)}
+          </ContractBlock>
+
+          {tab === 'rescisao' && notTerminated
+            ? <Notice>Rescisão só vale para quem saiu da empresa ou vai pedir rescisão indireta (marque nos dados do contrato).</Notice>
+            : <div className="space-y-3">{fields(current.facts)}</div>}
+
+          {current.pedidos.map((k) => {
+            const pd = res.pedidos.find((x) => x.key === k);
+            return pd ? <PedidoCard key={k} pd={pd} /> : null;
           })}
-          <details className="space-y-3 text-xs">
-            <summary className="cursor-pointer font-medium text-muted-foreground">Ajustes do cálculo</summary>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <Field id="lc-filing" type="date" label="Ajuizamento" hint="Hoje, se ainda não entrou." value={s.filing} onChange={(filing) => setS((p) => ({ ...p, filing }))} />
-              <Field id="lc-months" label="Meses cobráveis" placeholder={res.eligibility.months ? fmtNum(res.eligibility.months, 1) : 'pelas datas'}
-                hint="Só para trocar o calculado." value={s.monthsOverride} onChange={(monthsOverride) => setS((p) => ({ ...p, monthsOverride }))} />
-              <Field id="lc-minwage" className="col-span-2" label="Salário mínimo (base da insalubridade)" placeholder="1.621,00"
-                value={s.minimumWage} onChange={(minimumWage) => setS((p) => ({ ...p, minimumWage }))} />
-            </div>
-          </details>
-          <Button type="button" variant="ghost" size="sm" className="w-full gap-2 text-muted-foreground" onClick={() => setS(initial())}>
-            <ArrowCounterClockwise size={14} /> Limpar caso
-          </Button>
+
+          <TabPremises items={res.premises.filter((p) => !p.asked && [...CONTRACT, ...current.facts].includes(p.key))} />
+          <PendingList items={pendingIn([...CONTRACT, ...current.facts])} />
         </>
       )}
 
-      {tab === 'perguntas' && (
-        <>
-          {res.pending.length === 0
-            ? <Notice tone="ok">Nada pendente: todas as perguntas que se aplicam foram respondidas.</Notice>
-            : (
-              <Section title="Pergunte ao lead (em ordem de impacto)">
-                {res.pending.map((q) => (
-                  <div key={q.key} className={cn('space-y-1 rounded-[6px] border p-2.5', q.required ? 'border-primary/40' : 'border-border')}>
-                    {input(FACT_BY_KEY.get(q.key)!, true)}
-                    <p className="text-[11px] text-muted-foreground">{q.required ? 'Obrigatória. ' : ''}{q.why}</p>
-                  </div>
-                ))}
-              </Section>
-            )}
-          {res.premises.length > 0 && (
-            <Section title="Premissas em uso (confirmar)">
-              <ul className="space-y-1 text-[11px] text-muted-foreground">
-                {res.premises.map((p) => (
-                  <li key={p.key}><span className="font-medium text-foreground">{p.label}:</span> {p.assumed}{p.asked ? ' · lead não sabe' : ''}</li>
-                ))}
-              </ul>
-            </Section>
-          )}
-        </>
-      )}
-
-      {tab === 'resultado' && (
-        <>
-          <Notice tone={eligibilityTone(res)}>{res.eligibility.message}</Notice>
-          <div className="space-y-1.5 rounded-[6px] border border-border bg-muted/40 p-3">
-            <Row label="Total estimado" value={brl(res.total)} strong />
-            {res.range && <Row label="Faixa" value={`${brl(res.range.low)} – ${brl(res.range.high)}`} />}
-            <p className="pt-1 text-[11px] text-muted-foreground">
-              <span className="font-medium">{CONFIDENCE_LABEL[res.confidence]}.</span> {res.confidenceReason}
-            </p>
-          </div>
-          {res.warnings.map((w) => <Notice key={w} tone="warn">{w}</Notice>)}
-          <div className="space-y-2">
-            {res.pedidos.map((pd) => (
-              <details key={pd.key} className="rounded-[6px] border border-border p-2.5 text-xs">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
-                  <span className="font-medium">{pd.label}</span>
-                  <span className={cn('font-mono', pd.status !== 'calculado' && 'text-muted-foreground', !pd.included && pd.status === 'calculado' && 'line-through')}>
-                    {pd.status === 'calculado' ? brl(pd.total) : pd.status === 'pendente' ? 'pendente' : '—'}
-                  </span>
-                </summary>
-                <div className="mt-2 space-y-2">
-                  {pd.note && <p className="text-muted-foreground">{pd.note}</p>}
-                  {pd.missing.length > 0 && (
-                    <button type="button" className="text-primary underline" onClick={() => setTab('perguntas')}>
-                      Falta: {pd.missing.map((k) => FACT_BY_KEY.get(k)!.label.toLowerCase()).join(', ')}
-                    </button>
-                  )}
-                  {pd.status === 'calculado' && (
-                    <>
-                      <LinesCard lines={pd.lines} total={pd.total} />
-                      {pd.premises.length > 0 && (
-                        <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                          Presumido: {pd.premises.map((k) => FACT_BY_KEY.get(k)!.label.toLowerCase()).join(', ')}
-                        </p>
-                      )}
-                      {pd.warnings.map((w) => <p key={w} className="text-[11px] text-muted-foreground">{w}</p>)}
-                      <pre className="whitespace-pre-wrap font-mono text-[11px] text-muted-foreground">{pd.memory.join('\n')}</pre>
-                      <Check id={`inc-${pd.key}`} label="Incluir no total" checked={!s.exclude.includes(pd.key)}
-                        onChange={(v) => setS((p) => ({ ...p, exclude: v ? p.exclude.filter((k) => k !== pd.key) : [...p.exclude, pd.key] }))} />
-                    </>
-                  )}
-                </div>
-              </details>
-            ))}
-          </div>
-          <Button type="button" variant="outline" className="w-full gap-2" onClick={copy}>
-            <Copy size={14} /> Copiar resumo do caso
-          </Button>
-        </>
-      )}
+      {tab === 'resumo' && <Summary res={res} s={s} setS={setS} onOpen={setTab} onCopy={copy} />}
 
       <p className="text-[11px] text-muted-foreground">Estimativa sem correção monetária, juros, INSS e IR. Não substitui o cálculo de liquidação.</p>
     </div>
@@ -203,22 +153,135 @@ function eligibilityTone(res: CaseResult): Tone {
   return e.daysLeft != null && e.daysLeft <= 90 ? 'warn' : 'ok';
 }
 
-/** Linha fixa no topo: prazo + total + confiança, visível em qualquer aba. */
-function StatusBar({ res, onOpen }: { res: CaseResult; onOpen: () => void }) {
-  const e = res.eligibility;
-  const tone = eligibilityTone(res);
-  const prazo = e.status === 'prescrito' ? 'Prescrito'
-    : e.status === 'ativo' ? 'Contrato ativo'
-    : e.status === 'no_prazo' ? `Prazo: ${e.daysLeft} dias`
-    : 'Prazo: faltam datas';
+/** Dados do contrato: abertos até ficarem completos, depois viram uma linha de resumo (clicar abre de novo). */
+function ContractBlock({ res, peek, complete, children }: { res: CaseResult; peek: Peek; complete: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState<boolean | null>(null);
+  const expanded = open ?? !complete;
+  const adm = toDate(peek('admissao') as string | undefined);
+  const out = toDate(peek('saida') as string | undefined);
+  const term = peek('desligamento') as Termination | undefined;
+  const summary = [
+    typeof peek('salario') === 'number' ? brl(peek('salario') as number) : null,
+    adm ? `${fmtDate(adm)} → ${peek('ainda_trabalha') === true ? 'hoje' : out ? fmtDate(out) : '?'}` : null,
+    peek('ainda_trabalha') === true ? 'ainda trabalha' : term ? TERMINATION_LABEL[term].toLowerCase() : null,
+  ].filter(Boolean).join(' · ');
+
   return (
-    <button type="button" onClick={onOpen}
-      className="flex w-full items-center justify-between gap-2 rounded-[6px] border border-border px-2.5 py-1.5 text-left text-[11px]">
-      <span className={cn(
-        tone === 'danger' && 'text-destructive', tone === 'warn' && 'text-amber-700 dark:text-amber-400',
-        tone === 'ok' && 'text-emerald-700 dark:text-emerald-400', tone === 'muted' && 'text-muted-foreground')}>{prazo}</span>
-      <span className="font-mono text-foreground">{res.range ? `${brl(res.range.low)} – ${brl(res.range.high)}` : '—'}</span>
-      <span className="text-muted-foreground">{CONFIDENCE_LABEL[res.confidence]}</span>
-    </button>
+    <div className="rounded-[6px] border border-border">
+      <button type="button" onClick={() => setOpen(!expanded)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left">
+        <span className="min-w-0">
+          <span className="block text-xs font-medium">Dados do contrato</span>
+          {!expanded && <span className="block truncate text-[11px] text-muted-foreground">{summary || 'preencher'}</span>}
+        </span>
+        {expanded ? <CaretDown size={14} className="shrink-0 rotate-180" /> : <PencilSimple size={14} className="shrink-0 text-muted-foreground" />}
+      </button>
+      {expanded && <div className="space-y-3 border-t border-border p-2.5">{children}</div>}
+      <div className="border-t border-border p-1.5">
+        <Notice tone={eligibilityTone(res)}>{res.eligibility.message}</Notice>
+      </div>
+    </div>
+  );
+}
+
+function PedidoCard({ pd }: { pd: PedidoResult }) {
+  return (
+    <div className="space-y-2 rounded-[6px] border border-border p-2.5">
+      <div className="flex items-baseline justify-between gap-2 text-sm">
+        <span className="font-medium">{pd.label}</span>
+        <span className={cn('font-mono', pd.status !== 'calculado' && 'text-xs text-muted-foreground')}>
+          {pd.status === 'calculado' ? brl(pd.total) : pd.status === 'pendente' ? 'faltam dados' : 'nada a cobrar'}
+        </span>
+      </div>
+      {pd.note && pd.status !== 'calculado' && <p className="text-[11px] text-muted-foreground">{pd.note}</p>}
+      {pd.lines.length > 0 && pd.status !== 'calculado' && <LinesCard lines={pd.lines} total={pd.total} totalLabel={pd.status === 'pendente' ? 'Total devido' : 'A cobrar'} />}
+      {pd.status === 'calculado' && (
+        <>
+          {pd.note && <p className="text-[11px] text-muted-foreground">{pd.note}</p>}
+          <LinesCard lines={pd.lines} total={pd.total} totalLabel="A cobrar" />
+          {pd.warnings.map((w) => <p key={w} className="text-[11px] text-muted-foreground">{w}</p>)}
+          <details className="text-[11px]">
+            <summary className="cursor-pointer text-muted-foreground">Memória de cálculo</summary>
+            <pre className="mt-1 whitespace-pre-wrap font-mono text-muted-foreground">{pd.memory.join('\n')}</pre>
+          </details>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Uma linha só com o que a aba está presumindo, no valor e não no nome do campo. */
+function TabPremises({ items }: { items: CaseResult['premises'] }) {
+  if (!items.length) return null;
+  return (
+    <p className="text-[11px] text-amber-700 dark:text-amber-400">
+      Presumido até confirmar: {items.map((p) => p.assumed).join(', ')}.
+    </p>
+  );
+}
+
+function PendingList({ items }: { items: CaseResult['pending'] }) {
+  if (!items.length) return null;
+  return (
+    <details className="rounded-[6px] border border-dashed border-border p-2.5 text-xs">
+      <summary className="cursor-pointer font-medium text-muted-foreground">Perguntas para o lead ({items.length})</summary>
+      <ul className="mt-2 space-y-2">
+        {items.map((q) => (
+          <li key={q.key}>
+            <p>“{q.question}”</p>
+            <p className="text-[11px] text-muted-foreground">{q.why}</p>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function Summary({ res, s, setS, onOpen, onCopy }: {
+  res: CaseResult; s: State; setS: (fn: (p: State) => State) => void; onOpen: (t: TabKey) => void; onCopy: () => void;
+}) {
+  const tabOf = (k: PedidoKey) => TABS.find((t) => t.pedidos.includes(k))!.key;
+  return (
+    <div className="space-y-4">
+      <Notice tone={eligibilityTone(res)}>{res.eligibility.message}</Notice>
+      <div className="space-y-2 rounded-[6px] border border-border bg-muted/40 p-3">
+        {res.pedidos.map((pd) => (
+          <div key={pd.key} className="flex items-center justify-between gap-3 text-sm">
+            {pd.status === 'calculado'
+              ? <Check id={`sum-${pd.key}`} label={pd.label} checked={!s.exclude.includes(pd.key)}
+                  onChange={(v) => setS((p) => ({ ...p, exclude: v ? p.exclude.filter((k) => k !== pd.key) : [...p.exclude, pd.key] }))} />
+              : <span className="text-xs text-muted-foreground">{pd.label}</span>}
+            <button type="button" onClick={() => onOpen(tabOf(pd.key))}
+              className={cn('shrink-0 font-mono text-xs', pd.status === 'calculado' ? 'text-foreground' : 'text-muted-foreground underline')}>
+              {pd.status === 'calculado' ? brl(pd.total) : pd.status === 'pendente' ? 'preencher' : '—'}
+            </button>
+          </div>
+        ))}
+        <div className="space-y-1 border-t border-border pt-2">
+          <Row label="Total estimado" value={brl(res.total)} strong />
+          {res.range && <Row label="Faixa" value={`${brl(res.range.low)} – ${brl(res.range.high)}`} />}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          <span className="font-medium">{CONFIDENCE_LABEL[res.confidence]}.</span> {res.confidenceReason}
+        </p>
+      </div>
+      {res.warnings.map((w) => <Notice key={w} tone="warn">{w}</Notice>)}
+      <PendingList items={res.pending} />
+      <Button type="button" variant="outline" className="w-full gap-2" onClick={onCopy}>
+        <Copy size={14} /> Copiar resumo do caso
+      </Button>
+      <details className="text-xs">
+        <summary className="cursor-pointer font-medium text-muted-foreground">Ajustes do cálculo</summary>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <Field id="lc-filing" type="date" label="Ajuizamento" hint="Hoje, se ainda não entrou." value={s.filing} onChange={(filing) => setS((p) => ({ ...p, filing }))} />
+          <Field id="lc-months" label="Meses cobráveis" placeholder={res.eligibility.months ? fmtNum(res.eligibility.months, 1) : 'pelas datas'}
+            hint="Só para trocar o calculado." value={s.monthsOverride} onChange={(monthsOverride) => setS((p) => ({ ...p, monthsOverride }))} />
+          <Field id="lc-minwage" className="col-span-2" label="Salário mínimo (base da insalubridade)" placeholder="1.621,00"
+            value={s.minimumWage} onChange={(minimumWage) => setS((p) => ({ ...p, minimumWage }))} />
+        </div>
+      </details>
+      <Button type="button" variant="ghost" size="sm" className="w-full gap-2 text-muted-foreground" onClick={() => setS(() => initial())}>
+        <ArrowCounterClockwise size={14} /> Limpar caso
+      </Button>
+    </div>
   );
 }

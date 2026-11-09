@@ -18,7 +18,6 @@ export function FactInput({ def, value, unknown, premise, onChange, onUnknown, s
   showQuestion?: boolean;
 }) {
   const id = `lc-${def.key}`;
-  const empty = value === undefined || value === '';
   return (
     <div className="space-y-1.5">
       <div className="flex items-start justify-between gap-2">
@@ -30,16 +29,16 @@ export function FactInput({ def, value, unknown, premise, onChange, onUnknown, s
         </button>
       </div>
       {showQuestion && <p className="text-[11px] italic leading-snug text-muted-foreground">“{def.question}”</p>}
-      {!unknown && <Control id={id} def={def} value={value} onChange={onChange} />}
-      {(unknown || empty) && premise && (
-        <p className="text-[11px] text-muted-foreground">Enquanto isso, considera: <span className="font-medium">{premise}</span></p>
+      {!unknown && <Control id={id} def={def} value={value} onChange={onChange} premise={premise} />}
+      {unknown && premise && (
+        <p className="text-[11px] text-muted-foreground">Considerando: <span className="font-medium">{premise}</span></p>
       )}
       {unknown && !premise && <p className="text-[11px] text-amber-700 dark:text-amber-400">Sem essa informação o pedido fica pendente. Peça documento.</p>}
     </div>
   );
 }
 
-function Control({ id, def, value, onChange }: { id: string; def: FactDef; value: RawValue; onChange: (v: RawValue) => void }) {
+function Control({ id, def, value, onChange, premise }: { id: string; def: FactDef; value: RawValue; onChange: (v: RawValue) => void; premise?: string }) {
   if (def.kind === 'bool')
     return (
       <div className="flex gap-1.5" id={id}>
@@ -54,11 +53,11 @@ function Control({ id, def, value, onChange }: { id: string; def: FactDef; value
   if (def.kind === 'enum')
     return (
       <NativeSelect id={id} className="h-9 py-1.5 text-xs" value={typeof value === 'string' ? value : ''}
-        options={[{ value: '', label: '— escolher —' }, ...(def.options ?? [])]}
+        options={[{ value: '', label: premise ? `— (se vazio: ${premise})` : '— escolher —' }, ...(def.options ?? [])]}
         onChange={(e) => onChange(e.target.value || undefined)} />
     );
   const type = def.kind === 'date' ? 'date' : def.kind === 'time' ? 'time' : undefined;
-  const placeholder = def.kind === 'money' ? '0,00' : def.kind === 'text' ? '' : undefined;
+  const placeholder = premise ? `Se vazio: ${premise}` : def.kind === 'money' ? '0,00' : undefined;
   return (
     <Input id={id} type={type} inputMode={type || def.kind === 'text' ? undefined : 'decimal'} placeholder={placeholder}
       value={typeof value === 'string' ? value : ''} onChange={(e) => onChange(e.target.value)} />
