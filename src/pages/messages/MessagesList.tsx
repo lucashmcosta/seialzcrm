@@ -1,3 +1,4 @@
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { displayThreadStatus } from '@/lib/threadStatus';
 import { NoWhatsAppNumberBanner } from "@/components/messages/NoWhatsAppNumberBanner";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, Fragment } from 'react';
@@ -730,6 +731,15 @@ function DesktopMessagesList() {
   };
 
   // === THREAD ACTIONS ===
+  // Assumir ou atribuir uma conversa que o agente de IA está atendendo tira o agente dela.
+  // Pede confirmação para evitar o clique por engano que deixava o cliente sem resposta.
+  const [agentTakeOver, setAgentTakeOver] = useState<{ threadId: string; agentName: string; run: () => void } | null>(null);
+  const guardAgentThread = (threadId: string, run: () => void) => {
+    const agentName = agentThreads?.[threadId];
+    if (agentName) setAgentTakeOver({ threadId, agentName, run });
+    else run();
+  };
+
   const handleTakeOver = async (threadId: string) => {
     if (!userProfile?.id) return;
     const { error } = await supabase
@@ -2324,7 +2334,7 @@ function DesktopMessagesList() {
                             {locale === 'pt-BR' ? 'Atribuição' : 'Assignment'}
                           </DropdownMenuLabel>
                           {(!selectedThread.assigned_user_id || selectedThread.assigned_user_id !== userProfile?.id) && selectedThread.status !== 'resolved' && (
-                            <DropdownMenuItem disabled={!threadPerms.canAssign} title={threadPerms.canAssign ? undefined : DENY_ASSIGN} onClick={() => handleTakeOver(selectedThread.id)}>
+                            <DropdownMenuItem disabled={!threadPerms.canAssign} title={threadPerms.canAssign ? undefined : DENY_ASSIGN} onClick={() => guardAgentThread(selectedThread.id, () => handleTakeOver(selectedThread.id))}>
                               <UserCheck className="w-4 h-4 mr-2" />
                               {locale === 'pt-BR' ? 'Assumir conversa' : 'Take over'}
                             </DropdownMenuItem>
@@ -2333,7 +2343,7 @@ function DesktopMessagesList() {
                             <PermissionGate allowed={threadPerms.canAssign} reason={DENY_ASSIGN} className="w-full">
                             <OwnerSelector
                               value={selectedThread.assigned_user_id}
-                              onChange={(userId) => handleAssign(selectedThread.id, userId)}
+                              onChange={(userId) => guardAgentThread(selectedThread.id, () => handleAssign(selectedThread.id, userId))}
                               size="sm"
                               placeholder={locale === 'pt-BR' ? 'Atribuir a...' : 'Assign to...'}
                             />
@@ -3369,8 +3379,8 @@ function DesktopMessagesList() {
               denyAssignReason: DENY_ASSIGN,
               denyCloseReason: DENY_CLOSE,
               showReturnToAI: RETURN_TO_AI_ENABLED && !!selectedThread.needs_human_attention && !!hasAIAgent,
-              onTakeOver: () => handleTakeOver(selectedThread.id),
-              onAssign: (userId) => handleAssign(selectedThread.id, userId),
+              onTakeOver: () => guardAgentThread(selectedThread.id, () => handleTakeOver(selectedThread.id)),
+              onAssign: (userId) => guardAgentThread(selectedThread.id, () => handleAssign(selectedThread.id, userId)),
               onResolve: () => handleResolve(selectedThread.id),
               onReopen: () => handleReopen(selectedThread.id),
               onReturnToAI: () => handleReturnToAI(selectedThread.id),
@@ -3380,6 +3390,25 @@ function DesktopMessagesList() {
         )}
       </div>
 
+
+      <AlertDialog open={!!agentTakeOver} onOpenChange={(open) => { if (!open) setAgentTakeOver(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{locale === 'pt-BR' ? `${agentTakeOver?.agentName ?? 'O agente'} está atendendo esta conversa` : `${agentTakeOver?.agentName ?? 'The agent'} is handling this conversation`}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {locale === 'pt-BR'
+                ? `Se você assumir, ${agentTakeOver?.agentName ?? 'o agente'} para de responder e o cliente passa a esperar por você. Continue só se for responder agora.`
+                : 'If you take over, the agent stops replying and the customer waits for you. Continue only if you will reply now.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{locale === 'pt-BR' ? 'Deixar com o agente' : 'Keep with agent'}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { agentTakeOver?.run(); setAgentTakeOver(null); }}>
+              {locale === 'pt-BR' ? 'Assumir e responder' : 'Take over'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Media Preview Dialog */}
       <MediaPreviewDialog
