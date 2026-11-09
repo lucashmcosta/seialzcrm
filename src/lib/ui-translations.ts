@@ -1,6 +1,7 @@
 // Source strings are explicit UI keys; customer/provider content is never translated.
 export const uiEnglish: Record<string, string> = {
   'Veio deste anúncio': 'Came from this ad',
+  'Ampliar imagem do anúncio': 'Enlarge ad image',
   'Abrir anúncio': 'Open ad',
   'Anúncio': 'Ad',
   "Geral": "General",
