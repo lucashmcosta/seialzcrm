@@ -26,9 +26,9 @@ export function MarketingLayout({ children, title }: { children: ReactNode; titl
   const { enabled: socialPublishingEnabled } = useMetaSocialPublishingFlag(organization?.id);
   const TABS = [...BASE_TABS, ...(socialPublishingEnabled ? [
         { href: '/marketing/posts', label: uiText("Publicações"), icon: PaperPlaneTilt },
-        { href: '/marketing/comments', label: uiText("Comentários"), icon: ChatCircle }] : []), ...(publishingEnabled ? [
-        { href: '/marketing/campaigns', label: uiText("Campanhas"), icon: Megaphone },
-        { href: '/marketing/webhooks', label: 'Webhooks', icon: BellRinging }] : [])];
+        { href: '/marketing/comments', label: uiText("Comentários"), icon: ChatCircle },
+        { href: '/marketing/webhooks', label: 'Webhooks', icon: BellRinging }] : []), ...(publishingEnabled ? [
+        { href: '/marketing/campaigns', label: uiText("Campanhas"), icon: Megaphone }] : [])];
   return (
     <Layout>
       <div className="space-y-6 p-6">

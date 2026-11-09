@@ -3,7 +3,7 @@ import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { Navigate } from 'react-router-dom';
 import { useOrganization } from '@/hooks/useOrganization';
 import { MarketingLayout } from '../_components/MarketingLayout';
-import { useMarketingPublishingFlag } from '@/hooks/useMarketingPublishingFlag';
+import { useMetaSocialPublishingFlag } from '@/hooks/useMetaSocialPublishingFlag';
 import { useWebhookStatus, useSubscribeWebhooks } from '../_hooks/useWebhooks';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ export default function MarketingWebhooks() {
   useUiLocale();
   const { organization } = useOrganization();
   const orgId = organization?.id;
-  const { enabled, loading: flagLoading } = useMarketingPublishingFlag(orgId);
+  const { enabled, loading: flagLoading } = useMetaSocialPublishingFlag(orgId);
   const status = useWebhookStatus(enabled ? orgId : undefined);
   const subscribe = useSubscribeWebhooks(orgId);
 
