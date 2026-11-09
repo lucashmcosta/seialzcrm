@@ -55,6 +55,17 @@ const MENSAGENS: Record<string, string> = {
   invalid_raio: 'Escolha um raio entre 1 e 50 km.',
   opportunity_not_found: 'Você não tem acesso a esta oportunidade.',
   plamev_unavailable: 'A Plamev não respondeu. Tente de novo.',
+  missing_pergunta: 'Escreva a pergunta ou use as mensagens da conversa.',
+  conversa_vazia: 'A conversa ainda não tem mensagens de texto. Escreva a pergunta.',
+  thread_not_found: 'Você não tem acesso a esta conversa.',
+  ia_sem_materiais: 'Ainda não há materiais da Plamev para a IA ler.',
+  ia_sem_chave_claude: 'A IA precisa de uma chave do Claude. Conecte em Configurações › Integrações.',
+  ia_limite_mensal: 'O limite mensal da chave de IA desta organização foi atingido.',
+  ia_chave_recusada: 'A Anthropic recusou a chave do Claude. Confira em Configurações › Integrações.',
+  ia_ocupada: 'A IA está ocupada agora. Tente de novo em alguns segundos.',
+  ia_indisponivel: 'A IA não respondeu. Tente de novo.',
+  ia_recusou: 'A IA não quis responder essa pergunta. Reformule ou confira nos materiais.',
+  ia_resposta_invalida: 'A IA respondeu fora do formato. Tente de novo.',
 };
 
 /** Chamada feita à API da Plamev (sem o token), para conferir em "Ver payload". */
@@ -178,3 +189,6 @@ export function useMateriais(org: string | undefined) {
     queryFn: () => chamar<{ materiais: Material[] }>(org!, 'materiais').then((r) => r.materiais),
   });
 }
+
+/** Resposta sugerida pelo "Perguntar". fontes = ids dos materiais usados; materiaisFora = não couberam no pedido. */
+export interface RespostaIa { resposta: string; encontrado: boolean; fontes: string[]; materiaisFora: string[] }
