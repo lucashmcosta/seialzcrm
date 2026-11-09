@@ -25,6 +25,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { useAI } from '@/hooks/useAI';
+import { useHasTextAi } from '@/hooks/useHasTextAi';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 import { useThreadEndpointId } from '@/hooks/useThreadEndpointId';
 import { SpinnerGap, PaperPlaneTilt, Clock, Check, Checks, WarningCircle, Robot, Sparkle, SealCheck, Briefcase, Smiley, Target, FileText } from '@phosphor-icons/react';
@@ -109,23 +110,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
   const { generate: generateAI } = useAI();
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
-  // Check if organization has AI enabled
-  const { data: hasAI } = useQuery({
-    queryKey: ['org-has-ai', organization?.id],
-    queryFn: async () => {
-      if (!organization?.id) return false;
-      
-      const { data } = await supabase
-        .from('organization_integrations')
-        .select('is_enabled, integration:admin_integrations!inner(slug)')
-        .eq('organization_id', organization.id)
-        .eq('is_enabled', true)
-        .in('integration.slug', ['claude-ai', 'openai-gpt']);
-      
-      return data && data.length > 0;
-    },
-    enabled: !!organization?.id,
-  });
+  const hasAI = useHasTextAi(organization?.id);
 
   useEffect(() => {
     fetchThread();

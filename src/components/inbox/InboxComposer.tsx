@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useToast } from '@/hooks/use-toast';
 import { useAI } from '@/hooks/useAI';
+import { useHasTextAi } from '@/hooks/useHasTextAi';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -105,21 +106,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   const [aiImproving, setAiImproving] = useState(false);
   const { generate: generateAI } = useAI();
 
-  const { data: hasAIIntegration } = useQuery({
-    queryKey: ['org-has-ai-integration', organization?.id],
-    queryFn: async () => {
-      if (!organization?.id) return false;
-      const { data } = await supabase
-        .from('organization_integrations')
-        .select('id, admin_integrations!inner(slug)')
-        .eq('organization_id', organization.id)
-        .eq('is_enabled', true)
-        .in('admin_integrations.slug', ['openai-gpt', 'claude-ai', 'lovable-ai'])
-        .limit(1);
-      return !!(data && data.length > 0);
-    },
-    enabled: !!organization?.id,
-  });
+  const hasAIIntegration = useHasTextAi(organization?.id);
 
   async function handleImproveText(mode: 'grammar' | 'professional' | 'friendly' | 'persuasive') {
     if (!text.trim()) return;
