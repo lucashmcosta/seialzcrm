@@ -100,7 +100,7 @@ import {
   VALID_CATEGORIES, 
   GLOBAL_CATEGORIES, 
   PRODUCT_CATEGORIES,
-  isValidCategory 
+  isValidCategory,
   isCategoryAlreadySaved,
 } from '@/lib/knowledge-categories';
 
