@@ -677,7 +677,10 @@ export function KnowledgeBaseSettings() {
               setActiveTab('knowledge');
               toast.success('Base de conhecimento configurada!');
             }}
-            onCancel={() => setActiveTab('knowledge')}
+            onCancel={() => {
+              fetchData();
+              setActiveTab('knowledge');
+            }}
           />
         </TabsContent>
       </Tabs>

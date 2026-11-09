@@ -69,3 +69,12 @@ export function categoryForGeneratedDoc(docType: string | null | undefined): Kno
   if (docType && GENERATED_DOC_CATEGORY[docType]) return GENERATED_DOC_CATEGORY[docType];
   return VALID_CATEGORIES.includes(docType as KnowledgeCategory) ? (docType as KnowledgeCategory) : 'general';
 }
+
+/** Categoria que o Wizard já gerou e salvou: sair não pode trocar esse texto pelas respostas cruas. */
+export function isCategoryAlreadySaved(
+  savedItems: Array<{ category: string; productId?: string }>,
+  category: string,
+  productId?: string,
+): boolean {
+  return savedItems.some((item) => item.category === category && (item.productId ?? null) === (productId ?? null));
+}
