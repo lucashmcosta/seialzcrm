@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, agentIdentityLine, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, agentIdentityLine, followUpInstruction, isFollowUpSkip, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -75,4 +75,16 @@ Deno.test("apresentação: padrão é assistente virtual; pelo nome mantém a ve
 
 Deno.test("parágrafo repetido na mesma resposta sai uma vez só", () => {
   assertEquals(splitIntoBubbles("Faz sentido perguntar.\n\nÓtimo, o ponto ajuda.\n\nFaz sentido  perguntar."), ["Faz sentido perguntar.", "Ótimo, o ponto ajuda."]);
+});
+
+Deno.test("retomada: instrução interna, e a última tentativa avisa que continua por aqui", () => {
+  assertEquals(followUpInstruction(1, 2).includes("INSTRUÇÃO INTERNA"), true);
+  assertEquals(followUpInstruction(1, 2).includes("última tentativa"), false);
+  assertEquals(followUpInstruction(2, 2).includes("última tentativa"), true);
+});
+
+Deno.test("retomada pulada só com o marcador", () => {
+  assertEquals(isFollowUpSkip("NADA"), true);
+  assertEquals(isFollowUpSkip(" nada. "), true);
+  assertEquals(isFollowUpSkip("Nada de pressa, conseguiu ver?"), false);
 });

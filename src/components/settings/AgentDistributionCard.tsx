@@ -21,6 +21,8 @@ interface AgentRow {
   distribution_value: number | null;
   handoff_ack_message: string | null;
   presents_as_assistant: boolean;
+  followup_enabled: boolean;
+  followup_delays_minutes: number[] | null;
 }
 
 interface Stats {
@@ -44,13 +46,16 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
   const [value, setValue] = useState('');
   const [ack, setAck] = useState('');
   const [asAssistant, setAsAssistant] = useState(true);
+  const [followup, setFollowup] = useState(false);
+  const [delay1, setDelay1] = useState('2');
+  const [delay2, setDelay2] = useState('20');
   const [saving, setSaving] = useState(false);
 
   const agentQuery = useQuery({
     queryKey: ['agent-distribution', organizationId],
     queryFn: async (): Promise<AgentRow | null> => {
       const { data, error } = await supabase.from('ai_agents')
-        .select('id, name, is_enabled, distribution_mode, distribution_value, handoff_ack_message, presents_as_assistant' as never)
+        .select('id, name, is_enabled, distribution_mode, distribution_value, handoff_ack_message, presents_as_assistant, followup_enabled, followup_delays_minutes' as never)
         .eq('organization_id', organizationId).eq('agent_type', 'sdr')
         .order('is_enabled', { ascending: false }).order('created_at', { ascending: false })
         .limit(1).maybeSingle();
@@ -76,23 +81,33 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
     setValue(agent.distribution_value === null ? '' : String(agent.distribution_value));
     setAck(agent.handoff_ack_message ?? DEFAULT_HANDOFF_ACK);
     setAsAssistant(agent.presents_as_assistant !== false);
+    setFollowup(agent.followup_enabled === true);
+    const d = agent.followup_delays_minutes ?? [120, 1200];
+    setDelay1(String((d[0] ?? 120) / 60));
+    setDelay2(String((d[1] ?? 1200) / 60));
   }, [agent]);
 
   // Sem agente na org, a tela de rodízio fica como sempre foi.
   if (agentQuery.isLoading || agentQuery.isError || !agent) return null;
 
   const parsed = value.trim() === '' ? null : Number(value);
-  const valid = isValidDistribution(mode, parsed);
+  // Retomadas em horas, convertidas em minutos; a segunda é opcional. Tudo dentro de 23 h.
+  const hours = [delay1, delay2].map((v) => Number(v.replace(',', '.')));
+  const delaysMinutes = hours.filter((h, i) => i === 0 || (delay2.trim() !== '' && h > 0)).map((h) => Math.round(h * 60));
+  const delaysValid = !followup || (delaysMinutes.length > 0 && delaysMinutes.every((m, i) => m >= 30 && m <= 1380 && (i === 0 || m > delaysMinutes[i - 1])));
+  const valid = isValidDistribution(mode, parsed) && delaysValid;
   const dirty = mode !== agent.distribution_mode
     || (mode !== 'all' && parsed !== agent.distribution_value)
     || ack !== (agent.handoff_ack_message ?? DEFAULT_HANDOFF_ACK)
-    || asAssistant !== (agent.presents_as_assistant !== false);
+    || asAssistant !== (agent.presents_as_assistant !== false)
+    || followup !== (agent.followup_enabled === true)
+    || delaysMinutes.join(',') !== (agent.followup_delays_minutes ?? [120, 1200]).join(',');
 
   const save = async () => {
     if (!valid) return;
     setSaving(true);
     const { error } = await supabase.from('ai_agents')
-      .update({ distribution_mode: mode, distribution_value: mode === 'all' ? null : parsed, handoff_ack_message: ack.trim(), presents_as_assistant: asAssistant } as never)
+      .update({ distribution_mode: mode, distribution_value: mode === 'all' ? null : parsed, handoff_ack_message: ack.trim(), presents_as_assistant: asAssistant, followup_enabled: followup, followup_delays_minutes: delaysMinutes } as never)
       .eq('id', agent.id);
     setSaving(false);
     if (error) {
@@ -160,6 +175,32 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
             </p>
           </div>
           <Switch id="agent-presents-as-assistant" checked={asAssistant} onCheckedChange={setAsAssistant} />
+        </div>
+        <div className="space-y-3 rounded-md border p-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="agent-followup">Retomar quem parou de responder</Label>
+              <p className="text-xs text-muted-foreground">
+                Enquanto a conversa está com {agent.name}, ele manda uma retomada curta se o cliente parar de responder. Só dentro de 24 h da última mensagem do cliente, entre 8h e 20h. Para quando o cliente responde ou a conversa passa para a equipe.
+              </p>
+            </div>
+            <Switch id="agent-followup" checked={followup} onCheckedChange={setFollowup} />
+          </div>
+          {followup && (
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="agent-followup-1">1ª retomada (horas)</Label>
+                <Input id="agent-followup-1" type="number" step="0.5" min={0.5} max={23} className="w-28" value={delay1} onChange={(e) => setDelay1(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="agent-followup-2">2ª retomada (horas, opcional)</Label>
+                <Input id="agent-followup-2" type="number" step="0.5" min={0.5} max={23} className="w-28" value={delay2} onChange={(e) => setDelay2(e.target.value)} />
+              </div>
+            </div>
+          )}
+          {followup && !delaysValid && (
+            <p className="text-xs text-destructive">Use entre 0,5 e 23 horas, com a 2ª depois da 1ª.</p>
+          )}
         </div>
         <Button onClick={save} disabled={!valid || !dirty || saving}>Salvar</Button>
         {!roundRobinEnabled && (
