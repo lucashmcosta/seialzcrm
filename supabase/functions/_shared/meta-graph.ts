@@ -124,3 +124,6 @@ export function isTokenError(err: unknown): boolean {
 export function appSecretProof(appSecret: string, accessToken: string): Promise<string> {
   return hmacSha256Hex(appSecret, accessToken);
 }
+
+// Modificador do campo creative: pede a miniatura grande em vez da padrão de 64px.
+export const META_LARGE_THUMBNAIL = "thumbnail_width(1080).thumbnail_height(1080)";

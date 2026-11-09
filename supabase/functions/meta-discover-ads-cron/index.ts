@@ -1,22 +1,25 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { appSecretProof } from "../_shared/meta-graph.ts";
+import { appSecretProof, META_LARGE_THUMBNAIL } from "../_shared/meta-graph.ts";
 import { listCanonicalAdsOrgIds, resolveOrgAdsAccess, syncAdAccountIds } from "../_shared/meta/ads-access.ts";
 import { callerCanAccessOrg, resolveCaller } from "../_shared/auth/membership.ts";
 
 const API_VERSION = "v25.0";
 const GRAPH_TIMEOUT_MS = 30000;
-const AD_FIELDS = [
+const adFields = (creative: string) => [
   "id",
   "name",
   "status",
   "effective_status",
   "campaign{id,name,objective}",
   "adset{id,name}",
-  "creative{id,name,title,body,thumbnail_url,object_story_spec}",
+  `${creative}{id,name,title,body,thumbnail_url,object_story_spec}`,
   "updated_time",
 ].join(",");
+// Sem o tamanho, a Meta devolve miniatura de 64px. Se recusar o pedido, repete no formato simples.
+const AD_FIELDS = adFields(`creative.${META_LARGE_THUMBNAIL}`);
+const AD_FIELDS_PLAIN = adFields("creative");
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -47,11 +50,12 @@ async function fetchAllAds(
   adAccountId: string,
   token: string,
   appSecret?: string,
+  fields: string = AD_FIELDS,
 ): Promise<{ ok: boolean; ads: MetaAd[]; error?: any; status?: number }> {
   const ads: MetaAd[] = [];
   let url: string | null =
     `https://graph.facebook.com/${API_VERSION}/${adAccountId}/ads` +
-    `?fields=${encodeURIComponent(AD_FIELDS)}` +
+    `?fields=${encodeURIComponent(fields)}` +
     `&limit=100` +
     `&access_token=${encodeURIComponent(token)}` +
     (appSecret ? `&appsecret_proof=${await appSecretProof(appSecret, token)}` : "");
@@ -134,7 +138,11 @@ async function processOrg(
   // (arquivar só com a lista COMPLETA; qualquer falha aborta a org sem arquivar nada).
   const allAds: MetaAd[] = [];
   for (const actId of adAccountIds) {
-    const r = await fetchAllAds(actId, token, proofSecret);
+    let r = await fetchAllAds(actId, token, proofSecret);
+    if (!r.ok) {
+      console.warn("[meta-discover-ads-cron] pedido com miniatura grande recusado, repetindo", { status: r.status });
+      r = await fetchAllAds(actId, token, proofSecret, AD_FIELDS_PLAIN);
+    }
     if (!r.ok) {
       const msg = r.error?.error?.message ?? `http_${r.status}`;
       return { org_id: orgId, status: "failed", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: String(msg).slice(0, 300) };

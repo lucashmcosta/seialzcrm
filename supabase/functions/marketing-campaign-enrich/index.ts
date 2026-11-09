@@ -24,7 +24,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveOrgAdsAccess } from "../_shared/meta/ads-access.ts";
-import { isTokenError, metaGraphGet, MetaGraphError } from "../_shared/meta-graph.ts";
+import { isTokenError, META_LARGE_THUMBNAIL, metaGraphGet, MetaGraphError } from "../_shared/meta-graph.ts";
 import { notifyOrgUsers } from "../_shared/notify.ts";
 import { validateServiceRoleAuth } from "../_shared/auth.ts";
 
@@ -167,7 +167,7 @@ serve(async (req) => {
         }
 
         try {
-          const fields = [
+          const fieldsWith = (creative: string) => [
             "id",
             "name",
             "status",
@@ -176,14 +176,16 @@ serve(async (req) => {
             "campaign{id,name,objective,status}",
             "adset_id",
             "adset{id,name,daily_budget,lifetime_budget,optimization_goal}",
-            "creative{id,name,title,body,thumbnail_url,image_url,object_story_id,call_to_action_type}",
+            `${creative}{id,name,title,body,thumbnail_url,image_url,object_story_id,call_to_action_type}`,
           ].join(",");
+          const auth = { accessToken: systemUserToken, appSecret };
 
+          // Sem o tamanho, a Meta devolve miniatura de 64px. Se recusar o pedido, repete no formato simples.
           const adData = await metaGraphGet(
             `/${campaign.external_id}`,
-            { fields },
-            { accessToken: systemUserToken, appSecret },
-          );
+            { fields: fieldsWith(`creative.${META_LARGE_THUMBNAIL}`) },
+            auth,
+          ).catch(() => metaGraphGet(`/${campaign.external_id}`, { fields: fieldsWith("creative") }, auth));
 
           // Build update payload
           const adName = adData.name || `Ad ${campaign.external_id}`;
