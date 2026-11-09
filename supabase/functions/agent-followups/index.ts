@@ -18,6 +18,9 @@ serve(async (req) => {
   const url = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(url, serviceKey);
+  // Repassa a mesma credencial interna que chamou esta rotina (o JWT de service_role do agendador):
+  // a variável SUPABASE_SERVICE_ROLE_KEY pode estar no formato novo, que o agente não reconhece.
+  const forwardAuth = req.headers.get("authorization") ?? `Bearer ${serviceKey}`;
   const result = { followups: 0, followup_errors: 0, scheduled_sent: 0, scheduled_skipped: 0 };
 
   // 1. Retomadas
@@ -27,7 +30,7 @@ serve(async (req) => {
     try {
       const res = await fetch(`${url}/functions/v1/ai-agent-respond`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+        headers: { "Content-Type": "application/json", Authorization: forwardAuth },
         body: JSON.stringify({
           agentId: row.agent_id, contactId: row.contact_id, threadId: row.thread_id,
           message: "", followUp: { attempt: row.attempt, total: row.total },
