@@ -1602,12 +1602,14 @@ serve(async (req) => {
     // EDGE_AUTH Fase 0 (observação) — valida o chamador contra a org DO
     // AGENTE (não confia em org vinda do body). off | log (default) | enforce.
     // Plano: docs/operations/proposals/2026-07-05-edge-auth-hardening.md
+    // Modo de teste aceita histórico livre e gasta a chave de IA da org: exige sempre
+    // service_role ou login de membro da org, qualquer que seja o modo do EDGE_AUTH.
     const edgeAuth = edgeAuthMode();
-    if (edgeAuth !== 'off') {
+    if (edgeAuth !== 'off' || isTestMode) {
       const callerAuth = await validateCallerAuth(req, organizationId);
       if (!callerAuth.ok) {
         logAuthObservation('ai-agent-respond', req, callerAuth.error);
-        if (edgeAuth === 'enforce') {
+        if (edgeAuth === 'enforce' || isTestMode) {
           return new Response(
             JSON.stringify({ error: 'unauthorized', reason: callerAuth.error }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
