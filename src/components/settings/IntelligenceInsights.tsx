@@ -13,6 +13,7 @@ type Insights = {
   days: number;
   totals: { analyzed: number; objections: number; signals: number; negative: number };
   objections: Array<{ type: string; count: number; closed_deals: number; won_deals: number }>;
+  objection_labels?: Record<string, string>;
   stages: StageRow[];
   outcomes: { won?: Outcome; lost?: Outcome };
   reprocessing: number;
@@ -157,7 +158,7 @@ export function IntelligenceInsights({ organizationId }: { organizationId: strin
             ) : (
               <ul className="space-y-1">
                 {data.objections.map((o) => {
-                  const label = OBJECTION_LABELS[o.type] ?? OBJECTION_LABELS.other;
+                  const label = data.objection_labels?.[o.type] ?? OBJECTION_LABELS[o.type] ?? OBJECTION_LABELS.other;
                   const winRate = ratePercent(o.won_deals, o.closed_deals, MIN_DEALS_FOR_RATE);
                   return (
                     <Bar

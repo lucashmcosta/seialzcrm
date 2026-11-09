@@ -15,6 +15,8 @@ import { SpinnerGap, Sparkle, ShieldCheck, ChartLine, Microphone, Gear, Key, War
 import { toast } from 'sonner';
 import { AIProvidersSettings } from './AIProvidersSettings';
 import { IntelligenceInsights } from './IntelligenceInsights';
+import { AnalysisProfileCard } from './AnalysisProfileCard';
+import { emptyProfile, type AnalysisProfileForm } from '@/lib/analysisProfile';
 import { useAIProviders } from '@/hooks/useAIProviders';
 import { untranscribedAudios } from '@/lib/transcriptionNotice';
 
@@ -42,6 +44,7 @@ interface Settings {
     transcription_retention_days: number;
     org_opt_out: boolean;
   };
+  analysis_profile: AnalysisProfileForm | null;
 }
 
 export function IntelligenceSettings() {
@@ -134,6 +137,7 @@ export function IntelligenceSettings() {
       transcription: local.transcription,
       behavior: local.behavior,
       privacy: local.privacy,
+      analysis_profile: local.analysis_profile,
     } as any);
   };
 
@@ -221,6 +225,11 @@ export function IntelligenceSettings() {
 
         {/* CAPTURE */}
         <TabsContent value="capture" className="space-y-4 mt-4">
+          <AnalysisProfileCard
+            value={emptyProfile(local.analysis_profile)}
+            disabled={!canEdit}
+            onChange={(next) => setLocal({ ...local, analysis_profile: next })}
+          />
           <Card>
             <CardHeader><CardTitle>O que analisar</CardTitle></CardHeader>
             <CardContent className="space-y-1">

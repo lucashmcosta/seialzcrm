@@ -27,6 +27,7 @@ export interface IntelligenceSettings {
     transcription_retention_days: number;
     org_opt_out: boolean;
   };
+  analysis_profile: unknown;
 }
 
 const DEFAULTS: IntelligenceSettings = {
@@ -41,6 +42,7 @@ const DEFAULTS: IntelligenceSettings = {
     ghosting_threshold_days: 4,
   },
   privacy: { transcription_retention_days: 180, org_opt_out: false },
+  analysis_profile: null,
 };
 
 const cache = new Map<string, { at: number; value: IntelligenceSettings }>();
@@ -55,7 +57,7 @@ export async function getIntelligenceSettings(
 
   const { data } = await admin
     .from("intelligence_settings")
-    .select("capture, transcription, behavior, privacy")
+    .select("capture, transcription, behavior, privacy, analysis_profile")
     .eq("organization_id", organizationId)
     .maybeSingle();
 
@@ -64,6 +66,7 @@ export async function getIntelligenceSettings(
     transcription: { ...DEFAULTS.transcription, ...(data?.transcription ?? {}) },
     behavior: { ...DEFAULTS.behavior, ...(data?.behavior ?? {}) },
     privacy: { ...DEFAULTS.privacy, ...(data?.privacy ?? {}) },
+    analysis_profile: data?.analysis_profile ?? null,
   };
 
   cache.set(organizationId, { at: Date.now(), value: merged });
