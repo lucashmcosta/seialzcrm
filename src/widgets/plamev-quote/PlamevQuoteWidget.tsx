@@ -20,11 +20,16 @@ const MateriaisPlamev = lazy(() => import('./MateriaisPlamev').then((m) => {
   if (!m) throw new Error('Failed to fetch dynamically imported module: MateriaisPlamev');
   return { default: m.MateriaisPlamev };
 }));
+const PerguntarPlamev = lazy(() => import('./PerguntarPlamev').then((m) => {
+  if (!m) throw new Error('Failed to fetch dynamically imported module: PerguntarPlamev');
+  return { default: m.PerguntarPlamev };
+}));
 
 const ABAS = [
   { id: 'cotacao', nome: 'Cotação' },
   { id: 'rede', nome: 'Rede credenciada' },
   { id: 'materiais', nome: 'Materiais' },
+  { id: 'perguntar', nome: 'Perguntar' },
 ] as const;
 type Aba = typeof ABAS[number]['id'];
 
@@ -72,6 +77,11 @@ export function PlamevQuoteWidget({ context }: { context: WidgetContext }) {
         {abertas.has('materiais') && (
           <div className={aba === 'materiais' ? undefined : 'hidden'}>
             <MateriaisPlamev organizationId={organization.id} conversa={conversaDoContexto(context)} />
+          </div>
+        )}
+        {abertas.has('perguntar') && (
+          <div className={aba === 'perguntar' ? undefined : 'hidden'}>
+            <PerguntarPlamev key={chave} organizationId={organization.id} conversa={conversaDoContexto(context)} />
           </div>
         )}
       </Suspense>

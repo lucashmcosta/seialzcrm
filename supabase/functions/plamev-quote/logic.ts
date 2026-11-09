@@ -4,7 +4,7 @@
 export const MODULE_KEY = "plamev_quote";
 
 export const ACTIONS = [
-  "estados", "cidades", "racas", "planos", "campanhas", "cupom", "simular", "solicitar", "contexto", "rede", "pagamento", "materiais",
+  "estados", "cidades", "racas", "planos", "campanhas", "cupom", "simular", "solicitar", "contexto", "rede", "pagamento", "materiais", "perguntar",
   "config_get", "config_set", "config_delete", "config_opcoes",
 ] as const;
 export type Action = typeof ACTIONS[number];

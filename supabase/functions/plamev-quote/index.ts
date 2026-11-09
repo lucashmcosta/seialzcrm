@@ -19,6 +19,9 @@
 //   { action: 'pagamento', opportunity_id?, contact_id? }   → consulta na Plamev se as cotações viraram venda/foram pagas
 //   { action: 'materiais' }                                 → materiais de apoio da Plamev (iguais para todas as orgs;
 //                                                             mantidos em /admin/plamev-materiais) para enviar na conversa
+//   { action: 'perguntar', pergunta?, usar_conversa?, thread_id? }
+//                                                           → resposta sugerida pela IA (Claude, chave da própria org)
+//                                                             lendo os materiais e, se pedido, a conversa; ver perguntar.ts
 //   { action: 'config_get' }                                → { configurado, final, atualizadoEm, marcarGanhaAoPagar }
 //   { action: 'config_set', token }                         → testa o token na Plamev e grava
 //   { action: 'config_delete' }                             → remove o token
@@ -37,7 +40,14 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { validateServiceRoleAuth } from "../_shared/auth.ts";
 import { decryptIntegrationSecret, encryptIntegrationSecret } from "../_shared/integration-credentials.ts";
+import Anthropic from "npm:@anthropic-ai/sdk@1.4.0";
+import { decryptSecret } from "../_shared/crypto.ts";
+import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
+import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
+import { byokBudgetExceeded, markByokInvalid, readSecretPayload } from "../_shared/intelligence/resolve-provider.ts";
+import { pickTextAiCredential, type LegacyAiRow } from "../_shared/intelligence/text-ai-credential.ts";
 import * as L from "./logic.ts";
+import * as P from "./perguntar.ts";
 
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -168,6 +178,44 @@ async function verificarPagamento(db: Db, token: string, c: CotacaoLinha, marcar
 }
 
 const DIA = 24 * 60 * 60 * 1000;
+
+const MODELO_IA = "claude-opus-5-5";
+
+// Arquivo do material em base64, por instância. O caminho nunca muda (arquivo novo = caminho novo), então não expira.
+const arquivos = new Map<string, string>();
+async function base64DoMaterial(db: Db, storagePath: string): Promise<string> {
+  const pronto = arquivos.get(storagePath);
+  if (pronto) return pronto;
+  const { data, error } = await db.storage.from("plamev-materiais").download(storagePath);
+  if (error || !data) throw new Error(`material_download: ${error?.message ?? "vazio"}`);
+  const bytes = new Uint8Array(await data.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  const b64 = btoa(bin);
+  arquivos.set(storagePath, b64);
+  return b64;
+}
+
+/**
+ * Chave do Claude da org: BYOK verificada primeiro, depois a integração antiga (mesma regra do ai-generate).
+ * Só Claude: é ele que lê os PDFs e as imagens direto.
+ */
+async function chaveClaude(db: Db, org: string) {
+  const { data: integracoes } = await db.from("organization_integrations")
+    .select("config_values, integration:admin_integrations!inner(slug)")
+    .eq("organization_id", org).eq("is_enabled", true).in("integration.slug", ["claude-ai", "openai-gpt"]);
+  const legado: LegacyAiRow[] = (integracoes ?? []).map((i: { config_values: Record<string, unknown> | null; integration: { slug: string } }) => ({
+    slug: i.integration.slug, config_values: i.config_values,
+  }));
+  const cred = pickTextAiCredential(await readSecretPayload(db, org), legado);
+  if (!cred || cred.slug !== "claude-ai") throw new L.Recusa(409, "ia_sem_chave_claude");
+  if (cred.kind === "byok") {
+    const limite = Number(cred.entry.monthly_budget_usd ?? 0);
+    if (limite > 0 && await byokBudgetExceeded(db, org, "anthropic", limite)) throw new L.Recusa(402, "ia_limite_mensal");
+    return { apiKey: await decryptSecret(cred.entry.api_key_encrypted!), byok: true };
+  }
+  return { apiKey: String(cred.config.api_key), byok: false };
+}
 
 /** pg_cron: cotações não pagas dos últimos 60 dias, as menos recentemente conferidas primeiro, até ~90 s. */
 async function cronPagamentos(db: Db) {
@@ -438,6 +486,95 @@ Deno.serve(async (req) => {
           }
         }
         return json(200, { cotacoes: (await cotacoesVisiveis(opp, contatoDoPedido(opp))).map(cotacaoParaWidget) });
+      }
+
+      case "perguntar": {
+        const { pergunta, usarConversa } = P.pedidoPergunta(body);
+        // Conversa lida com o JWT do usuário: só a que ele enxerga.
+        let conversa: string | null = null;
+        if (usarConversa) {
+          const threadId = L.guid(body.thread_id, "thread_id");
+          const { data: thread } = await userClient.from("message_threads").select("id, organization_id").eq("id", threadId).maybeSingle();
+          if (!thread || thread.organization_id !== org) return json(404, { error: "thread_not_found" });
+          const { data: msgs } = await userClient.from("messages").select("direction, content, media_type")
+            .eq("thread_id", threadId).is("deleted_at", null).order("created_at", { ascending: false }).limit(P.MAX_MENSAGENS_CONVERSA);
+          conversa = P.textoConversa(((msgs ?? []) as P.MensagemConversa[]).reverse()) || null;
+          if (!conversa && !pergunta) return json(422, { error: "conversa_vazia" });
+        }
+
+        const { data: lista, error: eMat } = await db.from("plamev_materials")
+          .select("id, titulo, descricao, tipo, mime_type, storage_path, tamanho_bytes")
+          .eq("ativo", true).is("removido_em", null).order("ordem", { ascending: true }).order("created_at", { ascending: true });
+        if (eMat) throw new Error(`materiais: ${eMat.code}`);
+        const todos = (lista ?? []).map((m) => ({
+          id: m.id as string, titulo: m.titulo as string, descricao: m.descricao as string, tipo: m.tipo as "image" | "document",
+          mimeType: m.mime_type as string, bytes: Number(m.tamanho_bytes), storagePath: m.storage_path as string,
+        }));
+        if (!todos.length) return json(409, { error: "ia_sem_materiais" });
+        const { dentro, fora } = P.materiaisQueCabem(todos);
+
+        const chave = await chaveClaude(db, org);
+        // Materiais primeiro e sempre na mesma ordem: com o sistema, formam o prefixo em cache entre perguntas.
+        const blocos: Anthropic.Beta.BetaContentBlockParam[] = [];
+        for (const m of dentro) {
+          const data = await base64DoMaterial(db, m.storagePath);
+          blocos.push({ type: "text", text: P.rotuloMaterial(m) });
+          blocos.push(m.tipo === "document"
+            ? { type: "document", source: { type: "base64", media_type: "application/pdf", data }, title: m.titulo }
+            : { type: "image", source: { type: "base64", media_type: m.mimeType as "image/png" | "image/jpeg" | "image/webp", data } });
+        }
+        (blocos[blocos.length - 1] as { cache_control?: { type: "ephemeral" } }).cache_control = { type: "ephemeral" };
+        blocos.push({ type: "text", text: P.textoPedido(pergunta, conversa) });
+
+        const cliente = new Anthropic({ apiKey: chave.apiKey, timeout: 100_000, maxRetries: 1 });
+        let resposta: Anthropic.Beta.BetaMessage;
+        try {
+          resposta = await cliente.beta.messages.create({
+            model: MODELO_IA,
+            max_tokens: 4000,
+            // Atendimento ao vivo: resposta rápida vale mais que raciocínio longo.
+            output_config: { effort: "low", format: P.FORMATO_RESPOSTA },
+            // Se o modelo recusar por política, a própria API tenta o modelo indicado para a categoria.
+            betas: ["server-side-fallback-2026-07-01"],
+            fallbacks: "default",
+            system: P.SISTEMA,
+            messages: [{ role: "user", content: blocos }],
+          });
+        } catch (e) {
+          if (e instanceof Anthropic.AuthenticationError) {
+            if (chave.byok) await markByokInvalid(db, org, "anthropic", "invalid_key");
+            throw new L.Recusa(409, "ia_chave_recusada");
+          }
+          if (e instanceof Anthropic.RateLimitError) throw new L.Recusa(429, "ia_ocupada");
+          if (e instanceof Anthropic.APIError) {
+            console.warn(`[plamev-quote] perguntar claude ${e.status}`);
+            throw new L.Recusa(502, "ia_indisponivel");
+          }
+          throw e;
+        }
+
+        const entrada = P.tokensEntradaEquivalentes(resposta.usage);
+        const saida = resposta.usage.output_tokens ?? 0;
+        // BYOK entra com custo e origem (é o que o limite mensal soma); chave antiga registra como no ai-generate.
+        if (chave.byok) {
+          await logAiUsage(db, {
+            organization_id: org, user_id: me.id, provider: "anthropic", model: resposta.model,
+            source: "customer_key", action: "plamev_perguntar", integration_slug: "claude-ai",
+            prompt_tokens: entrada, completion_tokens: saida, total_tokens: entrada + saida,
+            estimated_cost_usd: await estimateTextCostUsd(db, "anthropic", resposta.model, entrada, saida),
+          });
+        } else {
+          await db.from("ai_usage_logs").insert({
+            organization_id: org, user_id: me.id, integration_slug: "claude-ai", model_used: resposta.model,
+            action: "plamev_perguntar", prompt_tokens: entrada, completion_tokens: saida, total_tokens: entrada + saida,
+          });
+        }
+        console.log(`[plamev-quote] perguntar org=${org} materiais=${dentro.length} cache_lido=${resposta.usage.cache_read_input_tokens ?? 0} stop=${resposta.stop_reason}`);
+
+        if (resposta.stop_reason === "refusal") return json(422, { error: "ia_recusou" });
+        const texto = resposta.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+        const r = P.respostaIa(texto, new Set(dentro.map((m) => m.id)));
+        return json(200, { ...r, materiaisFora: fora.map((m) => m.titulo) });
       }
 
       case "simular": {
