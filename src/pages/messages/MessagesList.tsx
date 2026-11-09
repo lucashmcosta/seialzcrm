@@ -103,6 +103,7 @@ import { useSnippets, bumpSnippetUsage, type MessageSnippet } from '@/hooks/useS
 import { interpolateSnippet, buildSnippetVars } from '@/lib/interpolateSnippet';
 import { SnippetsPickerPanel, extractSnippetQuery } from '@/components/whatsapp/SnippetsPicker';
 import { useAI } from '@/hooks/useAI';
+import { useHasTextAi } from '@/hooks/useHasTextAi';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { useSalesEndpointFilterOptions } from '@/hooks/useSalesEndpointFilterOptions';
@@ -654,22 +655,7 @@ function DesktopMessagesList() {
     enabled: !!organization?.id,
   });
 
-  // Check if organization has AI integration configured (controls text improvement buttons)
-  const { data: hasAIIntegration } = useQuery({
-    queryKey: ['org-has-ai-integration', organization?.id],
-    queryFn: async () => {
-      if (!organization?.id) return false;
-      const { data } = await supabase
-        .from('organization_integrations')
-        .select('id, admin_integrations!inner(slug)')
-        .eq('organization_id', organization.id)
-        .eq('is_enabled', true)
-        .in('admin_integrations.slug', ['openai-gpt', 'claude-ai', 'lovable-ai'])
-        .limit(1);
-      return data && data.length > 0;
-    },
-    enabled: !!organization?.id,
-  });
+  const hasAIIntegration = useHasTextAi(organization?.id);
   
   // Handle AI text improvement
   const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly' | 'persuasive') => {

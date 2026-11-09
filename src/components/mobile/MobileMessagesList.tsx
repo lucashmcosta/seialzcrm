@@ -53,6 +53,7 @@ import { cn } from '@/lib/utils';
 import { DateSeparator } from '@/components/messages/DateSeparator';
 import { shouldShowDateSeparator } from '@/lib/dateSeparator';
 import { useAI } from '@/hooks/useAI';
+import { useHasTextAi } from '@/hooks/useHasTextAi';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -202,21 +203,7 @@ export function MobileMessagesList() {
     enabled: !!organization?.id,
   });
 
-  const { data: hasAIIntegration } = useQuery({
-    queryKey: ['org-has-ai-integration', organization?.id],
-    queryFn: async () => {
-      if (!organization?.id) return false;
-      const { data } = await supabase
-        .from('organization_integrations')
-        .select('id, admin_integrations!inner(slug)')
-        .eq('organization_id', organization.id)
-        .eq('is_enabled', true)
-        .in('admin_integrations.slug', ['openai-gpt', 'claude-ai', 'lovable-ai'])
-        .limit(1);
-      return data && data.length > 0;
-    },
-    enabled: !!organization?.id,
-  });
+  const hasAIIntegration = useHasTextAi(organization?.id);
 
   // Fetch threads via RPC (replaces N+1 query)
   const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'] });
