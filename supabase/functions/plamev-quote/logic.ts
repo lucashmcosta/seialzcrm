@@ -4,11 +4,13 @@
 export const MODULE_KEY = "plamev_quote";
 
 export const ACTIONS = [
-  "estados", "cidades", "racas", "planos", "campanhas", "cupom", "simular", "solicitar", "contexto",
-  "config_get", "config_set", "config_delete",
+  "estados", "cidades", "racas", "planos", "campanhas", "cupom", "simular", "solicitar", "contexto", "rede", "pagamento",
+  "config_get", "config_set", "config_delete", "config_opcoes",
 ] as const;
 export type Action = typeof ACTIONS[number];
-export const CONFIG_ACTIONS: readonly Action[] = ["config_get", "config_set", "config_delete"];
+export const CONFIG_ACTIONS: readonly Action[] = ["config_get", "config_set", "config_delete", "config_opcoes"];
+/** Chamada pelo pg_cron com a service_role, sem usuário: confere o pagamento das cotações em aberto. */
+export const CRON_ACTION = "pagamentos_cron";
 
 export class Recusa extends Error {
   constructor(public status: number, public codigo: string, mensagem?: string) {
@@ -357,4 +359,82 @@ export function tokenColado(v: unknown): string {
   const t = typeof v === "string" ? v.replace(/^\s*Authorization:\s*/i, "").replace(/^Bearer\s+/i, "").trim() : "";
   if (t.length < 32 || t.length > 4096 || !/^[A-Za-z0-9._~+/=-]+$/.test(t)) throw new Recusa(400, "invalid_token");
   return t;
+}
+
+/** CEP só com números (8 dígitos). */
+export function cep(v: unknown): string {
+  const d = String(v ?? "").replace(/\D/g, "");
+  if (d.length !== 8) throw new Recusa(400, "invalid_cep");
+  return d;
+}
+
+/** Raio da busca da rede credenciada, em km (1 a 50; padrão 5). */
+export function raioKm(v: unknown): number {
+  if (v == null || v === "") return 5;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 50) throw new Recusa(400, "invalid_raio");
+  return n;
+}
+
+/**
+ * `Credenciados/BuscarRedeCredenciadaPorLocalidade` → clínicas mais perto primeiro. Com resultado vem a lista pura;
+ * sem clínica no raio vem 200 `{ Mensagem, CepPesquisado, EnderecoPesquisado, RedeCredenciada: [] }` (conferido em
+ * produção em 2026-11-08). CEP inexistente volta 400 "CEP não encontrado.".
+ */
+export function rede(raw: Json) {
+  const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const itens = raw && typeof raw === "object" && !Array.isArray(raw) && "RedeCredenciada" in raw ? raw.RedeCredenciada : raw;
+  return lista(itens).map((c) => {
+    const ddd = s(c?.IndividuosContatosDdd).replace(/\D/g, "");
+    const fone = s(c?.IndividuosContatosTelefone).replace(/\D/g, "");
+    return {
+      id: s(c?.CredenciadosId),
+      nome: s(c?.IndividuosNomeFantasia) || s(c?.CredenciadosNomeCredenciado) || s(c?.IndividuosNome),
+      endereco: [s(c?.IndividuosEnderecosLogradouro), s(c?.IndividuosEnderecosNumero)].filter(Boolean).join(", "),
+      bairro: s(c?.IndividuosEnderecosBairro),
+      cidade: s(c?.IndividuosEnderecosCidadesNome),
+      estado: s(c?.IndividuosEnderecosEstadosNome),
+      cep: s(c?.IndividuosEnderecosCep).replace(/\D/g, ""),
+      telefone: fone ? (ddd ? `(${ddd}) ${fone}` : fone) : "",
+      distanciaKm: Math.round(Number(c?.DistanciaKm) * 10) / 10 || 0,
+      volante: c?.TiposEstabelecimentosVolante === "1",
+      observacao: s(c?.CredenciadosObservacaoGeral).slice(0, 300),
+    };
+  }).filter((c) => c.nome).sort((a, b) => a.distanciaKm - b.distanciaKm);
+}
+
+/**
+ * `Cotacoes/VerificarConversaoVenda/{Id}`: virou venda? adesão paga? (só `PAGA` conta; isenta não).
+ * Datas da Plamev vêm como "AAAA-MM-DD ..."; guardamos só o dia.
+ */
+export function conversao(raw: Json) {
+  const s = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const dia = (v: unknown) => {
+    const t = s(v);
+    return t && /^\d{4}-\d{2}-\d{2}/.test(t) ? t.slice(0, 10) : null;
+  };
+  const adesao = raw?.Adesao && typeof raw.Adesao === "object" ? raw.Adesao : null;
+  const venda = raw?.Venda && typeof raw.Venda === "object" ? raw.Venda : null;
+  return {
+    virouVenda: raw?.VirouVenda === true,
+    adesaoPaga: raw?.AdesaoPaga === true,
+    adesaoSituacao: s(adesao?.Situacao)?.toUpperCase() ?? null,
+    vendaSituacao: s(venda?.SituacaoNome),
+    valorPago: adesao ? num(adesao.ValorPago) : null,
+    pagoEm: dia(adesao?.DataPagamento),
+  };
+}
+
+/** Nota na linha do tempo quando a Plamev confirma a adesão paga. */
+export function notaPagamento(numeroCotacao: string, c: ReturnType<typeof conversao>, ganha: boolean) {
+  const data = c.pagoEm ? c.pagoEm.split("-").reverse().join("/") : null;
+  return {
+    title: `Adesão paga · cotação Plamev nº ${numeroCotacao}`,
+    body: [
+      `Pagamento da adesão confirmado pela Plamev${data ? ` em ${data}` : ""}.`,
+      ...(c.valorPago ? [`Valor pago: ${brl(c.valorPago)}`] : []),
+      ...(c.vendaSituacao ? [`Situação da venda: ${c.vendaSituacao}`] : []),
+      ...(ganha ? ["Oportunidade marcada como ganha automaticamente."] : []),
+    ].join("\n"),
+  };
 }
