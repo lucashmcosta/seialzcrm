@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { DEFAULT_HANDOFF_ACK, DISTRIBUTION_LIMITS, describeDistribution, isValidDistribution, type DistributionMode } from '@/lib/agentDistribution';
@@ -19,6 +20,7 @@ interface AgentRow {
   distribution_mode: DistributionMode;
   distribution_value: number | null;
   handoff_ack_message: string | null;
+  presents_as_assistant: boolean;
 }
 
 interface Stats {
@@ -41,13 +43,14 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
   const [mode, setMode] = useState<DistributionMode>('all');
   const [value, setValue] = useState('');
   const [ack, setAck] = useState('');
+  const [asAssistant, setAsAssistant] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const agentQuery = useQuery({
     queryKey: ['agent-distribution', organizationId],
     queryFn: async (): Promise<AgentRow | null> => {
       const { data, error } = await supabase.from('ai_agents')
-        .select('id, name, is_enabled, distribution_mode, distribution_value, handoff_ack_message' as never)
+        .select('id, name, is_enabled, distribution_mode, distribution_value, handoff_ack_message, presents_as_assistant' as never)
         .eq('organization_id', organizationId).eq('agent_type', 'sdr')
         .order('is_enabled', { ascending: false }).order('created_at', { ascending: false })
         .limit(1).maybeSingle();
@@ -72,6 +75,7 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
     setMode(agent.distribution_mode);
     setValue(agent.distribution_value === null ? '' : String(agent.distribution_value));
     setAck(agent.handoff_ack_message ?? DEFAULT_HANDOFF_ACK);
+    setAsAssistant(agent.presents_as_assistant !== false);
   }, [agent]);
 
   // Sem agente na org, a tela de rodízio fica como sempre foi.
@@ -81,13 +85,14 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
   const valid = isValidDistribution(mode, parsed);
   const dirty = mode !== agent.distribution_mode
     || (mode !== 'all' && parsed !== agent.distribution_value)
-    || ack !== (agent.handoff_ack_message ?? DEFAULT_HANDOFF_ACK);
+    || ack !== (agent.handoff_ack_message ?? DEFAULT_HANDOFF_ACK)
+    || asAssistant !== (agent.presents_as_assistant !== false);
 
   const save = async () => {
     if (!valid) return;
     setSaving(true);
     const { error } = await supabase.from('ai_agents')
-      .update({ distribution_mode: mode, distribution_value: mode === 'all' ? null : parsed, handoff_ack_message: ack.trim() } as never)
+      .update({ distribution_mode: mode, distribution_value: mode === 'all' ? null : parsed, handoff_ack_message: ack.trim(), presents_as_assistant: asAssistant } as never)
       .eq('id', agent.id);
     setSaving(false);
     if (error) {
@@ -146,6 +151,15 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
           <p className="text-xs text-muted-foreground">
             Enviado ao passar para uma pessoa quando chega documento ou um áudio que ele não entendeu. Deixe em branco para não enviar nada. A conversa passa para a equipe do mesmo jeito.
           </p>
+        </div>
+        <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+          <div className="space-y-1">
+            <Label htmlFor="agent-presents-as-assistant">Apresentar-se como assistente virtual</Label>
+            <p className="text-xs text-muted-foreground">
+              Desligado, {agent.name} se apresenta só pelo nome, como alguém da equipe. Se perguntarem diretamente se é uma pessoa ou uma IA, responde sempre a verdade.
+            </p>
+          </div>
+          <Switch id="agent-presents-as-assistant" checked={asAssistant} onCheckedChange={setAsAssistant} />
         </div>
         <Button onClick={save} disabled={!valid || !dirty || saving}>Salvar</Button>
         {!roundRobinEnabled && (

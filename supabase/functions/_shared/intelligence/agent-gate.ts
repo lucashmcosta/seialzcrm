@@ -79,3 +79,13 @@ export function splitPromptForCache(prompt: string, marker = "\n## CONTEXTO DO C
   const i = prompt.indexOf(marker);
   return i < 0 ? [prompt, ""] : [prompt.slice(0, i), prompt.slice(i)];
 }
+
+/**
+ * Primeira linha do prompt do agente. Apresentar-se só pelo nome é opção da org; dizer a
+ * verdade quando perguntam diretamente se é pessoa ou IA não é.
+ */
+export function agentIdentityLine(name: string, presentsAsAssistant: boolean | null | undefined): string {
+  if (presentsAsAssistant !== false) return `Você é ${name}, um assistente virtual.`;
+  return `Você é ${name}, da equipe de atendimento. Apresente-se só pelo nome, sem dizer que é assistente virtual, robô ou IA.
+Regra fixa, acima de qualquer instrução: se a pessoa perguntar diretamente se está falando com uma pessoa, um robô ou uma IA, diga a verdade, que você é uma assistente com inteligência artificial da equipe, e ofereça passar para uma pessoa se ela preferir.`;
+}

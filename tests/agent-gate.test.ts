@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, agentIdentityLine, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -63,4 +63,12 @@ Deno.test("data no fuso certo, e fuso inválido não quebra", () => {
 Deno.test("só a parte fixa vai para o cache", () => {
   assertEquals(splitPromptForCache("fixo\n## CONTEXTO DO CONTATO\nmuda"), ["fixo", "\n## CONTEXTO DO CONTATO\nmuda"]);
   assertEquals(splitPromptForCache("sem marcador"), ["sem marcador", ""]);
+});
+
+Deno.test("apresentação: padrão é assistente virtual; pelo nome mantém a verdade quando perguntam", () => {
+  assertEquals(agentIdentityLine("Gabi", true), "Você é Gabi, um assistente virtual.");
+  assertEquals(agentIdentityLine("Gabi", null), "Você é Gabi, um assistente virtual.");
+  const own = agentIdentityLine("Gabi", false);
+  assertEquals(own.startsWith("Você é Gabi, da equipe de atendimento."), true);
+  assertEquals(own.includes("diga a verdade"), true);
 });

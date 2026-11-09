@@ -8,7 +8,7 @@ import { currentAiModel, pickAgentAiCredential } from "../_shared/intelligence/a
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
-import { agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
+import { agentIdentityLine, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1216,7 +1216,7 @@ function buildSystemPrompt(
   };
 
   // Com instruções próprias, tom e objetivo vêm delas; os textos padrão só atrapalhariam.
-  let prompt = `Você é ${agent.name}, um assistente virtual.
+  let prompt = `${agentIdentityLine(agent.name, agent.presents_as_assistant)}
 `;
   if (!agent.custom_instructions) {
     prompt += `
