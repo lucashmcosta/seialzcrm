@@ -675,6 +675,7 @@ export function SDRAgentWizard({
       try {
         const { data, error } = await supabase.functions.invoke('ai-generate', {
           body: {
+            organization_id: organizationId,
             action: 'generate_agent_prompt',
             context: {
               companyName: wizardData.companyName,
@@ -731,6 +732,7 @@ export function SDRAgentWizard({
     try {
       const { data, error } = await supabase.functions.invoke('ai-generate', {
         body: {
+          organization_id: organizationId,
           action: 'refine_agent_prompt',
           context: {
             currentPrompt: wizardData.generatedPrompt,
@@ -831,6 +833,7 @@ export function SDRAgentWizard({
       
       const { data, error } = await supabase.functions.invoke('ai-generate', {
         body: {
+          organization_id: organizationId,
           action: 'refine_agent_prompt',
           context: {
             currentPrompt: wizardData.generatedPrompt,

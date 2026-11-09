@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useHasTextAi } from '@/hooks/useHasTextAi';
 
 // AI integration slugs that enable AI Agent and Knowledge Base features
 const AI_INTEGRATION_SLUGS = ['openai-gpt', 'claude-ai', 'lovable-ai'];
 
 export function useAIIntegration() {
   const { organization } = useOrganization();
+  // Chave própria (BYOK) também habilita os recursos de IA, não só a integração antiga.
+  const hasOwnKey = useHasTextAi(organization?.id);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['ai-integration', organization?.id],
@@ -41,7 +44,7 @@ export function useAIIntegration() {
   const integrationInfo = activeIntegration?.admin_integrations as { slug: string; name: string; category: string } | undefined;
 
   return {
-    hasAI: !!data && data.length > 0,
+    hasAI: hasOwnKey || (!!data && data.length > 0),
     activeProvider: integrationInfo?.slug || null,
     providerName: integrationInfo?.name || null,
     loading: isLoading,
