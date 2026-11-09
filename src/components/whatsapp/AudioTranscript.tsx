@@ -1,17 +1,17 @@
-// Transcrição embaixo do player de áudio. O texto mora em audio_transcriptions: a mensagem
+// Transcrição embaixo do player de áudio, aberta ao clicar. O texto mora em audio_transcriptions: a mensagem
 // continua com "[Áudio]". Áudio inaudível fica sem texto, então aqui não aparece nada.
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { CaretDown, CaretUp } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 
-const COLLAPSE_AT = 280;
 const POLL_MS = 10_000;
 const MAX_POLLS = 4; // áudio recém-chegado costuma ser transcrito em segundos
 
 export function AudioTranscript({ messageId }: { messageId: string }) {
   useUiLocale();
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false);
   const { data } = useQuery({
     queryKey: ['audio-transcript', messageId],
     staleTime: 5 * 60_000,
@@ -32,19 +32,19 @@ export function AudioTranscript({ messageId }: { messageId: string }) {
 
   const text = data?.trim();
   if (!text) return null;
-  const long = text.length > COLLAPSE_AT;
 
   return (
     <div className="mt-1 px-1 pb-0.5 text-xs">
-      <p className="text-[10px] font-medium uppercase tracking-wide opacity-60">{uiText('Transcrição')}</p>
-      <p className="whitespace-pre-wrap break-words opacity-90">
-        {long && !expanded ? `${text.slice(0, COLLAPSE_AT).trimEnd()}…` : text}
-      </p>
-      {long && (
-        <button type="button" className="mt-0.5 font-medium underline opacity-70" onClick={() => setExpanded((v) => !v)}>
-          {expanded ? uiText('Ver menos') : uiText('Ver mais')}
-        </button>
-      )}
+      <button
+        type="button"
+        aria-expanded={open}
+        className="flex items-center gap-0.5 text-[11px] font-medium opacity-70 hover:opacity-100"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? <CaretUp size={10} weight="bold" /> : <CaretDown size={10} weight="bold" />}
+        {uiText('Transcrição')}
+      </button>
+      {open && <p className="mt-0.5 whitespace-pre-wrap break-words opacity-90">{text}</p>}
     </div>
   );
 }
