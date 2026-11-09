@@ -9,3 +9,4 @@ export { fmtDate, todayYMD, toDate } from './dates';
 export { parseTime, fmtTime } from './jornada';
 export type { Line } from './reflexes';
 export { TERMINATION_LABEL, type Termination } from './prescription';
+export { severanceClientText } from './clientText';

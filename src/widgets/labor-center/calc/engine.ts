@@ -87,6 +87,21 @@ export interface PedidoResult {
   included: boolean;
 }
 
+/** O que o trabalhador deveria ter recebido na rescisão (sem multa por atraso e sem descontar o recebido). */
+export interface SeveranceSimulation {
+  lines: Line[];
+  total: number;
+  termination: Termination;
+  notice: NoticeKind;
+  noticeDays: number;
+  admission: string;
+  exit: string;
+  remuneration: number;
+  fgtsEstimated: boolean;
+  /** Fatos presumidos nesta simulação. */
+  premises: FactKey[];
+}
+
 export interface Eligibility {
   status: PrescriptionStatus;
   message: string;
@@ -111,6 +126,8 @@ export interface CaseResult {
   warnings: string[];
   hourly: number | null;
   schedule: ScheduleHours | null;
+  /** Simulação da rescisão; null se o contrato não terminou ou faltam dados. */
+  severance: SeveranceSimulation | null;
 }
 
 // ---------------------------------------------------------------- leitura dos fatos
@@ -354,6 +371,25 @@ export function calcularCaso(input: CaseInput): CaseResult {
   const fgtsOwn = new Set<FactKey>();
   const fgtsAnswer = r.get<FgtsDeposited>('fgts_depositado', fgtsOwn) ?? 'sim';
   const monthsWithoutFgts = fgtsAnswer === 'nao' ? contractMonths : fgtsAnswer === 'parcial' ? r.get<number>('meses_sem_fgts') : 0;
+  let severance: SeveranceSimulation | null = null;
+  if (ended && termination && admission && exit && salary > 0) {
+    const simOwn = new Set<FactKey>();
+    const saldo = r.confirmed('saldo_fgts') as number | undefined;
+    const deposited = Math.max(0, contractMonths - (monthsWithoutFgts ?? 0));
+    const sim = calcSeverance({
+      salary: remuneration + allowance.value, admission, exit, termination, notice,
+      expiredVacations: r.get<number>('ferias_vencidas', simOwn) ?? 0,
+      fgtsBalance: saldo ?? 0.08 * (remuneration + allowance.value) * deposited, fine477: false,
+    });
+    if (!indirect && r.confirmed('aviso') === undefined && termination !== 'justa_causa') simOwn.add('aviso');
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    severance = {
+      lines: sim.lines, total: sim.total, termination, notice: notice ?? 'nao_houve', noticeDays: sim.noticeDays,
+      admission: iso(admission), exit: iso(exit), remuneration: remuneration + allowance.value,
+      fgtsEstimated: saldo == null, premises: [...simOwn],
+    };
+  }
+
   if (ended && termination && admission && exit) {
     const own = new Set<FactKey>(fgtsOwn);
     const paid: SeverancePaid = indirect ? 'nao' : (r.get<SeverancePaid>('rescisao_recebida', own) ?? 'total');
@@ -455,7 +491,7 @@ export function calcularCaso(input: CaseInput): CaseResult {
 
   return {
     eligibility, pedidos, total, range, confidence, confidenceReason, pending, premises, warnings,
-    hourly: Number.isFinite(hourly) ? hourly : null, schedule,
+    hourly: Number.isFinite(hourly) ? hourly : null, schedule, severance,
   };
 }
 

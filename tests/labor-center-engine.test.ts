@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  calcularCaso, caseSummaryText, FACT_KEYS, FACTS, type Facts, type PedidoKey,
+  calcularCaso, caseSummaryText, FACT_KEYS, FACTS, severanceClientText, type Facts, type PedidoKey,
 } from '../src/widgets/labor-center/calc';
 import { nightMinutesPerDay, parseTime, scheduleHours } from '../src/widgets/labor-center/calc/jornada';
 
@@ -177,5 +177,37 @@ describe('pedidos', () => {
     expect(t).toContain('Central Trabalhista — Mercado X');
     expect(t).toContain('Premissas (confirmar):');
     expect(t).toContain('Perguntas pendentes:');
+  });
+});
+
+describe('rescisão: quanto deveria ter recebido', () => {
+  it('mostra o devido mesmo se recebeu tudo, sem multa por atraso nem desconto', () => {
+    const late = calcularCaso({ facts: { ...full, rescisao_no_prazo: c(false) }, settings });
+    const sim = late.severance!;
+    expect(sim.lines.some((l) => l.label.startsWith('Multa art. 477'))).toBe(false);
+    expect(sim.lines.some((l) => l.label.startsWith('Já recebido'))).toBe(false);
+    // 10 dias de saldo + 36 de aviso + 13º 8/12 + férias 7/12 + 1/3, sobre R$ 2.200
+    const v = Object.fromEntries(sim.lines.map((l) => [l.label.split(' (')[0], l.value]));
+    expect(v['Saldo de salário']).toBeCloseTo(733.33, 2);
+    expect(v['Aviso prévio indenizado']).toBeCloseTo(2640, 2);
+    expect(v['13º proporcional']).toBeCloseTo(1466.67, 2);
+    expect(v['Férias proporcionais + 1/3']).toBeCloseTo(1711.11, 2);
+    expect(v['Multa 40% FGTS']).toBeCloseTo(0.4 * (5000 + 0.08 * (733.33 + 2640 + 1466.67)), 1);
+    // o Resumo (processo) continua cobrando só a multa do atraso
+    expect(late.pedidos.find((p) => p.key === 'rescisorias')!.total).toBeCloseTo(2200, 6);
+  });
+
+  it('sem saída não há simulação', () => {
+    expect(calcularCaso({ facts: { ...full, ainda_trabalha: c(true) }, settings }).severance).toBeNull();
+  });
+
+  it('mensagem para o cliente: total devido, FGTS explicado, sem jargão', () => {
+    const t = severanceClientText(calcularCaso({ facts: full, settings }).severance!, 'Mercado X');
+    expect(t).toContain('*Cálculo da sua rescisão* — Mercado X');
+    expect(t).toContain('Dispensa sem justa causa · 02/01/2023 a 10/07/2025');
+    expect(t).toMatch(/\*Total que você deveria ter recebido: R\$\s?[\d.]+,\d{2}\*/);
+    expect(t).toContain('Multa de 40% do FGTS (depósito na conta do FGTS)');
+    expect(t).not.toContain('rescisórias');
+    expect(t).not.toContain('a cobrar');
   });
 });
