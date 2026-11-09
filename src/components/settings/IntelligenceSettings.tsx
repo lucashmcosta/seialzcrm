@@ -9,12 +9,12 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { SpinnerGap, Sparkle, ShieldCheck, ChartLine, Microphone, Gear, Key, WarningCircle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { AIProvidersSettings } from './AIProvidersSettings';
+import { IntelligenceInsights } from './IntelligenceInsights';
 import { useAIProviders } from '@/hooks/useAIProviders';
 import { untranscribedAudios } from '@/lib/transcriptionNotice';
 
@@ -203,26 +203,7 @@ export function IntelligenceSettings() {
             <MetricCard label="Deals com snapshot" value={(overview?.won ?? 0) + (overview?.lost ?? 0) + (overview?.open ?? 0)} />
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Padrões de Fechamento</span>
-                <Badge variant="secondary">Em breve</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                Quando houver dados suficientes, esta área vai comparar won vs lost, top sellers vs low performers,
-                áudio vs texto, tempos de resposta e cadência de follow-up. Por enquanto exibimos contagens brutas
-                para confirmar que a coleta está rodando.
-              </p>
-              <div className="grid grid-cols-3 gap-3">
-                <MiniStat label="Ganhos" value={overview?.won ?? 0} />
-                <MiniStat label="Perdidos" value={overview?.lost ?? 0} />
-                <MiniStat label="Em aberto" value={overview?.open ?? 0} />
-              </div>
-            </CardContent>
-          </Card>
+          {orgId && <IntelligenceInsights organizationId={orgId} />}
 
           <Card>
             <CardHeader><CardTitle>Kill switch</CardTitle></CardHeader>
@@ -373,7 +354,7 @@ export function IntelligenceSettings() {
       </Tabs>
 
       <p className="text-xs text-muted-foreground pt-4">
-        Em breve: modelos por função, orçamento mensal, alertas de custo, anonimização PII, next best action, roteamento avançado.
+        Em breve: modelos por função, alertas de custo, anonimização PII, next best action, roteamento avançado.
       </p>
     </div>
   );
@@ -387,15 +368,6 @@ function MetricCard({ label, value }: { label: string; value: number | string })
         <div className="text-3xl font-mono">{value}</div>
       </CardContent>
     </Card>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-[6px] bg-muted p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-2xl font-mono">{value}</div>
-    </div>
   );
 }
 
