@@ -8,7 +8,7 @@ import { currentAiModel, pickAgentAiCredential } from "../_shared/intelligence/a
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
-import { agentInputKind, decideAgentGate, handoffAckText } from "../_shared/intelligence/agent-gate.ts";
+import { agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,6 +21,8 @@ interface AgentRequest {
   threadId: string;
   message: string;
   isTestMode?: boolean;
+  /** Só no modo de teste: a conversa do simulador, que não existe no banco. */
+  history?: Array<{ role: string; content: string }>;
 }
 
 interface WorkingHours {
@@ -1236,6 +1238,7 @@ ${agent.custom_instructions}
   // Add contact context
   prompt += `
 ## CONTEXTO DO CONTATO
+- Data e hora agora: ${currentTimeForPrompt(agent.working_hours?.timezone)}. Use para calcular prazos, completar datas sem ano e saber se a equipe está em horário.
 `;
   if (contact) {
     prompt += `- Nome atual registrado: ${contact.full_name || 'Não informado'}
@@ -1253,7 +1256,10 @@ ${agent.custom_instructions}
 
   let nameInstruction = '';
 
-  if (nameConfirmed) {
+  if (agent.custom_instructions) {
+    // Com instruções próprias, quando perguntar o nome é decisão delas.
+    nameInstruction = `Nome registrado: "${contact?.full_name || 'Não informado'}". Pode ter vindo do perfil do WhatsApp. Se o cliente informar o nome, use update_contact.`;
+  } else if (nameConfirmed) {
     // Nome já foi confirmado - não precisa perguntar
     nameInstruction = `
 ✅ NOME CONFIRMADO: "${contact?.full_name}"
@@ -1571,7 +1577,7 @@ serve(async (req) => {
   let releaseOnFailure: ((reason: string) => Promise<unknown>) | null = null;
 
   try {
-    const { agentId, contactId, threadId, message: incomingMessage, isTestMode }: AgentRequest = await req.json();
+    const { agentId, contactId, threadId, message: incomingMessage, isTestMode, history: testHistory }: AgentRequest = await req.json();
     let message = incomingMessage;
 
     console.log(`AI Agent processing - Agent: ${agentId}, Contact: ${contactId}, Thread: ${threadId}, TestMode: ${isTestMode}`);
@@ -1659,7 +1665,7 @@ serve(async (req) => {
 
     // Include mark_name_asked automatically when update_contact is enabled
     const baseTools = (agent.enabled_tools as string[]) || ['update_contact', 'transfer_to_human'];
-    const enabledTools = baseTools.includes('update_contact') && !baseTools.includes('mark_name_asked')
+    const enabledTools = baseTools.includes('update_contact') && !baseTools.includes('mark_name_asked') && !agent.custom_instructions
       ? [...baseTools, 'mark_name_asked']
       : baseTools;
 
@@ -1940,18 +1946,25 @@ serve(async (req) => {
       ? await supabase.from('audio_transcriptions').select('message_id, transcript').in('message_id', audioIds)
       : { data: [] as Array<{ message_id: string; transcript: string | null }> };
     const heardById = new Map((heardAudios ?? []).map((a: any) => [a.message_id, a.transcript]));
-    const conversationMessages = messageHistory.map((msg: any) => {
+    const storedMessages = messageHistory.map((msg: any) => {
       const { content, source } = effectiveContent({ content: msg.content, mediaType: msg.media_type, transcript: heardById.get(msg.id) ?? null });
       return {
         role: msg.direction === 'inbound' ? 'user' : 'assistant',
         content: (source === 'none' ? (msg.content || '') : content).slice(0, 1000),
       };
     });
+    const conversationMessages = withoutRepeatedLast(
+      isTestMode && Array.isArray(testHistory)
+        ? testHistory.slice(-20).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: String(m.content ?? '').slice(0, 1000) }))
+        : storedMessages,
+      message,
+    );
 
     // Filter enabled tools
     const tools = AVAILABLE_TOOLS.filter(t => enabledTools.includes(t.function.name));
 
     let aiResponse: string = '';
+    let emptyDetail = '';
     let tokensUsed = 0;
     let promptTokens = 0;
     let completionTokens = 0;
@@ -1969,7 +1982,7 @@ serve(async (req) => {
         total_tokens: tokensUsed,
         estimated_cost_usd: await estimateTextCostUsd(supabase as any, byokProvider, modelUsed, promptTokens, completionTokens),
         entity_type: 'message',
-        entity_id: threadId,
+        entity_id: isTestMode ? null : threadId,
       });
     };
     let modelUsed = '';
@@ -1986,10 +1999,17 @@ serve(async (req) => {
         { role: 'user', content: message }
       ];
 
+      // A parte fixa do prompt vai para o cache: é a maior parte do custo de cada resposta.
+      const [fixedPrompt, variablePrompt] = splitPromptForCache(systemPrompt);
+      const claudeSystem = [
+        { type: 'text', text: fixedPrompt, cache_control: { type: 'ephemeral' } },
+        ...(variablePrompt ? [{ type: 'text', text: variablePrompt }] : []),
+      ];
+      const claudeText: string[] = [];
       const claudeBody: any = {
         model,
         max_tokens: maxTokens,
-        system: systemPrompt,
+        system: claudeSystem,
         messages: claudeMessages,
       };
 
@@ -2043,8 +2063,8 @@ serve(async (req) => {
       }
 
       let claudeData = await claudeResponse.json();
-      tokensUsed = (claudeData.usage?.input_tokens || 0) + (claudeData.usage?.output_tokens || 0);
-      promptTokens += claudeData.usage?.input_tokens || 0;
+      tokensUsed += billableInputTokens(claudeData.usage) + (claudeData.usage?.output_tokens || 0);
+      promptTokens += billableInputTokens(claudeData.usage);
       completionTokens += claudeData.usage?.output_tokens || 0;
 
       // Handle tool calls with max iterations to prevent infinite loops
@@ -2055,6 +2075,7 @@ serve(async (req) => {
         toolIterations++;
         console.log(`Claude tool iteration ${toolIterations}/${MAX_TOOL_ITERATIONS}`);
         
+        claudeText.push(...claudeData.content.filter((c: any) => c.type === 'text').map((c: any) => c.text));
         const toolUseBlocks = claudeData.content.filter((c: any) => c.type === 'tool_use');
         const toolResults = [];
 
@@ -2062,7 +2083,7 @@ serve(async (req) => {
           console.log(`Claude wants to use tool: ${toolUse.name}`);
           toolsExecuted.push(toolUse.name);
           
-          const result = await executeTool(
+          const result = isTestMode ? { success: true, message: 'Simulado no modo de teste' } : await executeTool(
             supabase,
             toolUse.name,
             toolUse.input,
@@ -2090,7 +2111,7 @@ serve(async (req) => {
           body: JSON.stringify({
             model,
             max_tokens: maxTokens,
-            system: systemPrompt,
+            system: claudeSystem,
             messages: claudeMessages,
             tools: claudeBody.tools,
           }),
@@ -2115,7 +2136,7 @@ serve(async (req) => {
               body: JSON.stringify({
                 model,
                 max_tokens: maxTokens,
-                system: systemPrompt,
+                system: claudeSystem,
                 messages: claudeMessages,
                 tools: claudeBody.tools,
               }),
@@ -2130,8 +2151,8 @@ serve(async (req) => {
         }
 
         claudeData = await claudeResponse.json();
-        tokensUsed += (claudeData.usage?.input_tokens || 0) + (claudeData.usage?.output_tokens || 0);
-        promptTokens += claudeData.usage?.input_tokens || 0;
+        tokensUsed += billableInputTokens(claudeData.usage) + (claudeData.usage?.output_tokens || 0);
+        promptTokens += billableInputTokens(claudeData.usage);
         completionTokens += claudeData.usage?.output_tokens || 0;
       }
 
@@ -2142,6 +2163,7 @@ serve(async (req) => {
       // Extract text response
       const textBlock = claudeData.content?.find((c: any) => c.type === 'text');
       aiResponse = textBlock?.text || '';
+      emptyDetail = `stop_reason: ${claudeData.stop_reason}`;
 
       // If response is empty after tool execution, retry without tools to force a text response
       if (!aiResponse && toolsExecuted.length > 0) {
@@ -2164,7 +2186,7 @@ serve(async (req) => {
           body: JSON.stringify({
             model,
             max_tokens: maxTokens,
-            system: systemPrompt,
+            system: claudeSystem,
             messages: claudeMessages,
             // Explicitly NOT passing tools to force text response
           }),
@@ -2172,8 +2194,8 @@ serve(async (req) => {
 
         if (retryResponse.ok) {
           const retryData = await retryResponse.json();
-          tokensUsed += (retryData.usage?.input_tokens || 0) + (retryData.usage?.output_tokens || 0);
-          promptTokens += retryData.usage?.input_tokens || 0;
+          tokensUsed += billableInputTokens(retryData.usage) + (retryData.usage?.output_tokens || 0);
+          promptTokens += billableInputTokens(retryData.usage);
           completionTokens += retryData.usage?.output_tokens || 0;
           const retryTextBlock = retryData.content?.find((c: any) => c.type === 'text');
           aiResponse = retryTextBlock?.text || '';
@@ -2183,6 +2205,7 @@ serve(async (req) => {
         }
       }
 
+      aiResponse = joinAgentText(claudeText, aiResponse);
     } else if (integrationSlug === 'openai-gpt') {
       const model = configValues.default_model || 'gpt-4o-mini';
       modelUsed = model;
@@ -2243,14 +2266,16 @@ serve(async (req) => {
       let responseMessage = openaiData.choices?.[0]?.message;
 
       // Handle tool calls
+      const openaiText: string[] = [];
       while (responseMessage?.tool_calls && responseMessage.tool_calls.length > 0) {
+        if (responseMessage.content) openaiText.push(responseMessage.content);
         const toolResults = [];
 
         for (const toolCall of responseMessage.tool_calls) {
           console.log(`OpenAI wants to use tool: ${toolCall.function.name}`);
           toolsExecuted.push(toolCall.function.name);
 
-          const result = await executeTool(
+          const result = isTestMode ? { success: true, message: 'Simulado no modo de teste' } : await executeTool(
             supabase,
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments || '{}'),
@@ -2300,6 +2325,8 @@ serve(async (req) => {
       }
 
       aiResponse = responseMessage?.content || '';
+      emptyDetail = `finish_reason: ${openaiData.choices?.[0]?.finish_reason}`;
+      aiResponse = joinAgentText(openaiText, aiResponse);
 
       // Log para debug de resposta vazia em modelos de raciocínio
       if (!aiResponse && responseMessage) {
@@ -2325,10 +2352,19 @@ serve(async (req) => {
         : 'empty_response_no_tools';
       
       console.warn(`Using fallback response - reason: ${fallbackReason}, provider: ${integrationSlug}, model: ${modelUsed}`);
-      aiResponse = 'Desculpe, não consegui processar sua mensagem no momento. Pode repetir?';
+      console.warn(`Empty AI response detail - ${emptyDetail}`);
+      // Pedir para repetir não resolve: a conversa passa para uma pessoa.
+      if (isTestMode) {
+        aiResponse = `[Teste] A IA não devolveu texto (${emptyDetail}). Em produção, a conversa passaria para a equipe.`;
+      } else {
+        await releaseOnFailure?.('empty_response');
+        aiResponse = handoffAckText(agent.handoff_ack_message) ?? '';
+      }
     }
 
     const responseTime = Date.now() - startTime;
+    const splitMessages = (agent.formatting_rules as { split_messages?: boolean } | null)?.split_messages === true;
+    const bubbles = splitMessages ? splitIntoBubbles(aiResponse) : (aiResponse ? [aiResponse] : []);
 
     // 7. Check if this is test mode - don't send to WhatsApp, just return response
     if (isTestMode) {
@@ -2339,6 +2375,7 @@ serve(async (req) => {
         JSON.stringify({ 
           success: true, 
           response: aiResponse,
+          bubbles,
           responseTime,
           tokensUsed,
           toolsExecuted,
@@ -2349,19 +2386,22 @@ serve(async (req) => {
     }
 
     // 8. Send response via WhatsApp (production mode)
-    const { error: sendError } = await dispatchWhatsAppSend({
-      organizationId,
-      contactId,
-      threadId,
-      message: aiResponse,
-      isAgentMessage: true,
-      agentId: agent.id,
-      senderName: agent.name,
-    });
-
-    if (sendError) {
-      console.error('Error sending WhatsApp message:', sendError);
-      throw new Error('Failed to send WhatsApp message');
+    for (const [index, bubble] of bubbles.entries()) {
+      // Pausa curta entre as mensagens, para chegarem em ordem e como quem está digitando.
+      if (index > 0) await new Promise((resolve) => setTimeout(resolve, 1500));
+      const { error: sendError } = await dispatchWhatsAppSend({
+        organizationId,
+        contactId,
+        threadId,
+        message: bubble,
+        isAgentMessage: true,
+        agentId: agent.id,
+        senderName: agent.name,
+      });
+      if (sendError) {
+        console.error('Error sending WhatsApp message:', sendError);
+        throw new Error('Failed to send WhatsApp message');
+      }
     }
 
     // 9. Log successful interaction (with fallback info if applicable)

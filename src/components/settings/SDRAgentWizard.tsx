@@ -770,18 +770,21 @@ export function SDRAgentWizard({
           threadId: 'test-thread',
           message: testInput,
           isTestMode: true,
+          // A conversa do simulador não existe no banco: sem isto o agente só veria a última mensagem.
+          history: testMessages.map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
         },
       });
       
       if (error) throw error;
       
       if (data?.response) {
-        const agentMessage: TestMessage = {
+        const parts: string[] = data.bubbles?.length ? data.bubbles : [data.response];
+        const agentMessages: TestMessage[] = parts.map((content) => ({
           id: crypto.randomUUID(),
           role: 'agent',
-          content: data.response,
-        };
-        setTestMessages(prev => [...prev, agentMessage]);
+          content,
+        }));
+        setTestMessages(prev => [...prev, ...agentMessages]);
         
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
