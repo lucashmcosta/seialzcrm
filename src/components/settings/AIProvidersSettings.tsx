@@ -80,7 +80,7 @@ const PROVIDERS: ProviderMeta[] = [
   {
     id: 'deepgram',
     name: 'Deepgram',
-    description: 'Nova-2 · STT de telefonia, separa por canal',
+    description: 'Nova-3 · Transcrição de áudios e ligações',
     docsUrl: 'https://console.deepgram.com/',
     capability: 'Transcrição',
   },

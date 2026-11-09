@@ -1,6 +1,6 @@
 // transcribe-audio (v2.1 BYOK strict)
 // Chamado pelo intelligence-worker. Estratégia atual (Onda 2a):
-//   - prefere BYOK OpenAI gpt-4o-transcribe
+//   - usa a chave própria na ordem de resolve-provider (Deepgram, OpenAI, ElevenLabs)
 //   - SEM fallback managed (definido por env INTELLIGENCE_AUDIO_STRICT_BYOK=true)
 //   - aplica filtro anti-hallucination (Whisper boilerplate) antes de persistir.
 
@@ -16,6 +16,7 @@ import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateAudioCostUsd } from "../_shared/intelligence/pricing.ts";
 import { getIntelligenceSettings, shouldTranscribe } from "../_shared/intelligence/settings.ts";
 import { isLikelyHallucination } from "../_shared/intelligence/analyze-prompt.ts";
+import { audioContentType, deepgramAudioQuery, parseDeepgramAudio } from "../_shared/intelligence/deepgram-audio.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -104,7 +105,17 @@ Deno.serve(async (req) => {
 
   const callOnce = async (
     p: typeof provider,
-  ): Promise<{ ok: true; text: string; raw: any; durationSec: number } | { ok: false; status: number; rawBody: string }> => {
+  ): Promise<{ ok: true; text: string; raw: any; durationSec: number; model?: string } | { ok: false; status: number; rawBody: string }> => {
+    if (p.provider === "deepgram") {
+      const r = await fetch(`https://api.deepgram.com/v1/listen?${deepgramAudioQuery(p.model)}`, {
+        method: "POST",
+        headers: { Authorization: `Token ${p.apiKey}`, "Content-Type": audioContentType(audioBlob.type) },
+        body: audioBlob,
+      });
+      if (!r.ok) return { ok: false, status: r.status, rawBody: await r.text() };
+      const j = await r.json();
+      return { ok: true, raw: j, ...parseDeepgramAudio(j, p.model) };
+    }
     if (p.provider === "elevenlabs") {
       const form = new FormData();
       form.append("file", audioBlob, "audio.ogg");
@@ -210,11 +221,12 @@ Deno.serve(async (req) => {
     idempotency_key: `analyze:${msg.id}:after_transcribe`,
   });
 
-  const cost = await estimateAudioCostUsd(admin, provider.provider, provider.model, result.durationSec || 30);
+  const usedModel = result.model ?? provider.model;
+  const cost = await estimateAudioCostUsd(admin, provider.provider, usedModel, result.durationSec || 30);
   await logAiUsage(admin, {
     organization_id,
     provider: provider.provider,
-    model: provider.model,
+    model: usedModel,
     source: usedSource,
     action: "transcribe_audio",
     integration_slug: provider.provider,

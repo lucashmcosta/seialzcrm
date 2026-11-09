@@ -12,9 +12,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { SpinnerGap, Sparkle, ShieldCheck, ChartLine, Microphone, Gear, Key } from '@phosphor-icons/react';
+import { SpinnerGap, Sparkle, ShieldCheck, ChartLine, Microphone, Gear, Key, WarningCircle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { AIProvidersSettings } from './AIProvidersSettings';
+import { useAIProviders } from '@/hooks/useAIProviders';
+import { untranscribedAudios } from '@/lib/transcriptionNotice';
 
 type TranscriptionMode = 'all_whatsapp' | 'leads_only' | 'agents_only' | 'open_deals_only' | 'off';
 
@@ -48,6 +50,8 @@ export function IntelligenceSettings() {
   const canEdit = permissions.canManageSettings;
   const qc = useQueryClient();
   const orgId = organization?.id;
+  const [tab, setTab] = useState('overview');
+  const providerKeys = useAIProviders(orgId);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['intelligence_settings', orgId],
@@ -68,7 +72,7 @@ export function IntelligenceSettings() {
     enabled: !!orgId,
     queryFn: async () => {
       const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-      const [analyses, transcriptions, snapshots, ghosting] = await Promise.all([
+      const [analyses, transcriptions, snapshots, ghosting, audios] = await Promise.all([
         supabase.from('message_analyses').select('id', { count: 'exact', head: true })
           .eq('organization_id', orgId!).gte('created_at', sevenDaysAgo),
         supabase.from('audio_transcriptions').select('id', { count: 'exact', head: true })
@@ -77,11 +81,14 @@ export function IntelligenceSettings() {
           .eq('organization_id', orgId!),
         supabase.from('sales_events').select('id', { count: 'exact', head: true })
           .eq('organization_id', orgId!).eq('event_type', 'ghosting').gte('occurred_at', sevenDaysAgo),
+        supabase.from('messages').select('id', { count: 'exact', head: true })
+          .eq('organization_id', orgId!).ilike('media_type', 'audio%').gte('sent_at', sevenDaysAgo),
       ]);
       const statuses = (snapshots.data ?? []) as Array<{ final_status: string | null }>;
       return {
         analyses7d: analyses.count ?? 0,
         transcriptions7d: transcriptions.count ?? 0,
+        audios7d: audios.count ?? 0,
         ghosting7d: ghosting.count ?? 0,
         won: statuses.filter((s) => s.final_status === 'won').length,
         lost: statuses.filter((s) => s.final_status === 'lost').length,
@@ -130,6 +137,30 @@ export function IntelligenceSettings() {
     } as any);
   };
 
+  // Só avisa com a leitura das chaves confirmada, para não dar alarme falso.
+  const pendingAudios = providerKeys.isSuccess
+    ? untranscribedAudios({
+        providers: providerKeys.data,
+        mode: local.transcription.mode,
+        optedOut: local.privacy.org_opt_out,
+        audios7d: overview?.audios7d ?? 0,
+        transcriptions7d: overview?.transcriptions7d ?? 0,
+      })
+    : 0;
+  const transcriptionNotice = pendingAudios > 0 && (
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+      <WarningCircle size={18} weight="fill" className="shrink-0 text-amber-600" />
+      <div className="min-w-[220px] flex-1">
+        <p className="font-medium">Áudios não estão sendo transcritos</p>
+        <p className="text-xs text-muted-foreground">
+          {pendingAudios === 1 ? '1 áudio' : `${pendingAudios} áudios`} nos últimos 7 dias sem transcrição.
+          Adicione uma chave de transcrição (Deepgram, OpenAI ou ElevenLabs).
+        </p>
+      </div>
+      <Button type="button" size="sm" variant="outline" onClick={() => setTab('byok')}>Adicionar chave</Button>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -144,7 +175,7 @@ export function IntelligenceSettings() {
         )}
       </div>
 
-      <Tabs defaultValue="overview" className="w-full">
+      <Tabs value={tab} onValueChange={setTab} className="w-full">
         <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="overview"><ChartLine className="size-4 mr-2" /> Visão Geral</TabsTrigger>
           <TabsTrigger value="capture"><Gear className="size-4 mr-2" /> Captura & Análise</TabsTrigger>
@@ -155,6 +186,7 @@ export function IntelligenceSettings() {
 
         {/* OVERVIEW */}
         <TabsContent value="overview" className="space-y-4 mt-4">
+          {transcriptionNotice}
           <Card>
             <CardContent className="pt-6">
               <p className="text-base text-muted-foreground leading-relaxed">
@@ -232,6 +264,7 @@ export function IntelligenceSettings() {
 
         {/* TRANSCRIPTION */}
         <TabsContent value="transcription" className="space-y-4 mt-4">
+          {transcriptionNotice}
           <Card>
             <CardHeader><CardTitle>O que transcrever</CardTitle></CardHeader>
             <CardContent className="space-y-4">
