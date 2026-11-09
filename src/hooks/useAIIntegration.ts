@@ -4,7 +4,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useHasTextAi } from '@/hooks/useHasTextAi';
 
 // AI integration slugs that enable AI Agent and Knowledge Base features
-const AI_INTEGRATION_SLUGS = ['openai-gpt', 'claude-ai', 'lovable-ai'];
+const AI_INTEGRATION_SLUGS = ['openai-gpt', 'claude-ai'];
 
 export function useAIIntegration() {
   const { organization } = useOrganization();

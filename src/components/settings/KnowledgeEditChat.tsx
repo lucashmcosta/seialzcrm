@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
+import { functionErrorMessage } from '@/lib/functionError';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
 import { 
@@ -82,7 +83,7 @@ export function KnowledgeEditChat() {
         },
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, 'Não foi possível processar o pedido. Tente novamente.'));
 
       const assistantMessage: ChatMessage = {
         id: crypto.randomUUID(),

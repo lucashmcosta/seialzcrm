@@ -32,8 +32,6 @@ export const RETIRED_AI_MODELS: Record<string, string> = {
   "gpt-4.5-preview": "gpt-5.6-sol",
   "gpt-4-turbo": "gpt-5.6-sol",
   "gpt-3.5-turbo": "gpt-5.6-terra",
-  "google/gemini-2.5-flash": "google/gemini-3-flash-preview",
-  "google/gemini-2.5-pro": "google/gemini-3-flash-preview",
 };
 
 export function currentAiModel<T extends string | null | undefined>(model: T): T | string {

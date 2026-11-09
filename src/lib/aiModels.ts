@@ -1,9 +1,6 @@
 // Modelos que o agente oferece. O agente usa ferramentas pela Chat Completions, então só entra
 // aqui modelo da OpenAI que faz isso sem ajuste (GPT-6.1 Terra, por exemplo, exige a Responses API).
 export const AI_MODELS: Record<string, { value: string; label: string }[]> = {
-  'lovable-ai': [
-    { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (Recomendado)' },
-  ],
   'claude-ai': [
     { value: 'claude-sonnet-5-5', label: 'Sonnet 5.5 (Recomendado)' },
     { value: 'claude-opus-5-5', label: 'Opus 5.5 (Mais preciso)' },
@@ -33,8 +30,6 @@ export const RETIRED_AI_MODELS: Record<string, string> = {
   'gpt-4.5-preview': 'gpt-5.6-sol',
   'gpt-4-turbo': 'gpt-5.6-sol',
   'gpt-3.5-turbo': 'gpt-5.6-terra',
-  'google/gemini-2.5-flash': 'google/gemini-3-flash-preview',
-  'google/gemini-2.5-pro': 'google/gemini-3-flash-preview',
 };
 
 /** Agente salvo com modelo antigo: é o substituto que roda, então é ele que a tela mostra. */

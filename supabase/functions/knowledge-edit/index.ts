@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { openOrgAi, OrgAiError, orgAiErrorResponse } from "../_shared/intelligence/org-ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,28 +40,10 @@ serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Get auth user from request
-    const authHeader = req.headers.get("Authorization");
-    let userId: string | null = null;
-    
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) {
-        const { data: userData } = await supabase
-          .from("users")
-          .select("id")
-          .eq("auth_user_id", user.id)
-          .single();
-        userId = userData?.id || null;
-      }
-    }
+    const gate = await openOrgAi(req, organizationId, "knowledge_edit", corsHeaders);
+    if (!gate.ok) return gate.response;
+    const supabase = gate.admin;
+    const userId: string = gate.userId;
 
     console.log(`📝 Processing edit request for org ${organizationId}: "${userRequest.substring(0, 100)}..."`);
 
@@ -80,9 +62,9 @@ serve(async (req) => {
       .eq("is_active", true);
 
     // Build context for AI
-    const productsContext = (products || []).map(p => `- ${p.name} (slug: ${p.slug})`).join("\n");
-    const itemsContext = (items || []).map(i => {
-      const product = products?.find(p => p.id === i.product_id);
+    const productsContext = (products || []).map((p: any) => `- ${p.name} (slug: ${p.slug})`).join("\n");
+    const itemsContext = (items || []).map((i: any) => {
+      const product = products?.find((p: any) => p.id === i.product_id);
       return `- [${i.id}] "${i.title}" (category: ${i.category}, scope: ${i.scope}${product ? `, product: ${product.name}` : ""})`;
     }).join("\n");
 
@@ -137,41 +119,10 @@ Se precisar de mais informações, responda com:
     const userPrompt = `Pedido: ${userRequest}`;
 
     // Call AI to process the request
-    if (!lovableApiKey) {
-      return new Response(
-        JSON.stringify({ 
-          error: "AI not configured",
-          understood: false,
-          needs_clarification: "O sistema de IA não está configurado. Configure a LOVABLE_API_KEY."
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${lovableApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.3,
-      }),
-    });
-
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("AI API error:", errorText);
-      throw new Error(`AI API error: ${aiResponse.status}`);
-    }
-
-    const aiData = await aiResponse.json();
-    const aiContent = aiData.choices?.[0]?.message?.content;
+    const aiContent = await gate.ai([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ]);
 
     if (!aiContent) {
       throw new Error("Empty AI response");
@@ -196,7 +147,7 @@ Se precisar de mais informações, responda com:
       // Enrich proposed_changes with product_id
       const enrichedChanges = parsedResponse.proposed_changes.map((change: ProposedChange) => {
         if (change.product_slug) {
-          const product = products?.find(p => p.slug === change.product_slug);
+          const product = products?.find((p: any) => p.slug === change.product_slug);
           change.product_id = product?.id || null;
         }
         return change;
@@ -249,6 +200,7 @@ Se precisar de mais informações, responda com:
     );
 
   } catch (error) {
+    if (error instanceof OrgAiError) return orgAiErrorResponse(error, corsHeaders);
     console.error("Error processing knowledge edit:", error);
 
     return new Response(

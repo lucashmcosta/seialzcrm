@@ -15,3 +15,8 @@ export function untranscribedAudios(p: {
   const hasKey = TRANSCRIPTION_PROVIDERS.some((id) => p.providers[id]?.is_active && p.providers[id]?.verified_at);
   return hasKey ? 0 : Math.max(p.audios7d - p.transcriptions7d, 0);
 }
+
+/** A análise de mensagens só roda com chave ativa e verificada do Claude ou da OpenAI. */
+export function hasAnalysisKey(keys: Record<string, { is_active: boolean; verified_at: string | null } | undefined>): boolean {
+  return ['openai', 'anthropic'].some((p) => keys[p]?.is_active && !!keys[p]?.verified_at);
+}

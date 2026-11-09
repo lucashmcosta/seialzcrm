@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { openOrgAi, OrgAiError, orgAiErrorResponse, type OrgAiChat } from "../_shared/intelligence/org-ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,6 +9,7 @@ const corsHeaders = {
 type KnowledgeType = 'general' | 'faq_only' | 'policy' | 'product';
 
 interface SynthesizeRequest {
+  organization_id?: string;
   slots: Record<string, string>;
   faqs: Array<{ question: string; answer: string }>;
   knowledgeType?: KnowledgeType;
@@ -185,43 +187,8 @@ function getSynthesizePrompt(knowledgeType: KnowledgeType): string {
   }
 }
 
-async function callLovableAI(systemPrompt: string, userPrompt: string): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY is not configured");
-  }
-
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.5,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("AI Gateway error:", response.status, errorText);
-    
-    if (response.status === 429) {
-      throw new Error("RATE_LIMITED");
-    }
-    if (response.status === 402) {
-      throw new Error("PAYMENT_REQUIRED");
-    }
-    throw new Error(`AI Gateway error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "";
+function synth(ai: OrgAiChat, systemPrompt: string, userPrompt: string): Promise<string> {
+  return ai([{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }], { maxTokens: 8192 });
 }
 
 function parseResponse(responseText: string): { title: string; content: string } {
@@ -388,14 +355,14 @@ function buildUserPrompt(slots: Record<string, string>, faqs: Array<{ question: 
   return "";
 }
 
-async function synthesizeGeneralType(slots: Record<string, string>, faqs: Array<{ question: string; answer: string }>): Promise<SingleDocument[]> {
+async function synthesizeGeneralType(ai: OrgAiChat, slots: Record<string, string>, faqs: Array<{ question: string; answer: string }>): Promise<SingleDocument[]> {
   const documents: SingleDocument[] = [];
   
   // 1. Company document (always generate if we have basic info)
   const companyPrompt = buildCompanyPrompt(slots);
   if (companyPrompt) {
     try {
-      const response = await callLovableAI(COMPANY_SYNTHESIZE_PROMPT, companyPrompt);
+      const response = await synth(ai, COMPANY_SYNTHESIZE_PROMPT, companyPrompt);
       const doc = parseResponse(response);
       if (doc.content) {
         documents.push({ ...doc, type: 'general' });
@@ -409,7 +376,7 @@ async function synthesizeGeneralType(slots: Record<string, string>, faqs: Array<
   const productsPrompt = buildProductsPrompt(slots);
   if (productsPrompt) {
     try {
-      const response = await callLovableAI(PRODUCTS_SYNTHESIZE_PROMPT, productsPrompt);
+      const response = await synth(ai, PRODUCTS_SYNTHESIZE_PROMPT, productsPrompt);
       const doc = parseResponse(response);
       if (doc.content) {
         documents.push({ ...doc, type: 'product' });
@@ -423,7 +390,7 @@ async function synthesizeGeneralType(slots: Record<string, string>, faqs: Array<
   const policiesPrompt = buildPoliciesPrompt(slots);
   if (policiesPrompt) {
     try {
-      const response = await callLovableAI(POLICIES_SYNTHESIZE_PROMPT, policiesPrompt);
+      const response = await synth(ai, POLICIES_SYNTHESIZE_PROMPT, policiesPrompt);
       const doc = parseResponse(response);
       if (doc.content) {
         documents.push({ ...doc, type: 'policy' });
@@ -437,7 +404,7 @@ async function synthesizeGeneralType(slots: Record<string, string>, faqs: Array<
   const faqsPrompt = buildFaqsPrompt(faqs);
   if (faqsPrompt) {
     try {
-      const response = await callLovableAI(FAQS_SYNTHESIZE_PROMPT, faqsPrompt);
+      const response = await synth(ai, FAQS_SYNTHESIZE_PROMPT, faqsPrompt);
       const doc = parseResponse(response);
       if (doc.content) {
         documents.push({ ...doc, type: 'faq' });
@@ -456,7 +423,10 @@ serve(async (req) => {
   }
 
   try {
-    const { slots, faqs, knowledgeType = 'general' } = await req.json() as SynthesizeRequest;
+    const { organization_id, slots, faqs, knowledgeType = 'general' } = await req.json() as SynthesizeRequest;
+    const gate = await openOrgAi(req, organization_id, "synthesize_knowledge", corsHeaders);
+    if (!gate.ok) return gate.response;
+    const ai = gate.ai;
     
     // For FAQ only, we just need FAQs
     if (knowledgeType === 'faq_only') {
@@ -477,7 +447,7 @@ serve(async (req) => {
     
     // For 'general' type, generate multiple documents
     if (knowledgeType === 'general') {
-      const documents = await synthesizeGeneralType(slots || {}, faqs || []);
+      const documents = await synthesizeGeneralType(gate.ai, slots || {}, faqs || []);
       
       if (documents.length === 0) {
         return new Response(
@@ -494,7 +464,7 @@ serve(async (req) => {
     // For other types, generate single document (wrapped in documents array for consistency)
     const systemPrompt = getSynthesizePrompt(knowledgeType);
     const userPrompt = buildUserPrompt(slots || {}, faqs || [], knowledgeType);
-    const responseText = await callLovableAI(systemPrompt, userPrompt);
+    const responseText = await synth(ai, systemPrompt, userPrompt);
     
     try {
       const result = parseResponse(responseText);
@@ -512,7 +482,7 @@ serve(async (req) => {
       console.log("Parse error, trying retry...", parseError);
       
       const retryPrompt = `${userPrompt}\n\nIMPORTANTE: Retorne APENAS JSON válido, começando com { e terminando com }. Sem markdown code blocks.`;
-      const retryText = await callLovableAI(systemPrompt, retryPrompt);
+      const retryText = await synth(ai, systemPrompt, retryPrompt);
       
       const result = parseResponse(retryText);
       const typeMap: Record<string, string> = {
@@ -528,23 +498,12 @@ serve(async (req) => {
     }
     
   } catch (error) {
+    if (error instanceof OrgAiError) return orgAiErrorResponse(error, corsHeaders);
     console.error("Synthesize knowledge error:", error);
     
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     
-    if (errorMessage === "RATE_LIMITED") {
-      return new Response(
-        JSON.stringify({ error: "Taxa de requisições excedida. Aguarde um momento e tente novamente." }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
     
-    if (errorMessage === "PAYMENT_REQUIRED") {
-      return new Response(
-        JSON.stringify({ error: "Créditos insuficientes. Adicione créditos ao seu workspace." }),
-        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
     
     return new Response(
       JSON.stringify({ error: "Erro ao sintetizar conhecimento. Tente novamente." }),

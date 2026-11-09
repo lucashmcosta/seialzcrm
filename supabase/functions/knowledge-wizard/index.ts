@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { type ChatMessage as OrgChatMessage, openOrgAi, OrgAiError, orgAiErrorResponse, type OrgAiChat } from "../_shared/intelligence/org-ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,6 +14,7 @@ interface ChatMessage {
 type KnowledgeType = 'general' | 'faq_only' | 'policy' | 'product';
 
 interface WizardRequest {
+  organization_id?: string;
   recentMessages: ChatMessage[];
   currentSlots: Record<string, string>;
   userMessage: string;
@@ -189,42 +191,6 @@ ${formattedMessages}
 Última mensagem do usuário: ${userMessage}`;
 }
 
-async function callLovableAI(messages: Array<{role: string; content: string}>): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY is not configured");
-  }
-
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages,
-      temperature: 0.7,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("AI Gateway error:", response.status, errorText);
-    
-    if (response.status === 429) {
-      throw new Error("RATE_LIMITED");
-    }
-    if (response.status === 402) {
-      throw new Error("PAYMENT_REQUIRED");
-    }
-    throw new Error(`AI Gateway error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "";
-}
-
 function parseWizardResponse(responseText: string): WizardResponse {
   let jsonStr = responseText.trim();
   
@@ -256,8 +222,8 @@ function parseWizardResponse(responseText: string): WizardResponse {
   };
 }
 
-async function callWithRetry(messages: Array<{role: string; content: string}>): Promise<WizardResponse> {
-  const responseText = await callLovableAI(messages);
+async function callWithRetry(ai: OrgAiChat, messages: OrgChatMessage[]): Promise<WizardResponse> {
+  const responseText = await ai(messages);
   
   try {
     return parseWizardResponse(responseText);
@@ -270,7 +236,7 @@ async function callWithRetry(messages: Array<{role: string; content: string}>): 
       { role: "user", content: "Sua resposta anterior não era JSON válido. Retorne APENAS o JSON, sem markdown, sem texto adicional. Comece com { e termine com }." }
     ];
     
-    const retryResponseText = await callLovableAI(retryMessages);
+    const retryResponseText = await ai(retryMessages);
     
     try {
       return parseWizardResponse(retryResponseText);
@@ -294,7 +260,9 @@ serve(async (req) => {
   }
 
   try {
-    const { recentMessages, currentSlots, userMessage, knowledgeType = 'general' } = await req.json() as WizardRequest;
+    const { organization_id, recentMessages, currentSlots, userMessage, knowledgeType = 'general' } = await req.json() as WizardRequest;
+    const gate = await openOrgAi(req, organization_id, "knowledge_wizard", corsHeaders);
+    if (!gate.ok) return gate.response;
     
     const systemPrompt = getSystemPrompt(knowledgeType);
     const contextPrompt = buildContextPrompt(currentSlots || {}, recentMessages || [], userMessage || "", knowledgeType);
@@ -304,30 +272,19 @@ serve(async (req) => {
       { role: "user", content: contextPrompt }
     ];
     
-    const wizardResponse = await callWithRetry(messages);
+    const wizardResponse = await callWithRetry(gate.ai, messages);
     
     return new Response(JSON.stringify(wizardResponse), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
     
   } catch (error) {
+    if (error instanceof OrgAiError) return orgAiErrorResponse(error, corsHeaders);
     console.error("Knowledge wizard error:", error);
     
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     
-    if (errorMessage === "RATE_LIMITED") {
-      return new Response(
-        JSON.stringify({ error: "Taxa de requisições excedida. Aguarde um momento e tente novamente." }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
     
-    if (errorMessage === "PAYMENT_REQUIRED") {
-      return new Response(
-        JSON.stringify({ error: "Créditos insuficientes. Adicione créditos ao seu workspace." }),
-        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
     
     return new Response(
       JSON.stringify({ error: "Erro ao processar wizard. Tente novamente." }),

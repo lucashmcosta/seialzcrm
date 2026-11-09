@@ -199,6 +199,29 @@ Deno.test("resolveProvider under budget still resolves", async () => {
   assertEquals(r.monthlyBudgetUsd, 100);
 });
 
+Deno.test("chat aceita a chave do Claude quando a org não tem OpenAI", async () => {
+  const entry = await activeOpenAIEntry();
+  const admin = makeFakeAdmin({ rows: [{ id: "r1", organization_id: "org-A", secret_payload: { anthropic: entry } }] });
+  const r = await resolveProvider(admin, "org-A", "chat");
+  assertEquals([r.source, r.provider], ["customer_key", "anthropic"]);
+});
+
+Deno.test("OpenAI continua na frente para quem tem as duas chaves", async () => {
+  const entry = await activeOpenAIEntry();
+  const admin = makeFakeAdmin({ rows: [{ id: "r1", organization_id: "org-A", secret_payload: { anthropic: entry, openai: entry } }] });
+  assertEquals((await resolveProvider(admin, "org-A", "chat")).provider, "openai");
+});
+
+Deno.test("sem chave da org o chat nunca usa IA gerenciada, mesmo com a chave no ambiente", async () => {
+  Deno.env.set("LOVABLE_API_KEY", "nao-usar");
+  try {
+    const err = await assertRejects(() => resolveProvider(makeFakeAdmin({ rows: [] }), "org-A", "chat"), ProviderResolutionError);
+    assertEquals((err as any).code, "no_provider");
+  } finally {
+    Deno.env.delete("LOVABLE_API_KEY");
+  }
+});
+
 Deno.test("resolveProvider raises no_provider when no BYOK & no managed", async () => {
   const admin = makeFakeAdmin({ rows: [] });
   await assertRejects(

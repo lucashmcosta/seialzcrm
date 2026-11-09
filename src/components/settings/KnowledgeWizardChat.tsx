@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useOrganizationContext } from '@/contexts/OrganizationContext';
+import { functionErrorMessage } from '@/lib/functionError';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -125,6 +127,7 @@ const KNOWLEDGE_TYPES: Array<{
 ];
 
 export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: KnowledgeWizardChatProps) {
+  const { organization } = useOrganizationContext();
   const [knowledgeType, setKnowledgeType] = useState<KnowledgeType | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentStage, setCurrentStage] = useState<'discovery' | 'slots' | 'faq_generation' | 'policy_slots' | 'product_slots' | 'complete'>('discovery');
@@ -184,6 +187,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
     try {
       const { data, error } = await supabase.functions.invoke('knowledge-wizard', {
         body: {
+          organization_id: organization?.id,
           recentMessages: [],
           currentSlots: {},
           userMessage: 'Iniciar wizard para criar conhecimento',
@@ -207,7 +211,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
       }
     } catch (error) {
       console.error('Error starting wizard:', error);
-      toast.error('Erro ao iniciar o assistente');
+      toast.error(await functionErrorMessage(error, 'Erro ao iniciar o assistente'));
       // Fallback message based on type
       const fallbackMessages: Record<KnowledgeType, string> = {
         general: 'Olá! O que sua empresa oferece? (produto, serviço, consultoria...)',
@@ -238,6 +242,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
 
       const { data, error } = await supabase.functions.invoke('knowledge-wizard', {
         body: {
+          organization_id: organization?.id,
           recentMessages,
           currentSlots: extractedSlots,
           userMessage,
@@ -247,15 +252,8 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
 
       if (error) {
         // Handle specific errors
-        if (error.message?.includes('429') || error.message?.includes('rate')) {
-          toast.error('Taxa de requisições excedida. Aguarde um momento.');
-          return;
-        }
-        if (error.message?.includes('402')) {
-          toast.error('Créditos insuficientes. Adicione créditos ao seu workspace.');
-          return;
-        }
-        throw error;
+        toast.error(await functionErrorMessage(error, 'Não foi possível enviar. Tente novamente.'));
+        return;
       }
 
       const response = data as WizardResponse;
@@ -309,6 +307,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
     try {
       const { data, error } = await supabase.functions.invoke('synthesize-knowledge', {
         body: {
+          organization_id: organization?.id,
           slots: extractedSlots,
           faqs: answeredFaqs,
           knowledgeType,
@@ -321,7 +320,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
       setFinalDocuments(data.documents || []);
     } catch (error) {
       console.error('Error synthesizing:', error);
-      toast.error('Erro ao gerar conteúdo. Tente novamente.');
+      toast.error(await functionErrorMessage(error, 'Erro ao gerar conteúdo. Tente novamente.'));
     } finally {
       setIsSynthesizing(false);
     }

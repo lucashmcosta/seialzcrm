@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { openOrgAi, OrgAiError, orgAiErrorResponse } from "../_shared/intelligence/org-ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,6 +7,7 @@ const corsHeaders = {
 };
 
 interface GenerateRequest {
+  organization_id?: string;
   category: string;
   scope: 'global' | 'product';
   productName?: string;
@@ -65,46 +67,6 @@ Gerar documento estruturado e otimizado para RAG (busca semântica) com base nas
 
 IMPORTANTE: Responda SEMPRE em JSON válido. Nada antes ou depois do JSON. NÃO inclua campo suggestedFaqs - as FAQs devem estar dentro do content.`;
 
-async function callLovableAI(systemPrompt: string, userPrompt: string): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY is not configured");
-  }
-
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.5,
-      max_tokens: 3000,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("AI gateway error:", response.status, errorText);
-    
-    if (response.status === 429) {
-      throw new Error("RATE_LIMITED");
-    }
-    if (response.status === 402) {
-      throw new Error("PAYMENT_REQUIRED");
-    }
-    throw new Error(`AI gateway error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "";
-}
-
 function parseGenerateResponse(responseText: string): GenerateResponse {
   // Clean up the response - remove markdown code blocks if present
   let cleanedText = responseText.trim();
@@ -145,7 +107,9 @@ serve(async (req) => {
   }
 
   try {
-    const { category, scope, productName, collectedInfo, conversationExcerpts }: GenerateRequest = await req.json();
+    const { organization_id, category, scope, productName, collectedInfo, conversationExcerpts }: GenerateRequest = await req.json();
+    const gate = await openOrgAi(req, organization_id, "wizard_generate_content", corsHeaders);
+    if (!gate.ok) return gate.response;
 
     console.log(`📄 Generating content for category=${category}, scope=${scope}, product=${productName || 'global'}`);
 
@@ -167,7 +131,7 @@ ${conversationExcerpts.join('\n---\n')}
 
 Gere o documento seguindo as regras e formato JSON especificados.`;
 
-    const responseText = await callLovableAI(CONTENT_GENERATION_PROMPT, userPrompt);
+    const responseText = await gate.ai([{ role: "system", content: CONTENT_GENERATION_PROMPT }, { role: "user", content: userPrompt }], { maxTokens: 3000 });
     const generateResponse = parseGenerateResponse(responseText);
 
     // Adjust title based on scope
@@ -183,22 +147,11 @@ Gere o documento seguindo as regras e formato JSON especificados.`;
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
+    if (error instanceof OrgAiError) return orgAiErrorResponse(error, corsHeaders);
     console.error("Generate content error:", error);
 
     // Handle specific errors
     if (error instanceof Error) {
-      if (error.message === "RATE_LIMITED") {
-        return new Response(
-          JSON.stringify({ error: "Limite de requisições excedido. Aguarde um momento e tente novamente." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (error.message === "PAYMENT_REQUIRED") {
-        return new Response(
-          JSON.stringify({ error: "Créditos de IA esgotados. Adicione créditos para continuar." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
     }
 
     return new Response(

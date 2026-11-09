@@ -1,5 +1,5 @@
 // analyze-message (v2 BYOK)
-// Chamado pelo intelligence-worker. Resolve provider (managed Lovable Gateway ou BYOK OpenAI),
+// Chamado pelo intelligence-worker. Resolve a chave da org (OpenAI ou Claude; sem chave, não analisa),
 // faz tool-call para extrair análise estruturada, grava em message_analyses + sales_events,
 // loga em ai_usage_logs com source/cost.
 
@@ -10,7 +10,6 @@ import {
   type MessageAnalysisPayload,
 } from "../_shared/intelligence/analyze-prompt.ts";
 import {
-  getManagedProvider,
   markByokInvalid,
   ProviderResolutionError,
   resolveProvider,
@@ -21,23 +20,11 @@ import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { getIntelligenceSettings, shouldAnalyze } from "../_shared/intelligence/settings.ts";
 import { ANALYSIS_EVENT_TYPES, effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
 import { buildAnalysisPrompt, buildAnalysisTool, normalizeProfile, profileKey } from "../_shared/intelligence/analysis-profile.ts";
+import { buildAnalysisRequest, parseAnalysisResponse } from "../_shared/intelligence/analysis-call.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const WORKER_TOKEN = Deno.env.get("INTELLIGENCE_WORKER_TOKEN")!;
-
-function endpointFor(provider: string): string {
-  if (provider === "openai") return "https://api.openai.com/v1/chat/completions";
-  // managed gemini through Lovable Gateway (OpenAI-compatible)
-  return "https://ai.gateway.lovable.dev/v1/chat/completions";
-}
-
-function modelFor(provider: string, model: string): string {
-  // Lovable gateway expects "google/gemini-2.5-flash" style; OpenAI expects raw model name.
-  if (provider === "openai") return model;
-  if (provider === "gemini") return model.startsWith("google/") ? model : `google/${model}`;
-  return model;
-}
 
 Deno.serve(async (req) => {
   if (req.headers.get("x-worker-token") !== WORKER_TOKEN) {
@@ -142,10 +129,16 @@ Deno.serve(async (req) => {
     provider = await resolveProvider(admin, organization_id, "chat");
   } catch (e) {
     if (e instanceof ProviderResolutionError) {
-      return json({ error: e.code }, e.code === "no_provider" ? 503 : 402);
+      // Sem chave, sem análise: não é falha, e a tela avisa o que falta.
+      if (e.code === "no_provider") return json({ ok: true, skipped: "no_ai_key" });
+      return json({ error: e.code }, 402);
     }
     throw e;
   }
+
+  // A análise roda em toda mensagem: no Claude usa sempre o modelo econômico, e não o
+  // modelo escolhido para os recursos de texto, que é um campo só por provedor.
+  if (provider.provider === "anthropic") provider = { ...provider, model: "claude-haiku-5-5" };
 
   const { data: ctx } = await admin
     .from("messages")
@@ -179,32 +172,14 @@ direction: ${msg.direction}
 media_type: ${msg.media_type ?? "none"}
 content: ${messageText.slice(0, 2000)}`;
 
-  const callOnce = async (p: typeof provider) => {
-    const r = await fetch(endpointFor(p.provider), {
-      method: "POST",
-      headers: { Authorization: `Bearer ${p.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: modelFor(p.provider, p.model),
-        messages: [
-          { role: "system", content: buildAnalysisPrompt(profile) },
-          { role: "user", content: userPrompt },
-        ],
-        tools: [buildAnalysisTool(profile)],
-        tool_choice: { type: "function", function: { name: "record_message_analysis" } },
-      }),
-    });
-    if (!r.ok) return { ok: false as const, status: r.status, rawBody: await r.text() };
-    return { ok: true as const, json: await r.json() };
-  };
+  const request = buildAnalysisRequest(provider, buildAnalysisPrompt(profile), userPrompt, buildAnalysisTool(profile));
+  const response = await fetch(request.url, { method: "POST", headers: request.headers, body: JSON.stringify(request.body) });
+  const usedSource = provider.source;
 
-  let result = await callOnce(provider);
-  let usedSource: "managed" | "customer_key" | "managed_fallback" = provider.source;
-
-  if (!result.ok) {
-    const err = sanitizeProviderError(result.status, result.rawBody);
+  if (!response.ok) {
+    const err = sanitizeProviderError(response.status, await response.text());
     safeLog("[analyze-message] provider error", { provider: provider.provider, kind: err.kind, status: err.status });
-
-    if (provider.source === "customer_key" && err.kind === "invalid_key") {
+    if (err.kind === "invalid_key") {
       await markByokInvalid(admin, organization_id, provider.provider, err.code ?? "invalid_key");
       await admin.from("sales_events").insert({
         organization_id,
@@ -212,38 +187,16 @@ content: ${messageText.slice(0, 2000)}`;
         payload: { provider: provider.provider, capability: "chat" },
         occurred_at: new Date().toISOString(),
       });
-      if (provider.fallbackToManaged) {
-        const managed = getManagedProvider("chat");
-        result = await callOnce(managed);
-        usedSource = "managed_fallback";
-        provider = managed;
-      } else {
-        return json({ error: "byok_invalid", provider: provider.provider }, 424);
-      }
-    } else if (provider.source === "customer_key" && err.kind === "rate_limit" && provider.fallbackOnRateLimit) {
-      const managed = getManagedProvider("chat");
-      result = await callOnce(managed);
-      usedSource = "managed_fallback";
-      provider = managed;
+      return json({ error: "byok_invalid", provider: provider.provider }, 424);
     }
-  }
-
-  if (!result.ok) {
-    const err = sanitizeProviderError(result.status);
     return json({ error: "ai_failure", kind: err.kind }, err.kind === "transient" || err.kind === "rate_limit" ? 502 : 400);
   }
 
-  const aiJson = result.json;
-  const toolCall = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
-  if (!toolCall?.function?.arguments) return json({ error: "no_tool_call" }, 502);
-
-  let analysis: MessageAnalysisPayload;
-  try { analysis = JSON.parse(toolCall.function.arguments); }
-  catch { return json({ error: "invalid_analysis_json" }, 502); }
-
-  const promptTokens = Number(aiJson?.usage?.prompt_tokens ?? 0);
-  const completionTokens = Number(aiJson?.usage?.completion_tokens ?? 0);
-  const totalTokens = Number(aiJson?.usage?.total_tokens ?? (promptTokens + completionTokens));
+  const parsed = parseAnalysisResponse(provider.provider, await response.json());
+  if (!parsed.ok) return json({ error: parsed.error }, 502);
+  const aiJson = parsed.raw;
+  const analysis = parsed.analysis as MessageAnalysisPayload;
+  const { promptTokens, completionTokens, totalTokens } = parsed;
 
   // Hard-enforce: buying_signals only for inbound (defense in depth vs prompt drift)
   const buyingSignals = msg.direction === "inbound" ? (analysis.buying_signals ?? []) : [];
