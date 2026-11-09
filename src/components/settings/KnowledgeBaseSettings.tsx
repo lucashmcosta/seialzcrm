@@ -93,7 +93,7 @@ const contentTypeConfig: Record<string, { label: string; icon: React.ElementType
   },
 };
 
-import { CATEGORY_LABELS as categoryLabels, getCategoryLabel } from '@/lib/knowledge-categories';
+import { CATEGORY_LABELS as categoryLabels, categoryForGeneratedDoc, getCategoryLabel } from '@/lib/knowledge-categories';
 
 const sourceLabels: Record<string, { label: string; icon: React.ElementType }> = {
   wizard: { label: 'Wizard IA', icon: MagicWand },
@@ -195,7 +195,8 @@ export function KnowledgeBaseSettings() {
             organization_id: organization.id,
             agent_id: selectedAgentId || null,
             title: doc.title || 'Conhecimento sem título',
-            type: doc.type || 'general',
+            type: categoryForGeneratedDoc(doc.type),
+            category: categoryForGeneratedDoc(doc.type),
             status: 'processing',
             source: 'wizard_chat',
             metadata: {
@@ -224,12 +225,17 @@ export function KnowledgeBaseSettings() {
         }
       }
 
-      if (savedCount > 0) {
-        toast.success(`${savedCount} conhecimento(s) adicionado(s) com sucesso`);
-      } else {
-        toast.error('Erro ao salvar conhecimentos');
+      // Nada salvo: a janela fica aberta, porque fechar apagaria os documentos gerados.
+      if (savedCount === 0) {
+        toast.error('Não foi possível salvar. Os documentos continuam aqui para tentar de novo.');
+        return;
       }
-      
+      if (savedCount < documents.length) {
+        toast.warning(`${savedCount} de ${documents.length} conhecimentos salvos. Confira a lista.`);
+      } else {
+        toast.success(`${savedCount} conhecimento(s) adicionado(s) com sucesso`);
+      }
+
       handleDialogClose(false);
       fetchData();
     } catch (error) {
