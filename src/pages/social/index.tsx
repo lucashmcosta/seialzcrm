@@ -2,7 +2,7 @@ import { uiError } from '@/lib/ui-locale';
 import { getUiLocale, uiDateLocale, uiDatePattern } from '@/lib/ui-locale';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { useMemo, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useMetaSocialPublishingFlag } from '@/hooks/useMetaSocialPublishingFlag';
@@ -10,6 +10,7 @@ import {
   useSocialConversations, useSocialMessages, useSendSocialMessage, useSocialProfile, uploadSocialMedia,
   type SocialConversation, type SocialPlatform, type SocialAttachment, type SocialMessage, type SocialSendAttachment,
 } from './useSocialInbox';
+import { mergeSetups, socialSetupNotices } from './socialSetup';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -127,6 +128,8 @@ export default function SocialInboxPage() {
   const conversations = conversationsAll;
   const channels = { ...(msgrConvos.data?.channels ?? {}), ...(igConvos.data?.channels ?? {}) };
   const channelErrors = Object.entries(channels).filter(([, v]) => v);
+  const setup = mergeSetups([msgrConvos.data?.setup, igConvos.data?.setup]);
+  const setupNotices = socialSetupNotices(setup);
   // Lista utilizável assim que o Messenger chega; Instagram entra depois.
   const listLoading = msgrConvos.isLoading && igConvos.isLoading;
   const igLoading = igConvos.isLoading;
@@ -174,6 +177,16 @@ export default function SocialInboxPage() {
           </div>
         </div>
 
+        {setupNotices.length > 0 && (
+          <div className="mx-6 mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+            <WarningCircle className="h-4 w-4 shrink-0 mt-0.5" weight="fill" />
+            <div>
+              {setupNotices.map((notice) => <div key={notice}>{uiText(notice)}</div>)}
+              <Link to="/settings/integrations/meta" className="font-medium underline">{uiText("Abrir conexão Meta")}</Link>
+            </div>
+          </div>
+        )}
+
         {channelErrors.length > 0 && (
           <div className="mx-6 mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
             <WarningCircle className="h-4 w-4 shrink-0 mt-0.5" weight="fill" />
@@ -196,7 +209,14 @@ export default function SocialInboxPage() {
               {listLoading ? (
                 <div className="p-3 space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
               ) : conversations.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">{uiText("Nenhuma conversa encontrada.")}</p>
+                setup && !setup.has_page ? (
+                  <div className="p-4 space-y-2 text-sm text-muted-foreground">
+                    <p>{uiText("Conecte a Meta e selecione uma Página do Facebook para receber mensagens aqui.")}</p>
+                    <Link to="/settings/integrations/meta" className="font-medium text-primary hover:underline">{uiText("Abrir conexão Meta")}</Link>
+                  </div>
+                ) : (
+                  <p className="p-4 text-sm text-muted-foreground">{uiText("Nenhuma conversa ainda. As novas mensagens aparecem aqui automaticamente.")}</p>
+                )
               ) : conversations.map((c) => (
                 <button
                   key={c.id}
