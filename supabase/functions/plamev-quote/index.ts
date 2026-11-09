@@ -349,7 +349,7 @@ Deno.serve(async (req) => {
     if (action === "materiais") {
       const { data, error } = await db.from("plamev_materials")
         .select("id, titulo, descricao, tipo, mime_type, storage_path, tamanho_bytes")
-        .eq("ativo", true).order("ordem", { ascending: true }).order("created_at", { ascending: true }).limit(100);
+        .eq("ativo", true).is("removido_em", null).order("ordem", { ascending: true }).order("created_at", { ascending: true }).limit(100);
       if (error) throw new Error(`materiais: ${error.code}`);
       return json(200, {
         materiais: (data ?? []).map((m) => ({
