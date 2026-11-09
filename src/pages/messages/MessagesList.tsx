@@ -206,6 +206,8 @@ interface Message {
   endpoint_id?: string | null;
   edited_at?: string | null;
   edit_count?: number | null;
+  /** Nota interna gravada em messages (ex.: resumo do agente na passagem para a equipe). */
+  is_internal_note?: boolean | null;
 }
 
 interface InlineNote {
@@ -216,6 +218,8 @@ interface InlineNote {
   author_name?: string;
   /** Título da activity — usado para classificar eventos de sistema. */
   title?: string | null;
+  /** Rótulo no topo da nota. Padrão: "Nota interna". */
+  label?: string;
 }
 
 /**
@@ -1280,7 +1284,7 @@ function DesktopMessagesList() {
         .from('messages')
         .select(`
           id, content, direction, sent_at, whatsapp_status, whatsapp_message_sid, media_urls, media_type, error_message, error_code, reply_to_message_id,
-          sender_type, sender_name, sender_agent_id, sender_user_id, metadata, endpoint_id, edited_at, edit_count,
+          sender_type, sender_name, sender_agent_id, sender_user_id, metadata, endpoint_id, edited_at, edit_count, is_internal_note,
           reply_to_message:reply_to_message_id (content, direction)
         `)
         .eq('thread_id', threadId)
@@ -2418,7 +2422,19 @@ function DesktopMessagesList() {
                             const itemDateOf = (i: ChatItem) =>
                               i._type === 'message' ? i.data.sent_at : i.data.occurred_at;
                             const chatItems: ChatItem[] = [
-                              ...messages.map((m) => ({ _type: 'message' as const, data: m })),
+                              ...messages.filter((m) => !m.is_internal_note).map((m) => ({ _type: 'message' as const, data: m })),
+                              // Nota gravada como mensagem (resumo do agente): aparece como nota, nunca como balão do cliente.
+                              ...messages.filter((m) => m.is_internal_note).map((m) => ({
+                                _type: 'note' as const,
+                                data: {
+                                  id: m.id,
+                                  body: m.content,
+                                  occurred_at: m.sent_at,
+                                  created_by_user_id: m.sender_user_id ?? null,
+                                  author_name: m.sender_name ?? undefined,
+                                  label: m.sender_agent_id && m.sender_name ? `Resumo de ${m.sender_name} para a equipe` : 'Nota interna',
+                                } as InlineNote,
+                              })),
                               ...inlineNotes.map((n) => ({ _type: 'note' as const, data: n })),
                               ...timelineEvents.map((e) => ({ _type: 'event' as const, data: e })),
                             ].sort((a, b) => {
@@ -2606,7 +2622,7 @@ function DesktopMessagesList() {
                                     <div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700">
                                       <div className="flex items-center gap-1 mb-1">
                                         <NotePencil className="w-3 h-3 text-yellow-600 dark:text-yellow-400" />
-                                        <span className="text-[10px] font-medium text-yellow-600 dark:text-yellow-400">Nota interna</span>
+                                        <span className="text-[10px] font-medium text-yellow-600 dark:text-yellow-400">{note.label ?? 'Nota interna'}</span>
                                       </div>
                                       <p className="text-sm whitespace-pre-wrap break-all text-yellow-900 dark:text-yellow-100">
                                         {note.body}
@@ -2833,11 +2849,11 @@ function DesktopMessagesList() {
                                     {/* Footer — operador humano (quando houver), horário e status
                                         no fim do grupo (áudio-only renderiza dentro do player) */}
                                     {!(message.media_type === 'audio') && isGroupEnd && (() => {
+                                      // Operador humano ou agente de IA: quem mandou fica visível para a equipe.
                                       const humanSenderName =
                                         isOutbound &&
-                                        message.sender_type === 'user' &&
-                                        message.sender_user_id &&
-                                        message.sender_name?.trim()
+                                        message.sender_name?.trim() &&
+                                        ((message.sender_type === 'user' && message.sender_user_id) || message.sender_type === 'agent')
                                           ? message.sender_name.trim()
                                           : null;
                                       return (
