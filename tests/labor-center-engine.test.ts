@@ -84,7 +84,12 @@ describe('perguntas e premissas', () => {
     expect(r.pending).toEqual([]);
     expect(r.confidence).toBe('completo');
     expect(r.range!.low / r.total).toBeCloseTo(0.85);
-    expect(pedido(r, 'rescisorias').status).toBe('sem_direito');
+    const sv = pedido(r, 'rescisorias');
+    expect(sv.status).toBe('sem_direito');
+    // recebeu tudo: as verbas aparecem e o recebido zera o "a cobrar"
+    expect(sv.lines.some((l) => l.label.startsWith('Aviso prévio'))).toBe(true);
+    expect(sv.lines.at(-1)!.label).toBe('Já recebido na rescisão');
+    expect(sv.total).toBeCloseTo(0, 6);
     expect(pedido(r, 'fgts').status).toBe('sem_direito');
   });
 

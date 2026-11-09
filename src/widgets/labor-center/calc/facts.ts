@@ -81,7 +81,7 @@ export const FACTS: FactDef[] = [
     key: 'remuneracao_variavel', group: 'contrato', kind: 'money', impact: 2, label: 'Comissões / por fora (R$/mês)',
     question: 'Recebia comissão, prêmio ou algum valor por fora? Quanto por mês, em média?',
     why: 'Valor habitual integra a base da hora extra e dos reflexos.',
-    premise: () => ({ value: 0, label: 'sem variável' }),
+    premise: () => ({ value: 0, label: 'sem comissão/por fora' }),
   },
   {
     key: 'admissao', group: 'contrato', kind: 'date', impact: 3, label: 'Admissão',
@@ -121,14 +121,14 @@ export const FACTS: FactDef[] = [
     premise: (p) => {
       const t = termination(p);
       const v: NoticeKind = t ? defaultNotice(t) : 'indenizado';
-      return { value: v, label: NOTICE_LABEL[v].toLowerCase() };
+      return { value: v, label: `aviso ${NOTICE_LABEL[v].toLowerCase()}` };
     },
   },
   {
     key: 'jornada_contratual', group: 'contrato', kind: 'number', impact: 2, label: 'Jornada na carteira (h/semana)',
     question: 'Quantas horas por semana estavam na carteira? (Normalmente 44.)',
     why: 'Define o divisor da hora e a partir de quando é hora extra.',
-    premise: () => ({ value: 44, label: '44h semanais' }),
+    premise: () => ({ value: 44, label: '44h semanais na carteira' }),
   },
 
   // Jornada real
@@ -157,13 +157,13 @@ export const FACTS: FactDef[] = [
     key: 'domingos_feriados', group: 'jornada', kind: 'number', impact: 2, label: 'Domingos/feriados por mês',
     question: 'Trabalhava domingo ou feriado sem folgar em outro dia? Quantos por mês?',
     why: 'Pagos em dobro (100%).',
-    premise: () => ({ value: 0, label: 'nenhum' }),
+    premise: () => ({ value: 0, label: 'sem domingos/feriados' }),
   },
   {
     key: 'he_pagas', group: 'jornada', kind: 'number', impact: 2, label: 'Horas extras já pagas (h/mês)',
     question: 'A empresa pagava alguma hora extra no holerite? Quantas por mês, mais ou menos?',
     why: 'É descontado do que se cobra.',
-    premise: () => ({ value: 0, label: 'nenhuma paga' }),
+    premise: () => ({ value: 0, label: 'nenhuma hora extra paga' }),
   },
   {
     key: 'noturno_pago', group: 'jornada', kind: 'bool', impact: 1, label: 'Recebia adicional noturno?',
@@ -174,7 +174,7 @@ export const FACTS: FactDef[] = [
       const end = parseTime(p('saida_expediente'));
       return start != null && end != null && nightMinutesPerDay({ start, end }) > 0;
     },
-    premise: () => ({ value: false, label: 'não recebia' }),
+    premise: () => ({ value: false, label: 'não recebia adicional noturno' }),
   },
 
   // Condições
@@ -189,27 +189,27 @@ export const FACTS: FactDef[] = [
       { value: '20', label: 'Sim, grau médio (20%)' },
       { value: '40', label: 'Sim, grau máximo (40%)' },
     ],
-    premise: () => ({ value: 'nao', label: 'sem exposição' }),
+    premise: () => ({ value: 'nao', label: 'sem insalubridade' }),
   },
   {
     key: 'insalubridade_paga', group: 'adicionais', kind: 'bool', impact: 2, label: 'Recebia insalubridade?',
     question: 'Vinha adicional de insalubridade no holerite?',
     why: 'Se não vinha, é pedido; se vinha, só entra na base da hora.',
     relevant: (p) => p('insalubridade') != null && p('insalubridade') !== 'nao',
-    premise: () => ({ value: false, label: 'não recebia' }),
+    premise: () => ({ value: false, label: 'não recebia insalubridade' }),
   },
   {
     key: 'periculosidade', group: 'adicionais', kind: 'bool', impact: 2, label: 'Periculosidade',
     question: 'Trabalhava com inflamáveis, eletricidade, explosivos, segurança armada ou de moto?',
     why: 'Adicional de 30% do salário. Não se acumula com insalubridade.',
-    premise: () => ({ value: false, label: 'sem risco' }),
+    premise: () => ({ value: false, label: 'sem periculosidade' }),
   },
   {
     key: 'periculosidade_paga', group: 'adicionais', kind: 'bool', impact: 2, label: 'Recebia periculosidade?',
     question: 'Vinha adicional de periculosidade no holerite?',
     why: 'Se não vinha, é pedido; se vinha, só entra na base da hora.',
     relevant: (p) => p('periculosidade') === true,
-    premise: () => ({ value: false, label: 'não recebia' }),
+    premise: () => ({ value: false, label: 'não recebia periculosidade' }),
   },
 
   // Rescisão e FGTS
@@ -219,7 +219,7 @@ export const FACTS: FactDef[] = [
     why: 'Rescisão não paga vira pedido inteiro.',
     options: [{ value: 'total', label: 'Recebeu tudo' }, { value: 'parcial', label: 'Recebeu uma parte' }, { value: 'nao', label: 'Não recebeu' }],
     relevant: left,
-    premise: () => ({ value: 'total', label: 'recebeu tudo' }),
+    premise: () => ({ value: 'total', label: 'recebeu a rescisão toda' }),
   },
   {
     key: 'valor_recebido', group: 'rescisao', kind: 'money', impact: 2, label: 'Quanto recebeu (R$)',
@@ -232,21 +232,21 @@ export const FACTS: FactDef[] = [
     question: 'A rescisão foi paga em até 10 dias depois da saída?',
     why: 'Atraso gera multa de 1 salário (art. 477).',
     relevant: (p) => left(p) && p('rescisao_recebida') !== 'nao',
-    premise: () => ({ value: true, label: 'pagou no prazo' }),
+    premise: () => ({ value: true, label: 'rescisão paga no prazo' }),
   },
   {
     key: 'ferias_vencidas', group: 'rescisao', kind: 'int', impact: 2, label: 'Férias não tiradas (períodos)',
     question: 'Teve algum ano em que ficou sem tirar férias? Quantos?',
     why: 'Cada período não gozado vale 1 salário + 1/3.',
     relevant: ended,
-    premise: () => ({ value: 0, label: 'tirou todas' }),
+    premise: () => ({ value: 0, label: 'tirou todas as férias' }),
   },
   {
     key: 'fgts_depositado', group: 'rescisao', kind: 'enum', impact: 2, label: 'FGTS depositado?',
     question: 'A empresa depositava o seu FGTS certinho? (Dá para ver no app do FGTS.)',
     why: 'FGTS não depositado é pedido, com multa de 40% se foi mandado embora.',
     options: [{ value: 'sim', label: 'Sim, todo mês' }, { value: 'parcial', label: 'Faltam meses' }, { value: 'nao', label: 'Não depositava' }],
-    premise: () => ({ value: 'sim', label: 'depositava' }),
+    premise: () => ({ value: 'sim', label: 'FGTS depositado' }),
   },
   {
     key: 'meses_sem_fgts', group: 'rescisao', kind: 'number', impact: 2, label: 'Meses sem FGTS',
@@ -259,6 +259,8 @@ export const FACTS: FactDef[] = [
     question: 'Quanto tem de saldo no FGTS desse emprego? (Aparece no app do FGTS.)',
     why: 'Base da multa de 40%. Sem ele, o saldo é estimado.',
     relevant: ended,
+    // O motor lê só o valor confirmado; a premissa aqui serve para mostrar o que acontece se ficar vazio.
+    premise: () => ({ value: null, label: 'estimado pelo salário' }),
   },
 ];
 

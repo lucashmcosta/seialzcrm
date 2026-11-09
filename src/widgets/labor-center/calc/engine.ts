@@ -374,12 +374,19 @@ export function calcularCaso(input: CaseInput): CaseResult {
         `Saída projetada: ${fmtDate(sv.projectedExit)}`,
         `Saldo FGTS ${saldo != null ? 'informado' : 'estimado'}: ${brl(fgtsBase)}`,
       ];
-      if (paid === 'total' && onTime) push('rescisorias', { status: 'sem_direito', note: 'Rescisão recebida no prazo.', premises: [...own] });
-      else if (paid === 'total') {
-        push('rescisorias', { status: 'calculado', lines: sv.lines.filter((l) => l.label.startsWith('Multa art. 477')), memory: ['Rescisão paga com atraso: multa de 1 remuneração (art. 477 §8º).'], premises: [...own] });
+      // Sempre mostra as verbas devidas; o que foi recebido entra como desconto e sobra o "a cobrar".
+      const fine477 = sv.lines.find((l) => l.label.startsWith('Multa art. 477'))?.value ?? 0;
+      const dueWithoutFine = sv.total - fine477;
+      if (paid === 'total') {
+        const lines = [...sv.lines, { label: 'Já recebido na rescisão', value: -dueWithoutFine }];
+        push('rescisorias', {
+          status: fine477 ? 'calculado' : 'sem_direito', lines,
+          note: fine477 ? 'Recebeu a rescisão com atraso: a cobrar só a multa do art. 477.' : 'Recebeu a rescisão no prazo: nada a cobrar.',
+          memory, premises: [...own],
+        });
       } else if (paid === 'parcial') {
         const received = r.confirmed('valor_recebido') as number | undefined;
-        if (received == null) push('rescisorias', { status: 'pendente', missing: ['valor_recebido'], note: 'Falta quanto recebeu.' });
+        if (received == null) push('rescisorias', { status: 'pendente', lines: sv.lines, missing: ['valor_recebido'], note: 'Falta quanto recebeu.', memory });
         else push('rescisorias', {
           status: 'calculado',
           lines: [...sv.lines, { label: 'Já recebido', value: -Math.min(received, sv.total) }],
@@ -435,11 +442,10 @@ export function calcularCaso(input: CaseInput): CaseResult {
     confidenceReason = `Faltam: ${missingRequired.map((k) => FACT_BY_KEY.get(k)!.label.toLowerCase()).join(', ') || 'datas do contrato'}.`;
   } else if (unresolved.length || pendingPedidos.length) {
     confidence = 'parcial';
-    const bits = [
-      ...unresolved.map((x) => `${x.label.toLowerCase()} presumido (${x.assumed})`),
-      ...pendingPedidos.map((x) => `${x.label.toLowerCase()} sem dados`),
-    ];
-    confidenceReason = bits.join('; ') + '.';
+    const bits: string[] = [];
+    if (unresolved.length) bits.push(`${unresolved.length} ${unresolved.length === 1 ? 'informação presumida' : 'informações presumidas'}`);
+    if (pendingPedidos.length) bits.push(`${pendingPedidos.length} ${pendingPedidos.length === 1 ? 'cálculo sem dados' : 'cálculos sem dados'}`);
+    confidenceReason = `${bits.join(' e ')}. Responda as perguntas para fechar a faixa.`;
   } else {
     confidence = 'completo';
     confidenceReason = 'Todos os fatos que mudam o valor foram respondidos.';
