@@ -1,3 +1,4 @@
+import { displayThreadStatus } from '@/lib/threadStatus';
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { useThreadPerms, DENY_CLOSE, DENY_ASSIGN } from '@/hooks/useThreadPerms';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
@@ -96,6 +97,7 @@ type ThreadFilter = 'mine' | 'unassigned' | 'all_open' | 'resolved';
 // ─── Helpers ─────────────────────────────────────────────────────
 const statusConfig: Record<string, { label: string; labelEn: string; dotColor: string; color: string }> = {
   open: { label: 'Aberta', labelEn: 'Open', color: 'text-green-700 dark:text-green-400', dotColor: 'bg-green-500' },
+  reply: { label: 'Responder', labelEn: 'Reply', color: 'text-green-700 dark:text-green-400', dotColor: 'bg-green-500' },
   in_progress: { label: 'Em atendimento', labelEn: 'In progress', color: 'text-blue-700 dark:text-blue-400', dotColor: 'bg-blue-500' },
   awaiting_client: { label: 'Aguardando', labelEn: 'Awaiting', color: 'text-amber-700 dark:text-amber-400', dotColor: 'bg-amber-500' },
   resolved: { label: 'Resolvida', labelEn: 'Resolved', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
@@ -732,7 +734,7 @@ export function MobileMessagesList() {
             ) : (
               <div className="divide-y divide-border">
                 {(filteredThreads || []).map((thread) => {
-                  const status = statusConfig[thread.status] || statusConfig.open;
+                  const status = statusConfig[displayThreadStatus(thread.status, thread.last_message_direction)] || statusConfig.open;
                   return (
                     <button
                       key={thread.id}
@@ -823,9 +825,9 @@ export function MobileMessagesList() {
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">{selectedThread?.contact_name}</p>
                 <div className="flex items-center gap-1">
-                  {selectedThread?.status && statusConfig[selectedThread.status] && (
-                    <span className={cn('text-[10px] font-medium', statusConfig[selectedThread.status].color)}>
-                      {locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn}
+                  {selectedThread?.status && statusConfig[displayThreadStatus(selectedThread.status, selectedThread.last_message_direction)] && (
+                    <span className={cn('text-[10px] font-medium', statusConfig[displayThreadStatus(selectedThread.status, selectedThread.last_message_direction)].color)}>
+                      {locale === 'pt-BR' ? statusConfig[displayThreadStatus(selectedThread.status, selectedThread.last_message_direction)].label : statusConfig[displayThreadStatus(selectedThread.status, selectedThread.last_message_direction)].labelEn}
                     </span>
                   )}
                   {isIn24hWindow && (
