@@ -1,3 +1,6 @@
+/** Texto padrão do aviso, igual ao de agent-gate.ts (conferido em tests/agent-gate.test.ts). */
+export const DEFAULT_HANDOFF_ACK = 'Recebi! Vou passar para uma pessoa da nossa equipe conferir, e ela continua com você aqui mesmo.';
+
 export type DistributionMode = 'all' | 'every_n' | 'percent' | 'daily_quota';
 
 export const DISTRIBUTION_LIMITS: Record<Exclude<DistributionMode, 'all'>, { min: number; max: number }> = {

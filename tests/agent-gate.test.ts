@@ -1,5 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { agentInputKind, decideAgentGate } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
+import { AGENT_HANDOFF_ACK, agentInputKind, decideAgentGate, handoffAckText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -22,4 +23,12 @@ Deno.test("só áudio é escutado; outra mídia vai para humano", () => {
   assertEquals(agentInputKind("audio"), "audio");
   assertEquals(agentInputKind("audio/ogg"), "audio");
   for (const m of ["image", "document", "video", "sticker"]) assertEquals(agentInputKind(m), "unsupported_media");
+});
+Deno.test("aviso da passagem é configurável e pode não existir", () => {
+  assertEquals(DEFAULT_HANDOFF_ACK, AGENT_HANDOFF_ACK);
+  assertEquals(handoffAckText(null), AGENT_HANDOFF_ACK);
+  assertEquals(handoffAckText(undefined), AGENT_HANDOFF_ACK);
+  assertEquals(handoffAckText("Vou revisar aqui e já te falo"), "Vou revisar aqui e já te falo");
+  assertEquals(handoffAckText(""), null);
+  assertEquals(handoffAckText("   "), null);
 });

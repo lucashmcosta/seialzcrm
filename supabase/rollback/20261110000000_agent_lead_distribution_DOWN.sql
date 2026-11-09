@@ -75,4 +75,4 @@ drop function if exists public.fn_agent_should_take(text, integer, bigint, integ
 alter table public.message_threads drop column if exists ai_agent_release_reason, drop column if exists ai_agent_released_at, drop column if exists ai_agent_id;
 alter table public.contacts drop column if exists ai_agent_id;
 alter table public.ai_agents drop constraint if exists ai_agents_distribution_value_check, drop constraint if exists ai_agents_distribution_mode_check;
-alter table public.ai_agents drop column if exists distribution_day_count, drop column if exists distribution_day, drop column if exists distribution_sequence, drop column if exists distribution_value, drop column if exists distribution_mode;
+alter table public.ai_agents drop column if exists handoff_ack_message, drop column if exists distribution_day_count, drop column if exists distribution_day, drop column if exists distribution_sequence, drop column if exists distribution_value, drop column if exists distribution_mode;

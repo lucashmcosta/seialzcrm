@@ -8,7 +8,7 @@ import { currentAiModel, pickAgentAiCredential } from "../_shared/intelligence/a
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
-import { AGENT_HANDOFF_ACK, agentInputKind, decideAgentGate } from "../_shared/intelligence/agent-gate.ts";
+import { agentInputKind, decideAgentGate, handoffAckText } from "../_shared/intelligence/agent-gate.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1632,7 +1632,8 @@ serve(async (req) => {
 
       const handOffWithAck = async (reason: string) => {
         await releaseToHuman(supabase, threadId, reason);
-        await dispatchWhatsAppSend({ organizationId, contactId, threadId, message: AGENT_HANDOFF_ACK, isAgentMessage: true, agentId: agent.id, senderName: agent.name });
+        const ack = handoffAckText(agent.handoff_ack_message);
+        if (ack) await dispatchWhatsAppSend({ organizationId, contactId, threadId, message: ack, isAgentMessage: true, agentId: agent.id, senderName: agent.name });
         return skip(reason);
       };
       const { data: latest } = await supabase.from('messages').select('id, media_type')

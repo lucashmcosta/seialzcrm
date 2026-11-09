@@ -6,7 +6,9 @@ alter table public.ai_agents
   add column if not exists distribution_value integer,
   add column if not exists distribution_sequence bigint not null default 0,
   add column if not exists distribution_day date,
-  add column if not exists distribution_day_count integer not null default 0;
+  add column if not exists distribution_day_count integer not null default 0,
+  -- Aviso à pessoa quando a conversa passa para humano. Nulo: texto padrão. Vazio: não envia.
+  add column if not exists handoff_ack_message text;
 
 alter table public.ai_agents drop constraint if exists ai_agents_distribution_mode_check;
 alter table public.ai_agents add constraint ai_agents_distribution_mode_check

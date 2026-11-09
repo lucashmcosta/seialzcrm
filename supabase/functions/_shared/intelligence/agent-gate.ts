@@ -23,3 +23,9 @@ export function agentInputKind(mediaType: string | null | undefined): AgentInput
 }
 
 export const AGENT_HANDOFF_ACK = "Recebi! Vou passar para uma pessoa da nossa equipe conferir, e ela continua com você aqui mesmo.";
+
+/** Nulo usa o texto padrão; em branco não envia nada. A passagem para humano acontece igual. */
+export function handoffAckText(configured: string | null | undefined): string | null {
+  if (configured === null || configured === undefined) return AGENT_HANDOFF_ACK;
+  return configured.trim() || null;
+}

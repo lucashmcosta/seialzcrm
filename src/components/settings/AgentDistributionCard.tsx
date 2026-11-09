@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { DISTRIBUTION_LIMITS, describeDistribution, isValidDistribution, type DistributionMode } from '@/lib/agentDistribution';
+import { DEFAULT_HANDOFF_ACK, DISTRIBUTION_LIMITS, describeDistribution, isValidDistribution, type DistributionMode } from '@/lib/agentDistribution';
 
 interface AgentRow {
   id: string;
@@ -17,6 +18,7 @@ interface AgentRow {
   is_enabled: boolean;
   distribution_mode: DistributionMode;
   distribution_value: number | null;
+  handoff_ack_message: string | null;
 }
 
 interface Stats {
@@ -38,13 +40,14 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
   const qc = useQueryClient();
   const [mode, setMode] = useState<DistributionMode>('all');
   const [value, setValue] = useState('');
+  const [ack, setAck] = useState('');
   const [saving, setSaving] = useState(false);
 
   const agentQuery = useQuery({
     queryKey: ['agent-distribution', organizationId],
     queryFn: async (): Promise<AgentRow | null> => {
       const { data, error } = await supabase.from('ai_agents')
-        .select('id, name, is_enabled, distribution_mode, distribution_value' as never)
+        .select('id, name, is_enabled, distribution_mode, distribution_value, handoff_ack_message' as never)
         .eq('organization_id', organizationId).eq('agent_type', 'sdr')
         .order('is_enabled', { ascending: false }).order('created_at', { ascending: false })
         .limit(1).maybeSingle();
@@ -68,6 +71,7 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
     if (!agent) return;
     setMode(agent.distribution_mode);
     setValue(agent.distribution_value === null ? '' : String(agent.distribution_value));
+    setAck(agent.handoff_ack_message ?? DEFAULT_HANDOFF_ACK);
   }, [agent]);
 
   // Sem agente na org, a tela de rodízio fica como sempre foi.
@@ -75,13 +79,15 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
 
   const parsed = value.trim() === '' ? null : Number(value);
   const valid = isValidDistribution(mode, parsed);
-  const dirty = mode !== agent.distribution_mode || (mode !== 'all' && parsed !== agent.distribution_value);
+  const dirty = mode !== agent.distribution_mode
+    || (mode !== 'all' && parsed !== agent.distribution_value)
+    || ack !== (agent.handoff_ack_message ?? DEFAULT_HANDOFF_ACK);
 
   const save = async () => {
     if (!valid) return;
     setSaving(true);
     const { error } = await supabase.from('ai_agents')
-      .update({ distribution_mode: mode, distribution_value: mode === 'all' ? null : parsed } as never)
+      .update({ distribution_mode: mode, distribution_value: mode === 'all' ? null : parsed, handoff_ack_message: ack.trim() } as never)
       .eq('id', agent.id);
     setSaving(false);
     if (error) {
@@ -132,9 +138,16 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
               />
             </div>
           )}
-          <Button onClick={save} disabled={!valid || !dirty || saving}>Salvar</Button>
         </div>
         <p className="text-sm text-muted-foreground">{describeDistribution(mode, parsed)}</p>
+        <div className="space-y-1.5">
+          <Label htmlFor="agent-handoff-ack">Aviso quando o agente não consegue seguir</Label>
+          <Textarea id="agent-handoff-ack" rows={2} value={ack} onChange={(e) => setAck(e.target.value)} />
+          <p className="text-xs text-muted-foreground">
+            Enviado ao passar para uma pessoa quando chega documento ou um áudio que ele não entendeu. Deixe em branco para não enviar nada. A conversa passa para a equipe do mesmo jeito.
+          </p>
+        </div>
+        <Button onClick={save} disabled={!valid || !dirty || saving}>Salvar</Button>
         {!roundRobinEnabled && (
           <p className="text-sm text-amber-700">
             O rodízio está desligado: a conversa passada pelo agente fica marcada para atenção, sem vendedor definido.
