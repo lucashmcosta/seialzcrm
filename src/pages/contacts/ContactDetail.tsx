@@ -1,3 +1,4 @@
+import { AdImage } from '@/components/contacts/AdOriginCard';
 import { CustomFieldsCard } from '@/components/custom-fields/CustomFieldsCard';
 import { CommercialAttributionPanel } from '@/components/commercial/CommercialAttributionPanel';
 import { useEffect, useState } from 'react';
@@ -182,7 +183,7 @@ export default function ContactDetail() {
     if (data?.marketing_campaign_id) {
       const { data: mc } = await supabase
         .from('marketing_campaigns')
-        .select('id, display_name, ad_name, adset_name, campaign_name')
+        .select('id, display_name, ad_name, adset_name, campaign_name, creative_thumbnail_url')
         .eq('id', data.marketing_campaign_id)
         .maybeSingle();
       setCampaign(mc);
@@ -954,13 +955,14 @@ export default function ContactDetail() {
                       </div>
                     )}
                   </div>
-                  {contact.ad_referral_media_url && (
+                  {(contact.ad_referral_media_url || campaign?.creative_thumbnail_url) && (
                     <div className="mt-4">
                       <div className="text-sm text-muted-foreground mb-2">Imagem do Anúncio</div>
-                      <img 
-                        src={contact.ad_referral_media_url} 
-                        alt="Anúncio" 
-                        className="rounded-lg max-w-xs max-h-48 object-cover border border-border"
+                      <AdImage
+                        mediaUrl={contact.ad_referral_media_url}
+                        thumbnailUrl={campaign?.creative_thumbnail_url}
+                        className="h-24 w-24 rounded-lg object-cover border border-border"
+                        fallback={<div className="text-sm text-muted-foreground">Imagem não disponível. Use o link para abrir o anúncio.</div>}
                       />
                     </div>
                   )}
