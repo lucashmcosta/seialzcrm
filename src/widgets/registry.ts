@@ -1,8 +1,8 @@
 import { Calculator, GridNine, PawPrint, Scales } from '@phosphor-icons/react';
 import type { WidgetDefinition } from './types';
-import { OvertimeCalculatorWidget } from './overtime-calculator/OvertimeCalculatorWidget';
+import { LaborCenterWidget } from './labor-center/LaborCenterWidget';
 import { TicTacToeWidget } from './tic-tac-toe/TicTacToeWidget';
-import { OvertimePreview } from './overtime-calculator/OvertimePreview';
+import { LaborCenterPreview } from './labor-center/LaborCenterPreview';
 import { TicTacToePreview } from './tic-tac-toe/TicTacToePreview';
 import { ProcessClassificationWidget } from './process-classification/ProcessClassificationWidget';
 import { ProcessClassificationPreview } from './process-classification/ProcessClassificationPreview';
@@ -15,13 +15,14 @@ import { PlamevQuotePreview } from './plamev-quote/PlamevQuotePreview';
  */
 export const WIDGET_REGISTRY: WidgetDefinition[] = [
   {
+    // Chave mantida do antigo "Calculadora de Horas Extras": orgs que já ligaram (organization_widgets) e pins seguem valendo.
     key: 'overtime_calculator',
-    name: 'Calculadora de Horas Extras',
-    description: 'Estimativa simples do valor de horas extras a partir do salário mensal.',
+    name: 'Central Trabalhista',
+    description: 'Prescrição, horas extras, adicionais, intervalo, rescisão e FGTS, com perguntas ao lead, premissas e faixa de valor.',
     icon: Calculator,
     contextMode: 'none',
-    Component: OvertimeCalculatorWidget,
-    Preview: OvertimePreview,
+    Component: LaborCenterWidget,
+    Preview: LaborCenterPreview,
   },
   {
     key: 'tic_tac_toe',

@@ -1,5 +1,5 @@
 /** Prévia estática (galeria). Não importa o widget funcional. */
-export function OvertimePreview() {
+export function LaborCenterPreview() {
   return (
     <div className="w-[150px] space-y-1.5 rounded-[6px] border border-border bg-card p-2.5 shadow-sm">
       <div className="h-2 w-16 rounded-[6px] bg-muted" />
