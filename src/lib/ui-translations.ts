@@ -1430,3 +1430,6 @@ Object.assign(uiEnglish, {
   '{0} chamadas sem custo estimado não entram neste valor.': '{0} calls without an estimated cost are not included in this amount.',
   'Estimativa por uso. A fatura do provedor pode ser um pouco diferente.': 'Usage-based estimate. Your provider invoice may differ slightly.',
 });
+
+// Transcrição embaixo do player de áudio
+Object.assign(uiEnglish, { 'Transcrição': 'Transcript', 'Ver menos': 'Show less', 'Ver mais': 'Show more' });

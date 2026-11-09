@@ -16,7 +16,7 @@ import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateAudioCostUsd } from "../_shared/intelligence/pricing.ts";
 import { getIntelligenceSettings, shouldTranscribe } from "../_shared/intelligence/settings.ts";
 import { isLikelyHallucination } from "../_shared/intelligence/analyze-prompt.ts";
-import { audioContentType, deepgramAudioQuery, parseDeepgramAudio } from "../_shared/intelligence/deepgram-audio.ts";
+import { audioContentType, deepgramAudioQuery, isLowConfidence, parseDeepgramAudio } from "../_shared/intelligence/deepgram-audio.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
 
   const callOnce = async (
     p: typeof provider,
-  ): Promise<{ ok: true; text: string; raw: any; durationSec: number; model?: string } | { ok: false; status: number; rawBody: string }> => {
+  ): Promise<{ ok: true; text: string; raw: any; durationSec: number; model?: string; confidence?: number | null } | { ok: false; status: number; rawBody: string }> => {
     if (p.provider === "deepgram") {
       const r = await fetch(`https://api.deepgram.com/v1/listen?${deepgramAudioQuery(p.model)}`, {
         method: "POST",
@@ -184,6 +184,36 @@ Deno.serve(async (req) => {
   }
 
   const text = result.text;
+  const usedModel = result.model ?? provider.model;
+  const cost = await estimateAudioCostUsd(admin, provider.provider, usedModel, result.durationSec || 30);
+  const logUsage = () => logAiUsage(admin, {
+    organization_id,
+    provider: provider.provider,
+    model: usedModel,
+    source: usedSource,
+    action: "transcribe_audio",
+    integration_slug: provider.provider,
+    estimated_cost_usd: cost,
+    entity_type: "message",
+    entity_id: msg.id,
+    job_id: job_id ?? null,
+  });
+
+  // Áudio inaudível: o provedor cobrou, mas o texto é duvidoso. Não vai para a tela nem para
+  // a análise. O texto bruto fica em raw_response para calibrar o corte.
+  if (isLowConfidence(result.confidence)) {
+    await admin.from("audio_transcriptions").upsert({
+      message_id: msg.id,
+      organization_id: msg.organization_id,
+      version: TRANSCRIPTION_VERSION,
+      provider: provider.provider,
+      language: "por",
+      transcript: "",
+      raw_response: { ...result.raw, _filtered: "low_confidence" },
+    }, { onConflict: "message_id,version" });
+    await logUsage();
+    return json({ ok: true, skipped: "low_confidence", confidence: result.confidence });
+  }
 
   // Anti-hallucination: descarta transcripts boilerplate (Amara.org, etc.)
   if (isLikelyHallucination(text)) {
@@ -221,20 +251,7 @@ Deno.serve(async (req) => {
     idempotency_key: `analyze:${msg.id}:after_transcribe`,
   });
 
-  const usedModel = result.model ?? provider.model;
-  const cost = await estimateAudioCostUsd(admin, provider.provider, usedModel, result.durationSec || 30);
-  await logAiUsage(admin, {
-    organization_id,
-    provider: provider.provider,
-    model: usedModel,
-    source: usedSource,
-    action: "transcribe_audio",
-    integration_slug: provider.provider,
-    estimated_cost_usd: cost,
-    entity_type: "message",
-    entity_id: msg.id,
-    job_id: job_id ?? null,
-  });
+  await logUsage();
 
   return json({ ok: true, chars: text.length, source: usedSource });
 });
