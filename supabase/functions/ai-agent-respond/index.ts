@@ -7,6 +7,8 @@ import { byokBudgetExceeded, markByokInvalid, readSecretPayload } from "../_shar
 import { currentAiModel, pickAgentAiCredential } from "../_shared/intelligence/agent-ai-credential.ts";
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
+import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
+import { agentInputKind, decideAgentGate, handoffAckText } from "../_shared/intelligence/agent-gate.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -136,6 +138,7 @@ Exemplo de uso: Após enviar "Posso confirmar seu nome completo?", chame esta to
         type: "object",
         properties: {
           reason: { type: "string", description: "Motivo da transferência para o atendente" },
+          summary: { type: "string", description: "Resumo para a pessoa da equipe continuar sem repetir perguntas: situação do cliente, o que já foi respondido e explicado, dúvidas e próximo passo combinado" },
         },
       },
     },
@@ -301,6 +304,12 @@ Exemplo de uso: Após enviar "Posso confirmar seu nome completo?", chame esta to
 /**
  * Execute a tool call and return the result
  */
+async function releaseToHuman(supabase: any, threadId: string, reason: string, summary?: string) {
+  const { error } = await supabase.rpc('fn_agent_release_thread', { _thread: threadId, _reason: reason, _summary: summary ?? null });
+  if (error) console.error('Error releasing thread to human:', reason, error.message);
+  return { error };
+}
+
 async function executeTool(
   supabase: any,
   toolName: string,
@@ -523,16 +532,11 @@ async function executeTool(
       }
 
       case 'transfer_to_human': {
-        const { error } = await supabase
-          .from('message_threads')
-          .update({ needs_human_attention: true })
-          .eq('id', context.threadId);
-
+        const { error } = await releaseToHuman(supabase, context.threadId, args.reason || 'transfer_to_human', args.summary);
         if (error) {
-          console.error('Error transferring to human:', error);
           return { success: false, message: error.message };
         }
-        return { success: true, message: 'Conversa marcada para atenção humana' };
+        return { success: true, message: 'Conversa passada para uma pessoa da equipe' };
       }
 
       case 'schedule_meeting': {
@@ -1209,14 +1213,18 @@ function buildSystemPrompt(
     custom: 'Siga as instruções personalizadas fornecidas.',
   };
 
-  let prompt = `Você é ${agent.name}, um assistente virtual de vendas (SDR).
-
+  // Com instruções próprias, tom e objetivo vêm delas; os textos padrão só atrapalhariam.
+  let prompt = `Você é ${agent.name}, um assistente virtual.
+`;
+  if (!agent.custom_instructions) {
+    prompt += `
 ## TOM DA CONVERSA
 ${toneDescriptions[agent.tone] || toneDescriptions.professional}
 
 ## OBJETIVO PRINCIPAL
 ${goalDescriptions[agent.goal] || goalDescriptions.qualify_lead}
 `;
+  }
 
   if (agent.custom_instructions) {
     prompt += `
@@ -1269,11 +1277,8 @@ ${agent.custom_instructions}
    Este nome veio do WhatsApp e provavelmente NÃO é o nome real.
    
    📋 O QUE FAZER:
-   1. Na sua PRIMEIRA resposta, inclua naturalmente uma pergunta sobre o nome
-      Exemplos:
-      - "Antes de continuar, posso confirmar seu nome completo para nosso cadastro?"
-      - "Para te atender melhor, qual seu nome completo?"
-      - "Com quem estou falando? Gostaria de saber seu nome completo."
+   1. Pergunte o nome uma vez, quando fizer sentido na conversa, sem atrapalhar o objetivo do atendimento
+      Exemplo: "Com quem estou falando?"
    
    2. IMEDIATAMENTE após perguntar, use a tool mark_name_asked
    
@@ -1465,19 +1470,19 @@ ${item.content}
 ## 🚨 REGRA ANTI-ALUCINAÇÃO - PRIORIDADE MÁXIMA
 ⚠️ ESTA REGRA TEM PRECEDÊNCIA SOBRE TODAS AS OUTRAS:
 
-1. Se o "Conhecimento Relevante" (RAG_CONTEXT) acima estiver VAZIO ou NÃO mencionar o assunto perguntado:
+1. Se nem as INSTRUÇÕES PERSONALIZADAS nem o "Conhecimento Relevante" (RAG_CONTEXT) acima tratarem do assunto perguntado:
    → NÃO invente preços, valores, prazos, processos ou serviços
    → NÃO finja que oferecemos serviços que não estão documentados
    → Responda EXATAMENTE: "Não tenho informações sobre isso na minha base de conhecimento. Posso ajudar com os serviços que oferecemos?"
 
-2. Se o cliente perguntar sobre serviço que NÃO aparece no RAG_CONTEXT:
+2. Se o cliente perguntar sobre serviço que NÃO aparece nas instruções nem no RAG_CONTEXT:
    → NÃO invente que oferecemos o serviço
    → NÃO invente preços ou processos
    → Diga que vai verificar com a equipe ou liste apenas os serviços que aparecem na base
 
-3. NUNCA responda sobre: Green Card, EB1, EB2, EB3, EB4, EB5, vistos de trabalho (H1B, L1, O1), vistos de estudante (F1, J1), cidadania, processos de imigração permanente - A MENOS que estes estejam EXPLICITAMENTE no RAG_CONTEXT
 
 ## REGRAS IMPORTANTES
+Em caso de conflito com estas regras gerais, valem as INSTRUÇÕES PERSONALIZADAS.
 1. Responda APENAS com a mensagem para o cliente, sem explicações ou meta-comentários
 2. Mantenha respostas concisas (máximo 3 parágrafos curtos)
 3. Seja natural e humano na comunicação
@@ -1488,7 +1493,10 @@ ${item.content}
 8. Revise as ÚLTIMAS 3 mensagens do usuário para detectar correções ("não", "quis dizer", "na verdade")
 9. NUNCA use tags [BUTTONS] ou formate opções como lista numerada (1. 2. 3.)
 10. NUNCA ofereça "escolha uma opção" - responda de forma natural e fluída
+`;
 
+  if (enabledTools.includes('send_payment_link')) {
+    prompt += `
 ## ⛔ REGRAS CRÍTICAS DE PAGAMENTO - NUNCA VIOLE
 - NUNCA invente PIX, QR code, chave Pix, ou qualquer dado bancário
 - NUNCA invente links de pagamento ou checkout
@@ -1497,6 +1505,12 @@ ${item.content}
   → Se a ferramenta não retornar um link válido, diga: "Vou verificar com a equipe o link correto e já te envio!"
 - Palavras-chave que DEVEM acionar send_payment_link: "pix", "qr", "qrcode", "pagamento", "pagar", "link", "checkout", "como pago", "me manda o pix"
 `;
+  } else {
+    prompt += `
+## ⛔ DADOS DE PAGAMENTO
+- NUNCA invente Pix, QR code, chave Pix, link de pagamento ou dado bancário
+`;
+  }
 
   // Add formatting rules if configured
   const formattingRules = agent.formatting_rules as { max_consecutive_newlines?: number; strip_empty_lines?: boolean } | null;
@@ -1553,8 +1567,12 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
+  // Depois que o agente assumiu a conversa, qualquer falha passa para uma pessoa: lead nunca fica sem resposta.
+  let releaseOnFailure: ((reason: string) => Promise<unknown>) | null = null;
+
   try {
-    const { agentId, contactId, threadId, message, isTestMode }: AgentRequest = await req.json();
+    const { agentId, contactId, threadId, message: incomingMessage, isTestMode }: AgentRequest = await req.json();
+    let message = incomingMessage;
 
     console.log(`AI Agent processing - Agent: ${agentId}, Contact: ${contactId}, Thread: ${threadId}, TestMode: ${isTestMode}`);
 
@@ -1590,6 +1608,53 @@ serve(async (req) => {
           );
         }
       }
+    }
+
+    // Fora do teste, o agente só fala nas conversas que a distribuição deu a ele.
+    if (!isTestMode) {
+      const skip = (status: string) => new Response(JSON.stringify({ success: true, status }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const { data: threadState } = await supabase.from('message_threads')
+        .select('ai_agent_id, ai_agent_released_at, needs_human_attention, assigned_user_id')
+        .eq('id', threadId).maybeSingle();
+      const { count: humanReplies } = await supabase.from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('thread_id', threadId).eq('direction', 'outbound').eq('sender_type', 'user');
+      const gate = decideAgentGate(threadState, agentId, (humanReplies ?? 0) > 0);
+      if (gate === 'human_owns') {
+        await supabase.from('message_threads').update({ needs_human_attention: true, updated_at: new Date().toISOString() }).eq('id', threadId);
+        return skip('human_owns');
+      }
+      if (gate === 'take_over') {
+        await releaseToHuman(supabase, threadId, 'human_took_over');
+        return skip('human_took_over');
+      }
+      releaseOnFailure = (reason) => releaseToHuman(supabase, threadId, reason);
+
+      const handOffWithAck = async (reason: string) => {
+        await releaseToHuman(supabase, threadId, reason);
+        const ack = handoffAckText(agent.handoff_ack_message);
+        if (ack) await dispatchWhatsAppSend({ organizationId, contactId, threadId, message: ack, isAgentMessage: true, agentId: agent.id, senderName: agent.name });
+        return skip(reason);
+      };
+      const { data: latest } = await supabase.from('messages').select('id, media_type')
+        .eq('thread_id', threadId).eq('direction', 'inbound').is('deleted_at', null)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      const inputKind = agentInputKind(latest?.media_type);
+      if (inputKind === 'unsupported_media') return await handOffWithAck('unsupported_media');
+      if (inputKind === 'audio') {
+        // Pode rodar junto com a fila: a transcrição não duplica. Sem texto, passa para uma pessoa.
+        await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/transcribe-audio`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-worker-token': Deno.env.get('INTELLIGENCE_WORKER_TOKEN') ?? '' },
+          body: JSON.stringify({ message_id: latest!.id, organization_id: organizationId }),
+        }).catch((e) => console.error('Agent transcription call failed:', e));
+        const { data: transcription } = await supabase.from('audio_transcriptions').select('transcript')
+          .eq('message_id', latest!.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        const heard = (transcription?.transcript ?? '').trim();
+        if (!heard) return await handOffWithAck('audio_not_understood');
+        message = heard;
+      }
+      if (!message?.trim()) return skip('empty_message');
     }
 
     // Include mark_name_asked automatically when update_contact is enabled
@@ -1643,6 +1708,7 @@ serve(async (req) => {
     if (agentMessageCount && agentMessageCount >= maxMessages) {
       console.log(`Max messages reached for agent ${agentId}: ${agentMessageCount}/${maxMessages}`);
       
+      await releaseOnFailure?.('max_messages');
       await supabase.from('ai_agent_logs').insert({
         organization_id: organizationId,
         agent_id: agentId,
@@ -1688,11 +1754,12 @@ serve(async (req) => {
       // Message history - OPTIMIZED LIMIT to avoid rate limits
       supabase
         .from('messages')
-        .select('content, direction, created_at, sender_type')
+        .select('id, content, direction, media_type, created_at, sender_type')
         .eq('thread_id', threadId)
         .is('deleted_at', null)
+        .neq('direction', 'internal')
         .order('created_at', { ascending: false })
-        .limit(10),
+        .limit(20),
       
       // Contact memories - PERSISTENT MEMORY
       supabase
@@ -1731,6 +1798,7 @@ serve(async (req) => {
 
     const agentFailure = async (error: string, status: number) => {
       console.error(error);
+      await releaseOnFailure?.('agent_unavailable');
       await supabase.from('ai_agent_logs').insert({
         organization_id: organizationId,
         agent_id: agentId,
@@ -1866,10 +1934,19 @@ serve(async (req) => {
     const systemPrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories, retrievedKnowledge);
 
     // Build conversation messages for REAL memory - truncate long messages to save tokens
-    const conversationMessages = messageHistory.map(msg => ({
-      role: msg.direction === 'inbound' ? 'user' : 'assistant',
-      content: (msg.content || '').slice(0, 400),
-    }));
+    // Áudio entra no histórico pelo que foi dito, e não como "[Áudio]".
+    const audioIds = messageHistory.filter((m: any) => isAudioMessage(m.media_type)).map((m: any) => m.id);
+    const { data: heardAudios } = audioIds.length
+      ? await supabase.from('audio_transcriptions').select('message_id, transcript').in('message_id', audioIds)
+      : { data: [] as Array<{ message_id: string; transcript: string | null }> };
+    const heardById = new Map((heardAudios ?? []).map((a: any) => [a.message_id, a.transcript]));
+    const conversationMessages = messageHistory.map((msg: any) => {
+      const { content, source } = effectiveContent({ content: msg.content, mediaType: msg.media_type, transcript: heardById.get(msg.id) ?? null });
+      return {
+        role: msg.direction === 'inbound' ? 'user' : 'assistant',
+        content: (source === 'none' ? (msg.content || '') : content).slice(0, 1000),
+      };
+    });
 
     // Filter enabled tools
     const tools = AVAILABLE_TOOLS.filter(t => enabledTools.includes(t.function.name));
@@ -2339,6 +2416,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('AI Agent error:', error);
+    await releaseOnFailure?.('agent_error');
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -1080,7 +1080,8 @@ serve(async (req) => {
 
       const aiAgent = aiAgents?.[0]
 
-      if (aiAgent && threadId && body) {
+      // Sem texto também chama: áudio e documento são tratados pelo agente.
+      if (aiAgent && threadId) {
         console.log('AI Agent found:', aiAgent.id, '- triggering response...')
         
         // Invoke ai-agent-respond function (async, don't wait for response)
