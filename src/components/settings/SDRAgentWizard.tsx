@@ -44,6 +44,7 @@ interface ToolsTriggers {
   schedule_follow_up: string;
   send_payment_link: string;
   update_qualification: string;
+  end_conversation?: string;
 }
 
 interface ComplianceRules {
@@ -159,6 +160,7 @@ const AVAILABLE_TOOLS = [
   { id: 'schedule_follow_up', name: 'Agendar Follow-up', description: 'Agenda mensagem automática para data futura' },
   { id: 'send_payment_link', name: 'Enviar Link de Pagamento', description: 'Gera e envia link de pagamento' },
   { id: 'update_qualification', name: 'Atualizar Qualificação', description: 'Registra dados de qualificação do lead' },
+  { id: 'end_conversation', name: 'Encerrar conversa', description: 'Encerra quando o caso não se encaixa; reabre se o cliente voltar a escrever' },
 ];
 
 const STEPS = [
@@ -264,6 +266,7 @@ const DEFAULT_TOOLS_TRIGGERS: ToolsTriggers = {
   schedule_follow_up: 'Quando cliente pedir para ser contactado em data futura específica',
   send_payment_link: 'Quando cliente confirmar que deseja pagar ou pedir link',
   update_qualification: 'Quando coletar informações de qualificação (BANT, MEDDIC, etc.)',
+  end_conversation: 'Quando o caso não se encaixa e você já se despediu',
 };
 
 const initialWizardData: WizardData = {

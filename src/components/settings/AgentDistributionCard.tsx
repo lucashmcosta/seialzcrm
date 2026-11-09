@@ -28,6 +28,9 @@ interface AgentRow {
 interface Stats {
   agent_leads: number;
   agent_handed_off: number;
+  agent_closed?: number;
+  agent_followed_up?: number;
+  agent_replied_after_followup?: number;
   agent_won: number;
   human_leads: number;
   human_won: number;
@@ -213,7 +216,9 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
             <p className="mb-2 font-medium">Últimos 30 dias</p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1">
               <span className="text-muted-foreground">Com o agente</span>
-              <span>{stats.agent_leads} leads, {stats.agent_handed_off} passados, {stats.agent_won} ganhos</span>
+              <span>{stats.agent_leads} leads, {stats.agent_handed_off} passados, {stats.agent_closed ?? 0} encerrados pelo agente, {stats.agent_won} ganhos</span>
+              <span className="text-muted-foreground">Retomadas</span>
+              <span>{stats.agent_followed_up ?? 0} conversas retomadas, {stats.agent_replied_after_followup ?? 0} voltaram a responder</span>
               <span className="text-muted-foreground">Sem o agente</span>
               <span>{stats.human_leads} leads, {stats.human_won} ganhos</span>
             </div>

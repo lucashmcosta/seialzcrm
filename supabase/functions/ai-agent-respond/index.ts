@@ -150,6 +150,19 @@ Exemplo de uso: Após enviar "Posso confirmar seu nome completo?", chame esta to
   {
     type: "function",
     function: {
+      name: "end_conversation",
+      description: "Encerra a conversa quando o caso não se encaixa e você já se despediu. A conversa sai da lista de abertas; se o cliente voltar a escrever, ela reabre e você continua. Não use para passar para a equipe (use transfer_to_human).",
+      parameters: {
+        type: "object",
+        properties: {
+          reason: { type: "string", description: "Por que o caso não se encaixa (ex.: carteira assinada no nascimento e recebeu a licença)" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "schedule_meeting",
       description: "Agenda uma reunião ou demonstração com o cliente.",
       parameters: {
@@ -545,6 +558,17 @@ async function executeTool(
           return { success: false, message: error.message };
         }
         return { success: true, message: 'Tarefa criada com sucesso' };
+      }
+
+      case 'end_conversation': {
+        const { error } = await supabase.from('message_threads').update({
+          status: 'resolved',
+          resolved_at: new Date().toISOString(),
+          ai_agent_closed_at: new Date().toISOString(),
+          last_routing_decision: { action: 'agent_closed', reason: args.reason || 'caso não se encaixa', decided_at: new Date().toISOString() },
+        }).eq('id', context.threadId).not('ai_agent_id', 'is', null).is('ai_agent_released_at', null);
+        if (error) return { success: false, message: error.message };
+        return { success: true, message: 'Conversa encerrada' };
       }
 
       case 'transfer_to_human': {
