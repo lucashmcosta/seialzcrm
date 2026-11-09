@@ -2407,6 +2407,16 @@ serve(async (req) => {
       }
     }
 
+    // A nota da passagem é gravada quando a ferramenta roda, antes das últimas mensagens.
+    // Leva a nota para depois delas, para a equipe ler a conversa na ordem.
+    if (toolsExecuted.includes('transfer_to_human') && bubbles.length > 0) {
+      const { error: noteError } = await supabase.from('messages')
+        .update({ sent_at: new Date().toISOString() })
+        .eq('thread_id', threadId).eq('is_internal_note', true).eq('sender_agent_id', agent.id)
+        .gte('created_at', new Date(startTime).toISOString());
+      if (noteError) console.warn('[ai-agent-respond] não moveu a nota da passagem', noteError.message);
+    }
+
     // 9. Log successful interaction (with fallback info if applicable)
     await supabase.from('ai_agent_logs').insert({
       organization_id: organizationId,
