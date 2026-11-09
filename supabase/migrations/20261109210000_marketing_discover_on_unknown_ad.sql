@@ -11,7 +11,7 @@ ALTER TABLE public.marketing_ad_discovery_requests ENABLE ROW LEVEL SECURITY;
 
 -- Limites: anúncio que a Meta não devolve (de outra conta, por exemplo) só tenta de novo em 6 horas, e uma org não dispara
 -- mais de uma busca a cada 2 minutos, porque cada busca já traz todos os anúncios da conta.
--- Falha aqui nunca impede criar o contato: a rodada de hora em hora cobre.
+-- Falha aqui nunca impede criar o contato: a próxima rodada do dia cobre.
 CREATE OR REPLACE FUNCTION public.fn_discover_on_unknown_ad()
 RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
@@ -56,8 +56,9 @@ WHEN (NEW.ad_referral_source_type = 'ad' AND NEW.ad_referral_source_id IS NOT NU
       AND NEW.marketing_campaign_id IS NULL AND NEW.deleted_at IS NULL)
 EXECUTE FUNCTION public.fn_discover_on_unknown_ad();
 
--- De hora em hora: anúncios novos e números dos que estão ativos. A rodada diária segue revisando 3 dias de todos.
-SELECT cron.schedule('meta-discover-ads-hourly', '25 * * * *', $cron$
+-- Segunda rodada do dia (14h30 e 15h, horário de Brasília), para o limite da Meta: as de madrugada seguem como estão, e
+-- quem precisar antes aperta sincronizar na tela. Esta rodada traz só o dia corrente e o anterior dos anúncios ativos.
+SELECT cron.schedule('meta-discover-ads-tarde', '30 17 * * *', $cron$
   SELECT net.http_post(
     url := 'https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/meta-discover-ads-cron',
     headers := jsonb_build_object('Content-Type', 'application/json',
@@ -66,7 +67,7 @@ SELECT cron.schedule('meta-discover-ads-hourly', '25 * * * *', $cron$
     timeout_milliseconds := 300000
   );
 $cron$);
-SELECT cron.schedule('marketing-insights-sync-hourly', '30 * * * *', $cron$
+SELECT cron.schedule('marketing-insights-sync-tarde', '0 18 * * *', $cron$
   SELECT net.http_post(
     url := 'https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/marketing-insights-sync-daily',
     headers := jsonb_build_object('Content-Type', 'application/json',

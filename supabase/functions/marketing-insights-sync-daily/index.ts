@@ -253,7 +253,7 @@ serve(async (req) => {
     return json({ success: false, error_code: "unauthorized" }, 401);
   }
 
-  // only_active: rodada de hora em hora, só com o que está gastando.
+  // only_active: segunda rodada do dia, só com o que está gastando.
   let body: { organization_id?: string; days_back?: number; limit?: number; only_active?: boolean } = {};
   try {
     body = await req.json();

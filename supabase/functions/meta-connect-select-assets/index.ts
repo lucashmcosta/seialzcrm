@@ -121,7 +121,7 @@ serve(async (req) => {
     });
 
     // Conta de anúncio selecionada: traz anúncios e números na hora, sem esperar a rodada agendada. Em segundo plano,
-    // porque a resposta da tela não depende disso e, se falhar, a rodada de hora em hora resolve.
+    // porque a resposta da tela não depende disso e, se falhar, a próxima rodada do dia resolve.
     const adAccountSelected = (candidateAssets ?? []).some((a: any) => a.asset_type === 'ad_account' && selectedIds.has(a.id));
     if (adAccountSelected) EdgeRuntime.waitUntil(syncAdsNow(organization_id, authHeader));
 
