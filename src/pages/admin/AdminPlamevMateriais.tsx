@@ -18,13 +18,14 @@ import {
   ACEITA_MATERIAL, BUCKET_MATERIAIS, nomeArquivoMaterial, recusaMaterial, tamanhoLegivel, TIPOS_MATERIAL,
 } from '@/widgets/plamev-quote/materiais';
 import { PreviewMaterial, type MaterialPreview } from '@/widgets/plamev-quote/PreviewMaterial';
+import { TestarModelos, TextoDoMaterial, type MaterialTexto } from './PlamevMaterialTexto';
 
 // Admin — Materiais de apoio da Plamev (widget plamev_quote). São da Plamev, não de uma org: o que subir aqui aparece
 // na aba Materiais do widget de toda org com ele ligado. Tabela plamev_materials + bucket público plamev-materiais.
 // Remover (padrão) = soft delete: some daqui e do widget, o arquivo fica para as conversas que já receberam e dá para
 // restaurar. Excluir de vez só para material nunca enviado (plamev_material_excluir recusa o que já foi).
 
-interface Material {
+interface Material extends MaterialTexto {
   id: string; titulo: string; descricao: string; tipo: 'image' | 'document'; mime_type: string;
   storage_path: string; tamanho_bytes: number; ordem: number; ativo: boolean; created_at: string; updated_at: string;
   removido_em: string | null;
@@ -165,6 +166,7 @@ function LinhaMaterial({ m, podeSubir, podeDescer, mover, onVer, onExcluir }: {
           <span className="font-data">{m.storage_path.split('/').pop()}</span> · {tamanhoLegivel(m.tamanho_bytes)} ·{' '}
           {new Date(m.created_at).toLocaleDateString('pt-BR')}
         </div>
+        <TextoDoMaterial key={`${m.md_status}-${m.conteudo_md?.length ?? 0}`} m={m} chave={CHAVE} />
       </div>
       <div className="flex shrink-0 flex-col items-end gap-2">
         <label className="flex items-center gap-2 text-xs">
@@ -310,6 +312,8 @@ export default function AdminPlamevMateriais() {
       if (error) throw error;
       return (data ?? []) as Material[];
     },
+    // Conversão roda em segundo plano: acompanha até terminar.
+    refetchInterval: (q) => ((q.state.data as Material[] | undefined)?.some((m) => m.md_status === 'gerando') ? 5000 : false),
   });
   const todos = lista.data ?? [];
   const materiais = todos.filter((m) => !m.removido_em);
@@ -354,6 +358,7 @@ export default function AdminPlamevMateriais() {
             <Removidos materiais={removidos} proximaOrdem={proximaOrdem} onVer={setVendo} onExcluir={setExcluindo} />
           </CardContent>
         </Card>
+        <TestarModelos />
         <PreviewMaterial material={vendo ? preview(vendo) : null} onClose={() => setVendo(null)} />
         <ExcluirDeVez m={excluindo} onClose={() => setExcluindo(null)} />
       </div>
