@@ -15,6 +15,7 @@ import { SpinnerGap, Sparkle, ShieldCheck, ChartLine, Microphone, Gear, Key, War
 import { toast } from 'sonner';
 import { AIProvidersSettings } from './AIProvidersSettings';
 import { IntelligenceInsights } from './IntelligenceInsights';
+import { IntelligenceConversations } from './IntelligenceConversations';
 import { AnalysisProfileCard } from './AnalysisProfileCard';
 import { emptyProfile, type AnalysisProfileForm } from '@/lib/analysisProfile';
 import { useAIProviders } from '@/hooks/useAIProviders';
@@ -220,6 +221,7 @@ export function IntelligenceSettings() {
             <MetricCard label="Deals com snapshot" value={(overview?.won ?? 0) + (overview?.lost ?? 0) + (overview?.open ?? 0)} />
           </div>
 
+          {orgId && <IntelligenceConversations organizationId={orgId} />}
           {orgId && <IntelligenceInsights organizationId={orgId} />}
 
           <Card>
