@@ -1990,7 +1990,8 @@ serve(async (req) => {
 
     if (integrationSlug === 'claude-ai') {
       const model = configValues.default_model || 'claude-sonnet-5-5';
-      const maxTokens = 1024;
+      // A passagem para humano leva um resumo longo: com 1024 a resposta era cortada e vinha vazia.
+      const maxTokens = 4096;
       modelUsed = model;
 
       // Build messages with history
@@ -2213,7 +2214,7 @@ serve(async (req) => {
       // Modelos novos usam max_completion_tokens em vez de max_tokens
       // E precisam de mais tokens para reasoning + resposta
       const isNewModel = ['gpt-5', 'gpt-4.5', 'o1', 'o3'].some(prefix => model.startsWith(prefix));
-      const maxTokens = isNewModel ? 4096 : 1024;
+      const maxTokens = 4096;
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
