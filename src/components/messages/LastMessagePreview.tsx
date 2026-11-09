@@ -10,6 +10,7 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
+import { stripWhatsAppFormatting } from '@/lib/whatsappFormat';
 import {
   buildLastMessagePreview,
   type LastMessagePreviewInput,
@@ -26,7 +27,7 @@ export function LastMessagePreview({
   whatsappStatus,
   className,
 }: LastMessagePreviewInput & { className?: string }) {
-  const preview = buildLastMessagePreview({ content, direction, mediaType, whatsappStatus });
+  const preview = buildLastMessagePreview({ content: content ? stripWhatsAppFormatting(content) : content, direction, mediaType, whatsappStatus });
   if (!preview) return null;
 
   const MediaIcon =

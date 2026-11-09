@@ -43,6 +43,7 @@ import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { MediaPreviewDialog } from '@/components/whatsapp/MediaPreviewDialog';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
+import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { QuotedMessage } from '@/components/whatsapp/QuotedMessage';
 import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
@@ -1031,7 +1032,7 @@ export function MobileMessagesList() {
                                   metadata={message.metadata}
                                   content={message.content}
                                   isOutbound={message.direction === 'outbound'}
-                                  fallback={(c) => <p className="text-sm whitespace-pre-wrap break-all">{c}</p>}
+                                  fallback={(c) => <WhatsAppFormattedText content={c} />}
                                 />
                               )}
 

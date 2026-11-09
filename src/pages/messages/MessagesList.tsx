@@ -89,6 +89,7 @@ import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { MediaPreviewDialog } from '@/components/whatsapp/MediaPreviewDialog';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
+import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
 import { QuotedMessage } from '@/components/whatsapp/QuotedMessage';
 import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
@@ -2818,9 +2819,7 @@ function DesktopMessagesList() {
                                         metadata={message.metadata}
                                         content={message.content}
                                         isOutbound={message.direction === 'outbound'}
-                                        fallback={(c) => (
-                                          <p className="text-sm whitespace-pre-wrap break-all">{c}</p>
-                                        )}
+                                        fallback={(c) => <WhatsAppFormattedText content={c} />}
                                       />
                                     )}
 
