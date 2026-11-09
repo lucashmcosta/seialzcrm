@@ -238,6 +238,10 @@ const SYSTEM_ACTIVITY_TITLES = new Set(
   ].map((t) => t.toLowerCase()),
 );
 
+// "Devolver ao AI" é anterior à passagem do agente (ai_agent_released_at) e não a desfaz:
+// fica escondido até existir uma devolução que reverta a passagem com segurança.
+const RETURN_TO_AI_ENABLED = false;
+
 function isSystemActivity(title: string | null | undefined): boolean {
   if (!title) return false;
   return SYSTEM_ACTIVITY_TITLES.has(title.trim().toLowerCase());
@@ -287,9 +291,11 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
    * todo inbound (o selo não diz nada) — então só mostramos o aviso com IA ligada.
    */
   aiEnabled?: boolean;
+  /** Nome do agente de IA que está atendendo esta conversa agora (antes da passagem). */
+  agentName?: string | null;
 }
 
-const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = false, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = false, agentName = null, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -379,6 +385,18 @@ const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = fals
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
                 <span className="text-[10px] font-medium">{locale === 'pt-BR' ? 'Pediu humano' : 'Needs human'}</span>
+              </span>
+            </>
+          )}
+          {agentName && !value.assigned_user_name && (
+            <>
+              <span className="text-[10px] text-muted-foreground/60 shrink-0">·</span>
+              <span
+                className="inline-flex items-center gap-1 shrink-0 text-primary"
+                title={locale === 'pt-BR' ? `${agentName} está atendendo. Passa para a equipe quando precisar.` : `${agentName} is handling this conversation`}
+              >
+                <Robot className="h-3 w-3" />
+                <span className="text-[10px] font-medium truncate">{locale === 'pt-BR' ? `Com ${agentName}` : `With ${agentName}`}</span>
               </span>
             </>
           )}
@@ -645,6 +663,28 @@ function DesktopMessagesList() {
       setIsExporting(false);
     }
   };
+  // Conversas que um agente de IA está atendendo agora (ainda sem passagem para a equipe).
+  const { data: agentThreads } = useQuery({
+    queryKey: ['agent-active-threads', organization?.id],
+    enabled: !!organization?.id,
+    refetchInterval: 20_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('message_threads')
+        .select('id, ai_agent:ai_agent_id(name)' as never)
+        .eq('organization_id', organization!.id)
+        .not('ai_agent_id' as never, 'is', null)
+        .is('ai_agent_released_at' as never, null)
+        .limit(500);
+      if (error) return {} as Record<string, string>;
+      const map: Record<string, string> = {};
+      for (const row of (data ?? []) as unknown as Array<{ id: string; ai_agent: { name: string | null } | null }>) {
+        map[row.id] = (row.ai_agent?.name ?? 'agente').replace(/\s+AI$/i, '');
+      }
+      return map;
+    },
+  });
+
   // Check if organization has an active AI agent (controls "Return to AI" button)
   const { data: hasAIAgent } = useQuery({
     queryKey: ['org-has-ai-agent', organization?.id],
@@ -2160,6 +2200,7 @@ function DesktopMessagesList() {
                         value={thread}
                         rail={listRail}
                         aiEnabled={!!hasAIAgent}
+                        agentName={agentThreads?.[thread.id] ?? null}
                         locale={locale as 'pt-BR' | 'en-US'}
                         onHide={handleHideThread}
                         /* Badge visual: última mensagem -> primary_endpoint_id.
@@ -2302,7 +2343,7 @@ function DesktopMessagesList() {
                               {locale === 'pt-BR' ? 'Reabrir conversa' : 'Reopen'}
                             </DropdownMenuItem>
                           )}
-                          {selectedThread.needs_human_attention && hasAIAgent && (
+                          {RETURN_TO_AI_ENABLED && selectedThread.needs_human_attention && hasAIAgent && (
                             <DropdownMenuItem onClick={() => handleReturnToAI(selectedThread.id)}>
                               <Robot className="w-4 h-4 mr-2" />
                               {locale === 'pt-BR' ? 'Devolver ao AI' : 'Return to AI'}
@@ -3312,7 +3353,7 @@ function DesktopMessagesList() {
               canClose: threadPerms.canClose,
               denyAssignReason: DENY_ASSIGN,
               denyCloseReason: DENY_CLOSE,
-              showReturnToAI: !!selectedThread.needs_human_attention && !!hasAIAgent,
+              showReturnToAI: RETURN_TO_AI_ENABLED && !!selectedThread.needs_human_attention && !!hasAIAgent,
               onTakeOver: () => handleTakeOver(selectedThread.id),
               onAssign: (userId) => handleAssign(selectedThread.id, userId),
               onResolve: () => handleResolve(selectedThread.id),
