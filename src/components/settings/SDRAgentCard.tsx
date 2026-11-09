@@ -30,7 +30,6 @@ interface SDRAgentCardProps {
 
 const PROVIDER_LABELS: Record<string, string> = {
   'auto': 'Auto',
-  'lovable-ai': 'Lovable AI',
   'claude-ai': 'Claude',
   'openai-gpt': 'GPT',
 };

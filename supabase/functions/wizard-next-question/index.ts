@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { type ChatMessage, openOrgAi, OrgAiError, orgAiErrorResponse, type OrgAiChat } from "../_shared/intelligence/org-ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,6 +30,7 @@ interface WizardState {
 }
 
 interface WizardRequest {
+  organization_id?: string;
   wizardState: WizardState;
   userMessage: string;
   conversationHistory: Message[];
@@ -229,43 +231,6 @@ function formatCollectedKnowledge(state: WizardState): string {
   return parts.length > 0 ? parts.join('\n') : 'Nenhuma informação coletada ainda.';
 }
 
-async function callLovableAI(messages: Array<{ role: string; content: string }>): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY is not configured");
-  }
-
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages,
-      temperature: 0.7,
-      max_tokens: 2000,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("AI gateway error:", response.status, errorText);
-    
-    if (response.status === 429) {
-      throw new Error("RATE_LIMITED");
-    }
-    if (response.status === 402) {
-      throw new Error("PAYMENT_REQUIRED");
-    }
-    throw new Error(`AI gateway error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "";
-}
-
 function parseWizardResponse(responseText: string): WizardResponse {
   // Clean up the response - remove markdown code blocks if present
   let cleanedText = responseText.trim();
@@ -335,15 +300,15 @@ function parseWizardResponse(responseText: string): WizardResponse {
   }
 }
 
-async function callWithRetry(messages: Array<{ role: string; content: string }>): Promise<WizardResponse> {
+async function callWithRetry(ai: OrgAiChat, messages: Array<{ role: string; content: string }>): Promise<WizardResponse> {
   try {
-    const responseText = await callLovableAI(messages);
+    const responseText = await ai(messages, { maxTokens: 2000 });
     const parsed = parseWizardResponse(responseText);
     
     // If parsing worked but action is invalid, retry once
     if (!['ask', 'clarify', 'confirm', 'next_category', 'next_product', 'complete'].includes(parsed.action)) {
       console.log("Invalid action, retrying...");
-      const retryText = await callLovableAI(messages);
+      const retryText = await ai(messages, { maxTokens: 2000 });
       return parseWizardResponse(retryText);
     }
     
@@ -351,7 +316,7 @@ async function callWithRetry(messages: Array<{ role: string; content: string }>)
   } catch (error) {
     // On first error, retry once
     console.log("First call failed, retrying:", error);
-    const retryText = await callLovableAI(messages);
+    const retryText = await ai(messages, { maxTokens: 2000 });
     return parseWizardResponse(retryText);
   }
 }
@@ -363,7 +328,9 @@ serve(async (req) => {
   }
 
   try {
-    const { wizardState, userMessage, conversationHistory }: WizardRequest = await req.json();
+    const { organization_id, wizardState, userMessage, conversationHistory }: WizardRequest = await req.json();
+    const gate = await openOrgAi(req, organization_id, "wizard_next_question", corsHeaders);
+    if (!gate.ok) return gate.response;
 
     console.log(`📝 Wizard state: phase=${wizardState.currentPhase}, category=${wizardState.currentCategory}, product=${wizardState.currentProduct}`);
     console.log(`📝 User message: "${userMessage.slice(0, 100)}..."`);
@@ -407,7 +374,7 @@ Responda em JSON conforme o formato especificado.`;
       { role: "user", content: userPrompt },
     ];
 
-    const wizardResponse = await callWithRetry(messages);
+    const wizardResponse = await callWithRetry(gate.ai, messages);
 
     console.log(`✅ Wizard response: action=${wizardResponse.action}, categoryComplete=${wizardResponse.categoryComplete}, productsDetected=${wizardResponse.productsDetected.length}`);
 
@@ -415,22 +382,11 @@ Responda em JSON conforme o formato especificado.`;
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
+    if (error instanceof OrgAiError) return orgAiErrorResponse(error, corsHeaders);
     console.error("Wizard error:", error);
 
     // Handle specific errors
     if (error instanceof Error) {
-      if (error.message === "RATE_LIMITED") {
-        return new Response(
-          JSON.stringify({ error: "Limite de requisições excedido. Aguarde um momento e tente novamente." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (error.message === "PAYMENT_REQUIRED") {
-        return new Response(
-          JSON.stringify({ error: "Créditos de IA esgotados. Adicione créditos para continuar." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
     }
 
     return new Response(

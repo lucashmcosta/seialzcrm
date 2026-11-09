@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
+import { functionErrorMessage } from '@/lib/functionError';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
@@ -305,6 +306,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
     try {
       const { data, error } = await supabase.functions.invoke('wizard-generate-content', {
         body: {
+          organization_id: organization?.id,
           category: validateCategory(category),
           scope,
           productName,
@@ -317,9 +319,10 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
       return data as GenerateResponse;
     } catch (err) {
       console.error('Failed to generate content:', err);
+      toast.error(await functionErrorMessage(err, 'Não foi possível gerar o conteúdo.'));
       return null;
     }
-  }, []);
+  }, [organization?.id]);
 
   // Save current category progress (auto-save or manual)
   const saveCategoryProgress = useCallback(async (
@@ -492,32 +495,17 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
       // Call wizard-next-question edge function
       const { data, error: fnError } = await supabase.functions.invoke('wizard-next-question', {
         body: {
+          organization_id: organization?.id,
           wizardState: state,
           userMessage,
           conversationHistory: messages.map(m => ({ role: m.role, content: m.content })),
         },
       });
 
-      if (fnError) {
-        if (fnError.message?.includes('429') || fnError.context?.status === 429) {
-          throw new Error('Limite de requisições excedido. Aguarde um momento.');
-        }
-        if (fnError.message?.includes('402') || fnError.context?.status === 402) {
-          throw new Error('Créditos de IA esgotados. Adicione créditos em Configurações > Workspace > Uso.');
-        }
-        throw fnError;
-      }
+      if (fnError) throw new Error(await functionErrorMessage(fnError, 'Não foi possível continuar. Tente novamente.'));
 
       // Handle error response from the edge function
-      if (data?.error) {
-        if (data.error.includes('429') || data.error.includes('Limite')) {
-          throw new Error('Limite de requisições excedido. Aguarde um momento.');
-        }
-        if (data.error.includes('402') || data.error.includes('Créditos') || data.error.includes('esgotados')) {
-          throw new Error('Créditos de IA esgotados. Adicione créditos em Configurações > Workspace > Uso.');
-        }
-        throw new Error(data.error);
-      }
+      if (data?.error) throw new Error(data.error);
 
       const response = data as WizardResponse;
       console.log('Wizard response:', response);

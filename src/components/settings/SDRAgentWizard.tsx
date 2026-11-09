@@ -140,11 +140,14 @@ interface SDRAgentWizardProps {
 // ==================== CONSTANTS ====================
 
 const AI_PROVIDERS = [
-  { value: 'auto', label: 'Automático', description: 'Usa integração padrão da organização' },
-  { value: 'lovable-ai', label: 'Lovable AI (Gemini)', description: 'Google Gemini - rápido e econômico' },
+  { value: 'auto', label: 'Automático', description: 'Usa a chave de IA da organização' },
   { value: 'claude-ai', label: 'Claude (Anthropic)', description: 'Excelente raciocínio e nuance' },
   { value: 'openai-gpt', label: 'GPT (OpenAI)', description: 'Versátil e poderoso' },
 ];
+
+// Agente salvo com a opção Lovable, que saiu da lista, segue a chave da organização.
+const normalizeAiProvider = (provider?: string | null) =>
+  provider && AI_PROVIDERS.some((p) => p.value === provider) ? provider : 'auto';
 
 const AVAILABLE_TOOLS = [
   { id: 'update_contact', name: 'Atualizar Contato', description: 'Permite corrigir nome, email, telefone e empresa do contato' },
@@ -522,7 +525,7 @@ export function SDRAgentWizard({
   const [enabledTools, setEnabledTools] = useState<string[]>(
     existingAgent?.enabled_tools || ['update_contact', 'transfer_to_human']
   );
-  const [aiProvider, setAiProvider] = useState<string>(existingAgent?.ai_provider || 'auto');
+  const [aiProvider, setAiProvider] = useState<string>(normalizeAiProvider(existingAgent?.ai_provider));
   const [aiModel, setAiModel] = useState<string>(currentAiModel(existingAgent?.ai_model));
   const [maxMessages, setMaxMessages] = useState<number>(existingAgent?.max_messages_per_conversation ?? 10);
   const [agentName, setAgentName] = useState<string>(existingAgent?.name || '');
@@ -585,7 +588,7 @@ export function SDRAgentWizard({
       
       setFeedbackHistory(existingAgent?.feedback_history || []);
       setEnabledTools(existingAgent?.enabled_tools || ['update_contact', 'transfer_to_human']);
-      setAiProvider(existingAgent?.ai_provider || 'auto');
+      setAiProvider(normalizeAiProvider(existingAgent?.ai_provider));
       setAiModel(currentAiModel(existingAgent?.ai_model));
       setMaxMessages(existingAgent?.max_messages_per_conversation ?? 10);
       setAgentName(existingAgent?.name || '');
@@ -972,7 +975,7 @@ export function SDRAgentWizard({
     }
     setEnabledTools(version.enabled_tools || ['update_contact', 'transfer_to_human']);
     setFeedbackRules(version.feedback_rules || []);
-    setAiProvider(version.ai_provider || 'auto');
+    setAiProvider(normalizeAiProvider(version.ai_provider));
     setAiModel(currentAiModel(version.ai_model));
     
     toast.success(`Restaurado para versão ${version.version_number}. Salve para confirmar.`);

@@ -17,6 +17,7 @@ import {
   Check, WarningCircle
 } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
+import { functionErrorMessage } from '@/lib/functionError';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -153,7 +154,7 @@ export function AgentMessageFeedbackDialog({
         },
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, 'Erro ao classificar feedback'));
 
       setClassificationResult(data);
       setSelectedClassification(data.classification);

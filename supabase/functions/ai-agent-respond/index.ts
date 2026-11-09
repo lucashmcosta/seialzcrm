@@ -1745,12 +1745,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     };
 
-    if (agentProvider === 'lovable-ai') {
-      const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-      if (!lovableApiKey) return await agentFailure('Lovable AI not configured', 400);
-      integrationSlug = 'lovable-ai';
-      configValues = { api_key: lovableApiKey, default_model: agentModel || 'google/gemini-3-flash-preview' };
-    } else {
+    {
       const credential = pickAgentAiCredential(
         agentProvider,
         await readSecretPayload(supabase as any, organizationId) as any,
@@ -2234,137 +2229,7 @@ serve(async (req) => {
         console.warn('Empty content from OpenAI. Model:', model, 'Full response:', JSON.stringify(responseMessage));
       }
 
-    } else if (integrationSlug === 'lovable-ai') {
-      // Lovable AI Gateway (OpenAI-compatible)
-      const model = configValues.default_model || 'google/gemini-3-flash-preview';
-      const maxTokens = 1024;
-      modelUsed = model;
-
-      const lovableMessages = [
-        { role: 'system', content: systemPrompt },
-        ...conversationMessages,
-        { role: 'user', content: message },
-      ];
-
-      const lovableBody: any = {
-        model,
-        max_tokens: maxTokens,
-        messages: lovableMessages,
-      };
-
-      // Add tools if enabled
-      if (tools.length > 0) {
-        lovableBody.tools = tools;
-        lovableBody.tool_choice = 'auto';
-      }
-
-      let lovableResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${configValues.api_key}`,
-        },
-        body: JSON.stringify(lovableBody),
-      });
-
-      if (!lovableResponse.ok) {
-        const errorText = await lovableResponse.text();
-        console.error('Lovable AI API error:', lovableResponse.status, errorText);
-        throw new Error(`Lovable AI API error: ${lovableResponse.status}`);
-      }
-
-      let lovableData = await lovableResponse.json();
-      tokensUsed = lovableData.usage?.total_tokens || 0;
-
-      let responseMessage = lovableData.choices?.[0]?.message;
-
-      // Handle tool calls (OpenAI-compatible format)
-      while (responseMessage?.tool_calls && responseMessage.tool_calls.length > 0) {
-        const toolResults = [];
-
-        for (const toolCall of responseMessage.tool_calls) {
-          console.log(`Lovable AI wants to use tool: ${toolCall.function.name}`);
-          toolsExecuted.push(toolCall.function.name);
-
-          const result = await executeTool(
-            supabase,
-            toolCall.function.name,
-            JSON.parse(toolCall.function.arguments || '{}'),
-            { contactId, organizationId, threadId }
-          );
-
-          toolResults.push({
-            tool_call_id: toolCall.id,
-            role: 'tool',
-            content: JSON.stringify(result),
-          });
-        }
-
-        // Continue conversation with tool results
-        lovableMessages.push(responseMessage);
-        lovableMessages.push(...toolResults);
-
-        lovableResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${configValues.api_key}`,
-          },
-          body: JSON.stringify({
-            model,
-            max_tokens: maxTokens,
-            messages: lovableMessages,
-            tools: tools.length > 0 ? tools : undefined,
-          }),
-        });
-
-        if (!lovableResponse.ok) {
-          const errorText = await lovableResponse.text();
-          console.error('Lovable AI API error (tool continuation):', lovableResponse.status, errorText);
-          throw new Error(`Lovable AI API error: ${lovableResponse.status}`);
-        }
-
-        lovableData = await lovableResponse.json();
-        tokensUsed += lovableData.usage?.total_tokens || 0;
-        responseMessage = lovableData.choices?.[0]?.message;
-      }
-
-      aiResponse = responseMessage?.content || '';
-
-      // If response is empty after tool execution, retry without tools to force a text response
-      if (!aiResponse && toolsExecuted.length > 0) {
-        console.log('Empty response after tool execution, requesting final response without tools...');
-        
-        // Add a system instruction to force a response
-        lovableMessages.push({
-          role: 'user',
-          content: '[Sistema: As ferramentas foram executadas com sucesso. Agora responda ao cliente de forma natural, sem usar mais ferramentas.]'
-        });
-        
-        const retryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${configValues.api_key}`,
-          },
-          body: JSON.stringify({
-            model,
-            max_tokens: maxTokens,
-            messages: lovableMessages,
-            // Explicitly NOT passing tools to force text response
-          }),
-        });
-
-        if (retryResponse.ok) {
-          const retryData = await retryResponse.json();
-          tokensUsed += retryData.usage?.total_tokens || 0;
-          aiResponse = retryData.choices?.[0]?.message?.content || '';
-          console.log('Retry response received:', aiResponse ? 'success' : 'still empty');
-        } else {
-          console.error('Retry request failed:', retryResponse.status);
-        }
-      }
-    }
+}
 
     // Apply formatting rules to sanitize response
     const formattingRules = agent.formatting_rules as { max_consecutive_newlines?: number; strip_empty_lines?: boolean } | null;

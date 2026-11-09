@@ -18,7 +18,7 @@ import { IntelligenceInsights } from './IntelligenceInsights';
 import { AnalysisProfileCard } from './AnalysisProfileCard';
 import { emptyProfile, type AnalysisProfileForm } from '@/lib/analysisProfile';
 import { useAIProviders } from '@/hooks/useAIProviders';
-import { untranscribedAudios } from '@/lib/transcriptionNotice';
+import { hasAnalysisKey, untranscribedAudios } from '@/lib/transcriptionNotice';
 
 type TranscriptionMode = 'all_whatsapp' | 'leads_only' | 'agents_only' | 'open_deals_only' | 'off';
 
@@ -151,6 +151,18 @@ export function IntelligenceSettings() {
         transcriptions7d: overview?.transcriptions7d ?? 0,
       })
     : 0;
+  const analysisNotice = providerKeys.data && !hasAnalysisKey(providerKeys.data) && (
+    <div className="flex items-start gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+      <WarningCircle size={18} weight="fill" className="shrink-0 text-amber-600" />
+      <div>
+        <p className="font-medium">Mensagens não estão sendo analisadas</p>
+        <p className="text-xs text-muted-foreground">
+          A análise usa a chave da própria organização. Adicione uma chave do Claude ou da OpenAI em Provedores de IA.
+        </p>
+      </div>
+    </div>
+  );
+
   const transcriptionNotice = pendingAudios > 0 && (
     <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
       <WarningCircle size={18} weight="fill" className="shrink-0 text-amber-600" />
@@ -190,6 +202,7 @@ export function IntelligenceSettings() {
 
         {/* OVERVIEW */}
         <TabsContent value="overview" className="space-y-4 mt-4">
+          {analysisNotice}
           {transcriptionNotice}
           <Card>
             <CardContent className="pt-6">

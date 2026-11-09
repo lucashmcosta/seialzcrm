@@ -31,23 +31,20 @@ export class ProviderResolutionError extends Error {
 }
 
 const CAPABILITY_DEFAULTS: Record<Capability, { provider: string; model: string; envKey: string }[]> = {
-  chat: [
-    { provider: "gemini", model: "gemini-2.5-flash", envKey: "LOVABLE_API_KEY" },
-  ],
+  // Sem IA paga pelo Seialz: análise só com a chave da própria org.
+  chat: [],
   transcription: [
     { provider: "elevenlabs", model: "scribe_v2", envKey: "ELEVENLABS_API_KEY" },
   ],
-  embedding: [
-    { provider: "gemini", model: "gemini-embedding-001", envKey: "LOVABLE_API_KEY" },
-  ],
+  embedding: [],
 };
 
 // MVP: providers per capability supported as BYOK.
-// Anthropic/Gemini BYOK can be added later — for chat the MVP only
-// dispatches to OpenAI-compatible endpoints when customer_key is used.
+// OpenAI vem antes para não mudar quem já analisa com ela.
 const CAPABILITY_BYOK_ORDER: Record<Capability, { provider: string; defaultModel: string }[]> = {
   chat: [
     { provider: "openai", defaultModel: "gpt-4o-mini" },
+    { provider: "anthropic", defaultModel: "claude-haiku-5-5" },
   ],
   // Ordem para transcrição de LIGAÇÃO, que é o caso difícil: áudio longo e
   // dois falantes. O Deepgram vem primeiro porque é o único que busca o áudio
