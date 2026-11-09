@@ -269,3 +269,6 @@ verify_jwt = true
 
 [functions.meta-lead-ads-backfill-viagi]
 verify_jwt = true
+
+[functions.plamev-materiais-ia]
+verify_jwt = false

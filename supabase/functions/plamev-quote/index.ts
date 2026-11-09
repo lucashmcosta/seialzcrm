@@ -41,11 +41,10 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { validateServiceRoleAuth } from "../_shared/auth.ts";
 import { decryptIntegrationSecret, encryptIntegrationSecret } from "../_shared/integration-credentials.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@1.4.0";
-import { decryptSecret } from "../_shared/crypto.ts";
+import { base64DoMaterial, blocosMateriais, chaveClaude, perguntarClaude } from "./ia.ts";
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
-import { byokBudgetExceeded, markByokInvalid, readSecretPayload } from "../_shared/intelligence/resolve-provider.ts";
-import { pickTextAiCredential, type LegacyAiRow } from "../_shared/intelligence/text-ai-credential.ts";
+import { markByokInvalid } from "../_shared/intelligence/resolve-provider.ts";
 import * as L from "./logic.ts";
 import * as P from "./perguntar.ts";
 
@@ -178,44 +177,6 @@ async function verificarPagamento(db: Db, token: string, c: CotacaoLinha, marcar
 }
 
 const DIA = 24 * 60 * 60 * 1000;
-
-const MODELO_IA = "claude-opus-5-5";
-
-// Arquivo do material em base64, por instância. O caminho nunca muda (arquivo novo = caminho novo), então não expira.
-const arquivos = new Map<string, string>();
-async function base64DoMaterial(db: Db, storagePath: string): Promise<string> {
-  const pronto = arquivos.get(storagePath);
-  if (pronto) return pronto;
-  const { data, error } = await db.storage.from("plamev-materiais").download(storagePath);
-  if (error || !data) throw new Error(`material_download: ${error?.message ?? "vazio"}`);
-  const bytes = new Uint8Array(await data.arrayBuffer());
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  const b64 = btoa(bin);
-  arquivos.set(storagePath, b64);
-  return b64;
-}
-
-/**
- * Chave do Claude da org: BYOK verificada primeiro, depois a integração antiga (mesma regra do ai-generate).
- * Só Claude: é ele que lê os PDFs e as imagens direto.
- */
-async function chaveClaude(db: Db, org: string) {
-  const { data: integracoes } = await db.from("organization_integrations")
-    .select("config_values, integration:admin_integrations!inner(slug)")
-    .eq("organization_id", org).eq("is_enabled", true).in("integration.slug", ["claude-ai", "openai-gpt"]);
-  const legado: LegacyAiRow[] = (integracoes ?? []).map((i: { config_values: Record<string, unknown> | null; integration: { slug: string } }) => ({
-    slug: i.integration.slug, config_values: i.config_values,
-  }));
-  const cred = pickTextAiCredential(await readSecretPayload(db, org), legado);
-  if (!cred || cred.slug !== "claude-ai") throw new L.Recusa(409, "ia_sem_chave_claude");
-  if (cred.kind === "byok") {
-    const limite = Number(cred.entry.monthly_budget_usd ?? 0);
-    if (limite > 0 && await byokBudgetExceeded(db, org, "anthropic", limite)) throw new L.Recusa(402, "ia_limite_mensal");
-    return { apiKey: await decryptSecret(cred.entry.api_key_encrypted!), byok: true };
-  }
-  return { apiKey: String(cred.config.api_key), byok: false };
-}
 
 /** pg_cron: cotações não pagas dos últimos 60 dias, as menos recentemente conferidas primeiro, até ~90 s. */
 async function cronPagamentos(db: Db) {
@@ -503,43 +464,21 @@ Deno.serve(async (req) => {
         }
 
         const { data: lista, error: eMat } = await db.from("plamev_materials")
-          .select("id, titulo, descricao, tipo, mime_type, storage_path, tamanho_bytes")
+          .select("id, titulo, descricao, tipo, mime_type, storage_path, tamanho_bytes, conteudo_md, md_status")
           .eq("ativo", true).is("removido_em", null).order("ordem", { ascending: true }).order("created_at", { ascending: true });
         if (eMat) throw new Error(`materiais: ${eMat.code}`);
-        const todos = (lista ?? []).map((m) => ({
-          id: m.id as string, titulo: m.titulo as string, descricao: m.descricao as string, tipo: m.tipo as "image" | "document",
-          mimeType: m.mime_type as string, bytes: Number(m.tamanho_bytes), storagePath: m.storage_path as string,
-        }));
+        const todos = (lista ?? []).map(P.materialParaIa);
         if (!todos.length) return json(409, { error: "ia_sem_materiais" });
         const { dentro, fora } = P.materiaisQueCabem(todos);
 
         const chave = await chaveClaude(db, org);
-        // Materiais primeiro e sempre na mesma ordem: com o sistema, formam o prefixo em cache entre perguntas.
-        const blocos: Anthropic.Beta.BetaContentBlockParam[] = [];
-        for (const m of dentro) {
-          const data = await base64DoMaterial(db, m.storagePath);
-          blocos.push({ type: "text", text: P.rotuloMaterial(m) });
-          blocos.push(m.tipo === "document"
-            ? { type: "document", source: { type: "base64", media_type: "application/pdf", data }, title: m.titulo }
-            : { type: "image", source: { type: "base64", media_type: m.mimeType as "image/png" | "image/jpeg" | "image/webp", data } });
-        }
-        (blocos[blocos.length - 1] as { cache_control?: { type: "ephemeral" } }).cache_control = { type: "ephemeral" };
+        const blocos = await blocosMateriais(db, dentro);
         blocos.push({ type: "text", text: P.textoPedido(pergunta, conversa) });
 
         const cliente = new Anthropic({ apiKey: chave.apiKey, timeout: 100_000, maxRetries: 1 });
         let resposta: Anthropic.Beta.BetaMessage;
         try {
-          resposta = await cliente.beta.messages.create({
-            model: MODELO_IA,
-            max_tokens: 4000,
-            // Atendimento ao vivo: resposta rápida vale mais que raciocínio longo.
-            output_config: { effort: "low", format: P.FORMATO_RESPOSTA },
-            // Se o modelo recusar por política, a própria API tenta o modelo indicado para a categoria.
-            betas: ["server-side-fallback-2026-07-01"],
-            fallbacks: "default",
-            system: P.SISTEMA,
-            messages: [{ role: "user", content: blocos }],
-          });
+          resposta = await perguntarClaude(cliente, P.MODELO_PADRAO, blocos);
         } catch (e) {
           if (e instanceof Anthropic.AuthenticationError) {
             if (chave.byok) await markByokInvalid(db, org, "anthropic", "invalid_key");

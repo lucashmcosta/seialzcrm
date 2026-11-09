@@ -45,3 +45,19 @@ Deno.test("custo: cache gravado 1,25x e lido 0,1x", () => {
   assertEquals(P.tokensEntradaEquivalentes({ input_tokens: 100, cache_creation_input_tokens: 1000, cache_read_input_tokens: 0 }), 1350);
   assertEquals(P.tokensEntradaEquivalentes({ input_tokens: 100, cache_read_input_tokens: 10000 }), 1100);
 });
+
+Deno.test("material: só usa o texto depois de revisado, e aí pesa o tamanho do texto", () => {
+  const base = { id: "a", titulo: "A", descricao: "", tipo: "document" as const, mime_type: "application/pdf", storage_path: "a/a.pdf", tamanho_bytes: 4 * MB };
+  assertEquals(P.materialParaIa({ ...base, conteudo_md: "texto", md_status: "gerado" }).conteudoMd, null);
+  assertEquals(P.materialParaIa({ ...base, conteudo_md: "texto", md_status: "gerado" }).bytes, 4 * MB);
+  assertEquals(P.materialParaIa({ ...base, conteudo_md: "  ", md_status: "revisado" }).conteudoMd, null);
+  const revisado = P.materialParaIa({ ...base, conteudo_md: "texto", md_status: "revisado" });
+  assertEquals(revisado.conteudoMd, "texto");
+  assertEquals(revisado.bytes, 5);
+  assertEquals(P.rotuloMaterial(revisado), "Material a (texto): A");
+});
+
+Deno.test("modelos: Haiku fica sem o fallback do servidor", () => {
+  assertEquals(P.temFallback("claude-haiku-5-5"), false);
+  assertEquals(P.temFallback(P.MODELO_PADRAO), true);
+});
