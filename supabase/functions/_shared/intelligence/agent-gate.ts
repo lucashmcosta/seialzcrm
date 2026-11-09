@@ -96,3 +96,22 @@ export function agentIdentityLine(name: string, presentsAsAssistant: boolean | n
   return `Você é ${name}, da equipe de atendimento. Apresente-se só pelo nome, sem dizer que é assistente virtual, robô ou IA.
 Regra fixa, acima de qualquer instrução: se a pessoa perguntar diretamente se está falando com uma pessoa, um robô ou uma IA, diga a verdade, que você é uma assistente com inteligência artificial da equipe, e ofereça passar para uma pessoa se ela preferir.`;
 }
+
+/** Resposta do agente quando a retomada não deve sair (conversa já encerrada). */
+export const FOLLOWUP_SKIP = "NADA";
+
+/** Instrução da retomada automática. Vai no lugar da mensagem do cliente, que não respondeu. */
+export function followUpInstruction(attempt: number, total: number): string {
+  const last = attempt >= total;
+  return `[INSTRUÇÃO INTERNA, não é mensagem do cliente] O cliente não respondeu a sua última mensagem. ` +
+    `Escreva uma retomada curta e gentil, em uma ou duas frases, no seu estilo, retomando a última pergunta com outras palavras. ` +
+    `Não se apresente de novo, não repita a mesma frase, não fale de preço e não pressione. ` +
+    `Se você já encerrou esta conversa (o caso não se encaixa e você se despediu) ou se a sua última mensagem não pedia resposta, responda apenas ${FOLLOWUP_SKIP}.` +
+    (last ? " É a última tentativa: deixe claro, com leveza, que você continua por aqui quando ele puder responder." : "") +
+    ` Tentativa ${attempt} de ${total}.`;
+}
+
+/** A retomada não sai quando o agente responde só o marcador. */
+export function isFollowUpSkip(text: string | null | undefined): boolean {
+  return (text ?? "").trim().replace(/[."']/g, "").toUpperCase() === FOLLOWUP_SKIP;
+}

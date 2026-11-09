@@ -8,7 +8,7 @@ import { currentAiModel, pickAgentAiCredential } from "../_shared/intelligence/a
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
-import { agentIdentityLine, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
+import { agentIdentityLine, agentInputKind, followUpInstruction, isFollowUpSkip, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,6 +23,8 @@ interface AgentRequest {
   isTestMode?: boolean;
   /** Só no modo de teste: a conversa do simulador, que não existe no banco. */
   history?: Array<{ role: string; content: string }>;
+  /** Retomada automática (rotina agent-followups, só service_role): o cliente parou de responder. */
+  followUp?: { attempt: number; total: number };
 }
 
 interface WorkingHours {
@@ -312,11 +314,23 @@ async function releaseToHuman(supabase: any, threadId: string, reason: string, s
   return { error };
 }
 
+/** Deslocamento do fuso (ex.: "-03:00") para ler a data/hora que o agente escreveu. */
+function timezoneOffset(timezone: string | null | undefined): string {
+  try {
+    const part = new Intl.DateTimeFormat('en-US', { timeZone: timezone || 'America/Sao_Paulo', timeZoneName: 'longOffset' })
+      .formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? 'GMT-03:00';
+    const m = part.match(/GMT([+-]\d{2}:\d{2})/);
+    return m ? m[1] : '+00:00';
+  } catch {
+    return '-03:00';
+  }
+}
+
 async function executeTool(
   supabase: any,
   toolName: string,
   args: any,
-  context: { contactId: string; organizationId: string; threadId: string }
+  context: { contactId: string; organizationId: string; threadId: string; agentId?: string; timezone?: string }
 ): Promise<ToolResult> {
   console.log(`Executing tool: ${toolName}`, args);
 
@@ -647,7 +661,8 @@ async function executeTool(
       case 'schedule_follow_up': {
         // Parse scheduled date and time
         const scheduledTime = args.scheduled_time || '09:00';
-        const scheduledAt = new Date(`${args.scheduled_date}T${scheduledTime}:00`);
+        // Data e hora do agente estão no fuso da org, não em UTC.
+        const scheduledAt = new Date(`${args.scheduled_date}T${scheduledTime}:00${timezoneOffset(context.timezone)}`);
         
         if (isNaN(scheduledAt.getTime())) {
           return { success: false, message: 'Data/hora inválida' };
@@ -662,6 +677,7 @@ async function executeTool(
             content: args.message,
             scheduled_at: scheduledAt.toISOString(),
             reason: args.reason || null,
+            ai_agent_id: context.agentId ?? null,
             created_by: 'agent',
             status: 'pending',
           });
@@ -1577,7 +1593,7 @@ serve(async (req) => {
   let releaseOnFailure: ((reason: string) => Promise<unknown>) | null = null;
 
   try {
-    const { agentId, contactId, threadId, message: incomingMessage, isTestMode, history: testHistory }: AgentRequest = await req.json();
+    const { agentId, contactId, threadId, message: incomingMessage, isTestMode, history: testHistory, followUp }: AgentRequest = await req.json();
     let message = incomingMessage;
 
     console.log(`AI Agent processing - Agent: ${agentId}, Contact: ${contactId}, Thread: ${threadId}, TestMode: ${isTestMode}`);
@@ -1605,8 +1621,13 @@ serve(async (req) => {
     // Modo de teste aceita histórico livre e gasta a chave de IA da org: exige sempre
     // service_role ou login de membro da org, qualquer que seja o modo do EDGE_AUTH.
     const edgeAuth = edgeAuthMode();
-    if (edgeAuth !== 'off' || isTestMode) {
+    if (edgeAuth !== 'off' || isTestMode || followUp) {
       const callerAuth = await validateCallerAuth(req, organizationId);
+      // Retomada só vem da rotina interna.
+      if (followUp && !(callerAuth.ok && callerAuth.kind === 'service_role')) {
+        return new Response(JSON.stringify({ error: 'unauthorized', reason: 'followup_requires_service_role' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       if (!callerAuth.ok) {
         logAuthObservation('ai-agent-respond', req, callerAuth.error);
         if (edgeAuth === 'enforce' || isTestMode) {
@@ -1644,10 +1665,14 @@ serve(async (req) => {
         if (ack) await dispatchWhatsAppSend({ organizationId, contactId, threadId, message: ack, isAgentMessage: true, agentId: agent.id, senderName: agent.name });
         return skip(reason);
       };
-      const { data: latest } = await supabase.from('messages').select('id, media_type')
+      if (followUp) {
+        // Não é mensagem do cliente: instrução para o agente escrever a retomada.
+        message = followUpInstruction(followUp.attempt, followUp.total);
+      }
+      const { data: latest } = followUp ? { data: null } : await supabase.from('messages').select('id, media_type')
         .eq('thread_id', threadId).eq('direction', 'inbound').is('deleted_at', null)
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
-      const inputKind = agentInputKind(latest?.media_type);
+      const inputKind = followUp ? 'text' : agentInputKind(latest?.media_type);
       if (inputKind === 'unsupported_media') return await handOffWithAck('unsupported_media');
       if (inputKind === 'audio') {
         // Pode rodar junto com a fila: a transcrição não duplica. Sem texto, passa para uma pessoa.
@@ -1963,7 +1988,8 @@ serve(async (req) => {
     );
 
     // Filter enabled tools
-    const tools = AVAILABLE_TOOLS.filter(t => enabledTools.includes(t.function.name));
+    // Na retomada o agente só escreve: nada de passar para a equipe, agendar ou salvar dados.
+    const tools = followUp ? [] : AVAILABLE_TOOLS.filter(t => enabledTools.includes(t.function.name));
 
     let aiResponse: string = '';
     let emptyDetail = '';
@@ -2090,7 +2116,7 @@ serve(async (req) => {
             supabase,
             toolUse.name,
             toolUse.input,
-            { contactId, organizationId, threadId }
+            { contactId, organizationId, threadId, agentId, timezone: agent.working_hours?.timezone }
           );
 
           toolResults.push({
@@ -2282,7 +2308,7 @@ serve(async (req) => {
             supabase,
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments || '{}'),
-            { contactId, organizationId, threadId }
+            { contactId, organizationId, threadId, agentId, timezone: agent.working_hours?.timezone }
           );
 
           toolResults.push({
@@ -2366,6 +2392,11 @@ serve(async (req) => {
     }
 
     const responseTime = Date.now() - startTime;
+    // Retomada de conversa que o agente já encerrou: não envia nada.
+    if (followUp && isFollowUpSkip(aiResponse)) {
+      await logByokUsage();
+      return new Response(JSON.stringify({ success: true, status: 'followup_skipped' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     const splitMessages = (agent.formatting_rules as { split_messages?: boolean } | null)?.split_messages === true;
     const bubbles = splitMessages ? splitIntoBubbles(aiResponse) : (aiResponse ? [aiResponse] : []);
 
