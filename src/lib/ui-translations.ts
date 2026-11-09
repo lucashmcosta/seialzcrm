@@ -1433,3 +1433,10 @@ Object.assign(uiEnglish, {
 
 // Transcrição embaixo do player de áudio
 Object.assign(uiEnglish, { 'Transcrição': 'Transcript', 'Ver menos': 'Show less', 'Ver mais': 'Show more' });
+
+// Sincronização de anúncios de hora em hora
+Object.assign(uiEnglish, {
+  'atualização automática a cada hora': 'updates automatically every hour',
+  'Sincronização automática a cada hora — sem dados ainda': 'Syncs automatically every hour — no data yet',
+  'Configuração e status. Sincronização automática a cada hora; a análise (gráficos, tabelas) vive no módulo Marketing.': 'Configuration and status. Syncs automatically every hour; analysis (charts, tables) lives in the Marketing module.',
+});

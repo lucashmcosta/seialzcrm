@@ -277,7 +277,7 @@ export default function MetaIntegrationPage() {
             <div className="space-y-4">
               <ConfigLinkCard
                 icon={Megaphone} title="Performance (Ads)"
-                desc={uiText("Configuração e status. Sincronização automática diária; a análise (gráficos, tabelas) vive no módulo Marketing.")}
+                desc={uiText("Configuração e status. Sincronização automática a cada hora; a análise (gráficos, tabelas) vive no módulo Marketing.")}
                 status={lastSync('performance') ? uiText("Último sync: {0}", {"0": fmtDateBR(lastSync('performance')!)}) : uiText("Sync automático diário")}
                 to="/marketing" toLabel={uiText("Ver no Marketing")}
               />

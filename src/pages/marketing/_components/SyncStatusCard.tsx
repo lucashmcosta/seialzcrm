@@ -163,10 +163,10 @@ export function SyncStatusCard({ orgId }: Props) {
               {uiText("Última sincronização")}<span className="text-foreground">{formatRelative(lastSyncIso)}</span>
               {' • '}
               <span className="text-foreground font-mono">{status?.activeAds ?? 0}</span> {uiText("ads ativos")}{' • '}
-              <span className="text-xs">{uiText("atualização automática diária")}</span>
+              <span className="text-xs">{uiText("atualização automática a cada hora")}</span>
             </>
           ) : (
-            uiText("Sincronização automática diária — sem dados ainda")
+            uiText("Sincronização automática a cada hora — sem dados ainda")
           )}
         </span>
       </div>
