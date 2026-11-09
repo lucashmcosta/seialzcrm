@@ -1440,3 +1440,7 @@ Object.assign(uiEnglish, {
   'Sincronização automática 2 vezes por dia — sem dados ainda': 'Syncs automatically twice a day — no data yet',
   'Configuração e status. Sincronização automática 2 vezes por dia; a análise (gráficos, tabelas) vive no módulo Marketing.': 'Configuration and status. Syncs automatically twice a day; analysis (charts, tables) lives in the Marketing module.',
 });
+
+// Marketing: conta de anúncio em outra moeda
+uiEnglish['Conta de anúncio em {0}: valores convertidos para reais pela cotação oficial (PTAX) de cada dia. Total na conta: {1}.'] =
+  'Ad account in {0}: amounts converted to BRL using the official PTAX rate for each day. Account total: {1}.';
