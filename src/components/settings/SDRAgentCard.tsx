@@ -1,3 +1,4 @@
+import { aiModelShortLabel } from '@/lib/aiModels';
 import { Robot, GearSix, Lightning, Copy, DotsThreeVertical } from '@phosphor-icons/react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,22 +35,11 @@ const PROVIDER_LABELS: Record<string, string> = {
   'openai-gpt': 'GPT',
 };
 
-const MODEL_SHORT_LABELS: Record<string, string> = {
-  'google/gemini-3-flash-preview': 'Gemini 3 Flash',
-  'google/gemini-2.5-flash': 'Gemini 2.5 Flash',
-  'google/gemini-2.5-pro': 'Gemini 2.5 Pro',
-  'claude-sonnet-4-20250514': 'Sonnet 4',
-  'claude-3-5-sonnet-20241022': 'Sonnet 3.5',
-  'claude-3-5-haiku-20241022': 'Haiku 3.5',
-  'gpt-4o': 'GPT-4o',
-  'gpt-4o-mini': 'GPT-4o Mini',
-};
-
 function getModelLabel(provider?: string | null, model?: string | null): string | null {
   if (!provider || provider === 'auto') return null;
   
   const providerLabel = PROVIDER_LABELS[provider] || provider;
-  const modelLabel = model ? (MODEL_SHORT_LABELS[model] || model) : null;
+  const modelLabel = model ? aiModelShortLabel(model) : null;
   
   return modelLabel ? `${providerLabel} (${modelLabel})` : providerLabel;
 }
