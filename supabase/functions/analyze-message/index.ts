@@ -21,6 +21,7 @@ import { sanitizeProviderError, safeLog } from "../_shared/intelligence/sanitize
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { getIntelligenceSettings, shouldAnalyze } from "../_shared/intelligence/settings.ts";
+import { ANALYSIS_EVENT_TYPES, effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -44,20 +45,24 @@ Deno.serve(async (req) => {
     return json({ error: "unauthorized" }, 401);
   }
 
-  let body: { message_id?: string; organization_id?: string; job_id?: string };
+  // reanalyze: refaz análise feita sem o texto do áudio (ver reanalyzing abaixo).
+  let body: { message_id?: string; organization_id?: string; job_id?: string; reanalyze?: boolean };
   try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
   const { message_id, organization_id, job_id } = body;
+  const reanalyzing = body.reanalyze === true;
   if (!message_id || !organization_id) return json({ error: "missing_params" }, 400);
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
   const { data: existing } = await admin
     .from("message_analyses")
-    .select("id")
+    .select("id, source:raw_response->>_content_source")
     .eq("message_id", message_id)
     .eq("analysis_version", ANALYSIS_VERSION)
     .maybeSingle();
-  if (existing) return json({ ok: true, skipped: "already_analyzed" });
+  if (existing && (!reanalyzing || (existing as { source?: string | null }).source === "transcript")) {
+    return json({ ok: true, skipped: "already_analyzed" });
+  }
 
   const { data: msg, error: msgErr } = await admin
     .from("messages")
@@ -66,7 +71,19 @@ Deno.serve(async (req) => {
     .single();
   if (msgErr || !msg) return json({ error: "message_not_found", detail: msgErr?.message }, 404);
   if (msg.organization_id !== organization_id) return json({ error: "org_mismatch" }, 403);
-  const filt = preLlmFilter({ content: msg.content, direction: msg.direction, mediaType: msg.media_type });
+  // Áudio: analisa o que foi dito. Sem texto utilizável (sem chave de transcrição, ou áudio
+  // inaudível) não há o que analisar, e pagar a IA para ler "[Áudio]" não informa nada.
+  let transcript: string | null = null;
+  if (isAudioMessage(msg.media_type)) {
+    const { data: rows } = await admin.from("audio_transcriptions").select("transcript")
+      .eq("message_id", msg.id).order("created_at", { ascending: false }).limit(1);
+    transcript = rows?.[0]?.transcript ?? null;
+  }
+  const { content: messageText, source: contentSource } = effectiveContent({
+    content: msg.content, mediaType: msg.media_type, transcript,
+  });
+  if (contentSource === "none") return json({ ok: true, skipped: "no_transcript" });
+  const filt = preLlmFilter({ content: messageText, direction: msg.direction, mediaType: msg.media_type });
   if (filt.skip) return json({ ok: true, skipped: filt.reason });
 
   // Settings gating; derive contact/opportunity from thread
@@ -94,9 +111,24 @@ Deno.serve(async (req) => {
       .from("opportunities").select("status").eq("id", oppId).maybeSingle();
     opportunityIsOpen = opp ? opp.status === "open" : null;
   }
+  // Reanálise de conversa antiga: o negócio pode já ter fechado. A regra de "só em aberto" vale
+  // para o que chega agora, e o vínculo com a oportunidade é preservado dos sinais anteriores.
+  let previousEvents: Array<{ opportunity_id: string | null }> = [];
+  if (reanalyzing) {
+    const { data } = await admin.from("sales_events").select("opportunity_id")
+      .eq("message_id", msg.id).in("event_type", ANALYSIS_EVENT_TYPES);
+    previousEvents = data ?? [];
+    oppId = oppId ?? previousEvents.find((e) => e.opportunity_id)?.opportunity_id ?? null;
+    if (!oppId && contactId) {
+      const { data: opp } = await admin.from("opportunities").select("id")
+        .eq("contact_id", contactId).is("deleted_at", null).lte("created_at", msg.created_at)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (opp) oppId = opp.id;
+    }
+  }
   const gate = shouldAnalyze(settings, {
     direction: (msg.direction as any) ?? null,
-    opportunityIsOpen,
+    opportunityIsOpen: reanalyzing ? true : opportunityIsOpen,
     channel: thr?.channel ?? null,
     isInternalNote: false,
   });
@@ -114,14 +146,26 @@ Deno.serve(async (req) => {
 
   const { data: ctx } = await admin
     .from("messages")
-    .select("direction, content, created_at")
+    .select("id, direction, content, media_type, created_at")
     .eq("thread_id", msg.thread_id)
     .neq("id", msg.id)
+    .lte("created_at", msg.created_at)
     .order("created_at", { ascending: false })
     .limit(4);
 
+  const contextAudioIds = (ctx ?? []).filter((m) => isAudioMessage(m.media_type)).map((m) => m.id);
+  const { data: contextTranscripts } = contextAudioIds.length
+    ? await admin.from("audio_transcriptions").select("message_id, transcript").in("message_id", contextAudioIds)
+    : { data: [] };
+  const transcriptByMessage = new Map((contextTranscripts ?? []).map((t) => [t.message_id, t.transcript]));
+
   const conversation = (ctx ?? []).reverse()
-    .map((m) => `[${m.direction}] ${(m.content ?? "").slice(0, 280)}`)
+    .map((m) => {
+      const { content, source } = effectiveContent({
+        content: m.content, mediaType: m.media_type, transcript: transcriptByMessage.get(m.id),
+      });
+      return `[${m.direction}] ${(source === "none" ? (m.content ?? "") : content).slice(0, 280)}`;
+    })
     .join("\n");
 
   const userPrompt = `CONVERSA ANTERIOR (mais antiga -> mais recente):
@@ -130,7 +174,7 @@ ${conversation || "(sem histórico)"}
 MENSAGEM A ANALISAR:
 direction: ${msg.direction}
 media_type: ${msg.media_type ?? "none"}
-content: ${(msg.content ?? "").slice(0, 2000)}`;
+content: ${messageText.slice(0, 2000)}`;
 
   const callOnce = async (p: typeof provider) => {
     const r = await fetch(endpointFor(p.provider), {
@@ -262,7 +306,7 @@ content: ${(msg.content ?? "").slice(0, 2000)}`;
     message_quality_score: analysis.message_quality_score,
     reasoning: analysis.reasoning,
     tokens_used: totalTokens,
-    raw_response: rawResponseAugmented,
+    raw_response: { ...rawResponseAugmented, _content_source: contentSource },
   }, { onConflict: "message_id,analysis_version" });
 
   if (analysisError) {
@@ -291,6 +335,10 @@ content: ${(msg.content ?? "").slice(0, 2000)}`;
     ai_analyzed_at: new Date().toISOString(),
     ai_analysis_version: ANALYSIS_VERSION,
   }).eq("id", msg.id);
+
+  if (reanalyzing && previousEvents.length) {
+    await admin.from("sales_events").delete().eq("message_id", msg.id).in("event_type", ANALYSIS_EVENT_TYPES);
+  }
 
   const events: Array<Record<string, unknown>> = [];
   const base = {
