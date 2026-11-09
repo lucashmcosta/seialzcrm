@@ -6,6 +6,7 @@ import { useIsOrgSystemAdmin } from '@/hooks/useIsOrgSystemAdmin';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CsRoundRobinTab } from './CsRoundRobinTab';
 import { RoundRobinPeopleList } from './RoundRobinPeopleList';
+import { AgentDistributionCard } from './AgentDistributionCard';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -207,6 +208,8 @@ function CommercialRoundRobinTab() {
           Distribua novos leads entre seu time e configure a privacidade dos registros.
         </p>
       </div>
+
+      {organization?.id && <AgentDistributionCard organizationId={organization.id} roundRobinEnabled={flags.round_robin_enabled} />}
 
       <Card>
         <CardHeader>

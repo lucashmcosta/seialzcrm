@@ -666,7 +666,8 @@ async function triggerAiAgentOrFlagHuman(
 
   const aiAgent = aiAgents?.[0];
 
-  if (aiAgent && body) {
+  // Sem texto também chama: áudio e documento são tratados pelo agente.
+  if (aiAgent) {
     console.log("[meta-wa-webhook] AI Agent found", aiAgent.id, "- triggering response");
     try {
       const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -687,7 +688,7 @@ async function triggerAiAgentOrFlagHuman(
     } catch (e) {
       console.error("[meta-wa-webhook] ai-agent trigger exception", e);
     }
-  } else if (!aiAgent) {
+  } else {
     console.log("[meta-wa-webhook] no AI agent — flagging needs_human_attention", threadId);
     await supabase
       .from("message_threads")

@@ -784,7 +784,8 @@ async function triggerAiAgentOrFlagHuman(
     .order("created_at", { ascending: false })
     .limit(1);
   const agent = (agents as Array<{ id: string }> | null)?.[0];
-  if (agent && body) {
+  // Sem texto também chama: áudio e documento são tratados pelo agente.
+  if (agent) {
     const url = Deno.env.get("SUPABASE_URL");
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     fetch(`${url}/functions/v1/ai-agent-respond`, {
@@ -792,7 +793,7 @@ async function triggerAiAgentOrFlagHuman(
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({ agentId: agent.id, contactId, threadId, message: body }),
     }).catch(() => {});
-  } else if (!agent) {
+  } else {
     await service.from("message_threads").update({
       needs_human_attention: true,
       updated_at: new Date().toISOString(),
