@@ -32,7 +32,14 @@ export function handoffAckText(configured: string | null | undefined): string | 
 
 /** Quebra em até 3 mensagens nos parágrafos, como quem escreve no WhatsApp. O excedente fica na última. */
 export function splitIntoBubbles(text: string, max = 3): string[] {
-  const parts = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  // O modelo às vezes repete um parágrafo inteiro na mesma resposta: cada um sai uma vez só.
+  const seen = new Set<string>();
+  const parts = text.split(/\n{2,}/).map((p) => p.trim()).filter((p) => {
+    const key = p.replace(/\s+/g, " ").toLowerCase();
+    if (!p || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   if (parts.length <= max) return parts;
   return [...parts.slice(0, max - 1), parts.slice(max - 1).join("\n\n")];
 }

@@ -72,3 +72,7 @@ Deno.test("apresentação: padrão é assistente virtual; pelo nome mantém a ve
   assertEquals(own.startsWith("Você é Gabi, da equipe de atendimento."), true);
   assertEquals(own.includes("diga a verdade"), true);
 });
+
+Deno.test("parágrafo repetido na mesma resposta sai uma vez só", () => {
+  assertEquals(splitIntoBubbles("Faz sentido perguntar.\n\nÓtimo, o ponto ajuda.\n\nFaz sentido  perguntar."), ["Faz sentido perguntar.", "Ótimo, o ponto ajuda."]);
+});
