@@ -13,6 +13,24 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
+
+async function syncAdsNow(organizationId: string, authHeader: string) {
+  const call = (fn: string, body: Record<string, unknown>) => fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${fn}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: authHeader },
+    body: JSON.stringify({ organization_id: organizationId, ...body }),
+  });
+  try {
+    const discovered = await call("meta-discover-ads-cron", {});
+    if (!discovered.ok) throw new Error(`discover_${discovered.status}`);
+    const insights = await call("marketing-insights-sync-daily", { days_back: 30 });
+    if (!insights.ok) throw new Error(`insights_${insights.status}`);
+  } catch (e) {
+    console.warn("meta-connect-select-assets sync_now_failed", (e as Error).message);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
@@ -101,6 +119,11 @@ serve(async (req) => {
       action: "select_assets",
       detail: { count: updated },
     });
+
+    // Conta de anúncio selecionada: traz anúncios e números na hora, sem esperar a rodada agendada. Em segundo plano,
+    // porque a resposta da tela não depende disso e, se falhar, a próxima rodada do dia resolve.
+    const adAccountSelected = (candidateAssets ?? []).some((a: any) => a.asset_type === 'ad_account' && selectedIds.has(a.id));
+    if (adAccountSelected) EdgeRuntime.waitUntil(syncAdsNow(organization_id, authHeader));
 
     return json({ success: true, updated });
   } catch (e) {

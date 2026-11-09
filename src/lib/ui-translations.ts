@@ -1433,3 +1433,10 @@ Object.assign(uiEnglish, {
 
 // Transcrição embaixo do player de áudio
 Object.assign(uiEnglish, { 'Transcrição': 'Transcript', 'Ver menos': 'Show less', 'Ver mais': 'Show more' });
+
+// Sincronização de anúncios 2 vezes por dia
+Object.assign(uiEnglish, {
+  'atualização automática 2 vezes por dia': 'updates automatically twice a day',
+  'Sincronização automática 2 vezes por dia — sem dados ainda': 'Syncs automatically twice a day — no data yet',
+  'Configuração e status. Sincronização automática 2 vezes por dia; a análise (gráficos, tabelas) vive no módulo Marketing.': 'Configuration and status. Syncs automatically twice a day; analysis (charts, tables) lives in the Marketing module.',
+});

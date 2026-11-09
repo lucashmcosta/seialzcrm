@@ -253,7 +253,8 @@ serve(async (req) => {
     return json({ success: false, error_code: "unauthorized" }, 401);
   }
 
-  let body: { organization_id?: string; days_back?: number; limit?: number } = {};
+  // only_active: segunda rodada do dia, só com o que está gastando.
+  let body: { organization_id?: string; days_back?: number; limit?: number; only_active?: boolean } = {};
   try {
     body = await req.json();
   } catch {
@@ -325,15 +326,16 @@ serve(async (req) => {
     const proofSecret = access.source === "canonical" ? access.appSecret : undefined;
     const cred = { source: access.legacy?.source ?? null };
 
-    const { data: ads, error: adsErr } = await admin
+    let adsQuery = admin
       .from("marketing_campaigns")
       .select("id, external_id, spend_currency")
       .eq("organization_id", org.id)
       .eq("platform", "meta")
       .eq("sync_status", "success")
       .is("deleted_at", null)
-      .not("external_id", "is", null)
-      .limit(limit);
+      .not("external_id", "is", null);
+    if (body.only_active === true) adsQuery = adsQuery.eq("status", "active");
+    const { data: ads, error: adsErr } = await adsQuery.limit(limit);
 
     if (adsErr) {
       errors.push({ org_id: org.id, error: `ads: ${adsErr.message}` });
