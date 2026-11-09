@@ -878,6 +878,7 @@ function DesktopMessagesList() {
     endpointIds: activeEndpointFilterIdList,
     assignedUserIds: assigneeFilter.filter((v) => v !== 'unassigned'),
     unassignedOnly: assigneeFilter.includes('unassigned'),
+    toReplyOnly,
   });
 
 

@@ -77,21 +77,23 @@ interface UseMessageThreadsOptions {
   unassignedOnly?: boolean;
   /** Seleção múltipla de responsáveis (une com `unassignedOnly`). */
   assignedUserIds?: string[];
+  /** Só conversas em que o cliente mandou a última mensagem (filtro no servidor). */
+  toReplyOnly?: boolean;
 }
 
 const REALTIME_FLUSH_MS = 400;
 const VISIBILITY_REFETCH_MS = 60_000;
 
 export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
-  const { channels = ['whatsapp'], limit = 50, search, endpointIds, assignedUserId, unassignedOnly = false, assignedUserIds } = options;
+  const { channels = ['whatsapp'], limit = 50, search, endpointIds, assignedUserId, unassignedOnly = false, assignedUserIds, toReplyOnly = false } = options;
   const searchTerm = search && search.trim().length > 0 ? search.trim() : null;
   const endpointKey = endpointIds?.slice().sort().join(',') ?? '';
   const endpointFilter = endpointKey.length > 0 ? endpointKey.split(',') : null;
   const assigneeFilter = assignedUserId ?? null;
   const assigneeIdsKey = assignedUserIds?.slice().sort().join(',') ?? '';
   const assigneeIdsFilter = assigneeIdsKey.length > 0 ? assigneeIdsKey.split(',') : null;
-  const assigneeKey = `${assigneeFilter ?? ''}|${unassignedOnly ? '1' : '0'}|${assigneeIdsKey}`;
-  const hasServerSideListFilter = endpointFilter !== null || assigneeFilter !== null || unassignedOnly || assigneeIdsFilter !== null;
+  const assigneeKey = `${assigneeFilter ?? ''}|${unassignedOnly ? '1' : '0'}|${assigneeIdsKey}|${toReplyOnly ? 'r' : ''}`;
+  const hasServerSideListFilter = endpointFilter !== null || assigneeFilter !== null || unassignedOnly || assigneeIdsFilter !== null || toReplyOnly;
 
   const { organization, userProfile } = useOrganization();
 
@@ -123,6 +125,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_assigned_user_id: assigneeFilter ?? undefined,
         p_unassigned_only: unassignedOnly,
         ...(assigneeIdsFilter ? { p_assigned_user_ids: assigneeIdsFilter } : {}),
+        ...(toReplyOnly ? { p_to_reply: true } : {}),
       } as any);
 
 
@@ -168,6 +171,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_assigned_user_id: assigneeFilter ?? undefined,
         p_unassigned_only: unassignedOnly,
         ...(assigneeIdsFilter ? { p_assigned_user_ids: assigneeIdsFilter } : {}),
+        ...(toReplyOnly ? { p_to_reply: true } : {}),
       } as any);
 
 
