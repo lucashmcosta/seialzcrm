@@ -294,6 +294,7 @@ const ObservabilityPage = lazyWithRetry("ObservabilityPage", () => import("./pag
 const AdminProtectedRoute = lazyWithRetry("AdminProtectedRoute", () => import("./components/admin/AdminProtectedRoute"), "AdminProtectedRoute");
 const ImpersonateCallback = lazyWithRetry("ImpersonateCallback", () => import("./pages/admin/ImpersonateCallback"));
 const AdminEvolution = lazyWithRetry("AdminEvolution", () => import("./pages/admin/AdminEvolution"));
+const AdminPlamevMateriais = lazyWithRetry("AdminPlamevMateriais", () => import("./pages/admin/AdminPlamevMateriais"));
 
 
 const queryClient = new QueryClient({
@@ -582,6 +583,11 @@ const App = () => (
           <Route path="/admin/evolution" element={
             <AdminProtectedRoute>
               <AdminEvolution />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/plamev-materiais" element={
+            <AdminProtectedRoute>
+              <AdminPlamevMateriais />
             </AdminProtectedRoute>
           } />
           <Route path="/admin/obs" element={

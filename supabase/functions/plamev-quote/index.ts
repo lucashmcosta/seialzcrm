@@ -17,6 +17,8 @@
 //                                                             (sem oportunidade: das oportunidades do contato)
 //   { action: 'rede', cep, raio_km? }                       → rede credenciada perto do CEP (1 a 50 km, padrão 5)
 //   { action: 'pagamento', opportunity_id?, contact_id? }   → consulta na Plamev se as cotações viraram venda/foram pagas
+//   { action: 'materiais' }                                 → materiais de apoio da Plamev (iguais para todas as orgs;
+//                                                             mantidos em /admin/plamev-materiais) para enviar na conversa
 //   { action: 'config_get' }                                → { configurado, final, atualizadoEm, marcarGanhaAoPagar }
 //   { action: 'config_set', token }                         → testa o token na Plamev e grava
 //   { action: 'config_delete' }                             → remove o token
@@ -341,6 +343,19 @@ Deno.serve(async (req) => {
       return json(200, {
         cliente: contatoOk ? L.clienteDoContato(contato) : null,
         cotacoes: (await cotacoesVisiveis(opp, contatoOk ? contatoId : null)).map(cotacaoParaWidget),
+      });
+    }
+
+    if (action === "materiais") {
+      const { data, error } = await db.from("plamev_materials")
+        .select("id, titulo, descricao, tipo, mime_type, storage_path, tamanho_bytes")
+        .eq("ativo", true).order("ordem", { ascending: true }).order("created_at", { ascending: true }).limit(100);
+      if (error) throw new Error(`materiais: ${error.code}`);
+      return json(200, {
+        materiais: (data ?? []).map((m) => ({
+          id: m.id, titulo: m.titulo, descricao: m.descricao, tipo: m.tipo, mimeType: m.mime_type,
+          tamanho: Number(m.tamanho_bytes), url: L.urlMaterial(url, m.storage_path),
+        })),
       });
     }
 

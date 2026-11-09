@@ -166,3 +166,15 @@ export function useRede(org: string | undefined, busca: { cep: string; raioKm: n
       .then((r) => r.credenciados),
   });
 }
+
+/** Material de apoio da Plamev (igual para todas as orgs), mantido em /admin/plamev-materiais. */
+export interface Material {
+  id: string; titulo: string; descricao: string; tipo: 'image' | 'document'; mimeType: string; tamanho: number; url: string;
+}
+
+export function useMateriais(org: string | undefined) {
+  return useQuery({
+    queryKey: ['plamev', org, 'materiais'], enabled: !!org, staleTime: 5 * 60 * 1000,
+    queryFn: () => chamar<{ materiais: Material[] }>(org!, 'materiais').then((r) => r.materiais),
+  });
+}

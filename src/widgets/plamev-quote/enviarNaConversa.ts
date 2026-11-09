@@ -21,13 +21,28 @@ export const LIMITE_MENSAGEM = 4096;
 export async function enviarTextoNaConversa(input: {
   organizationId: string; userId: string | null; conversa: Conversa; texto: string;
 }): Promise<void> {
+  await enviar(input, { message: input.texto });
+}
+
+/** Manda um arquivo (URL pública) na conversa aberta, com legenda opcional. */
+export async function enviarArquivoNaConversa(input: {
+  organizationId: string; userId: string | null; conversa: Conversa;
+  url: string; tipo: 'image' | 'document'; legenda: string;
+}): Promise<void> {
+  await enviar(input, { mediaUrl: input.url, mediaType: input.tipo, message: input.legenda });
+}
+
+async function enviar(
+  input: { organizationId: string; userId: string | null; conversa: Conversa },
+  conteudo: { message: string; mediaUrl?: string; mediaType?: string },
+): Promise<void> {
   const { data, error } = await dispatchWhatsAppSend({
     organizationId: input.organizationId,
     threadId: input.conversa.threadId,
     contactId: input.conversa.contactId ?? undefined,
-    message: input.texto,
     userId: input.userId ?? undefined,
     senderContext: input.conversa.screen === 'inbox' ? 'inbox' : 'messages',
+    ...conteudo,
   });
   if (error) {
     let motivo = error.message;
