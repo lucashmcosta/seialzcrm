@@ -71,9 +71,13 @@ serve(async (req) => {
   const resolveOrg = async (assetId: string): Promise<string | null> => {
     if (orgCache.has(assetId)) return orgCache.get(assetId) ?? null;
     const assetType = platform === "instagram" ? "instagram_account" : "page";
+    // Orgs da mesma empresa Meta enxergam os mesmos ativos: só vale quem SELECIONOU o
+    // ativo numa conexão ativa, senão a mensagem de uma org cai na caixa de outra.
     const { data } = await admin.from("meta_assets")
-      .select("connection_id, meta_connections!inner(organization_id)")
-      .eq("external_id", assetId).eq("asset_type", assetType).limit(1).maybeSingle();
+      .select("connection_id, meta_connections!inner(organization_id, status)")
+      .eq("external_id", assetId).eq("asset_type", assetType)
+      .eq("selection_state", "selected").eq("meta_connections.status", "connected")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
     const org = (data as any)?.meta_connections?.organization_id ?? null;
     orgCache.set(assetId, org);
     return org;
