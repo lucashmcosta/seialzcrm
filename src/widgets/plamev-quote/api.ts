@@ -42,7 +42,7 @@ export interface ClientePedido {
 
 const MENSAGENS: Record<string, string> = {
   module_disabled: 'O widget da Plamev está desligado nesta organização.',
-  plamev_not_configured: 'Falta o token da Plamev. Peça a um administrador para colar em Configurações › Widgets › Cotação Plamev.',
+  plamev_not_configured: 'Falta o token da Plamev. Peça a um administrador para colar em Configurações › Widgets › Plamev.',
   plamev_unauthorized: 'A Plamev recusou o token salvo. Um administrador precisa colar um token novo nas configurações do widget.',
   token_rejected: 'A Plamev recusou este token. Gere um novo no portal da Plamev e tente de novo.',
   invalid_token: 'Isso não parece um token da Plamev. Cole só o token, sem espaços.',
@@ -52,6 +52,7 @@ const MENSAGENS: Record<string, string> = {
   invalid_email: 'E-mail inválido.',
   invalid_telefone: 'Telefone inválido. Use DDD + número.',
   invalid_cep: 'CEP inválido. Use os 8 números.',
+  invalid_raio: 'Escolha um raio entre 1 e 50 km.',
   opportunity_not_found: 'Você não tem acesso a esta oportunidade.',
   plamev_unavailable: 'A Plamev não respondeu. Tente de novo.',
 };
@@ -118,9 +119,18 @@ export interface ClienteContato {
   nome: string; cpf: string; email: string; telefone: string; cep: string; logradouro: string;
   numero: string; complemento: string; bairro: string; cidade: string; estado: string;
 }
+/** Status consultado na Plamev (VerificarConversaoVenda). verificadoEm null = ainda não consultado. */
+export interface StatusPagamento {
+  virouVenda: boolean; adesaoPaga: boolean;
+  /** PAGA | ISENTA | PENDENTE | CANCELADA | ESTORNADA; null = sem venda */
+  adesaoSituacao: string | null;
+  vendaSituacao: string | null; pagoEm: string | null; verificadoEm: string | null;
+}
 export interface CotacaoSalva {
   numeroCotacao: string; linkPagamento: string | null; formaPagamento: 1 | 2;
   mensalidade: number; adesao: number; pets: { nome: string; plano: string }[]; criadaEm: string;
+  /** Ausente antes do deploy da função nova. */
+  pagamento?: StatusPagamento;
 }
 export interface Contexto { cliente: ClienteContato | null; cotacoes: CotacaoSalva[] }
 
@@ -140,5 +150,19 @@ export function useSimulacao(org: string | undefined, pedido: PedidoSimulacao | 
   return useQuery({
     queryKey: ['plamev', org, 'simular', pedido], enabled: !!org && !!pedido, staleTime: 5 * 60 * 1000, retry: false,
     queryFn: () => chamar<{ resultado: Resultado; payload?: ChamadaPlamev[] }>(org!, 'simular', pedido!),
+  });
+}
+
+export interface Credenciado {
+  id: string; nome: string; endereco: string; bairro: string; cidade: string; estado: string; cep: string;
+  telefone: string; distanciaKm: number; volante: boolean; observacao: string;
+}
+
+/** Rede credenciada perto do CEP. busca null = ainda não buscou. */
+export function useRede(org: string | undefined, busca: { cep: string; raioKm: number } | null) {
+  return useQuery({
+    queryKey: ['plamev', org, 'rede', busca], enabled: !!org && !!busca, staleTime: HORA, retry: false,
+    queryFn: () => chamar<{ credenciados: Credenciado[] }>(org!, 'rede', { cep: busca!.cep, raio_km: busca!.raioKm })
+      .then((r) => r.credenciados),
   });
 }

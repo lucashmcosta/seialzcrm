@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowSquareOut, Cat, CheckCircle, Copy, Dog, LinkSimple, Plus, SpinnerGap, Trash, WarningCircle } from '@phosphor-icons/react';
+import { ArrowClockwise, ArrowSquareOut, Cat, CheckCircle, Copy, Dog, LinkSimple, Plus, SpinnerGap, Trash, WarningCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -110,7 +110,53 @@ function Composicao({ titulo, linhas }: { titulo: string; linhas: Resultado['com
 /** Compara nomes ignorando acento e caixa ("São Paulo" = "sao paulo"). */
 const norm = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
 
-function CotacoesSalvas({ cotacoes }: { cotacoes: CotacaoSalva[] }) {
+const dataCurta = (dia: string) => dia.split('-').reverse().slice(0, 2).join('/');
+
+/** Situação do pagamento da cotação, como a Plamev informou na última consulta. */
+function StatusPagamento({ p }: { p: CotacaoSalva['pagamento'] }) {
+  if (!p?.verificadoEm) return <span className="text-muted-foreground">Pagamento não consultado</span>;
+  if (p.adesaoPaga) {
+    return <span className="font-medium text-emerald-700 dark:text-emerald-400">Adesão paga{p.pagoEm ? ` em ${dataCurta(p.pagoEm)}` : ''}</span>;
+  }
+  if (p.virouVenda) {
+    const situacao = p.adesaoSituacao ? p.adesaoSituacao.toLowerCase() : 'pendente';
+    return <span className="text-amber-700 dark:text-amber-400">Venda criada · adesão {situacao}</span>;
+  }
+  return <span className="text-muted-foreground">Aguardando pagamento</span>;
+}
+
+const DEZ_MIN = 10 * 60 * 1000;
+
+function CotacoesSalvas({ org, opportunityId, contactId, cotacoes }: {
+  org: string; opportunityId: string | null; contactId: string | null; cotacoes: CotacaoSalva[];
+}) {
+  const qc = useQueryClient();
+  const [consultando, setConsultando] = useState(false);
+  const autoFeito = useRef(false);
+
+  const consultar = async (silencioso: boolean) => {
+    setConsultando(true);
+    try {
+      const r = await chamar<{ cotacoes: CotacaoSalva[] }>(org, 'pagamento', { opportunity_id: opportunityId, contact_id: contactId });
+      qc.setQueryData(contextoKey(org, opportunityId, contactId), (velho: { cotacoes: CotacaoSalva[] } | undefined) =>
+        velho ? { ...velho, cotacoes: r.cotacoes } : velho);
+      if (!silencioso) toast({ title: 'Status de pagamento atualizado' });
+    } catch (e) {
+      if (!silencioso) toast({ title: 'Não deu para consultar a Plamev', description: (e as Error).message, variant: 'destructive' });
+    } finally { setConsultando(false); }
+  };
+
+  // Ao abrir: consulta sozinho se alguma não paga não foi conferida nos últimos 10 min (o cron confere a cada 15).
+  const precisa = cotacoes.some((c) => c.pagamento && !c.pagamento.adesaoPaga
+    && (!c.pagamento.verificadoEm || Date.now() - Date.parse(c.pagamento.verificadoEm) > DEZ_MIN));
+  useEffect(() => {
+    if (precisa && !autoFeito.current) {
+      autoFeito.current = true;
+      void consultar(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [precisa]);
+
   if (!cotacoes.length) return null;
   const copiar = async (link: string) => {
     await navigator.clipboard.writeText(link);
@@ -118,8 +164,16 @@ function CotacoesSalvas({ cotacoes }: { cotacoes: CotacaoSalva[] }) {
   };
   return (
     <details className="rounded-[6px] border border-border p-2 text-xs" open={cotacoes.length <= 2}>
-      <summary className="cursor-pointer font-medium">Cotações desta oportunidade ({cotacoes.length})</summary>
-      <div className="mt-2 space-y-2">
+      <summary className="cursor-pointer font-medium">
+        {opportunityId ? 'Cotações desta oportunidade' : 'Cotações do contato'} ({cotacoes.length})
+      </summary>
+      <div className="mt-2 flex justify-end">
+        <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={consultando} onClick={() => consultar(false)}>
+          {consultando ? <SpinnerGap className="mr-1 h-3.5 w-3.5 animate-spin" /> : <ArrowClockwise className="mr-1 h-3.5 w-3.5" />}
+          Atualizar pagamento
+        </Button>
+      </div>
+      <div className="mt-1 space-y-2">
         {cotacoes.map((c) => (
           <div key={c.numeroCotacao} className="flex items-center justify-between gap-2">
             <div className="min-w-0">
@@ -127,6 +181,7 @@ function CotacoesSalvas({ cotacoes }: { cotacoes: CotacaoSalva[] }) {
               <div className="text-muted-foreground">
                 {new Date(c.criadaEm).toLocaleDateString('pt-BR')} · <span className="font-data">{brl(c.mensalidade)}</span>/mês
               </div>
+              <StatusPagamento p={c.pagamento} />
             </div>
             {c.linkPagamento && (
               <div className="flex shrink-0 gap-1">
@@ -309,7 +364,7 @@ export function PlamevQuoteForm({ organizationId: org, opportunityId, contactId 
 
   return (
     <div className="space-y-4">
-      <CotacoesSalvas cotacoes={contexto.data?.cotacoes ?? []} />
+      <CotacoesSalvas org={org} opportunityId={opportunityId} contactId={contactId} cotacoes={contexto.data?.cotacoes ?? []} />
       {opportunityId && contexto.isError && <p className="text-xs text-destructive">{(contexto.error as Error).message}</p>}
       {!opportunityId && !contactId && (
         <p className="text-xs text-muted-foreground">

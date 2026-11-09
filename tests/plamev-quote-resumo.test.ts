@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resumoParaCliente } from '../src/widgets/plamev-quote/resumo';
+import { resumoParaCliente, textoRede } from '../src/widgets/plamev-quote/resumo';
 
 const resultado = {
   mensalidade: 359.98, totalMensalidade: 331.48, descontosMensalidade: -28.5, adesao: 331.48, fidelidadeAte: '2027-11-02',
@@ -61,5 +61,27 @@ describe('resumo da cotação Plamev', () => {
     expect(t).toMatch(/Adesão \(1ª cobrança\): R\$\s?69,98/);
     expect(t.match(/Desconto Advance 89,99/g)).toHaveLength(1);
     expect(t).not.toContain('Desconto 2° Pet');
+  });
+});
+
+describe('textoRede', () => {
+  const base = { id: '', cep: '', observacao: '', volante: false };
+  it('lista as clínicas marcadas com distância, endereço e telefone', () => {
+    const texto = textoRede([
+      { ...base, id: 'a', nome: 'Bicharada', endereco: 'Rua A, 10', bairro: 'Pacaembu', cidade: 'São Paulo', estado: 'SP',
+        telefone: '(11) 38710000', distanciaKm: 2.9 },
+      { ...base, id: 'b', nome: 'Pet Volante', endereco: '', bairro: '', cidade: 'São Paulo', estado: 'SP',
+        telefone: '', distanciaKm: 4, volante: true },
+    ], '01310100');
+    expect(texto).toBe([
+      'Clínicas credenciadas Plamev perto do CEP 01310-100:',
+      '',
+      '1. Bicharada (2,9 km)',
+      'Rua A, 10 · Pacaembu, São Paulo/SP',
+      'Tel.: (11) 38710000',
+      '',
+      '2. Pet Volante (4 km)',
+      'Atendimento volante',
+    ].join('\n'));
   });
 });

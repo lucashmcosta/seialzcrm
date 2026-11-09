@@ -1,4 +1,4 @@
-import type { Resultado } from './api';
+import type { Credenciado, Resultado } from './api';
 
 export const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -33,5 +33,22 @@ export function resumoParaCliente({ resultado, pets, formaPagamento, numeroCotac
     ...(fidelidade ? [fidelidade] : []),
     ...(descontos.length ? ['', 'Descontos aplicados:', ...descontos.map((d) => `• ${d}`)] : []),
     ...(resultado.linkPagamento ? ['', 'Para contratar, é só pagar por aqui:', resultado.linkPagamento] : []),
+  ].join('\n');
+}
+
+const cepFormatado = (cep: string) => cep.replace(/^(\d{5})(\d{3})$/, '$1-$2');
+const km = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km`;
+
+/** Lista da rede credenciada para mandar ao cliente (dados públicos das clínicas). */
+export function textoRede(credenciados: Credenciado[], cep: string): string {
+  return [
+    `Clínicas credenciadas Plamev perto do CEP ${cepFormatado(cep)}:`,
+    ...credenciados.flatMap((c, i) => [
+      '',
+      `${i + 1}. ${c.nome} (${km(c.distanciaKm)})`,
+      ...(c.endereco || c.bairro ? [[c.endereco, [c.bairro, [c.cidade, c.estado].filter(Boolean).join('/')].filter(Boolean).join(', ')].filter(Boolean).join(' · ')] : []),
+      ...(c.telefone ? [`Tel.: ${c.telefone}`] : []),
+      ...(c.volante ? ['Atendimento volante'] : []),
+    ]),
   ].join('\n');
 }

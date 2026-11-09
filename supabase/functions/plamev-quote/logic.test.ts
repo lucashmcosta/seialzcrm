@@ -184,3 +184,69 @@ Deno.test("sem ComposicaoCampanha: continua usando os campos antigos", () => {
   const r = L.resultado({ ValorMensalidade: 149.99, ValorTotalMensalidade: 139.99, ValorDescontosMensalidades: -10, ValorAdesao: 89.99 });
   assertEquals([r.totalMensalidade, r.descontosMensalidade, r.adesao, r.campanha], [139.99, -10, 89.99, null]);
 });
+
+Deno.test("rede credenciada: mais perto primeiro, telefone com DDD, sem nome some", () => {
+  const raw = {
+    "1": {
+      CredenciadosId: "b", IndividuosNomeFantasia: "Clinicat 24h", IndividuosEnderecosLogradouro: "Rua A", IndividuosEnderecosNumero: "10",
+      IndividuosEnderecosBairro: "Sumaré", IndividuosEnderecosCidadesNome: "São Paulo", IndividuosEnderecosEstadosNome: "SP",
+      IndividuosEnderecosCep: "01255-000", IndividuosContatosDdd: "11", IndividuosContatosTelefone: "38710000",
+      DistanciaKm: "3.9015586222028964", TiposEstabelecimentosVolante: "0", CredenciadosObservacaoGeral: null,
+    },
+    "2": { CredenciadosId: "a", IndividuosNomeFantasia: "", CredenciadosNomeCredenciado: "Bicharada", DistanciaKm: "2.96" },
+    "3": { CredenciadosId: "c", DistanciaKm: "1" },
+  };
+  const r = L.rede(raw);
+  assertEquals(r.map((c) => c.nome), ["Bicharada", "Clinicat 24h"]);
+  assertEquals(r[1].telefone, "(11) 38710000");
+  assertEquals(r[1].distanciaKm, 3.9);
+  assertEquals(r[1].endereco, "Rua A, 10");
+  assertEquals(r[1].cep, "01255000");
+  assertEquals(r[0].telefone, "");
+});
+
+Deno.test("rede: sem clínica no raio a Plamev manda um objeto com RedeCredenciada vazia", () => {
+  const vazio = {
+    Mensagem: "Não encontramos rede credenciada para o CEP informado (69980000).", CepPesquisado: "69980000",
+    EnderecoPesquisado: { cep: "69980000", cidade: { nome: "Cruzeiro do Sul" }, estado: { sigla: "AC" } }, RedeCredenciada: [],
+  };
+  assertEquals(L.rede(vazio), []);
+});
+
+Deno.test("rede: CEP e raio validados", () => {
+  assertEquals(L.cep("01310-100"), "01310100");
+  assertEquals(recusa(() => L.cep("123")).codigo, "invalid_cep");
+  assertEquals(L.raioKm(undefined), 5);
+  assertEquals(L.raioKm("10"), 10);
+  assertEquals(recusa(() => L.raioKm(80)).codigo, "invalid_raio");
+  assertEquals(recusa(() => L.raioKm(2.5)).codigo, "invalid_raio");
+});
+
+Deno.test("conversão: sem venda, venda pendente e adesão paga", () => {
+  const nada = L.conversao({ CotacoesId: "x", NumeroCotacao: "1", VirouVenda: false, AdesaoPaga: false, Venda: null, Adesao: null });
+  assertEquals(nada, { virouVenda: false, adesaoPaga: false, adesaoSituacao: null, vendaSituacao: null, valorPago: null, pagoEm: null });
+
+  const pendente = L.conversao({
+    VirouVenda: true, AdesaoPaga: false, Venda: { SituacaoNome: "Aguardando Pagamento" },
+    Adesao: { Situacao: "PENDENTE", Valor: 69.98, ValorPago: 0, DataPagamento: null },
+  });
+  assertEquals([pendente.virouVenda, pendente.adesaoPaga, pendente.adesaoSituacao, pendente.pagoEm], [true, false, "PENDENTE", null]);
+
+  const paga = L.conversao({
+    VirouVenda: true, AdesaoPaga: true, Venda: { SituacaoNome: "Ativo" },
+    Adesao: { Situacao: "PAGA", Valor: 69.98, ValorPago: "69.98", DataPagamento: "2026-11-05 14:02:11" },
+  });
+  assertEquals([paga.adesaoPaga, paga.valorPago, paga.pagoEm], [true, 69.98, "2026-11-05"]);
+
+  // Isenta não é paga (o Swagger diz AdesaoPaga false), mesmo que algo venha estranho.
+  assertEquals(L.conversao({ VirouVenda: true, AdesaoPaga: "true", Adesao: { Situacao: "isenta" } }).adesaoPaga, false);
+
+  const nota = L.notaPagamento("202611000000284-01", paga, true);
+  assertEquals(nota.title, "Adesão paga · cotação Plamev nº 202611000000284-01");
+  assertEquals(nota.body, [
+    "Pagamento da adesão confirmado pela Plamev em 05/11/2026.",
+    "Valor pago: R$ 69,98",
+    "Situação da venda: Ativo",
+    "Oportunidade marcada como ganha automaticamente.",
+  ].join("\n"));
+});
