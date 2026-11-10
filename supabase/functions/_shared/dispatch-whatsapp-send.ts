@@ -9,6 +9,7 @@
 //   3. Se a thread não tiver `primary_endpoint_id`, tenta a última `messages.endpoint_id`.
 //   4. Só então cai no DEFAULT `twilio` (compat. com threads legadas Twilio puras).
 
+import { interactiveFallbackText, normalizeInteractive, validateInteractive, type InteractivePayload } from "./whatsapp-interactive.ts";
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { resolveSalesReplyRoute } from "./route-resolver.ts";
 import { resolveManualReplyEndpoint } from "./manual-reply-endpoint.ts";
@@ -76,6 +77,8 @@ export interface WhatsAppSendPayload {
   /** Auditoria: origem efetiva da seleção, propagada à provider function. */
   replyEndpointChoice?: ReplyEndpointChoice;
   migrationContext?: MigrationContext;
+  /** Botões, lista ou botão de link. Na Meta sai interativo; nos outros provedores, como texto numerado. */
+  interactive?: InteractivePayload;
 }
 
 
@@ -373,6 +376,19 @@ export async function dispatchWhatsAppSend(
   }
 
   const fnName = providerFunctionName(resolved.provider);
+
+  // Mensagem interativa: mesmas regras para todos os provedores. Sem botões nativos
+  // (Twilio, Evolution), vira texto numerado e segue como mensagem comum.
+  if (payload.interactive) {
+    const interactive = normalizeInteractive(payload.interactive);
+    const problems = validateInteractive(interactive);
+    if (problems.length) {
+      return { data: null, error: { message: "invalid_interactive", details: { error: "invalid_interactive", problems } } };
+    }
+    payload = resolved.provider === "meta_cloud_api"
+      ? { ...payload, interactive }
+      : { ...payload, interactive: undefined, message: interactiveFallbackText(interactive) };
+  }
 
 
   console.log("[dispatch-wa] route", {
