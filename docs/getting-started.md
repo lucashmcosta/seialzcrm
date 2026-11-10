@@ -5,7 +5,7 @@ Guia mínimo para colocar o ambiente de desenvolvimento em pé. Baseado em `pack
 ## Pré-requisitos
 
 - **Node.js 24.x** (`engines` em `package.json`).
-- **npm** (o repo versiona `package-lock.json`; o build da Vercel usa `bun install --frozen-lockfile` — localmente npm funciona normalmente).
+- **Bun** — o lockfile do repo é `bun.lock` (a Vercel e o CI usam `bun install --frozen-lockfile`). Não há `package-lock.json`; não gerar nem commitar um. Sem Bun instalado, `npx bun <cmd>` funciona.
 - Acesso ao projeto Supabase `qvmtzfvkhkhkhdpclzua` (produção — **não há ambiente de staging**; ver Cuidados abaixo).
 - `[TODO]` Supabase CLI para desenvolvimento local (`supabase start`) — fluxo local ainda não padronizado no projeto; hoje o desenvolvimento aponta direto para o banco de produção via chave anon + RLS.
 
@@ -14,12 +14,12 @@ Guia mínimo para colocar o ambiente de desenvolvimento em pé. Baseado em `pack
 ```sh
 git clone <repo>
 cd seialzcrm
-npm install
+bun install
 cp .env.example .env   # preencher com os valores reais
-npm run dev            # Vite em modo dev
+bun run dev            # Vite em modo dev
 ```
 
-Outros scripts: `npm run build` (produção), `npm run build:dev`, `npm run lint`, `npm run preview`.
+Outros scripts: `bun run build` (produção), `bun run build:dev`, `bun run lint`, `bun run preview`.
 
 ## Variáveis de ambiente
 
