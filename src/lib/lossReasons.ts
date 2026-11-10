@@ -30,39 +30,6 @@ export interface LossSettings {
 /** Org sem linha em opportunity_loss_settings usa este padrão (igual ao banco). */
 export const DEFAULT_LOSS_SETTINGS: LossSettings = { reason_required: true, detail_mode: 'optional' };
 
-/** Mesma regra do CHECK do banco. */
-export const LOSS_CODE_PATTERN = /^[A-Za-z0-9_.-]{1,20}$/;
-
-export const normalizeLossCode = (code: string) => code.trim().toUpperCase();
-
-export function isValidLossCode(code: string) {
-  return LOSS_CODE_PATTERN.test(code.trim());
-}
-
-/** O código é único na org sem diferenciar maiúsculas; `ignoreId` exclui o próprio item na edição. */
-export function lossCodeTaken(code: string, items: { id: string; code: string }[], ignoreId?: string) {
-  const wanted = normalizeLossCode(code);
-  return items.some((item) => item.id !== ignoreId && normalizeLossCode(item.code) === wanted);
-}
-
-/**
- * Sugere o próximo código de detalhe usando o código do motivo como prefixo (A → A1, A2…).
- * Pula códigos já ocupados em qualquer motivo da org, inclusive inativos (não são reaproveitados).
- */
-export function suggestDetailCode(reasonCode: string, allDetailCodes: string[]) {
-  const prefix = normalizeLossCode(reasonCode);
-  const taken = new Set(allDetailCodes.map(normalizeLossCode));
-  let next = 1;
-  for (const code of taken) {
-    if (!code.startsWith(prefix)) continue;
-    const n = Number(code.slice(prefix.length));
-    if (Number.isInteger(n) && n >= next) next = n + 1;
-  }
-  while (taken.has(`${prefix}${next}`)) next += 1;
-  const suggestion = `${prefix}${next}`;
-  return isValidLossCode(suggestion) ? suggestion : '';
-}
-
 /**
  * Move o item uma posição para cima/baixo e devolve só as linhas cujo order_index mudou.
  * Renumera de 1 em diante, o que também conserta empates antigos.
@@ -118,6 +85,8 @@ export function lossErrorMessage(error: unknown): string | null {
     loss_reason_inactive: 'Este motivo está inativo.',
     loss_detail_reason_mismatch: 'O detalhe escolhido não pertence a este motivo.',
     loss_code_in_use: 'O código já foi usado em alguma oportunidade e não pode mudar.',
+    loss_code_immutable: 'O código é gerado automaticamente e não muda.',
+    loss_code_too_long: 'O código gerado passaria de 20 caracteres. Fale com o suporte.',
     loss_reason_in_use: 'Motivo já usado não pode ser apagado. Inative-o.',
     loss_detail_in_use: 'Detalhe já usado não pode ser apagado. Inative-o.',
     loss_detail_reason_immutable: 'Detalhe não muda de motivo. Crie um novo detalhe no motivo certo e inative este.',
@@ -129,9 +98,6 @@ export function lossErrorMessage(error: unknown): string | null {
   };
   for (const [code, text] of Object.entries(known)) {
     if (raw.includes(code)) return uiText(text);
-  }
-  if (raw.includes('opportunity_loss_reasons_org_code_key') || raw.includes('opportunity_loss_reason_details_org_code_key')) {
-    return uiText('Este código já existe nesta organização (inclusive entre os inativos).');
   }
   if (raw.includes('opportunity_loss_stage_rules_detail_fkey')) {
     return uiText('Este detalhe está numa regra por etapa. Tire a regra antes de apagar.');

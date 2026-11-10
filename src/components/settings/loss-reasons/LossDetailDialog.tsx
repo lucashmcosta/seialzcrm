@@ -9,10 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
-import {
-  isValidLossCode, lossCodeTaken, lossErrorMessage, nextOrderIndex, normalizeLossCode, suggestDetailCode,
-  type LossDetail, type LossReason,
-} from '@/lib/lossReasons';
+import { lossErrorMessage, nextOrderIndex, type LossDetail, type LossReason } from '@/lib/lossReasons';
 
 interface Props {
   open: boolean;
@@ -21,13 +18,11 @@ interface Props {
   reason: LossReason;
   detail: LossDetail | null;
   allDetails: LossDetail[];
-  codeLocked: boolean;
   onSaved: () => void | Promise<void>;
 }
 
-export function LossDetailDialog({ open, onOpenChange, organizationId, reason, detail, allDetails, codeLocked, onSaved }: Props) {
+export function LossDetailDialog({ open, onOpenChange, organizationId, reason, detail, allDetails, onSaved }: Props) {
   useUiLocale();
-  const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [helpText, setHelpText] = useState('');
   const [active, setActive] = useState(true);
@@ -37,19 +32,14 @@ export function LossDetailDialog({ open, onOpenChange, organizationId, reason, d
 
   useEffect(() => {
     if (!open) return;
-    setCode(detail?.code ?? suggestDetailCode(reason.code, allDetails.map((d) => d.code)));
     setName(detail?.name ?? '');
     setHelpText(detail?.help_text ?? '');
     setActive(detail?.is_active ?? true);
     setRequiresDescription(detail?.requires_description ?? false);
     setAutomationOnly(detail?.automation_only ?? false);
-  }, [open, detail, reason.code, allDetails]);
+  }, [open, detail]);
 
-  const codeError = !code.trim() ? null
-    : !isValidLossCode(code) ? uiText('Use até 20 letras, números, ponto, hífen ou sublinhado, sem espaço.')
-    : lossCodeTaken(code, allDetails, detail?.id) ? uiText('Este código já existe nesta organização (inclusive entre os inativos).')
-    : null;
-  const canSave = !!code.trim() && !!name.trim() && !codeError && !saving;
+  const canSave = !!name.trim() && !saving;
 
   const save = async () => {
     setSaving(true);
@@ -61,12 +51,11 @@ export function LossDetailDialog({ open, onOpenChange, organizationId, reason, d
       automation_only: automationOnly,
     };
     const siblings = allDetails.filter((d) => d.reason_id === reason.id);
+    // o código é gerado pelo banco (código do motivo + número em sequência) e nunca muda
     const { error } = detail
-      ? await supabase.from('opportunity_loss_reason_details')
-          .update(codeLocked ? fields : { ...fields, code: normalizeLossCode(code) })
-          .eq('id', detail.id)
+      ? await supabase.from('opportunity_loss_reason_details').update(fields).eq('id', detail.id)
       : await supabase.from('opportunity_loss_reason_details').insert({
-          ...fields, code: normalizeLossCode(code), organization_id: organizationId, reason_id: reason.id,
+          ...fields, organization_id: organizationId, reason_id: reason.id,
           order_index: nextOrderIndex(siblings),
         });
     setSaving(false);
@@ -83,23 +72,14 @@ export function LossDetailDialog({ open, onOpenChange, organizationId, reason, d
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
           <DialogTitle>{detail ? uiText('Editar detalhe') : uiText('Novo detalhe')}</DialogTitle>
-          <DialogDescription>{uiText('Motivo: {0}', { 0: `${reason.code} · ${reason.name}` })}</DialogDescription>
+          <DialogDescription>{detail ? uiText('Motivo: {0} · código {1} (gerado automaticamente).', { 0: `${reason.code} · ${reason.name}`, 1: detail.code }) : uiText('Motivo: {0}. O código é gerado automaticamente.', { 0: `${reason.code} · ${reason.name}` })}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-1">
-          <div className="grid grid-cols-[120px_1fr] gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="loss-detail-code">{uiText('Código')}</Label>
-              <Input id="loss-detail-code" value={code} maxLength={20} disabled={codeLocked} className="font-data uppercase"
-                onChange={(e) => setCode(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="loss-detail-name">{uiText('Nome')}</Label>
-              <Input id="loss-detail-name" value={name} maxLength={160} onChange={(e) => setName(e.target.value)}
-                placeholder={uiText('Nunca contribuiu antes do parto')} />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="loss-detail-name">{uiText('Nome')}</Label>
+            <Input id="loss-detail-name" value={name} maxLength={160} onChange={(e) => setName(e.target.value)}
+              placeholder={uiText('Nunca contribuiu antes do parto')} />
           </div>
-          {codeLocked && <p className="text-xs text-muted-foreground">{uiText('O código já foi usado em alguma oportunidade e não pode mudar.')}</p>}
-          {codeError && <p className="text-xs text-destructive">{codeError}</p>}
           <div className="space-y-2">
             <Label htmlFor="loss-detail-help">{uiText('Texto de ajuda (opcional)')}</Label>
             <Input id="loss-detail-help" value={helpText} maxLength={200}

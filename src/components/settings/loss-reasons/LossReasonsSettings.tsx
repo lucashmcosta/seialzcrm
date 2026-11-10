@@ -236,13 +236,11 @@ export function LossReasonsSettings() {
         reasons={reasons} details={details} onChanged={reload} />
 
       <LossReasonDialog open={reasonDialog.open} onOpenChange={(open) => setReasonDialog((s) => ({ ...s, open }))}
-        organizationId={orgId} reason={reasonDialog.reason} reasons={reasons}
-        codeLocked={!!reasonDialog.reason && reasonUsed(reasonDialog.reason)} onSaved={reload} />
+        organizationId={orgId} reason={reasonDialog.reason} reasons={reasons} onSaved={reload} />
 
       {detailDialog.reason && (
         <LossDetailDialog open={detailDialog.open} onOpenChange={(open) => setDetailDialog((s) => ({ ...s, open }))}
-          organizationId={orgId} reason={detailDialog.reason} detail={detailDialog.detail} allDetails={details}
-          codeLocked={!!detailDialog.detail && !!usage.details[detailDialog.detail.id]} onSaved={reload} />
+          organizationId={orgId} reason={detailDialog.reason} detail={detailDialog.detail} allDetails={details} onSaved={reload} />
       )}
 
       <ConfirmDialog
