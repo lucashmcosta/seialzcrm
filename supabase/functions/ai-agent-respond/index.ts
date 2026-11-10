@@ -2463,6 +2463,19 @@ serve(async (req) => {
     for (const [index, bubble] of bubbles.entries()) {
       // Pausa curta entre as mensagens, para chegarem em ordem e como quem está digitando.
       if (index > 0) await new Promise((resolve) => setTimeout(resolve, 1500));
+      // O cliente escreveu enquanto esta resposta era montada: para aqui. A chamada da
+      // mensagem nova responde, já lendo tudo, e não saem duas respostas parecidas.
+      // Na passagem para a equipe, termina de enviar: depois dela o agente não responde mais.
+      if (!followUp && !toolsExecuted.includes('transfer_to_human')) {
+        const { count: newerInbound } = await supabase.from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('thread_id', threadId).eq('direction', 'inbound').is('deleted_at', null)
+          .gt('created_at', new Date(startTime).toISOString());
+        if ((newerInbound ?? 0) > 0) {
+          console.log(`[ai-agent-respond] cliente escreveu durante a resposta; parou em ${index}/${bubbles.length}`);
+          break;
+        }
+      }
       const { error: sendError } = await dispatchWhatsAppSend({
         organizationId,
         contactId,
