@@ -11,6 +11,7 @@
 // - Dispara AI agent SDR ou marca needs_human_attention
 //
 // Mídia, outbound, templates e handleStatus permanecem inalterados.
+import { metaInboundInteractiveReply } from "../_shared/whatsapp-interactive.ts";
 import { inboundEventKey, isDuplicateAuditError } from "./audit-key.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -967,6 +968,9 @@ async function handleInbound(
       ?? `[mensagem não suportada: ${msg?.type ?? "desconhecido"}]`;
   }
 
+  // Escolha num botão ou lista: guarda o id da opção, não só o texto.
+  const interactiveReply = metaInboundInteractiveReply(msg);
+
   // 9) Reply context
   const replyToMessageId = await resolveReplyToMessageId(
     supabase, endpoint.organization_id, msg?.context?.id,
@@ -986,7 +990,11 @@ async function handleInbound(
     media_type: mediaType,
     reply_to_message_id: replyToMessageId,
     sent_at: new Date().toISOString(),
-    metadata: { meta_cloud: { ...mediaInfo, raw: msg, referral }, commercial_entry: { first_contact_entry: created, opportunity_id: commercialOpportunityId } },
+    metadata: {
+      meta_cloud: { ...mediaInfo, raw: msg, referral },
+      commercial_entry: { first_contact_entry: created, opportunity_id: commercialOpportunityId },
+      ...(interactiveReply ? { interactive_reply: interactiveReply } : {}),
+    },
   }).select("id").single();
   if (msgInsErr) {
     console.error("[meta-wa-webhook] message insert error", msgInsErr);

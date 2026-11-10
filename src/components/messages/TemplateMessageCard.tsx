@@ -1,11 +1,11 @@
 import { Fragment, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowSquareOut, Phone, ArrowBendUpLeft, Image as ImageIcon } from '@phosphor-icons/react';
+import { ArrowSquareOut, Phone, ArrowBendUpLeft, Copy, FileText, FilmStrip, Image as ImageIcon } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { templateDisplay, type TemplateDisplay } from '../../../supabase/functions/_shared/template-display';
 
-type Parameter = { type?: string; text?: string; image?: { link?: string } };
+type Parameter = { type?: string; text?: string; image?: { link?: string }; video?: { link?: string }; document?: { link?: string; filename?: string } };
 export type StoredTemplate = {
   template_id?: string;
   components?: Array<{ type?: string; parameters?: Parameter[] }>;
@@ -43,6 +43,8 @@ export function TemplateCardContent({ template, content, display }: { template: 
   const header = template.components?.find(c => c.type?.toLowerCase() === 'header');
   const rawImage = header?.parameters?.find(p => p.type === 'image')?.image?.link;
   const image = rawImage && /^https:\/\//i.test(rawImage) ? rawImage : undefined;
+  const video = header?.parameters?.find(p => p.type === 'video')?.video?.link;
+  const doc = header?.parameters?.find(p => p.type === 'document')?.document;
   const headerText = header?.parameters?.filter(p => p.type === 'text').map(p => p.text).join(' ') || display?.headerText;
   const [failedImage, setFailedImage] = useState<string>();
   return (
@@ -50,6 +52,12 @@ export function TemplateCardContent({ template, content, display }: { template: 
       {image && (failedImage === image ? (
         <div className="flex h-32 items-center justify-center gap-2 rounded-md bg-black/5 text-xs"><ImageIcon size={18} />Imagem indisponível</div>
       ) : <img src={image} alt="Imagem do template" loading="lazy" referrerPolicy="no-referrer" className="max-h-72 w-full rounded-md object-contain" onError={() => setFailedImage(image)} />)}
+      {(video || doc) && (
+        <div className="flex h-12 items-center gap-2 rounded-md bg-black/5 px-3 text-xs">
+          {video ? <FilmStrip size={18} aria-hidden="true" /> : <FileText size={18} aria-hidden="true" />}
+          <span className="truncate">{video ? 'Vídeo' : doc?.filename || 'Documento'}</span>
+        </div>
+      )}
       <div className="space-y-1 py-2 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
         {headerText && <div className="font-semibold"><TemplateText text={headerText} /></div>}
         <div><TemplateText text={content} /></div>
@@ -57,7 +65,7 @@ export function TemplateCardContent({ template, content, display }: { template: 
       </div>
       {!!display?.buttons.length && <div className="divide-y divide-current/10 border-t border-current/10">
         {display.buttons.map((button, index) => {
-          const Icon = button.type === 'URL' ? ArrowSquareOut : button.type === 'PHONE_NUMBER' ? Phone : ArrowBendUpLeft;
+          const Icon = button.type === 'URL' ? ArrowSquareOut : button.type === 'PHONE_NUMBER' ? Phone : button.type === 'COPY_CODE' ? Copy : ArrowBendUpLeft;
           return <div key={index} role="img" aria-label={`Botão ${button.text} (prévia)`} title="Prévia do botão recebido pelo cliente" className="flex min-h-10 items-center justify-center gap-2 px-2 py-2 text-sm font-medium text-blue-700 dark:text-blue-300">
             <Icon size={16} aria-hidden="true" /><span className="break-words">{button.text}</span>
           </div>;

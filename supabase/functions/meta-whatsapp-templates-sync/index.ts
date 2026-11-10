@@ -9,6 +9,13 @@ import { metaWaGet, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
 import { resolveMetaCredentials, MetaCredentialsError } from "../_shared/meta-whatsapp/credentials.ts";
 import { resolveSyncedTemplateType } from "./template_type.ts";
 
+function pickHeaderMedia(metadata: unknown): Record<string, unknown> {
+  const m = (metadata && typeof metadata === "object" ? metadata : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const k of ["header_format", "header_media_url", "header_media_filename"]) if (m[k] !== undefined) out[k] = m[k];
+  return out;
+}
+
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
     status,
@@ -196,7 +203,7 @@ serve(async (req) => {
       // onConflict nomeado em PostgREST sem nome de constraint estável).
       const { data: existing } = await supabase
         .from("whatsapp_templates")
-        .select("id")
+        .select("id, metadata")
         .eq("provider", "meta_cloud_api")
         .eq("organization_integration_id", oi.id)
         .eq("meta_template_name", tpl.name)
@@ -228,7 +235,11 @@ serve(async (req) => {
         source: "meta",
         is_active: true,
         last_synced_at: new Date().toISOString(),
-        metadata: { meta_cloud: { waba_id: String(wabaId), rejected_reason: rejectedReason, raw: tpl } },
+        metadata: {
+          // Mídia de exemplo gravada na criação (envio reaproveita); a Meta não a devolve.
+          ...pickHeaderMedia(existing?.metadata),
+          meta_cloud: { waba_id: String(wabaId), rejected_reason: rejectedReason, raw: tpl },
+        },
       };
 
 

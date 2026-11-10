@@ -23,6 +23,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { interpolateSnippet } from '@/lib/interpolateSnippet';
 import type { MessageSnippet } from '@/hooks/useSnippets';
+import { InteractiveEditor, emptyInteractive } from '@/components/messages/InteractiveEditor';
+import { interactiveFallbackText, normalizeInteractive, validateInteractive, type InteractivePayload } from '../../../supabase/functions/_shared/whatsapp-interactive';
 
 const PURPOSE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'commercial', label: 'Comercial' },
@@ -46,6 +48,8 @@ const EMPTY_FORM = {
   body: '',
   allowed_purposes: ['commercial'] as string[],
   is_active: true,
+  /** Com botões, lista ou link: o texto da mensagem vai dentro de `interactive.body`. */
+  interactive: null as InteractivePayload | null,
 };
 
 type FormState = typeof EMPTY_FORM;
@@ -112,6 +116,7 @@ export default function WhatsAppSnippetsPage() {
       body: s.body,
       allowed_purposes: [...(s.allowed_purposes ?? [])],
       is_active: s.is_active,
+      interactive: s.interactive ?? null,
     });
     setDialogOpen(true);
   };
@@ -119,7 +124,16 @@ export default function WhatsAppSnippetsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization?.id) return;
-    if (!form.title.trim() || !form.body.trim()) {
+    const interactive = form.interactive ? normalizeInteractive(form.interactive) : null;
+    if (interactive) {
+      const problems = validateInteractive(interactive);
+      if (problems.length) {
+        toast({ variant: 'destructive', description: problems[0] });
+        return;
+      }
+    }
+    const body = interactive ? interactiveFallbackText(interactive) : form.body;
+    if (!form.title.trim() || !body.trim()) {
       toast({ variant: 'destructive', description: 'Título e mensagem são obrigatórios.' });
       return;
     }
@@ -132,9 +146,10 @@ export default function WhatsAppSnippetsPage() {
       title: form.title.trim(),
       shortcut: form.shortcut.trim() || null,
       category: form.category.trim() || null,
-      body: form.body,
+      body,
       allowed_purposes: form.allowed_purposes,
       is_active: form.is_active,
+      interactive,
     };
     try {
       if (editing) {
@@ -250,7 +265,14 @@ export default function WhatsAppSnippetsPage() {
               <TableBody>
                 {snippets.map((s) => (
                   <TableRow key={s.id}>
-                    <TableCell className="font-medium">{s.title}</TableCell>
+                    <TableCell className="font-medium">
+                      {s.title}
+                      {s.interactive && (
+                        <Badge variant="outline" className="ml-2 align-middle text-[10px]">
+                          {s.interactive.kind === 'list' ? 'Lista' : s.interactive.kind === 'cta_url' ? 'Link' : 'Botões'}
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {s.shortcut ? (
                         <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
@@ -303,7 +325,7 @@ export default function WhatsAppSnippetsPage() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className={form.interactive ? "max-h-[90vh] max-w-3xl overflow-y-auto" : "max-w-2xl"}>
           <form onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle>{editing ? 'Editar resposta rápida' : 'Nova resposta rápida'}</DialogTitle>
@@ -346,6 +368,21 @@ export default function WhatsAppSnippetsPage() {
                 />
               </div>
 
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div>
+                  <Label htmlFor="snippet-interactive">Com botões, lista ou link</Label>
+                  <p className="text-xs text-muted-foreground">A cliente toca na opção em vez de digitar. Só vale até 24 h depois da última mensagem dela.</p>
+                </div>
+                <Switch
+                  id="snippet-interactive"
+                  checked={!!form.interactive}
+                  onCheckedChange={(on) => setForm({ ...form, interactive: on ? { ...emptyInteractive(), body: form.body } : null, body: on ? form.body : (form.interactive?.body ?? form.body) })}
+                />
+              </div>
+
+              {form.interactive ? (
+                <InteractiveEditor value={form.interactive} onChange={(next) => setForm({ ...form, interactive: next })} />
+              ) : (
               <div className="space-y-2">
                 <Label htmlFor="body">Mensagem</Label>
                 <Textarea
@@ -357,8 +394,9 @@ export default function WhatsAppSnippetsPage() {
                   placeholder={'Ex.: Olá {{primeiro_nome}}, ...'}
                 />
               </div>
+              )}
 
-              {form.body.trim() && (
+              {!form.interactive && form.body.trim() && (
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Preview (com variáveis de exemplo)</Label>
                   <div className="rounded-md border border-border bg-muted/40 p-3 text-sm whitespace-pre-wrap">

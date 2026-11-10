@@ -60,6 +60,8 @@ export interface WhatsAppSendPayload {
   isAgentMessage?: boolean;
   agentId?: string;
   senderName?: string;
+  /** Botões, lista ou botão de link (regras em _shared/whatsapp-interactive.ts). */
+  interactive?: import('../../supabase/functions/_shared/whatsapp-interactive').InteractivePayload;
   senderContext?: "inbox" | "messages" | string;
   /**
    * message_threads.business_context da thread — usado para decidir a re-rota

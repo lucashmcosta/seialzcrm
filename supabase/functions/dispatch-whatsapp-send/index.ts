@@ -30,6 +30,8 @@ const payloadSchema = z.object({
     z.object({ source: z.literal("derived"), endpointId: z.string().uuid().nullish() }),
     z.object({ source: z.literal("manual"), endpointId: z.string().uuid() }),
   ]).optional(),
+  // Regras completas em _shared/whatsapp-interactive.ts (validateInteractive).
+  interactive: z.object({ kind: z.enum(["buttons", "list", "cta_url"]), body: z.string().max(1024) }).passthrough().optional(),
 }).passthrough();
 
 function json(status: number, body: unknown) {

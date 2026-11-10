@@ -42,6 +42,8 @@ import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageCon
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
+import { InteractiveComposerDialog } from '@/components/messages/InteractiveComposerDialog';
+import { interactiveFallbackText, type InteractivePayload } from '../../../supabase/functions/_shared/whatsapp-interactive';
 import { MediaPreviewDialog } from '@/components/whatsapp/MediaPreviewDialog';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
@@ -532,6 +534,51 @@ export function MobileMessagesList() {
     } catch (error: any) {
       setMessages(prev => prev.map(m => m.id === tempId ? { ...m, whatsapp_status: 'failed', error_message: error.message } : m));
       toast({ variant: 'destructive', description: error.message });
+    }
+  };
+
+  const [interactiveOpen, setInteractiveOpen] = useState(false);
+  const [interactiveSending, setInteractiveSending] = useState(false);
+  const handleSendInteractive = async (payload: InteractivePayload) => {
+    if (!organization?.id || !selectedThread) return;
+    const tempId = `temp-${Date.now()}`;
+    setMessages(prev => [...prev, {
+      id: tempId, content: interactiveFallbackText(payload), direction: 'outbound',
+      sent_at: new Date().toISOString(), whatsapp_status: 'sending',
+      media_urls: null, media_type: null, error_message: null, error_code: null, whatsapp_message_sid: null,
+      reply_to_message_id: null, reply_to_message: null,
+      sender_type: 'user', sender_name: userProfile?.full_name || null, sender_agent_id: null,
+      metadata: { meta_cloud: { interactive: payload } },
+    } as any]);
+    scrollToBottom();
+    if (selectedThreadId && selectedThread) autoAssignOnSend(selectedThreadId, selectedThread);
+    setInteractiveSending(true);
+    try {
+      const { data, error } = await dispatchWhatsAppSend({
+        organizationId: organization.id, contactId: selectedThread.contact_id,
+        threadId: selectedThreadId, message: '', interactive: payload,
+        userId: userProfile?.id,
+        senderContext: 'messages',
+        ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
+      });
+      if (error) throw error;
+      if ((data as any)?.error) {
+        if ((data as any).requiresTemplate) {
+          setMessages(prev => prev.filter(m => m.id !== tempId));
+          setInteractiveOpen(false);
+          setShowTemplates(true);
+          toast({ description: 'Botões e lista só podem ser enviados até 24 h depois da última mensagem da cliente. Use um modelo aprovado.' });
+          return;
+        }
+        throw new Error((data as any).details || (data as any).message || (data as any).error);
+      }
+      setInteractiveOpen(false);
+      refetchThreads();
+    } catch (error: any) {
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, whatsapp_status: 'failed', error_message: error.message } : m));
+      toast({ variant: 'destructive', description: error.message });
+    } finally {
+      setInteractiveSending(false);
     }
   };
 
@@ -1094,7 +1141,8 @@ export function MobileMessagesList() {
                     )}
                     <div className="flex items-end gap-1.5">
                       <div className="flex gap-0.5 shrink-0">
-                        <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} onNoteClick={() => setIsNoteMode(true)} disabled={submitting || mediaUploading} />
+                        <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} onNoteClick={() => setIsNoteMode(true)} onInteractiveClick={() => setInteractiveOpen(true)} disabled={submitting || mediaUploading} />
+                        <InteractiveComposerDialog open={interactiveOpen} onOpenChange={setInteractiveOpen} organizationId={organization?.id} sending={interactiveSending} onSend={handleSendInteractive} />
                         <AudioRecorder
                           onSend={handleAudioSend}
                           onSendAsDocument={handleAudioSendAsDocument}

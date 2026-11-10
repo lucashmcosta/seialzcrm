@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { TEMPLATE_DRAFT_STATE_KEY, type InteractiveTemplateDraft } from '@/lib/interactiveTemplateDraft';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,7 +49,17 @@ interface CTAAction {
   type: 'url' | 'phone' | 'copy_code';
   title: string;
   value: string;
+  /** Somente Meta: exemplo do {{1}} no final do link. */
+  example?: string;
 }
+
+type MetaHeaderFormat = 'NONE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+// Mesmos limites validados em meta-whatsapp-templates-create/components.ts.
+const META_HEADER_MEDIA: Record<'IMAGE' | 'VIDEO' | 'DOCUMENT', { accept: string; types: string[]; maxMb: number; label: string }> = {
+  IMAGE: { accept: 'image/jpeg,image/png', types: ['image/jpeg', 'image/png'], maxMb: 5, label: 'JPG ou PNG, até 5 MB' },
+  VIDEO: { accept: 'video/mp4', types: ['video/mp4'], maxMb: 16, label: 'MP4, até 16 MB' },
+  DOCUMENT: { accept: 'application/pdf', types: ['application/pdf'], maxMb: 100, label: 'PDF, até 100 MB' },
+};
 
 export default function TemplateForm() {
   const navigate = useNavigate();
@@ -105,6 +116,27 @@ export default function TemplateForm() {
   const [buttons, setButtons] = useState<QuickReplyButton[]>([]);
   const [actions, setActions] = useState<CTAAction[]>([]);
   const [mediaUrl, setMediaUrl] = useState('');
+  // Cabeçalho Meta (texto ou mídia de exemplo enviada ao storage da org)
+  const [headerFormat, setHeaderFormat] = useState<MetaHeaderFormat>('NONE');
+  const [headerExample, setHeaderExample] = useState('');
+  const [headerMediaUrl, setHeaderMediaUrl] = useState('');
+  const [headerMediaName, setHeaderMediaName] = useState('');
+  const [headerMediaUploading, setHeaderMediaUploading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Rascunho vindo de uma mensagem com botões/link ("Enviar para aprovação como modelo").
+  const location = useLocation();
+  useEffect(() => {
+    const draft = (location.state as Record<string, unknown> | null)?.[TEMPLATE_DRAFT_STATE_KEY] as InteractiveTemplateDraft | undefined;
+    if (!draft || isEditing) return;
+    setBody(draft.body);
+    setFooter(draft.footer);
+    if (draft.header) { setHeaderFormat('TEXT'); setHeader(draft.header); }
+    setTemplateType(draft.templateType);
+    setButtons(draft.buttons);
+    setActions(draft.actions);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Autenticação (OTP) — somente Meta Cloud, criação nova
   const [authSecurity, setAuthSecurity] = useState(true);
   const [authExpiry, setAuthExpiry] = useState<number>(5);
@@ -139,9 +171,17 @@ export default function TemplateForm() {
   const isStep1Valid = !nameError && language && category && templateType;
   const authExpiryValid = Number.isInteger(authExpiry) && authExpiry >= 1 && authExpiry <= 90;
   const authButtonValid = authButtonText.trim().length > 0 && authButtonText.length <= 25;
+  const isMetaCreate = isMetaProvider && !isEditing;
+  const isMetaMediaHeader = isMetaCreate && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
+  const headerHasVar = isMetaCreate && headerFormat === 'TEXT' && header.includes('{{1}}');
+  const metaHeaderValid = !isMetaCreate || (
+    isMetaMediaHeader
+      ? !!headerMediaUrl && !headerMediaUploading
+      : headerFormat !== 'TEXT' || (header.trim().length > 0 && header.length <= 60 && (!headerHasVar || headerExample.trim().length > 0))
+  );
   const isStep2Valid = isAuth
     ? authExpiryValid && authButtonValid
-    : !bodyError && !bodyStartsWithVariable;
+    : !bodyError && !bodyStartsWithVariable && metaHeaderValid;
   const isStep3Valid = variables.every(v => v.example.trim()) || variables.length === 0;
 
   // Insert variable at cursor
@@ -167,8 +207,9 @@ export default function TemplateForm() {
   };
 
   // Quick Reply buttons
+  const totalButtons = buttons.length + (isMetaCreate ? actions.length : 0);
   const handleAddButton = () => {
-    if (buttons.length >= 10) return;
+    if (totalButtons >= 10) return;
     setButtons([...buttons, { id: `btn_${Date.now()}`, title: '' }]);
   };
 
@@ -183,8 +224,10 @@ export default function TemplateForm() {
   };
 
   // CTA Actions
+  // Meta: até 2 links + 1 telefone + 1 copiar código.
+  const maxActions = isMetaCreate ? 4 : 3;
   const handleAddAction = () => {
-    if (actions.length >= 3) return;
+    if (actions.length >= maxActions || totalButtons >= 10) return;
     setActions([...actions, { type: 'url', title: '', value: '' }]);
   };
 
@@ -199,9 +242,36 @@ export default function TemplateForm() {
     setActions(updated);
   };
 
+  // Upload do arquivo de exemplo do cabeçalho (mesmo bucket das mídias de mensagens).
+  const handleHeaderMediaFile = async (file: File | undefined) => {
+    if (!file || !organization?.id || !isMetaMediaHeader) return;
+    const spec = META_HEADER_MEDIA[headerFormat as 'IMAGE' | 'VIDEO' | 'DOCUMENT'];
+    if (!spec.types.includes(file.type) || file.size > spec.maxMb * 1024 * 1024) {
+      toast.error(`Arquivo inválido: use ${spec.label}.`);
+      return;
+    }
+    setHeaderMediaUploading(true);
+    try {
+      const safeName = file.name.normalize('NFD').replace(/[^\w.-]+/g, '_').slice(-80) || 'arquivo';
+      const filePath = `${organization.id}/templates/${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage
+        .from('whatsapp-media')
+        .upload(filePath, file, { contentType: file.type });
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from('whatsapp-media').getPublicUrl(filePath);
+      setHeaderMediaUrl(publicUrl);
+      setHeaderMediaName(file.name);
+    } catch (e) {
+      toast.error(`Falha ao enviar o arquivo: ${(e as Error).message}`);
+    } finally {
+      setHeaderMediaUploading(false);
+    }
+  };
+
   // Submit
   const handleSubmit = async () => {
     if (!organization?.id) return;
+    setSubmitError(null);
 
     try {
       if (needsMetaAccount && !metaAccountId) {
@@ -234,10 +304,21 @@ export default function TemplateForm() {
           language,
           category,
           body,
-          header: header || undefined,
+          headerFormat: headerFormat === 'NONE' ? undefined : headerFormat,
+          header: headerFormat === 'TEXT' && header.trim() ? header : undefined,
+          headerExample: headerHasVar ? headerExample.trim() : undefined,
+          headerMediaUrl: isMetaMediaHeader ? headerMediaUrl : undefined,
           footer: footer || undefined,
           variables: variables.length > 0 ? variables : undefined,
           buttons: buttons.length > 0 ? buttons : undefined,
+          actions: actions.length > 0
+            ? actions.map(a => ({
+                type: a.type,
+                title: a.title,
+                value: a.value.trim(),
+                example: a.type === 'url' && a.value.includes('{{1}}') ? (a.example || '').trim() : undefined,
+              }))
+            : undefined,
         });
         navigate('/settings/whatsapp-templates');
         return;
@@ -264,7 +345,8 @@ export default function TemplateForm() {
       }
       navigate('/settings/whatsapp-templates');
     } catch (error) {
-      // Error handled by mutation
+      // Toast vem da mutation; a mensagem da Meta/validação fica visível no formulário.
+      if (isMetaCreate) setSubmitError((error as Error)?.message || 'Erro ao criar template na Meta.');
     }
   };
 
@@ -497,8 +579,83 @@ export default function TemplateForm() {
                       )}
                     </div>
 
+                    {/* Cabeçalho e rodapé (Meta) */}
+                    {isMetaCreate && (
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label>Cabeçalho</Label>
+                          <Select
+                            value={headerFormat}
+                            onValueChange={(v) => {
+                              setHeaderFormat(v as MetaHeaderFormat);
+                              setHeaderMediaUrl('');
+                              setHeaderMediaName('');
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="NONE">Sem cabeçalho</SelectItem>
+                              <SelectItem value="TEXT">Texto</SelectItem>
+                              <SelectItem value="IMAGE">Imagem</SelectItem>
+                              <SelectItem value="VIDEO">Vídeo</SelectItem>
+                              <SelectItem value="DOCUMENT">Documento (PDF)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {headerFormat === 'TEXT' && (
+                          <div className="space-y-2">
+                            <Input
+                              value={header}
+                              onChange={(e) => setHeader(e.target.value)}
+                              placeholder="Pedido {{1}} confirmado"
+                              maxLength={60}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Até 60 caracteres. Aceita uma variável, {'{{1}}'}.
+                            </p>
+                            {headerHasVar && (
+                              <Input
+                                value={headerExample}
+                                onChange={(e) => setHeaderExample(e.target.value)}
+                                placeholder="Exemplo para {{1}} (ex: 12345)"
+                              />
+                            )}
+                          </div>
+                        )}
+                        {isMetaMediaHeader && (
+                          <div className="space-y-2">
+                            <Input
+                              type="file"
+                              accept={META_HEADER_MEDIA[headerFormat as 'IMAGE' | 'VIDEO' | 'DOCUMENT'].accept}
+                              disabled={headerMediaUploading}
+                              onChange={(e) => handleHeaderMediaFile(e.target.files?.[0])}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              {headerMediaUploading
+                                ? 'Enviando arquivo...'
+                                : headerMediaUrl
+                                ? `Arquivo de exemplo: ${headerMediaName}. Ele é enviado à Meta para aprovação e usado por padrão nos envios.`
+                                : `Arquivo de exemplo (${META_HEADER_MEDIA[headerFormat as 'IMAGE' | 'VIDEO' | 'DOCUMENT'].label}).`}
+                            </p>
+                          </div>
+                        )}
+                        <div className="space-y-2">
+                          <Label htmlFor="footer">Rodapé</Label>
+                          <Input
+                            id="footer"
+                            value={footer}
+                            onChange={(e) => setFooter(e.target.value)}
+                            placeholder="Opcional"
+                            maxLength={60}
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     {/* Quick Reply buttons */}
-                    {templateType === 'quick-reply' && (
+                    {(templateType === 'quick-reply' || (isMetaCreate && templateType === 'call-to-action')) && (
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
                           <Label>Botões de Resposta Rápida</Label>
@@ -507,7 +664,7 @@ export default function TemplateForm() {
                             variant="outline"
                             size="sm"
                             onClick={handleAddButton}
-                            disabled={buttons.length >= 10}
+                            disabled={totalButtons >= 10}
                           >
                             <Plus className="w-3 h-3 mr-1" />
                             Botão
@@ -541,7 +698,7 @@ export default function TemplateForm() {
                     )}
 
                     {/* CTA actions */}
-                    {templateType === 'call-to-action' && (
+                    {(templateType === 'call-to-action' || (isMetaCreate && templateType === 'quick-reply')) && (
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
                           <Label>Ações</Label>
@@ -550,7 +707,7 @@ export default function TemplateForm() {
                             variant="outline"
                             size="sm"
                             onClick={handleAddAction}
-                            disabled={actions.length >= 3}
+                            disabled={actions.length >= maxActions || totalButtons >= 10}
                           >
                             <Plus className="w-3 h-3 mr-1" />
                             Ação
@@ -559,7 +716,9 @@ export default function TemplateForm() {
                         <Alert>
                            <WarningCircle className="w-4 h-4" />
                           <AlertDescription>
-                            Máximo 2 URLs e 1 telefone. Títulos não aceitam variáveis.
+                            {isMetaCreate
+                              ? 'Máximo 2 links, 1 telefone e 1 copiar código (10 botões no total). O link aceita {{1}} só no final. Títulos não aceitam variáveis.'
+                              : 'Máximo 2 URLs e 1 telefone. Títulos não aceitam variáveis.'}
                           </AlertDescription>
                         </Alert>
                         {actions.map((action, index) => (
@@ -605,13 +764,20 @@ export default function TemplateForm() {
                               value={action.value}
                               onChange={(e) => handleActionChange(index, 'value', e.target.value)}
                             />
+                            {isMetaCreate && action.type === 'url' && action.value.includes('{{1}}') && (
+                              <Input
+                                placeholder="Exemplo para {{1}} (ex: pedido123)"
+                                value={action.example || ''}
+                                onChange={(e) => handleActionChange(index, 'example', e.target.value)}
+                              />
+                            )}
                           </div>
                         ))}
                       </div>
                     )}
 
                     {/* Media URL */}
-                    {templateType === 'media' && (
+                    {templateType === 'media' && !isMetaCreate && (
                       <div className="space-y-2">
                         <Label htmlFor="mediaUrl">URL da Mídia</Label>
                         <Input
@@ -645,6 +811,13 @@ export default function TemplateForm() {
                     variables={variables}
                     onChange={setVariables}
                   />
+                )}
+
+                {submitError && (
+                  <Alert variant="destructive">
+                    <WarningCircle className="w-4 h-4" />
+                    <AlertDescription>{submitError}</AlertDescription>
+                  </Alert>
                 )}
 
                 {/* Navigation */}
@@ -693,12 +866,12 @@ export default function TemplateForm() {
               <Label className="mb-2 block">Prévia</Label>
               <WhatsAppPreview
                 body={body}
-                header={header}
                 footer={footer}
                 variables={variables}
-                buttons={templateType === 'quick-reply' ? buttons : []}
-                actions={templateType === 'call-to-action' ? actions : []}
-                mediaUrl={templateType === 'media' ? mediaUrl : undefined}
+                header={isMetaCreate ? (headerFormat === 'TEXT' ? header.replace('{{1}}', headerExample || '{{1}}') : '') : header}
+                buttons={templateType === 'quick-reply' || (isMetaCreate && templateType === 'call-to-action') ? buttons : []}
+                actions={templateType === 'call-to-action' || (isMetaCreate && templateType === 'quick-reply') ? actions : []}
+                mediaUrl={isMetaCreate ? (headerFormat === 'IMAGE' ? headerMediaUrl || undefined : undefined) : templateType === 'media' ? mediaUrl : undefined}
                 otp={isAuth ? { securityNotice: authSecurity, minutes: authExpiry, buttonText: authButtonText } : undefined}
               />
             </div>

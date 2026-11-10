@@ -1,6 +1,7 @@
 // Envia mensagem WhatsApp via Meta Cloud API.
 // Shape de entrada/saída compatível com twilio-whatsapp-send para uso pelo dispatcher.
 // Suporta texto, image, audio, video, document dentro da janela 24h.
+import { interactiveFallbackText, normalizeInteractive, toMetaInteractive, validateInteractive, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -175,10 +176,12 @@ serve(async (req) => {
       endpointId: explicitEndpointIdRaw,
       manualReplyEndpointId,
       templateId, templateVariables, templateHeaderImageUrl, templateButtonUrls, sensitiveTemplate,
+      templateHeaderText, templateCouponCode,
       type: payloadType, templateName: directTemplateName,
       languageCode: directLanguageCode, components: directComponents,
       migrationContext,
       senderContext,
+      interactive: interactiveRaw,
     } = body as Record<string, any>;
     let explicitEndpointId = explicitEndpointIdRaw;
 
@@ -222,6 +225,10 @@ serve(async (req) => {
       : (typeof mediaUrl === "string" && mediaUrl ? [mediaUrl] : []);
     const hasMedia = !isTemplateSend && (mediaUrlsArr.length > 0 || !!mediaType);
     const trimmedMessage = typeof message === "string" ? message : "";
+    // Botões, lista ou botão de link (só dentro da janela de 24h; fora dela cai no bloqueio abaixo).
+    const interactiveIn: InteractivePayload | null = !isTemplateSend && !hasMedia && interactiveRaw && typeof interactiveRaw === "object"
+      ? normalizeInteractive(interactiveRaw as InteractivePayload)
+      : null;
 
     if (isTemplateSend) {
       // Validação leve aqui — restante após carregar o template do banco.
@@ -246,6 +253,11 @@ serve(async (req) => {
       }
       if (trimmedMessage.length > 1024) {
         return errorResponse(400, { error: "caption_too_long", max: 1024 }, { branch: "caption_too_long", reason: "caption acima de 1024 caracteres" });
+      }
+    } else if (interactiveIn) {
+      const problems = validateInteractive(interactiveIn);
+      if (problems.length) {
+        return errorResponse(400, { error: "invalid_interactive", details: problems.join(" "), problems }, { branch: "invalid_interactive", reason: problems.join(" | ") });
       }
     } else {
       if (!trimmedMessage.trim()) {
@@ -635,7 +647,7 @@ serve(async (req) => {
     if (isTemplateSend && templateId) {
       const { data: tpl, error: tplErr } = await supabase
         .from("whatsapp_templates")
-        .select("id, organization_id, organization_integration_id, meta_waba_id, provider, status, meta_template_name, language, body, components, friendly_name, allowed_purposes")
+        .select("id, organization_id, organization_integration_id, meta_waba_id, provider, status, meta_template_name, language, body, components, friendly_name, allowed_purposes, metadata")
         .eq("id", templateId)
         .maybeSingle();
       if (tplErr || !tpl) return jsonResponse(404, { error: "template_not_found" });
@@ -772,10 +784,17 @@ serve(async (req) => {
         outboundTemplateComponents = directComponents;
       } else {
         try {
+          // Sem mídia no pedido, usa o exemplo gravado na criação do template.
+          const tplMeta = (templateRow?.metadata ?? {}) as Record<string, unknown>;
+          const storedMediaUrl = typeof tplMeta.header_media_url === "string" ? tplMeta.header_media_url : undefined;
           const built = buildMetaTemplateComponents(templateComponentsTemplate, {
             body: templateVariables ?? {},
             headerImageUrl: templateHeaderImageUrl,
+            headerMediaUrl: templateHeaderImageUrl ? undefined : storedMediaUrl,
+            headerFilename: typeof tplMeta.header_media_filename === "string" ? tplMeta.header_media_filename : undefined,
+            headerText: typeof templateHeaderText === "string" ? templateHeaderText : undefined,
             buttonUrls: templateButtonUrls,
+            couponCode: typeof templateCouponCode === "string" ? templateCouponCode : undefined,
           }, templateBodyText || "");
           renderedPreview = built.preview;
           outboundTemplateComponents = built.components;
@@ -801,13 +820,16 @@ serve(async (req) => {
       ? (renderedPreview || `[Template: ${templateName ?? "?"}]`)
       : hasMedia
         ? (trimmedMessage.trim() || placeholderForMedia(kind!))
-        : trimmedMessage;
+        : interactiveIn
+          ? interactiveFallbackText(interactiveIn)
+          : trimmedMessage;
 
     const baseMeta: Record<string, any> = { phone_number_id: endpoint.sender_sid, to };
     if (hasMedia) {
       baseMeta.media_source_url = mediaUrlsArr[0];
       baseMeta.media_kind = kind;
     }
+    if (interactiveIn) baseMeta.interactive = interactiveIn;
     if (isTemplateSend) {
       baseMeta.template = {
         name: templateName,
@@ -1029,6 +1051,15 @@ serve(async (req) => {
           [kind!]: mediaObj,
           ...(context ? { context } : {}),
         };
+      } else if (interactiveIn) {
+        outboundPayload = {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to,
+          type: "interactive",
+          interactive: toMetaInteractive(interactiveIn),
+          ...(context ? { context } : {}),
+        };
       } else {
         outboundPayload = {
           messaging_product: "whatsapp",
@@ -1060,6 +1091,7 @@ serve(async (req) => {
         finalMeta.media_kind = kind;
         finalMeta.media_source_url = mediaUrlsArr[0];
       }
+      if (interactiveIn) finalMeta.interactive = interactiveIn;
       if (isTemplateSend) {
         finalMeta.template = {
           name: templateName,
