@@ -1,6 +1,9 @@
 // Editor de mensagem interativa (botões, lista ou botão de link) com prévia.
 // As regras vêm de _shared/whatsapp-interactive.ts, as mesmas que o servidor aplica.
-import { Plus, Trash } from '@phosphor-icons/react';
+import { useState } from 'react';
+import { Plus, Trash, UploadSimple } from '@phosphor-icons/react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,7 +26,7 @@ export function emptyInteractive(kind: InteractiveKind = 'buttons'): Interactive
 /** Troca o tipo aproveitando o texto e as opções já digitados. */
 export function switchKind(p: InteractivePayload, kind: InteractiveKind): InteractivePayload {
   if (p.kind === kind) return p;
-  const base = { body: p.body, header: p.header, footer: p.footer };
+  const base = { body: p.body, header: p.header, footer: p.footer, headerMedia: kind === 'list' ? undefined : p.headerMedia };
   const titles = p.kind === 'buttons' ? p.buttons.map((b) => b.title) : p.kind === 'list' ? p.sections.flatMap((s) => s.rows.map((r) => r.title)) : [];
   if (kind === 'buttons') {
     const t = (titles.length ? titles : ['', '']).slice(0, L.buttonsMax);
@@ -47,14 +50,54 @@ const KINDS: Array<{ value: InteractiveKind; label: string; hint: string }> = [
   { value: 'cta_url', label: 'Link', hint: 'Um botão que abre um site' },
 ];
 
+// Mídia no topo: mesmos tipos e tamanhos aceitos pela Meta.
+const MEDIA_SPEC = {
+  image: { label: 'Imagem', accept: 'image/jpeg,image/png', types: ['image/jpeg', 'image/png'], maxMb: 5, hint: 'JPG ou PNG até 5 MB' },
+  video: { label: 'Vídeo', accept: 'video/mp4', types: ['video/mp4'], maxMb: 16, hint: 'MP4 até 16 MB' },
+  document: { label: 'PDF', accept: 'application/pdf', types: ['application/pdf'], maxMb: 100, hint: 'PDF até 100 MB' },
+} as const;
+type TopKind = 'none' | 'text' | keyof typeof MEDIA_SPEC;
+
 interface Props {
   value: InteractivePayload;
   onChange: (next: InteractivePayload) => void;
   problems?: string[];
+  /** Necessário para subir imagem, vídeo ou PDF do topo. */
+  organizationId?: string | null;
 }
 
-export function InteractiveEditor({ value, onChange, problems = [] }: Props) {
+export function InteractiveEditor({ value, onChange, problems = [], organizationId }: Props) {
+  const { toast } = useToast();
+  const [uploading, setUploading] = useState(false);
   const set = (patch: Partial<InteractivePayload>) => onChange({ ...value, ...patch } as InteractivePayload);
+  const top: TopKind = value.headerMedia ? value.headerMedia.type : value.header !== undefined ? 'text' : 'none';
+  const allowsMedia = value.kind !== 'list';
+  const setTop = (k: TopKind) => {
+    if (k === 'none') set({ header: undefined, headerMedia: undefined });
+    else if (k === 'text') set({ header: value.header ?? '', headerMedia: undefined });
+    else set({ header: undefined, headerMedia: { type: k, url: value.headerMedia?.type === k ? value.headerMedia.url : '' } });
+  };
+  const uploadMedia = async (file: File | undefined) => {
+    if (!file || !value.headerMedia || !organizationId) return;
+    const spec = MEDIA_SPEC[value.headerMedia.type];
+    if (!(spec.types as readonly string[]).includes(file.type) || file.size > spec.maxMb * 1024 * 1024) {
+      toast({ variant: 'destructive', description: `Arquivo inválido: use ${spec.hint}.` });
+      return;
+    }
+    setUploading(true);
+    try {
+      const safeName = file.name.normalize('NFD').replace(/[^\w.-]+/g, '_').slice(-80) || 'arquivo';
+      const path = `${organizationId}/interactive/${Date.now()}-${safeName}`;
+      const { error } = await supabase.storage.from('whatsapp-media').upload(path, file, { contentType: file.type });
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('whatsapp-media').getPublicUrl(path);
+      set({ headerMedia: { type: value.headerMedia.type, url: publicUrl, ...(value.headerMedia.type === 'document' ? { filename: file.name } : {}) } });
+    } catch (e) {
+      toast({ variant: 'destructive', description: `Falha ao enviar o arquivo: ${(e as Error).message}` });
+    } finally {
+      setUploading(false);
+    }
+  };
   const rows = value.kind === 'list' ? value.sections[0]?.rows ?? [] : [];
 
   return (
@@ -68,6 +111,36 @@ export function InteractiveEditor({ value, onChange, problems = [] }: Props) {
               {k.label}
             </Button>
           ))}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Topo da mensagem</Label>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Topo da mensagem">
+            {(['none', 'text', ...(allowsMedia ? (['image', 'video', 'document'] as const) : [])] as TopKind[]).map((k) => (
+              <Button key={k} type="button" size="sm" variant={top === k ? 'secondary' : 'ghost'} className="h-7 px-2.5 text-xs" aria-pressed={top === k} onClick={() => setTop(k)}>
+                {k === 'none' ? 'Nada' : k === 'text' ? 'Título' : MEDIA_SPEC[k].label}
+              </Button>
+            ))}
+          </div>
+          {!allowsMedia && <p className="text-[11px] text-muted-foreground">Lista só aceita título em texto no topo.</p>}
+          {top === 'text' && (
+            <div className="flex items-center gap-2">
+              <Input value={value.header ?? ''} placeholder="Título em negrito" onChange={(e) => set({ header: e.target.value })} />
+              <Counter value={value.header} max={L.header} />
+            </div>
+          )}
+          {value.headerMedia && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={uploading || !organizationId} asChild={!uploading && !!organizationId}>
+                <label className="cursor-pointer">
+                  <UploadSimple className="mr-1 h-4 w-4" />
+                  {uploading ? 'Enviando…' : value.headerMedia.url ? 'Trocar arquivo' : 'Escolher arquivo'}
+                  <input type="file" className="hidden" accept={MEDIA_SPEC[value.headerMedia.type].accept} onChange={(e) => { void uploadMedia(e.target.files?.[0]); e.target.value = ''; }} />
+                </label>
+              </Button>
+              <span className="text-[11px] text-muted-foreground">{value.headerMedia.url ? (value.headerMedia.filename || 'Arquivo pronto') : MEDIA_SPEC[value.headerMedia.type].hint}</span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-1">

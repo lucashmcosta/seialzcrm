@@ -4,7 +4,7 @@ import { buildChoicesInteractive, withoutQuestionEcho } from "../supabase/functi
 Deno.test("até 3 opções viram botões", () => {
   const { payload, problems } = buildChoicesInteractive({ question: " Qual plano? ", options: ["Básico", "Plus "] });
   assertEquals(problems, []);
-  assertEquals(payload, { kind: "buttons", body: "Qual plano?", header: undefined, footer: undefined, buttons: [{ id: "basico", title: "Básico" }, { id: "plus", title: "Plus" }] });
+  assertEquals(payload, { kind: "buttons", body: "Qual plano?", buttons: [{ id: "basico", title: "Básico" }, { id: "plus", title: "Plus" }] });
 });
 Deno.test("4 ou mais opções viram lista com uma seção e botão padrão", () => {
   const { payload } = buildChoicesInteractive({ question: "Qual horário?", options: ["8h", "10h", "14h", "16h"] });

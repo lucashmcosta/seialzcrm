@@ -72,3 +72,16 @@ Deno.test("casa resposta digitada com a opção", () => {
   assertEquals(matchTypedReply("5", botoes), null);
   assertEquals(matchTypedReply("talvez", botoes), null);
 });
+
+Deno.test("mídia no topo de botões e link", () => {
+  const comImagem = normalizeInteractive({ kind: "buttons", body: "Olha isso", headerMedia: { type: "image", url: "https://x.supabase.co/a.jpg" }, buttons: [{ id: "", title: "Ok" }] });
+  assertEquals(validateInteractive(comImagem), []);
+  assertEquals((toMetaInteractive(comImagem) as any).header, { type: "image", image: { link: "https://x.supabase.co/a.jpg" } });
+  const pdf = normalizeInteractive({ kind: "cta_url", body: "Contrato", headerMedia: { type: "document", url: "https://x.supabase.co/c.pdf", filename: "contrato.pdf" }, displayText: "Assinar", url: "https://a.com" });
+  assertEquals((toMetaInteractive(pdf) as any).header, { type: "document", document: { link: "https://x.supabase.co/c.pdf", filename: "contrato.pdf" } });
+  const lista = { kind: "list", body: "x", buttonText: "Ver", headerMedia: { type: "image", url: "https://a.com/i.jpg" }, sections: [{ rows: [{ id: "a", title: "A" }] }] } as InteractivePayload;
+  assertEquals(validateInteractive(lista).includes("Lista não aceita imagem, vídeo ou PDF no topo."), true);
+  assertEquals(normalizeInteractive(lista).headerMedia, undefined);
+  const http = { kind: "buttons", body: "x", headerMedia: { type: "image", url: "http://a.com/i.jpg" }, buttons: [{ id: "a", title: "A" }] } as InteractivePayload;
+  assertEquals(validateInteractive(http).includes("A mídia do topo precisa de um link https."), true);
+});

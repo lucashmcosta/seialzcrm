@@ -381,7 +381,7 @@ export default function WhatsAppSnippetsPage() {
               </div>
 
               {form.interactive ? (
-                <InteractiveEditor value={form.interactive} onChange={(next) => setForm({ ...form, interactive: next })} />
+                <InteractiveEditor value={form.interactive} onChange={(next) => setForm({ ...form, interactive: next })} organizationId={organization?.id} />
               ) : (
               <div className="space-y-2">
                 <Label htmlFor="body">Mensagem</Label>

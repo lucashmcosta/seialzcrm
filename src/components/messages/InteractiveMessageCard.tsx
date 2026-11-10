@@ -1,11 +1,22 @@
 // Mensagem interativa enviada (botões, lista ou botão de link), no estilo do cartão de template.
-import { ArrowBendUpLeft, ArrowSquareOut, ListBullets } from '@phosphor-icons/react';
+import { ArrowBendUpLeft, ArrowSquareOut, FilePdf, ListBullets } from '@phosphor-icons/react';
 import { interactiveOptions, type InteractivePayload } from '../../../supabase/functions/_shared/whatsapp-interactive';
 
 export function InteractiveMessageCard({ payload }: { payload: InteractivePayload }) {
   const options = interactiveOptions(payload);
   return (
     <div className="w-[300px] max-w-full overflow-hidden rounded-lg" aria-label="Mensagem com opções">
+      {payload.headerMedia?.type === 'image' && /^https:\/\//i.test(payload.headerMedia.url) && (
+        <img src={payload.headerMedia.url} alt="Imagem da mensagem" loading="lazy" className="max-h-72 w-full rounded-md object-contain" />
+      )}
+      {payload.headerMedia?.type === 'video' && /^https:\/\//i.test(payload.headerMedia.url) && (
+        <video src={payload.headerMedia.url} controls preload="metadata" className="max-h-72 w-full rounded-md" />
+      )}
+      {payload.headerMedia?.type === 'document' && (
+        <a href={payload.headerMedia.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-md bg-black/5 p-2 text-xs underline-offset-2 hover:underline">
+          <FilePdf size={18} aria-hidden="true" />{payload.headerMedia.filename || 'Documento'}
+        </a>
+      )}
       <div className="space-y-1 py-2 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
         {payload.header && <div className="font-semibold">{payload.header}</div>}
         <div>{payload.body || <span className="opacity-50">Texto da mensagem</span>}</div>
