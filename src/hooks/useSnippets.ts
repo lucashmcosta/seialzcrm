@@ -15,6 +15,8 @@ export interface MessageSnippet {
   is_active: boolean;
   usage_count: number;
   last_used_at: string | null;
+  /** Resposta rápida com botões, lista ou link. */
+  interactive?: import('../../supabase/functions/_shared/whatsapp-interactive').InteractivePayload | null;
 }
 
 interface Args {
@@ -34,7 +36,7 @@ export function useSnippets({ organizationId, purpose }: Args) {
     setLoading(true);
     const { data, error } = await supabase
       .from('message_snippets' as any)
-      .select('id, organization_id, title, shortcut, body, category, allowed_purposes, is_active, usage_count, last_used_at')
+      .select('id, organization_id, title, shortcut, body, category, allowed_purposes, is_active, usage_count, last_used_at, interactive')
       .eq('organization_id', organizationId)
       .eq('is_active', true)
       .contains('allowed_purposes', [purpose])

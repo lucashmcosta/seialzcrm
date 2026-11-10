@@ -1,3 +1,5 @@
+import { InteractiveMessageCard, InteractiveReplyBadge } from './InteractiveMessageCard';
+import type { InteractivePayload } from '../../../supabase/functions/_shared/whatsapp-interactive';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MapPin, User, ArrowSquareOut, Plus, Eye, SpinnerGap } from '@phosphor-icons/react';
@@ -79,6 +81,11 @@ export function MetaRichMessageContent({
 }: Props) {
   const template = (metadata as { meta_cloud?: { template?: StoredTemplate } } | null)?.meta_cloud?.template;
   if (isOutbound && template) return <TemplateMessageCard template={template} content={content} />;
+  const meta = metadata as { meta_cloud?: { interactive?: InteractivePayload }; interactive_reply?: { kind?: string } } | null;
+  if (isOutbound && meta?.meta_cloud?.interactive) return <InteractiveMessageCard payload={meta.meta_cloud.interactive} />;
+  if (!isOutbound && meta?.interactive_reply?.kind && meta.interactive_reply.kind !== 'flow') {
+    return <div className={className}><InteractiveReplyBadge kind={meta.interactive_reply.kind} />{fallback(content)}</div>;
+  }
   const raw = readRaw(metadata);
   const type = raw?.type;
 

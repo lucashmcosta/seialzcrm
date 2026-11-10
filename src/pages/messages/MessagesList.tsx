@@ -90,6 +90,8 @@ import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplate
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
+import { InteractiveComposerDialog } from '@/components/messages/InteractiveComposerDialog';
+import { interactiveFallbackText, type InteractivePayload } from '../../../supabase/functions/_shared/whatsapp-interactive';
 import { MediaPreviewDialog } from '@/components/whatsapp/MediaPreviewDialog';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
@@ -497,6 +499,10 @@ function DesktopMessagesList() {
   // Janela de atendimento (24h/CTWA 72h) — hoisted for use nos handlers e UI.
   // Substitui o antigo state `isIn24hWindow` + `hoursDiff<24` local.
   const [showTemplates, setShowTemplates] = useState(false);
+  // Botões, lista ou botão de link
+  const [interactiveOpen, setInteractiveOpen] = useState(false);
+  const [interactiveInitial, setInteractiveInitial] = useState<InteractivePayload | null>(null);
+  const [interactiveSending, setInteractiveSending] = useState(false);
   const [searchQuery, setSearchQuery] = usePersistedFilters<string>('messages.search', '');
   const [debouncedSearch, setDebouncedSearch] = useState<string>(searchQuery || '');
   useEffect(() => {
@@ -1068,13 +1074,21 @@ function DesktopMessagesList() {
   }, [orgEndpoints]);
 
   const applySnippet = (snippet: MessageSnippet) => {
-    const body = interpolateSnippet(snippet.body, buildSnippetVars({
+    const vars = buildSnippetVars({
       contactName: selectedThread?.contact_name ?? null,
       companyName: (selectedThread as any)?.company_name ?? null,
       agentName: userProfile?.full_name ?? null,
       commercialNumber: commercialEndpointNumber,
       serviceNumber: serviceEndpointNumber,
-    }));
+    });
+    // Resposta rápida com botões ou lista: abre a janela já preenchida para revisar e enviar.
+    if (snippet.interactive) {
+      setInteractiveInitial({ ...snippet.interactive, body: interpolateSnippet(snippet.interactive.body, vars) } as InteractivePayload);
+      setInteractiveOpen(true);
+      pendingSnippetIdRef.current = snippet.id;
+      return;
+    }
+    const body = interpolateSnippet(snippet.body, vars);
     setMessageText(body);
     pendingSnippetIdRef.current = snippet.id;
     // devolver foco ao textarea
@@ -1639,6 +1653,78 @@ function DesktopMessagesList() {
         )
       );
       toast({ variant: 'destructive', description: msg });
+    }
+  };
+
+  const handleSendInteractive = async (payload: InteractivePayload) => {
+    if (!guardReplyEndpointAllowed()) return;
+    if (!organization?.id || !selectedThread || !selectedThreadId) return;
+    if (!serviceWindow.isOpen && !composerAllowsFreeformOutsideWindow && messages.length > 0) {
+      toast({ description: 'Botões e lista só podem ser enviados até 24 h depois da última mensagem da cliente. Use um modelo aprovado.' });
+      setInteractiveOpen(false);
+      setShowTemplates(true);
+      return;
+    }
+    const tempId = `temp-${Date.now()}`;
+    const tempMessage: Message = {
+      id: tempId,
+      content: interactiveFallbackText(payload),
+      direction: 'outbound',
+      sent_at: new Date().toISOString(),
+      whatsapp_status: 'sending',
+      media_urls: null,
+      media_type: null,
+      error_message: null,
+      error_code: null,
+      whatsapp_message_sid: null,
+      reply_to_message_id: null,
+      reply_to_message: null,
+      sender_type: 'user',
+      sender_name: userProfile?.full_name || null,
+      sender_agent_id: null,
+      metadata: { meta_cloud: { interactive: payload } },
+    } as Message;
+    setInteractiveSending(true);
+    setMessages((prev) => [...prev, tempMessage]);
+    scrollToBottom();
+    autoAssignOnSend(selectedThreadId, selectedThread);
+    try {
+      const { data, error } = await dispatchWhatsAppSend({
+        organizationId: organization.id,
+        contactId: selectedThread.contact_id,
+        threadId: selectedThreadId,
+        message: '',
+        interactive: payload,
+        userId: userProfile?.id,
+        senderContext: 'messages',
+        ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
+        ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
+        ...(replyEndpointSelection ? { replyEndpointSelection } : {}),
+      });
+      if (error) throw error;
+      invalidateThreadLastEndpoint(selectedThreadId);
+      if ((data as any)?.error) {
+        if ((data as any).requiresTemplate) {
+          setMessages((prev) => prev.filter((m) => m.id !== tempId));
+          setInteractiveOpen(false);
+          setShowTemplates(true);
+          toast({ description: (data as any).message || 'Fora da janela WhatsApp. Selecione um template aprovado.' });
+          return;
+        }
+        throw new Error((data as any).details || (data as any).message || (data as any).error);
+      }
+      setInteractiveOpen(false);
+      if (replyEndpointSelection?.source === 'manual') void manualReply.useDerived();
+      refetchThreads();
+      const snippetId = pendingSnippetIdRef.current;
+      pendingSnippetIdRef.current = null;
+      if (snippetId) bumpSnippetUsage(snippetId);
+    } catch (error: any) {
+      const msg = toErrorMessageString(error, 'Erro ao enviar mensagem');
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, whatsapp_status: 'failed', error_message: msg } : m)));
+      toast({ variant: 'destructive', description: msg });
+    } finally {
+      setInteractiveSending(false);
     }
   };
 
@@ -3160,7 +3246,17 @@ function DesktopMessagesList() {
                                     onFileSelected={handleFileSelected}
                                     onTemplateClick={lowEndpointWindowBlocked ? undefined : () => setShowTemplates(true)}
                                     onNoteClick={() => setIsNoteMode(true)}
+                                    onInteractiveClick={() => { setInteractiveInitial(null); pendingSnippetIdRef.current = null; setInteractiveOpen(true); }}
                                     disabled={submitting || mediaUploading}
+                                  />
+                                  <InteractiveComposerDialog
+                                    open={interactiveOpen}
+                                    onOpenChange={(o) => { setInteractiveOpen(o); if (!o) pendingSnippetIdRef.current = null; }}
+                                    initial={interactiveInitial}
+                                    organizationId={organization?.id}
+                                    purpose={composerEndpointPurpose}
+                                    sending={interactiveSending}
+                                    onSend={handleSendInteractive}
                                   />
                                   <AudioRecorder
                                     onSend={handleAudioSend}

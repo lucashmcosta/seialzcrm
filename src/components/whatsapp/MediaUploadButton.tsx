@@ -6,16 +6,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, Image, FileText, VideoCamera, Files, Note } from '@phosphor-icons/react';
+import { Plus, Image, FileText, VideoCamera, Files, Note, ListBullets } from '@phosphor-icons/react';
 
 interface MediaUploadButtonProps {
   onFileSelected: (file: File) => void;
   onTemplateClick?: () => void;
   onNoteClick?: () => void;
+  /** Botões, lista ou botão de link. */
+  onInteractiveClick?: () => void;
   disabled?: boolean;
 }
 
-export function MediaUploadButton({ onFileSelected, onTemplateClick, onNoteClick, disabled }: MediaUploadButtonProps) {
+export function MediaUploadButton({ onFileSelected, onTemplateClick, onNoteClick, onInteractiveClick, disabled }: MediaUploadButtonProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
@@ -72,6 +74,12 @@ export function MediaUploadButton({ onFileSelected, onTemplateClick, onNoteClick
             <FileText className="w-4 h-4 mr-2" />
             Documento
           </DropdownMenuItem>
+          {onInteractiveClick && (
+            <DropdownMenuItem onClick={onInteractiveClick}>
+              <ListBullets className="w-4 h-4 mr-2" />
+              Botões ou lista
+            </DropdownMenuItem>
+          )}
           {onTemplateClick && (
             <DropdownMenuItem onClick={onTemplateClick}>
               <Files className="w-4 h-4 mr-2" />
