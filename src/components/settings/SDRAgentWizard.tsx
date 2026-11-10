@@ -45,6 +45,7 @@ interface ToolsTriggers {
   send_payment_link: string;
   update_qualification: string;
   end_conversation?: string;
+  send_choices?: string;
 }
 
 interface ComplianceRules {
@@ -161,6 +162,7 @@ const AVAILABLE_TOOLS = [
   { id: 'send_payment_link', name: 'Enviar Link de Pagamento', description: 'Gera e envia link de pagamento' },
   { id: 'update_qualification', name: 'Atualizar Qualificação', description: 'Registra dados de qualificação do lead' },
   { id: 'end_conversation', name: 'Encerrar conversa', description: 'Encerra quando o caso não se encaixa; reabre se o cliente voltar a escrever' },
+  { id: 'send_choices', name: 'Perguntas com botões', description: 'Faz perguntas de opções fixas com botões ou lista no WhatsApp (texto numerado onde não há botões)' },
 ];
 
 const STEPS = [
@@ -267,6 +269,7 @@ const DEFAULT_TOOLS_TRIGGERS: ToolsTriggers = {
   send_payment_link: 'Quando cliente confirmar que deseja pagar ou pedir link',
   update_qualification: 'Quando coletar informações de qualificação (BANT, MEDDIC, etc.)',
   end_conversation: 'Quando o caso não se encaixa e você já se despediu',
+  send_choices: 'Quando a pergunta tiver poucas opções fixas (plano, horário, sim/não)',
 };
 
 const initialWizardData: WizardData = {
@@ -780,7 +783,8 @@ export function SDRAgentWizard({
       
       if (error) throw error;
       
-      if (data?.response) {
+      // Só a pergunta com botões também é resposta: ela chega em bubbles, sem texto.
+      if (data?.response || data?.bubbles?.length) {
         const parts: string[] = data.bubbles?.length ? data.bubbles : [data.response];
         const agentMessages: TestMessage[] = parts.map((content) => ({
           id: crypto.randomUUID(),
