@@ -8,7 +8,7 @@ import { currentAiModel, pickAgentAiCredential } from "../_shared/intelligence/a
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
-import { agentIdentityLine, agentInputKind, followUpInstruction, isFollowUpSkip, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
+import { agentIdentityLine, agentInputKind, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -2436,8 +2436,9 @@ serve(async (req) => {
     }
     const splitMessages = (agent.formatting_rules as { split_messages?: boolean } | null)?.split_messages === true;
     // Texto que só ecoa o encerramento ("Conversa encerrada.") nunca vai para o cliente.
-    const isCloseEcho = (t: string) => toolsExecuted.includes('end_conversation') && /^(conversa\s+)?encerrad[ao]\.?$/i.test(t.trim());
-    const bubbles = (splitMessages ? splitIntoBubbles(aiResponse) : (aiResponse ? [aiResponse] : [])).filter((b) => !isCloseEcho(b));
+    const cleanResponse = aiResponse ? stripCloseEcho(aiResponse) : aiResponse;
+    const bubbles = (splitMessages ? splitIntoBubbles(cleanResponse) : (cleanResponse ? [cleanResponse] : []))
+      .map((b) => stripCloseEcho(b)).filter((b) => b.length > 0);
 
     // 7. Check if this is test mode - don't send to WhatsApp, just return response
     if (isTestMode) {
@@ -2447,7 +2448,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          response: aiResponse,
+          response: cleanResponse,
           bubbles,
           responseTime,
           tokensUsed,

@@ -115,6 +115,16 @@ export function followUpInstruction(attempt: number, total: number): string {
 }
 
 /** A retomada não sai quando o agente responde só o marcador. */
+/** Remove o eco do encerramento ("Conversa encerrada.") em qualquer ponto do texto. Isso nunca vai ao cliente. */
+export function stripCloseEcho(text: string): string {
+  return text
+    .replace(/(^|[\s.!?])(a\s+)?conversa\s+(foi\s+|está\s+)?(encerrada|finalizada)\s*[.!]?/gi, "$1")
+    .replace(/^\s*encerrad[ao]\s*[.!]?\s*$/gim, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function isFollowUpSkip(text: string | null | undefined): boolean {
   return (text ?? "").trim().replace(/[."']/g, "").toUpperCase() === FOLLOWUP_SKIP;
 }
