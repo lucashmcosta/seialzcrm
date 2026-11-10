@@ -403,6 +403,46 @@ export function rede(raw: Json) {
   }).filter((c) => c.nome).sort((a, b) => a.distanciaKm - b.distanciaKm);
 }
 
+/** Latitude/longitude do CEP pela BrasilAPI (`/api/cep/v2`); null se ela não tiver a localização. */
+export function coordenadasCep(raw: Json): { lat: number; lng: number } | null {
+  const c = raw?.location?.coordinates;
+  const lat = Number(c?.latitude);
+  const lng = Number(c?.longitude);
+  if (!c?.latitude || !c?.longitude || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
+/**
+ * `Credenciados/BuscaCredenciados` (Lat/Lng): plano B quando a busca por CEP da Plamev diz "CEP não encontrado" para CEP
+ * que existe (acontece com a maioria; conferido em 2026-11-09). Ela ignora o raio e devolve a rede toda com
+ * `DistanciaLinhaReta` em km: o raio é filtrado aqui. Só entra credenciado ativo, exibido no site e não bloqueado.
+ */
+export function redePorCoordenadas(raw: Json, raioKm: number) {
+  const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  return lista(raw).map((item) => {
+    const c = item?.Credenciados ?? {};
+    const ddd = s(c.Ddd).replace(/\D/g, "");
+    const fone = s(c.Telefone).replace(/\D/g, "");
+    const visivel = s(c.Situacao) === "1" && s(c.ExibeSite) !== "0" && s(c.Bloqueado) !== "1";
+    return {
+      visivel,
+      id: s(c.Id),
+      nome: s(c.NomeFantasia) || s(c.NomeCredenciado) || s(c.Nome),
+      endereco: [s(c.Logradouro), s(c.Numero)].filter(Boolean).join(", "),
+      bairro: s(c.Bairro),
+      cidade: s(c.Cidade),
+      estado: s(c.Estado),
+      cep: s(c.Cep).replace(/\D/g, ""),
+      telefone: fone ? (ddd ? `(${ddd}) ${fone}` : fone) : "",
+      distanciaKm: Math.round(Number(item?.DistanciaLinhaReta) * 10) / 10 || 0,
+      volante: false,
+      observacao: "",
+    };
+  }).filter((c) => c.visivel && c.nome && c.distanciaKm <= raioKm)
+    .map(({ visivel: _, ...c }) => c)
+    .sort((a, b) => a.distanciaKm - b.distanciaKm);
+}
+
 /**
  * `Cotacoes/VerificarConversaoVenda/{Id}`: virou venda? adesão paga? (só `PAGA` conta; isenta não).
  * Datas da Plamev vêm como "AAAA-MM-DD ..."; guardamos só o dia.
