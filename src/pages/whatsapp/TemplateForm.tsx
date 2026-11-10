@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { TEMPLATE_DRAFT_STATE_KEY, type InteractiveTemplateDraft } from '@/lib/interactiveTemplateDraft';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -122,6 +123,20 @@ export default function TemplateForm() {
   const [headerMediaName, setHeaderMediaName] = useState('');
   const [headerMediaUploading, setHeaderMediaUploading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Rascunho vindo de uma mensagem com botões/link ("Enviar para aprovação como modelo").
+  const location = useLocation();
+  useEffect(() => {
+    const draft = (location.state as Record<string, unknown> | null)?.[TEMPLATE_DRAFT_STATE_KEY] as InteractiveTemplateDraft | undefined;
+    if (!draft || isEditing) return;
+    setBody(draft.body);
+    setFooter(draft.footer);
+    if (draft.header) { setHeaderFormat('TEXT'); setHeader(draft.header); }
+    setTemplateType(draft.templateType);
+    setButtons(draft.buttons);
+    setActions(draft.actions);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Autenticação (OTP) — somente Meta Cloud, criação nova
   const [authSecurity, setAuthSecurity] = useState(true);
   const [authExpiry, setAuthExpiry] = useState<number>(5);

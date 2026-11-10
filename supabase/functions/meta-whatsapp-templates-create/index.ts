@@ -30,6 +30,23 @@ import {
 } from "./components.ts";
 import { handleAuthentication } from "./auth.ts";
 
+/** Confere o usuário do token e se ele é membro ativo da organização. */
+async function callerIsActiveMember(req: Request, organizationId: string): Promise<boolean> {
+  const auth = req.headers.get("authorization") || req.headers.get("Authorization") || "";
+  const jwt = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+  if (!jwt) return false;
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: authData, error: authErr } = await admin.auth.getUser(jwt);
+  if (authErr || !authData?.user?.id) return false;
+  const { data: me } = await admin.from("users").select("id").eq("auth_user_id", authData.user.id).maybeSingle();
+  if (!me?.id) return false;
+  const { data: link } = await admin.from("user_organizations").select("id")
+    .eq("user_id", me.id).eq("organization_id", organizationId).eq("is_active", true).maybeSingle();
+  return !!link;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
@@ -37,6 +54,11 @@ serve(async (req) => {
   try {
     const input = (await req.json().catch(() => null)) as CreateInput | null;
     if (!input) return json(400, { error: "invalid_body" });
+    // Só quem é membro ativo da organização cria modelo nela.
+    const orgForAuth = (input as any)?.organizationId;
+    if (typeof orgForAuth !== "string" || !(await callerIsActiveMember(req, orgForAuth))) {
+      return json(403, { error: "forbidden", message: "Você não tem acesso a esta organização." });
+    }
     if (String((input as any).category || "").toUpperCase() === "AUTHENTICATION") {
       return await handleAuthentication(input as any, json);
     }
