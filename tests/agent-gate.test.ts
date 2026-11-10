@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, agentIdentityLine, followUpInstruction, isFollowUpSkip, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, agentIdentityLine, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -87,4 +87,19 @@ Deno.test("retomada pulada só com o marcador", () => {
   assertEquals(isFollowUpSkip("NADA"), true);
   assertEquals(isFollowUpSkip(" nada. "), true);
   assertEquals(isFollowUpSkip("Nada de pressa, conseguiu ver?"), false);
+});
+
+Deno.test("stripCloseEcho tira o eco no fim de uma frase", () => {
+  assertEquals(stripCloseEcho("E se você indicar uma mamãe que fechar contrato com a gente, ganha R$ 50. Conversa encerrada."),
+    "E se você indicar uma mamãe que fechar contrato com a gente, ganha R$ 50.");
+});
+Deno.test("stripCloseEcho tira o eco sozinho e variações", () => {
+  assertEquals(stripCloseEcho("Conversa encerrada."), "");
+  assertEquals(stripCloseEcho("Encerrado."), "");
+  assertEquals(stripCloseEcho("Obrigada! A conversa foi encerrada."), "Obrigada!");
+  assertEquals(stripCloseEcho("Até mais.\n\nConversa finalizada"), "Até mais.");
+});
+Deno.test("stripCloseEcho não mexe em texto normal", () => {
+  assertEquals(stripCloseEcho("Se mudar alguma coisa, é só me chamar."), "Se mudar alguma coisa, é só me chamar.");
+  assertEquals(stripCloseEcho("A licença foi encerrada em março?"), "A licença foi encerrada em março?");
 });
