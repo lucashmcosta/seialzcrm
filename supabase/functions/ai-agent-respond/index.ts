@@ -2478,6 +2478,25 @@ serve(async (req) => {
       }
     }
 
+    // Enviar para uma conversa resolvida a reabre. Se o agente encerrou nesta resposta,
+    // fecha de novo depois da despedida, a menos que o cliente já tenha escrito depois disso.
+    if (toolsExecuted.includes('end_conversation') && bubbles.length > 0) {
+      const { data: closedThread } = await supabase.from('message_threads')
+        .select('ai_agent_closed_at').eq('id', threadId).maybeSingle();
+      const closedAt = closedThread?.ai_agent_closed_at as string | null | undefined;
+      if (closedAt) {
+        const { count: newerInbound } = await supabase.from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('thread_id', threadId).eq('direction', 'inbound').gt('created_at', closedAt);
+        if (!newerInbound) {
+          const { error: closeError } = await supabase.from('message_threads')
+            .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+            .eq('id', threadId).not('ai_agent_id', 'is', null).is('ai_agent_released_at', null).is('assigned_user_id', null);
+          if (closeError) console.warn('[ai-agent-respond] não fechou de novo após a despedida', closeError.message);
+        }
+      }
+    }
+
     // A nota da passagem é gravada quando a ferramenta roda, antes das últimas mensagens.
     // Leva a nota para depois delas, para a equipe ler a conversa na ordem.
     if (toolsExecuted.includes('transfer_to_human') && bubbles.length > 0) {
