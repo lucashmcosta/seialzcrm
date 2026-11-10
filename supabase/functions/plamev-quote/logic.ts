@@ -290,8 +290,10 @@ function campanha(raw: Json) {
 export function resultado(raw: Json) {
   const mensalidade = num(raw?.ValorMensalidade ?? raw?.ValorTotal);
   const camp = campanha(raw);
-  // Com campanha, a mensalidade é a primeira fatura depois da adesão (a 1ª fatura é a adesão).
-  const recorrente = camp?.faturas.find((f, i) => i > 0 && !/ades[aã]o/i.test(f.periodo));
+  // Com campanha, a mensalidade é a primeira fatura depois da adesão (a 1ª fatura é a adesão). Período único
+  // ("Todas as Faturas", campanha SLIM de 2026-11-10) vale para adesão e mensalidade.
+  const recorrente = camp?.faturas.find((f, i) => i > 0 && !/ades[aã]o/i.test(f.periodo))
+    ?? (camp?.faturas.length === 1 && !/ades[aã]o/i.test(camp.faturas[0].periodo) ? camp.faturas[0] : undefined);
   const totalMensalidade = recorrente ? recorrente.total : num(raw?.ValorTotalMensalidade ?? raw?.ValorTotal);
   return {
     mensalidade,
