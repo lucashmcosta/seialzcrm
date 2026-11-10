@@ -180,6 +180,15 @@ Deno.test("campanha: mensalidade vem de ComposicaoCampanha (resposta real de 202
   assertEquals(dois.campanha?.faturas[0].total, 139.96);
 });
 
+Deno.test("campanha com período único (Todas as Faturas): é a mensalidade", () => {
+  const pet = (nome: string, total: string) => ({ PetNome: nome, Linhas: [{ Periodo: "Todas as Faturas", Total: total, Detalhes: [] }] });
+  const r = L.resultado({
+    ValorMensalidade: 119.98, ValorTotalMensalidade: 97.48, ValorAdesao: 97.48,
+    ComposicaoCampanha: { NomeCampanha: "SLIM", TotalAdesao: "77.98", Tabela: [pet("Luna", "39.99"), pet("Tyler", "37.99")] },
+  });
+  assertEquals([r.totalMensalidade, r.descontosMensalidade, r.adesao], [77.98, -42, 77.98]);
+});
+
 Deno.test("sem ComposicaoCampanha: continua usando os campos antigos", () => {
   const r = L.resultado({ ValorMensalidade: 149.99, ValorTotalMensalidade: 139.99, ValorDescontosMensalidades: -10, ValorAdesao: 89.99 });
   assertEquals([r.totalMensalidade, r.descontosMensalidade, r.adesao, r.campanha], [139.99, -10, 89.99, null]);
