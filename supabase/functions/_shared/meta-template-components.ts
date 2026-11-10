@@ -2,12 +2,20 @@ import { sanitizeTemplateParam } from "./template-param-text.ts";
 
 export type TemplateDefinition = {
   type: string; format?: string; text?: string;
-  buttons?: { type: string; text: string; url?: string }[];
+  buttons?: { type: string; text?: string; url?: string; example?: string | string[] }[];
 };
 export type TemplateInput = {
   body?: Record<string, unknown>;
   headerImageUrl?: string;
+  /** Mídia de VIDEO/DOCUMENT (ou IMAGE); prevalece sobre headerImageUrl. */
+  headerMediaUrl?: string;
+  /** Nome exibido do cabeçalho DOCUMENT. */
+  headerFilename?: string;
+  /** Valor do {{1}} do cabeçalho de texto. */
+  headerText?: string;
   buttonUrls?: Record<string, string>;
+  /** Código do botão COPY_CODE; sem ele, usa o exemplo aprovado no template. */
+  couponCode?: string;
 };
 
 export function httpsUrl(value: string): string {
@@ -35,17 +43,38 @@ export function buildMetaTemplateComponents(definition: TemplateDefinition[], in
   const values = Object.fromEntries(keys.map(k => [k, sanitizeTemplateParam(input.body?.[k] ?? input.body?.[`var${k}`] ?? "")]));
   const components: Record<string, unknown>[] = [];
   const header = definition.find(c => c.type.toUpperCase() === "HEADER");
-  if (header?.format?.toUpperCase() === "IMAGE") {
-    if (!input.headerImageUrl) throw new Error("Informe a imagem do cabeçalho do template.");
-    components.push({ type: "header", parameters: [{ type: "image", image: { link: httpsUrl(input.headerImageUrl) } }] });
-  } else if (header?.format && header.format.toUpperCase() !== "TEXT") {
+  const headerFormat = header?.format?.toUpperCase();
+  const mediaUrl = input.headerMediaUrl || input.headerImageUrl;
+  if (headerFormat === "IMAGE") {
+    if (!mediaUrl) throw new Error("Informe a imagem do cabeçalho do template.");
+    components.push({ type: "header", parameters: [{ type: "image", image: { link: httpsUrl(mediaUrl) } }] });
+  } else if (headerFormat === "VIDEO") {
+    if (!mediaUrl) throw new Error("Informe o vídeo do cabeçalho do template.");
+    components.push({ type: "header", parameters: [{ type: "video", video: { link: httpsUrl(mediaUrl) } }] });
+  } else if (headerFormat === "DOCUMENT") {
+    if (!mediaUrl) throw new Error("Informe o documento do cabeçalho do template.");
+    const document: Record<string, string> = { link: httpsUrl(mediaUrl) };
+    if (input.headerFilename?.trim()) document.filename = input.headerFilename.trim();
+    components.push({ type: "header", parameters: [{ type: "document", document }] });
+  } else if (headerFormat && headerFormat !== "TEXT") {
     throw new Error("Este formato de cabeçalho ainda não é suportado neste envio.");
   } else if (header?.text?.includes("{{")) {
-    throw new Error("Este template exige variáveis no cabeçalho.");
+    if (!/^[^{}]*\{\{1\}\}[^{}]*$/.test(header.text)) throw new Error("Este formato de cabeçalho ainda não é suportado neste envio.");
+    const text = sanitizeTemplateParam(input.headerText ?? "");
+    if (!text) throw new Error("Este template exige variáveis no cabeçalho.");
+    components.push({ type: "header", parameters: [{ type: "text", text }] });
   }
   if (keys.length) components.push({ type: "body", parameters: keys.map(k => ({ type: "text", text: values[k] })) });
   const buttons = definition.find(c => c.type.toUpperCase() === "BUTTONS")?.buttons ?? [];
   buttons.forEach((button, index) => {
+    if (button.type.toUpperCase() === "COPY_CODE") {
+      const example = Array.isArray(button.example) ? button.example[0] : button.example;
+      const code = (input.couponCode ?? example ?? "").trim();
+      if (!code) throw new Error("Informe o código do botão de copiar código.");
+      if (code.length > 15) throw new Error("O código do botão deve ter no máximo 15 caracteres.");
+      components.push({ type: "button", sub_type: "copy_code", index: String(index), parameters: [{ type: "coupon_code", coupon_code: code }] });
+      return;
+    }
     if (button.type.toUpperCase() !== "URL" || !button.url?.includes("{{")) return;
     const url = input.buttonUrls?.[String(index)];
     if (!url) throw new Error(`Informe o link do botão ${button.text}.`);
@@ -66,7 +95,7 @@ export function signatureTemplateButton(definition: TemplateDefinition[]): { ind
   if (buttons.length !== 1) return null;
   const button = buttons[0];
   if (button.type.toUpperCase() !== "URL" || button.url !== "https://sign.suvsign.com/s/{{1}}") return null;
-  return { index: 0, text: button.text, url: button.url, hasImage: header?.format?.toUpperCase() === "IMAGE" };
+  return { index: 0, text: button.text ?? "", url: button.url, hasImage: header?.format?.toUpperCase() === "IMAGE" };
 }
 
 export function redactTemplateComponents(components: Record<string, unknown>[]) {
