@@ -71,3 +71,20 @@ describe('reabrir oportunidade ganha ou perdida', () => {
     expect(TOOLS.filter(visibleFor(new Set())).map((t) => t.key)).toContain('reabrir_oportunidade');
   });
 });
+
+describe('corrigir motivo de perda', () => {
+  it('só o gestor comercial corrige entre os modelos', () => {
+    const corrigem = TEMPLATES.filter((t) => t.perms.ferramentas.corrigir_motivo_perda).map((t) => t.key);
+    expect(corrigem).toEqual(['gestor']);
+  });
+
+  it('perfil salvo antes da permissão abre sem ela', () => {
+    const antigo = fromLegacy({ can_edit_opportunities: true }, true);
+    delete antigo.ferramentas.corrigir_motivo_perda;
+    expect(normalize(antigo).ferramentas.corrigir_motivo_perda).toBe(false);
+  });
+
+  it('aparece para todas as orgs (não depende de módulo)', () => {
+    expect(TOOLS.filter(visibleFor(new Set())).map((t) => t.key)).toContain('corrigir_motivo_perda');
+  });
+});

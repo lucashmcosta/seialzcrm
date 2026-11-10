@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { lossErrorMessage } from '@/lib/lossReasons';
 
 export type ClosePolicyMode = 'off' | 'monitor' | 'enforce';
 
@@ -66,5 +67,6 @@ export function mensagemErroStatus(error: unknown): string | null {
   if (msg.includes('reopen_forbidden')) {
     return 'Só quem tem a permissão "Reabrir oportunidade ganha ou perdida" pode tirar uma venda de Ganho ou Perdido. Fale com o administrador.';
   }
-  return null;
+  // regras de perda (motivo obrigatório, detalhe, descrição…): mostra a mensagem real em vez da genérica
+  return lossErrorMessage(error);
 }

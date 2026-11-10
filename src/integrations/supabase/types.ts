@@ -758,13 +758,21 @@ export type Database = {
           created_at: string | null
           current_version: number | null
           custom_instructions: string | null
+          distribution_day: string | null
+          distribution_day_count: number
+          distribution_mode: string
+          distribution_sequence: number
+          distribution_value: number | null
           empathy_level: number | null
           enabled_tools: Json | null
           feedback_history: Json | null
           feedback_rules: Json | null
+          followup_delays_minutes: number[]
+          followup_enabled: boolean
           formatting_rules: Json | null
           goal: string
           greeting_message: string | null
+          handoff_ack_message: string | null
           id: string
           is_enabled: boolean
           max_messages_per_conversation: number | null
@@ -772,6 +780,7 @@ export type Database = {
           name: string
           organization_id: string
           out_of_hours_message: string | null
+          presents_as_assistant: boolean
           provider: string | null
           tone: string
           tool_settings: Json | null
@@ -790,13 +799,21 @@ export type Database = {
           created_at?: string | null
           current_version?: number | null
           custom_instructions?: string | null
+          distribution_day?: string | null
+          distribution_day_count?: number
+          distribution_mode?: string
+          distribution_sequence?: number
+          distribution_value?: number | null
           empathy_level?: number | null
           enabled_tools?: Json | null
           feedback_history?: Json | null
           feedback_rules?: Json | null
+          followup_delays_minutes?: number[]
+          followup_enabled?: boolean
           formatting_rules?: Json | null
           goal?: string
           greeting_message?: string | null
+          handoff_ack_message?: string | null
           id?: string
           is_enabled?: boolean
           max_messages_per_conversation?: number | null
@@ -804,6 +821,7 @@ export type Database = {
           name?: string
           organization_id: string
           out_of_hours_message?: string | null
+          presents_as_assistant?: boolean
           provider?: string | null
           tone?: string
           tool_settings?: Json | null
@@ -822,13 +840,21 @@ export type Database = {
           created_at?: string | null
           current_version?: number | null
           custom_instructions?: string | null
+          distribution_day?: string | null
+          distribution_day_count?: number
+          distribution_mode?: string
+          distribution_sequence?: number
+          distribution_value?: number | null
           empathy_level?: number | null
           enabled_tools?: Json | null
           feedback_history?: Json | null
           feedback_rules?: Json | null
+          followup_delays_minutes?: number[]
+          followup_enabled?: boolean
           formatting_rules?: Json | null
           goal?: string
           greeting_message?: string | null
+          handoff_ack_message?: string | null
           id?: string
           is_enabled?: boolean
           max_messages_per_conversation?: number | null
@@ -836,6 +862,7 @@ export type Database = {
           name?: string
           organization_id?: string
           out_of_hours_message?: string | null
+          presents_as_assistant?: boolean
           provider?: string | null
           tone?: string
           tool_settings?: Json | null
@@ -3299,6 +3326,7 @@ export type Database = {
           address_state: string | null
           address_street: string | null
           address_zip: string | null
+          ai_agent_id: string | null
           attribution_path: string[]
           avg_response_time_seconds: number | null
           client_ip_address: unknown
@@ -3367,6 +3395,7 @@ export type Database = {
           address_state?: string | null
           address_street?: string | null
           address_zip?: string | null
+          ai_agent_id?: string | null
           attribution_path?: string[]
           avg_response_time_seconds?: number | null
           client_ip_address?: unknown
@@ -3437,6 +3466,7 @@ export type Database = {
           address_state?: string | null
           address_street?: string | null
           address_zip?: string | null
+          ai_agent_id?: string | null
           attribution_path?: string[]
           avg_response_time_seconds?: number | null
           client_ip_address?: unknown
@@ -3491,6 +3521,13 @@ export type Database = {
           utm_term?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "contacts_ai_agent_id_fkey"
+            columns: ["ai_agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contacts_company_id_fkey"
             columns: ["company_id"]
@@ -4396,6 +4433,30 @@ export type Database = {
           name?: string
           organization_ids?: string[] | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      fx_rates: {
+        Row: {
+          currency: string
+          fetched_at: string
+          rate_brl: number
+          rate_date: string
+          source: string
+        }
+        Insert: {
+          currency: string
+          fetched_at?: string
+          rate_brl: number
+          rate_date: string
+          source?: string
+        }
+        Update: {
+          currency?: string
+          fetched_at?: string
+          rate_brl?: number
+          rate_date?: string
+          source?: string
         }
         Relationships: []
       }
@@ -5389,6 +5450,7 @@ export type Database = {
       }
       intelligence_settings: {
         Row: {
+          analysis_profile: Json | null
           behavior: Json
           capture: Json
           created_at: string
@@ -5400,6 +5462,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          analysis_profile?: Json | null
           behavior?: Json
           capture?: Json
           created_at?: string
@@ -5411,6 +5474,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          analysis_profile?: Json | null
           behavior?: Json
           capture?: Json
           created_at?: string
@@ -6313,6 +6377,32 @@ export type Database = {
           },
         ]
       }
+      marketing_ad_discovery_requests: {
+        Row: {
+          external_id: string
+          organization_id: string
+          requested_at: string
+        }
+        Insert: {
+          external_id: string
+          organization_id: string
+          requested_at?: string
+        }
+        Update: {
+          external_id?: string
+          organization_id?: string
+          requested_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_ad_discovery_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketing_attribution_ambiguities: {
         Row: {
           candidate_count: number
@@ -6418,6 +6508,8 @@ export type Database = {
           created_at: string
           ctr_basis_points: number | null
           date: string
+          fx_rate: number | null
+          fx_rate_date: string | null
           id: string
           impressions: number
           inline_link_clicks: number
@@ -6428,6 +6520,7 @@ export type Database = {
           source_data: Json | null
           spend_cents: number
           spend_currency: string
+          spend_original_cents: number | null
           synced_at: string
           updated_at: string
         }
@@ -6439,6 +6532,8 @@ export type Database = {
           created_at?: string
           ctr_basis_points?: number | null
           date: string
+          fx_rate?: number | null
+          fx_rate_date?: string | null
           id?: string
           impressions?: number
           inline_link_clicks?: number
@@ -6449,6 +6544,7 @@ export type Database = {
           source_data?: Json | null
           spend_cents?: number
           spend_currency?: string
+          spend_original_cents?: number | null
           synced_at?: string
           updated_at?: string
         }
@@ -6460,6 +6556,8 @@ export type Database = {
           created_at?: string
           ctr_basis_points?: number | null
           date?: string
+          fx_rate?: number | null
+          fx_rate_date?: string | null
           id?: string
           impressions?: number
           inline_link_clicks?: number
@@ -6470,6 +6568,7 @@ export type Database = {
           source_data?: Json | null
           spend_cents?: number
           spend_currency?: string
+          spend_original_cents?: number | null
           synced_at?: string
           updated_at?: string
         }
@@ -6875,6 +6974,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          interactive: Json | null
           is_active: boolean
           last_used_at: string | null
           organization_id: string
@@ -6890,6 +6990,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          interactive?: Json | null
           is_active?: boolean
           last_used_at?: string | null
           organization_id: string
@@ -6905,6 +7006,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          interactive?: Json | null
           is_active?: boolean
           last_used_at?: string | null
           organization_id?: string
@@ -7027,6 +7129,12 @@ export type Database = {
         Row: {
           agent_typing: boolean | null
           agent_typing_at: string | null
+          ai_agent_closed_at: string | null
+          ai_agent_id: string | null
+          ai_agent_release_reason: string | null
+          ai_agent_released_at: string | null
+          ai_followup_count: number
+          ai_followup_last_at: string | null
           assigned_at: string | null
           assigned_user_id: string | null
           awaiting_button_response: boolean | null
@@ -7065,6 +7173,12 @@ export type Database = {
         Insert: {
           agent_typing?: boolean | null
           agent_typing_at?: string | null
+          ai_agent_closed_at?: string | null
+          ai_agent_id?: string | null
+          ai_agent_release_reason?: string | null
+          ai_agent_released_at?: string | null
+          ai_followup_count?: number
+          ai_followup_last_at?: string | null
           assigned_at?: string | null
           assigned_user_id?: string | null
           awaiting_button_response?: boolean | null
@@ -7103,6 +7217,12 @@ export type Database = {
         Update: {
           agent_typing?: boolean | null
           agent_typing_at?: string | null
+          ai_agent_closed_at?: string | null
+          ai_agent_id?: string | null
+          ai_agent_release_reason?: string | null
+          ai_agent_released_at?: string | null
+          ai_followup_count?: number
+          ai_followup_last_at?: string | null
           assigned_at?: string | null
           assigned_user_id?: string | null
           awaiting_button_response?: boolean | null
@@ -7139,6 +7259,13 @@ export type Database = {
           whatsapp_last_inbound_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "message_threads_ai_agent_id_fkey"
+            columns: ["ai_agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "message_threads_assigned_user_id_fkey"
             columns: ["assigned_user_id"]
@@ -10159,6 +10286,517 @@ export type Database = {
           },
         ]
       }
+      opportunity_loss_code_counters: {
+        Row: {
+          last_value: number
+          organization_id: string
+          scope: string
+        }
+        Insert: {
+          last_value?: number
+          organization_id: string
+          scope: string
+        }
+        Update: {
+          last_value?: number
+          organization_id?: string
+          scope?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_loss_code_counters_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_loss_corrections: {
+        Row: {
+          corrected_at: string
+          corrected_by: string | null
+          id: string
+          loss_id: string
+          new_description: string | null
+          new_detail_code: string | null
+          new_detail_id: string | null
+          new_reason_code: string | null
+          new_reason_id: string | null
+          old_description: string | null
+          old_detail_code: string | null
+          old_detail_id: string | null
+          old_reason_code: string | null
+          old_reason_id: string | null
+          opportunity_id: string
+          organization_id: string
+        }
+        Insert: {
+          corrected_at?: string
+          corrected_by?: string | null
+          id?: string
+          loss_id: string
+          new_description?: string | null
+          new_detail_code?: string | null
+          new_detail_id?: string | null
+          new_reason_code?: string | null
+          new_reason_id?: string | null
+          old_description?: string | null
+          old_detail_code?: string | null
+          old_detail_id?: string | null
+          old_reason_code?: string | null
+          old_reason_id?: string | null
+          opportunity_id: string
+          organization_id: string
+        }
+        Update: {
+          corrected_at?: string
+          corrected_by?: string | null
+          id?: string
+          loss_id?: string
+          new_description?: string | null
+          new_detail_code?: string | null
+          new_detail_id?: string | null
+          new_reason_code?: string | null
+          new_reason_id?: string | null
+          old_description?: string | null
+          old_detail_code?: string | null
+          old_detail_id?: string | null
+          old_reason_code?: string | null
+          old_reason_id?: string | null
+          opportunity_id?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_loss_corrections_corrected_by_fkey"
+            columns: ["corrected_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_corrections_loss_id_fkey"
+            columns: ["loss_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_losses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_corrections_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_corrections_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_corrections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_loss_reason_details: {
+        Row: {
+          automation_only: boolean
+          code: string
+          created_at: string
+          created_by: string | null
+          help_text: string | null
+          id: string
+          is_active: boolean
+          name: string
+          order_index: number
+          organization_id: string
+          reason_id: string
+          requires_description: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          automation_only?: boolean
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          help_text?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          order_index?: number
+          organization_id: string
+          reason_id: string
+          requires_description?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          automation_only?: boolean
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          help_text?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          order_index?: number
+          organization_id?: string
+          reason_id?: string
+          requires_description?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_loss_reason_details_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_reason_details_reason_id_organization_id_fkey"
+            columns: ["reason_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_loss_reasons"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_reason_details_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_loss_reasons: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          order_index: number
+          organization_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          order_index?: number
+          organization_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          order_index?: number
+          organization_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_loss_reasons_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_reasons_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_reasons_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_loss_settings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          detail_mode: string
+          organization_id: string
+          reason_required: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          detail_mode?: string
+          organization_id: string
+          reason_required?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          detail_mode?: string
+          organization_id?: string
+          reason_required?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_loss_settings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_loss_stage_rules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          detail_id: string
+          id: string
+          organization_id: string
+          stage_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          detail_id: string
+          id?: string
+          organization_id: string
+          stage_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          detail_id?: string
+          id?: string
+          organization_id?: string
+          stage_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_loss_stage_rules_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_stage_rules_detail_fkey"
+            columns: ["detail_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_loss_reason_details"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_stage_rules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_stage_rules_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: true
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_loss_stage_rules_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_losses: {
+        Row: {
+          actor_type: string
+          actor_user_id: string | null
+          automation_ref: string | null
+          close_date: string | null
+          created_at: string
+          description: string | null
+          detail_code: string | null
+          detail_id: string | null
+          id: string
+          lost_at: string
+          opportunity_id: string
+          organization_id: string
+          reason_code: string | null
+          reason_id: string | null
+          reopened_at: string | null
+          reopened_by: string | null
+          reopened_to_stage_id: string | null
+          source: string
+          stage_id_at_loss: string | null
+        }
+        Insert: {
+          actor_type?: string
+          actor_user_id?: string | null
+          automation_ref?: string | null
+          close_date?: string | null
+          created_at?: string
+          description?: string | null
+          detail_code?: string | null
+          detail_id?: string | null
+          id?: string
+          lost_at?: string
+          opportunity_id: string
+          organization_id: string
+          reason_code?: string | null
+          reason_id?: string | null
+          reopened_at?: string | null
+          reopened_by?: string | null
+          reopened_to_stage_id?: string | null
+          source?: string
+          stage_id_at_loss?: string | null
+        }
+        Update: {
+          actor_type?: string
+          actor_user_id?: string | null
+          automation_ref?: string | null
+          close_date?: string | null
+          created_at?: string
+          description?: string | null
+          detail_code?: string | null
+          detail_id?: string | null
+          id?: string
+          lost_at?: string
+          opportunity_id?: string
+          organization_id?: string
+          reason_code?: string | null
+          reason_id?: string | null
+          reopened_at?: string | null
+          reopened_by?: string | null
+          reopened_to_stage_id?: string | null
+          source?: string
+          stage_id_at_loss?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_losses_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_losses_detail_id_organization_id_fkey"
+            columns: ["detail_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_loss_reason_details"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "opportunity_losses_detail_id_reason_id_fkey"
+            columns: ["detail_id", "reason_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_loss_reason_details"
+            referencedColumns: ["id", "reason_id"]
+          },
+          {
+            foreignKeyName: "opportunity_losses_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_losses_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
+            foreignKeyName: "opportunity_losses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_losses_reason_id_organization_id_fkey"
+            columns: ["reason_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_loss_reasons"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "opportunity_losses_reopened_by_fkey"
+            columns: ["reopened_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_losses_reopened_to_stage_id_fkey"
+            columns: ["reopened_to_stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_losses_stage_id_at_loss_fkey"
+            columns: ["stage_id_at_loss"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_api_keys: {
         Row: {
           api_key: string
@@ -10701,6 +11339,7 @@ export type Database = {
           duplicate_enforce_block: boolean | null
           enable_companies_module: boolean | null
           id: string
+          logo_icon_url: string | null
           logo_size: number | null
           logo_url: string | null
           name: string
@@ -10733,6 +11372,7 @@ export type Database = {
           duplicate_enforce_block?: boolean | null
           enable_companies_module?: boolean | null
           id?: string
+          logo_icon_url?: string | null
           logo_size?: number | null
           logo_url?: string | null
           name: string
@@ -10767,6 +11407,7 @@ export type Database = {
           duplicate_enforce_block?: boolean | null
           enable_companies_module?: boolean | null
           id?: string
+          logo_icon_url?: string | null
           logo_size?: number | null
           logo_url?: string | null
           name?: string
@@ -11082,6 +11723,7 @@ export type Database = {
       plamev_credentials: {
         Row: {
           created_at: string
+          marcar_ganha_ao_pagar: boolean
           organization_id: string
           token_ciphertext: string
           token_last4: string
@@ -11090,6 +11732,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          marcar_ganha_ao_pagar?: boolean
           organization_id: string
           token_ciphertext: string
           token_last4: string
@@ -11098,6 +11741,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          marcar_ganha_ao_pagar?: boolean
           organization_id?: string
           token_ciphertext?: string
           token_last4?: string
@@ -11121,8 +11765,80 @@ export type Database = {
           },
         ]
       }
+      plamev_materials: {
+        Row: {
+          ativo: boolean
+          conteudo_md: string | null
+          created_at: string
+          created_by_auth_user_id: string | null
+          descricao: string
+          id: string
+          md_erro: string | null
+          md_gerado_em: string | null
+          md_revisado_em: string | null
+          md_revisado_por_auth_user_id: string | null
+          md_status: string
+          mime_type: string
+          ordem: number
+          removido_em: string | null
+          removido_por_auth_user_id: string | null
+          storage_path: string
+          tamanho_bytes: number
+          tipo: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          conteudo_md?: string | null
+          created_at?: string
+          created_by_auth_user_id?: string | null
+          descricao?: string
+          id?: string
+          md_erro?: string | null
+          md_gerado_em?: string | null
+          md_revisado_em?: string | null
+          md_revisado_por_auth_user_id?: string | null
+          md_status?: string
+          mime_type: string
+          ordem?: number
+          removido_em?: string | null
+          removido_por_auth_user_id?: string | null
+          storage_path: string
+          tamanho_bytes: number
+          tipo: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          conteudo_md?: string | null
+          created_at?: string
+          created_by_auth_user_id?: string | null
+          descricao?: string
+          id?: string
+          md_erro?: string | null
+          md_gerado_em?: string | null
+          md_revisado_em?: string | null
+          md_revisado_por_auth_user_id?: string | null
+          md_status?: string
+          mime_type?: string
+          ordem?: number
+          removido_em?: string | null
+          removido_por_auth_user_id?: string | null
+          storage_path?: string
+          tamanho_bytes?: number
+          tipo?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       plamev_quotes: {
         Row: {
+          adesao_paga: boolean
+          adesao_pago_em: string | null
+          adesao_situacao: string | null
           created_at: string
           created_by_user_id: string | null
           forma_pagamento: number
@@ -11131,12 +11847,19 @@ export type Database = {
           numero_cotacao: string
           opportunity_id: string
           organization_id: string
+          pagamento_registrado_em: string | null
           pets: Json
           plamev_cotacao_id: string
+          status_verificado_em: string | null
           valor_adesao: number
           valor_mensalidade: number
+          venda_situacao: string | null
+          virou_venda: boolean
         }
         Insert: {
+          adesao_paga?: boolean
+          adesao_pago_em?: string | null
+          adesao_situacao?: string | null
           created_at?: string
           created_by_user_id?: string | null
           forma_pagamento: number
@@ -11145,12 +11868,19 @@ export type Database = {
           numero_cotacao: string
           opportunity_id: string
           organization_id: string
+          pagamento_registrado_em?: string | null
           pets?: Json
           plamev_cotacao_id: string
+          status_verificado_em?: string | null
           valor_adesao: number
           valor_mensalidade: number
+          venda_situacao?: string | null
+          virou_venda?: boolean
         }
         Update: {
+          adesao_paga?: boolean
+          adesao_pago_em?: string | null
+          adesao_situacao?: string | null
           created_at?: string
           created_by_user_id?: string | null
           forma_pagamento?: number
@@ -11159,10 +11889,14 @@ export type Database = {
           numero_cotacao?: string
           opportunity_id?: string
           organization_id?: string
+          pagamento_registrado_em?: string | null
           pets?: Json
           plamev_cotacao_id?: string
+          status_verificado_em?: string | null
           valor_adesao?: number
           valor_mensalidade?: number
+          venda_situacao?: string | null
+          virou_venda?: boolean
         }
         Relationships: [
           {
@@ -13076,6 +13810,7 @@ export type Database = {
           api_key_last4: string | null
           base_url: string
           created_at: string
+          disconnected_at: string | null
           last_test_at: string | null
           last_test_ok: boolean | null
           organization_id: string
@@ -13088,6 +13823,7 @@ export type Database = {
           api_key_last4?: string | null
           base_url?: string
           created_at?: string
+          disconnected_at?: string | null
           last_test_at?: string | null
           last_test_ok?: boolean | null
           organization_id: string
@@ -13100,6 +13836,7 @@ export type Database = {
           api_key_last4?: string | null
           base_url?: string
           created_at?: string
+          disconnected_at?: string | null
           last_test_at?: string | null
           last_test_ok?: boolean | null
           organization_id?: string
@@ -15430,6 +16167,7 @@ export type Database = {
         Args: { _org_id: string }
         Returns: boolean
       }
+      can_manage_loss_reasons: { Args: { _org: string }; Returns: boolean }
       can_manage_permission_profiles: {
         Args: { _organization_id: string }
         Returns: boolean
@@ -15732,6 +16470,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      correct_opportunity_loss_v1: {
+        Args: {
+          _description: string
+          _detail_id: string
+          _opportunity_id: string
+          _organization_id: string
+          _reason_id: string
+        }
+        Returns: Json
+      }
       count_custom_fields_for_org: {
         Args: { p_module?: string; p_organization_id: string }
         Returns: number
@@ -15755,6 +16503,31 @@ export type Database = {
       fn__rec_from_legacy: {
         Args: { kind: string; l: Json; privacy_on: boolean }
         Returns: Json
+      }
+      fn_agent_claim_lead: { Args: { _org: string }; Returns: string }
+      fn_agent_followup_claim: {
+        Args: { _limit?: number }
+        Returns: {
+          agent_id: string
+          attempt: number
+          contact_id: string
+          organization_id: string
+          thread_id: string
+          total: number
+        }[]
+      }
+      fn_agent_release_thread: {
+        Args: { _reason: string; _summary?: string; _thread: string }
+        Returns: Json
+      }
+      fn_agent_should_take: {
+        Args: {
+          _day_count: number
+          _mode: string
+          _sequence: number
+          _value: number
+        }
+        Returns: boolean
       }
       fn_build_nammux_contact_payload: {
         Args: { _contact_id: string }
@@ -15840,6 +16613,21 @@ export type Database = {
         Args: { _contact_id: string; _org_id: string }
         Returns: string
       }
+      fn_mark_opportunity_lost_internal_v1: {
+        Args: {
+          _actor_type: string
+          _actor_user_id: string
+          _automation_ref: string
+          _close_date: string
+          _description: string
+          _detail_id: string
+          _opportunity_id: string
+          _organization_id: string
+          _reason_id: string
+          _source: string
+        }
+        Returns: Json
+      }
       fn_marketing_attribution_dryrun: {
         Args: never
         Returns: {
@@ -15866,6 +16654,10 @@ export type Database = {
           utm_medium: string
           utm_term: string
         }[]
+      }
+      fn_next_loss_code_seq: {
+        Args: { _org: string; _scope: string }
+        Returns: number
       }
       fn_outbox_dismiss_job: {
         Args: { p_job_id: string; p_reason: string }
@@ -15925,6 +16717,22 @@ export type Database = {
       fn_resolve_inbound_suggested_assignee: {
         Args: { _endpoint_id: string; _organization_id: string }
         Returns: string
+      }
+      fn_resolve_loss_choice_v1: {
+        Args: {
+          _description: string
+          _detail_id: string
+          _for_person: boolean
+          _organization_id: string
+          _reason_id: string
+        }
+        Returns: {
+          description: string
+          detail_code: string
+          detail_id: string
+          reason_code: string
+          reason_id: string
+        }[]
       }
       fn_resolve_marketing_campaign_id: {
         Args: {
@@ -16274,6 +17082,56 @@ export type Database = {
         }
         Returns: Json
       }
+      list_loss_reason_options_v1: {
+        Args: { _organization_id: string }
+        Returns: Json
+      }
+      list_loss_stage_rule_issues_v1: {
+        Args: { _organization_id: string }
+        Returns: Json
+      }
+      loss_code_letters: { Args: { _n: number }; Returns: string }
+      loss_detail_is_used: { Args: { _detail_id: string }; Returns: boolean }
+      loss_reason_is_used: { Args: { _reason_id: string }; Returns: boolean }
+      loss_reason_usage_v1: {
+        Args: { _organization_id: string }
+        Returns: Json
+      }
+      loss_settings_internal_v1: {
+        Args: { _org: string }
+        Returns: {
+          detail_mode: string
+          reason_required: boolean
+        }[]
+      }
+      loss_stage_rule_detail_v1: {
+        Args: { _stage_id: string }
+        Returns: string
+      }
+      mark_opportunities_lost_batch_v1: {
+        Args: {
+          _close_date: string
+          _description: string
+          _detail_id: string
+          _opportunity_ids: string[]
+          _organization_id: string
+          _reason_id: string
+          _source: string
+        }
+        Returns: Json
+      }
+      mark_opportunity_lost_v1: {
+        Args: {
+          _close_date: string
+          _description: string
+          _detail_id: string
+          _opportunity_id: string
+          _organization_id: string
+          _reason_id: string
+          _source: string
+        }
+        Returns: Json
+      }
       merge_message_threads: {
         Args: { p_batch: string; p_loser: string; p_winner: string }
         Returns: undefined
@@ -16425,6 +17283,8 @@ export type Database = {
         Args: { _org: string; _user: string }
         Returns: Json
       }
+      plamev_material_enviado: { Args: { p_id: string }; Returns: boolean }
+      plamev_material_excluir: { Args: { p_id: string }; Returns: string }
       populate_communication_endpoints_from_v2_senders: {
         Args: never
         Returns: {
@@ -16632,6 +17492,14 @@ export type Database = {
         Args: { p_holder: string; p_name: string }
         Returns: undefined
       }
+      reopen_opportunity_v1: {
+        Args: {
+          _opportunity_id: string
+          _organization_id: string
+          _source: string
+        }
+        Returns: Json
+      }
       replace_document_single_v1: {
         Args: {
           _bucket?: string
@@ -16712,6 +17580,24 @@ export type Database = {
       rotate_messaging_line_endpoint: {
         Args: { p_endpoint_id: string; p_line_id: string; p_reason?: string }
         Returns: Json
+      }
+      rpc_ad_referral_text: {
+        Args: { _org: string; _source_id: string }
+        Returns: string
+      }
+      rpc_agent_distribution_stats: {
+        Args: { _days?: number; _org: string }
+        Returns: Json
+      }
+      rpc_ai_spend_summary: {
+        Args: { p_org: string }
+        Returns: {
+          action: string
+          calls: number
+          calls_without_cost: number
+          cost_usd: number
+          provider: string
+        }[]
       }
       rpc_apply_message_edit_v1: {
         Args: {
@@ -17015,6 +17901,14 @@ export type Database = {
           waiting: number
         }[]
       }
+      rpc_intelligence_conversations: {
+        Args: { p_days?: number; p_org: string }
+        Returns: Json
+      }
+      rpc_intelligence_insights: {
+        Args: { p_days?: number; p_org: string }
+        Returns: Json
+      }
       rpc_kommo_upsert_contact: {
         Args: { p_data: Json; p_existing_id: string }
         Returns: string
@@ -17048,6 +17942,7 @@ export type Database = {
           p_organization_id: string
           p_search?: string
           p_status?: string
+          p_to_reply?: boolean
           p_unassigned_only?: boolean
         }
         Returns: {
@@ -17082,6 +17977,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      rpc_meta_assets_in_use_elsewhere: {
+        Args: { p_connection: string; p_org: string }
+        Returns: string[]
+      }
       rpc_meta_effective_sync_assets: {
         Args: { p_org: string }
         Returns: {
@@ -17089,6 +17988,7 @@ export type Database = {
           id: string
         }[]
       }
+      rpc_org_has_text_ai: { Args: { p_org: string }; Returns: boolean }
       rpc_register_push_token: {
         Args: { p_expo_push_token: string; p_platform: string }
         Returns: string

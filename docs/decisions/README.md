@@ -14,3 +14,4 @@ Numeração `NNNN`. Cada ADR captura contexto → decisão → consequências. N
 | [0008](0008-domain-ownership-catalog.md) | Ownership por domínio em `reference/catalog.md` | Aceito (markdown por decisão consciente) |
 | [0009](0009-inbox-messages-separation.md) | Separação Inbox e Messages (decisão de negócio) | Aceito |
 | [0010](0010-post-win-document-sync.md) | Documentos pós-venda via outbox do Nammux | Aceito |
+| [0013](0013-loss-reasons.md) | Motivos de perda com detalhe e histórico de perdas | Aceito |

@@ -80,9 +80,9 @@ import { CommercialFichaPanel } from '@/components/messages/ficha/CommercialFich
 import { AdOriginCard } from '@/components/contacts/AdOriginCard';
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
+import { LossDialog } from '@/components/opportunities/loss/LossDialog';
 import { OpportunityCloseDialog } from '@/components/opportunities/OpportunityCloseDialog';
-import { transitionOpportunityStage } from '@/lib/opportunityClose';
+import { mensagemErroStatus } from '@/lib/opportunityClose';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
@@ -624,7 +624,6 @@ function DesktopMessagesList() {
   const [moveStageOpp, setMoveStageOpp] = useState<ChatOpp | null>(null);
   const [moveStageTargetId, setMoveStageTargetId] = useState<string | null>(null);
   const [movingStage, setMovingStage] = useState(false);
-  const [markingOpp, setMarkingOpp] = useState(false);
 
   const handleExportConversations = async () => {
     if (!organization?.id) return;
@@ -1182,54 +1181,6 @@ function DesktopMessagesList() {
     })();
   }, [organization?.id, selectedThread?.contact_id, oppReloadKey]);
 
-  const handleMarkOpportunity = async (kind: 'won' | 'lost', opp: ChatOpp, closeDateOverride?: string) => {
-    if (!organization?.id) return;
-    const targetStage = pipelineStages.find((s) => s.type === kind);
-    if (!targetStage) {
-      toast({
-        title: locale === 'pt-BR' ? 'Estágio não encontrado' : 'Stage not found',
-        description: locale === 'pt-BR'
-          ? `Configure um estágio do tipo "${kind === 'won' ? 'Ganho' : 'Perdido'}" no pipeline.`
-          : `Configure a "${kind}" stage in your pipeline.`,
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const closeDate = closeDateOverride || opp.close_date;
-    if (!closeDate) {
-      // Need to ask user for the close date
-      setConfirmAction(null);
-      setPendingCloseDate({ kind, opp });
-      return;
-    }
-
-    setMarkingOpp(true);
-    try {
-      const result = await transitionOpportunityStage({
-        organizationId: organization.id,
-        opportunityId: opp.id,
-        targetStageId: targetStage.id,
-        closeDate,
-        source: 'inbox',
-      });
-      if (!result.ok) throw new Error(result.error || 'closing_requirements_missing');
-      toast({
-        title: kind === 'won'
-          ? (locale === 'pt-BR' ? 'Oportunidade marcada como ganha' : 'Opportunity marked as won')
-          : (locale === 'pt-BR' ? 'Oportunidade marcada como perdida' : 'Opportunity marked as lost'),
-      });
-      setContactOpportunities((prev) => prev.filter((o) => o.id !== opp.id));
-      setConfirmAction(null);
-      setPendingCloseDate(null);
-    } catch (err) {
-      console.error('Error marking opportunity:', err);
-      toast({ title: locale === 'pt-BR' ? 'Erro ao atualizar' : 'Error updating', variant: 'destructive' });
-    } finally {
-      setMarkingOpp(false);
-    }
-  };
-
   const handleMoveStage = async () => {
     if (!moveStageOpp || !moveStageTargetId) return;
     const target = pipelineStages.find((s) => s.id === moveStageTargetId);
@@ -1241,7 +1192,9 @@ function DesktopMessagesList() {
       const opp = moveStageOpp;
       setMoveStageOpp(null);
       setMoveStageTargetId(null);
-      setConfirmAction({ kind, opp });
+      // perda vai direto para o diálogo de motivo; ganho passa pela confirmação e pelo checklist
+      if (kind === 'lost') setPendingCloseDate({ kind, opp });
+      else setConfirmAction({ kind, opp });
       return;
     }
 
@@ -1266,7 +1219,7 @@ function DesktopMessagesList() {
       setMoveStageTargetId(null);
     } catch (err) {
       console.error('Error moving stage:', err);
-      toast({ title: locale === 'pt-BR' ? 'Erro ao mover etapa' : 'Error moving stage', variant: 'destructive' });
+      toast({ title: locale === 'pt-BR' ? 'Erro ao mover etapa' : 'Error moving stage', description: mensagemErroStatus(err) ?? undefined, variant: 'destructive' });
     } finally {
       setMovingStage(false);
     }
@@ -2500,7 +2453,7 @@ function DesktopMessagesList() {
                                     <TrendUp className="w-4 h-4 mr-2 text-green-600" />
                                     {locale === 'pt-BR' ? 'Marcar como Ganho' : 'Mark as Won'}
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => setConfirmAction({ kind: 'lost', opp })}>
+                                  <DropdownMenuItem onClick={() => setPendingCloseDate({ kind: 'lost', opp })}>
                                     <TrendDown className="w-4 h-4 mr-2 text-red-600" />
                                     {locale === 'pt-BR' ? 'Marcar como Perdido' : 'Mark as Lost'}
                                   </DropdownMenuItem>
@@ -3472,7 +3425,7 @@ function DesktopMessagesList() {
             opportunities={contactOpportunities}
             stages={pipelineStages}
             onWon={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) setConfirmAction({ kind: 'won', opp: o }); }}
-            onLost={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) setConfirmAction({ kind: 'lost', opp: o }); }}
+            onLost={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) setPendingCloseDate({ kind: 'lost', opp: o }); }}
             onMoveStage={(opp) => { const o = contactOpportunities.find((x) => x.id === opp.id); if (o) { setMoveStageTargetId(o.pipeline_stage_id); setMoveStageOpp(o); } }}
             onOpportunityUpdated={(id, patch) => setContactOpportunities((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))}
             onOpportunityCreated={() => setOppReloadKey((k) => k + 1)}
@@ -3660,13 +3613,10 @@ function DesktopMessagesList() {
         confirmText={locale === 'pt-BR' ? 'Confirmar' : 'Confirm'}
         cancelText={locale === 'pt-BR' ? 'Cancelar' : 'Cancel'}
         variant={confirmAction?.kind === 'lost' ? 'destructive' : 'default'}
-        loading={markingOpp}
         onConfirm={() => {
           if (!confirmAction) return;
-          if (confirmAction.kind === 'won') {
-            setPendingCloseDate(confirmAction);
-            setConfirmAction(null);
-          } else void handleMarkOpportunity(confirmAction.kind, confirmAction.opp);
+          setPendingCloseDate(confirmAction);
+          setConfirmAction(null);
         }}
       />
 
@@ -3682,12 +3632,17 @@ function DesktopMessagesList() {
           setContactOpportunities((current) => current.filter((item) => item.id !== pendingCloseDate.opp.id));
           setPendingCloseDate(null);
         }}
-      /> : <CloseDatePromptDialog
+      /> : <LossDialog
         open={pendingCloseDate?.kind === 'lost'}
         onOpenChange={(o) => !o && setPendingCloseDate(null)}
-        title={locale === 'pt-BR' ? 'Marcar como Perdido' : 'Mark as Lost'}
-        loading={markingOpp}
-        onConfirm={(date) => pendingCloseDate && handleMarkOpportunity(pendingCloseDate.kind, pendingCloseDate.opp, date)}
+        opportunityIds={pendingCloseDate ? [pendingCloseDate.opp.id] : []}
+        opportunityTitle={pendingCloseDate?.opp.title}
+        initialCloseDate={pendingCloseDate?.opp.close_date}
+        source="inbox"
+        onSuccess={() => {
+          if (pendingCloseDate) setContactOpportunities((current) => current.filter((item) => item.id !== pendingCloseDate.opp.id));
+          setPendingCloseDate(null);
+        }}
       />}
 
       {/* Move stage dialog */}

@@ -18,10 +18,11 @@ npm run docs:validate        # valida links/refs em docs/ (roda no CI)
 
 Testes (não existe script `test` no `package.json` raiz):
 
-- **Frontend/libs** — `bun:test`, em `tests/*.test.ts` e `src/**/*.test.ts`:
-  `bun test tests/thread-status.test.ts` (um arquivo) · `bun test tests/` · `bun test -t "<nome>"`
-- **Edge functions** — `Deno.test`, em `supabase/functions/**/*.test.ts`: `deno test <arquivo>` (o Deno não vem instalado por padrão).
-- **SQL** — `tests/sql/*.sql` são scripts `psql` que criam o mínimo de schema, aplicam uma migration via `\ir` e verificam com `RAISE EXCEPTION`, dentro de transação. Rodar só contra Postgres descartável, nunca produção.
+- **`tests/*.test.ts` mistura dois runners.** Os que importam `bun:test` rodam com Bun; os que usam `Deno.test` ou imports `jsr:`/`https://deno.land` são Deno. Veja o import antes de escolher. Por isso `bun test tests/` sempre mostra falhas ("Deno is not defined", "Cannot find module 'jsr:…'") que não são regressão.
+- **Frontend/libs (Bun)** — `bun:test`, em parte de `tests/*.test.ts` e em `src/**/*.test.ts`:
+  `bun test tests/thread-status.test.ts` (um arquivo) · `bun test -t "<nome>"`
+- **Deno** — `Deno.test`, em `supabase/functions/**/*.test.ts` e na outra parte de `tests/*.test.ts`: `deno test <arquivo>` (o Deno não vem instalado por padrão).
+- **SQL** — `tests/sql/*.sql` e `supabase/tests/*.sql` são scripts `psql` que criam o mínimo de schema, aplicam migrations via `\ir` e verificam com `RAISE EXCEPTION`, dentro de transação. Rodar só contra Postgres descartável, nunca produção (`psql -d BANCO_DESCARTAVEL -v ON_ERROR_STOP=1 -f <arquivo>`). Se o servidor não estiver em inglês, use `SET LOCAL lc_messages = 'C'` para comparar mensagens de erro.
 - **`packages/motor-classificacao`** — pacote isolado (vitest + esbuild, `npm ci && npm test`). O build `dist/motor.mjs` precisa ser **byte a byte igual** a `supabase/functions/_shared/classificacao/motor.mjs` (o CI checa com `cmp`). O motor é validado pelo jurídico: não altere a lógica.
 
 O CI (`.github/workflows/ci.yml`) também roda `bun test src/components/process-classification src/lib/permissions`, `bun run build` e `node scripts/check-seller-bundle.mjs`. Esse último garante que o bundle do navegador não carregue calibração nem cálculo do motor de classificação.

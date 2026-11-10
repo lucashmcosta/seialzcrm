@@ -236,6 +236,7 @@ const ThemeSettings = lazyWithRetry("ThemeSettings", () => import("./components/
 const UsersSettings = lazyWithRetry("UsersSettings", () => import("./components/settings/UsersSettings"), "UsersSettings");
 const PipelineSettings = lazyWithRetry("PipelineSettings", () => import("./components/settings/PipelineSettings"), "PipelineSettings");
 const OpportunityCloseSettings = lazyWithRetry("OpportunityCloseSettings", () => import("./components/settings/OpportunityCloseSettings"), "OpportunityCloseSettings");
+const LossReasonsSettings = lazyWithRetry("LossReasonsSettings", () => import("./components/settings/loss-reasons/LossReasonsSettings"), "LossReasonsSettings");
 const DuplicatePreventionSettings = lazyWithRetry("DuplicatePreventionSettings", () => import("./components/settings/DuplicatePreventionSettings"), "DuplicatePreventionSettings");
 const CustomFieldsSettings = lazyWithRetry("CustomFieldsSettings", () => import("./components/settings/CustomFieldsSettings"), "CustomFieldsSettings");
 const TagsSettings = lazyWithRetry("TagsSettings", () => import("./components/settings/TagsSettings"), "TagsSettings");
@@ -738,6 +739,7 @@ const App = () => (
             <Route path="billing" element={<BillingSettings />} />
             <Route path="pipeline" element={<PipelineSettings />} />
             <Route path="opportunity-close" element={<OpportunityCloseSettings />} />
+            <Route path="loss-reasons" element={<LossReasonsSettings />} />
             <Route path="duplicates" element={<DuplicatePreventionSettings />} />
             <Route path="custom-fields" element={<CustomFieldsSettings />} />
             <Route path="tags" element={<TagsSettings />} />

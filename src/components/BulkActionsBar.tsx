@@ -9,6 +9,7 @@ import { X, User, Prohibit, TrashSimple, Stack } from '@phosphor-icons/react';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
 import { useOrganization } from '@/hooks/useOrganization';
 import { mensagemErroStatus } from '@/lib/opportunityClose';
+import { LossDialog } from '@/components/opportunities/loss/LossDialog';
 
 interface User {
   id: string;
@@ -189,12 +190,20 @@ export function BulkActionsBar({
   return (
     <>
       <CloseDatePromptDialog
-        open={pendingStage !== null}
+        open={pendingStage?.type === 'won'}
         onOpenChange={(open) => !open && setPendingStage(null)}
-        title={pendingStage?.type === 'won' ? 'Marcar selecionadas como Ganhas' : 'Marcar selecionadas como Perdidas'}
+        title="Marcar selecionadas como Ganhas"
         description="A operação é atômica: se alguma oportunidade estiver bloqueada, nenhuma será alterada."
         onConfirm={handleConfirmBatchStage}
         loading={processing}
+      />
+      {/* perda em lote: mesmo motivo para todas, tudo ou nada */}
+      <LossDialog
+        open={pendingStage?.type === 'lost'}
+        onOpenChange={(open) => !open && setPendingStage(null)}
+        opportunityIds={selectedIds}
+        source="bulk_actions"
+        onSuccess={() => { setPendingStage(null); onSuccess(); onClear(); }}
       />
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
         <div className="bg-primary text-primary-foreground rounded-lg shadow-lg p-4 flex items-center gap-4 flex-wrap">
