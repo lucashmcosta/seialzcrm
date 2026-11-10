@@ -8,6 +8,8 @@ import { currentAiModel, pickAgentAiCredential } from "../_shared/intelligence/a
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
+import { buildChoicesInteractive, withoutQuestionEcho } from "../_shared/intelligence/agent-choices.ts";
+import { interactiveFallbackText, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
 import { agentIdentityLine, agentInputKind, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
 
 const corsHeaders = {
@@ -313,9 +315,42 @@ Exemplo de uso: Após enviar "Posso confirmar seu nome completo?", chame esta to
           competitors_mentioned: {
             type: "array",
             items: { type: "string" },
-            description: "Concorrentes que o lead mencionou usar ou considerar" 
+            description: "Concorrentes que o lead mencionou usar ou considerar"
           },
         },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_choices",
+      description: `Envia ao cliente uma pergunta com opções para tocar (botões no WhatsApp; até 3 opções viram botões, de 4 a 10 viram uma lista).
+
+Use para perguntas com opções fixas (ex.: plano, horário, sim/não, tipo de serviço).
+- Escreva a pergunta SOMENTE em question. NÃO repita a pergunta nem as opções no seu texto de resposta.
+- No máximo uma por resposta. A pergunta é enviada depois do seu texto.
+- Só dentro da conversa, respondendo ao cliente. Nunca em retomada de contato (follow-up).`,
+      parameters: {
+        type: "object",
+        properties: {
+          question: {
+            type: "string",
+            description: "O texto da pergunta, como o cliente vai ler (até 1024 caracteres)",
+          },
+          options: {
+            type: "array",
+            items: { type: "string" },
+            minItems: 2,
+            maxItems: 10,
+            description: "As opções, de 2 a 10, sem repetir. Com até 3 opções, cada uma com até 20 caracteres; com 4 ou mais, até 24 caracteres",
+          },
+          button_text: {
+            type: "string",
+            description: "Só para 4 ou mais opções: texto do botão que abre a lista (até 20 caracteres). Padrão: \"Ver opções\"",
+          },
+        },
+        required: ["question", "options"],
       },
     },
   },
@@ -1472,6 +1507,13 @@ Você tem acesso a ferramentas que DEVE usar quando apropriado:
   - "estou muito interessado" → save_memory({qualification: {interest_level: "high"}})
 `;
     }
+    if (enabledTools.includes('send_choices')) {
+      prompt += `
+- **send_choices**: Para perguntas com opções fixas (plano, horário, sim/não), mande a pergunta com botões.
+  A pergunta vai SOMENTE em question; não repita a pergunta nem as opções no seu texto. No máximo uma por resposta.
+  É a única forma permitida de oferecer opções ao cliente (exceção às regras 9 e 10 abaixo).
+`;
+    }
   }
 
   // Add retrieved knowledge from RAG
@@ -1510,6 +1552,8 @@ ${item.content}
 ## GATILHOS ESPECÍFICOS DE FERRAMENTAS
 `;
     Object.entries(toolTriggers).forEach(([tool, trigger]) => {
+      // Gatilho de perguntas com botões sem a ferramenta ligada levaria a listas no texto.
+      if (tool === 'send_choices' && !enabledTools.includes('send_choices')) return;
       prompt += `- **${tool}**: ${trigger}
 `;
     });
@@ -2052,6 +2096,17 @@ serve(async (req) => {
     };
     let modelUsed = '';
     const toolsExecuted: string[] = [];
+    // Pergunta com botões (send_choices): não sai na hora; vai depois do texto da resposta.
+    // Roda também no modo de teste, para o simulador mostrar a pergunta.
+    let pendingInteractive = null as InteractivePayload | null;
+    const takeChoices = (args: any): ToolResult => {
+      if (followUp) return { success: false, message: 'Perguntas com opções não são usadas na retomada.' };
+      if (pendingInteractive) return { success: false, message: 'Já existe uma pergunta com opções nesta resposta. Use só uma.' };
+      const { payload, problems } = buildChoicesInteractive(args);
+      if (!payload) return { success: false, message: `Pergunta com opções inválida: ${problems.join(' ')} Corrija e chame de novo.` };
+      pendingInteractive = payload;
+      return { success: true, message: 'Pergunta com opções será enviada depois do seu texto. Não repita a pergunta.' };
+    };
 
     if (integrationSlug === 'claude-ai') {
       const model = configValues.default_model || 'claude-sonnet-5-5';
@@ -2149,7 +2204,7 @@ serve(async (req) => {
           console.log(`Claude wants to use tool: ${toolUse.name}`);
           toolsExecuted.push(toolUse.name);
           
-          const result = isTestMode ? { success: true, message: 'Simulado no modo de teste' } : await executeTool(
+          const result = toolUse.name === 'send_choices' ? takeChoices(toolUse.input) : isTestMode ? { success: true, message: 'Simulado no modo de teste' } : await executeTool(
             supabase,
             toolUse.name,
             toolUse.input,
@@ -2341,7 +2396,7 @@ serve(async (req) => {
           console.log(`OpenAI wants to use tool: ${toolCall.function.name}`);
           toolsExecuted.push(toolCall.function.name);
 
-          const result = isTestMode ? { success: true, message: 'Simulado no modo de teste' } : await executeTool(
+          const result = toolCall.function.name === 'send_choices' ? takeChoices(JSON.parse(toolCall.function.arguments || '{}')) : isTestMode ? { success: true, message: 'Simulado no modo de teste' } : await executeTool(
             supabase,
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments || '{}'),
@@ -2411,7 +2466,8 @@ serve(async (req) => {
     let fallbackUsed = false;
     let fallbackReason = '';
     
-    if (!aiResponse) {
+    // Só a pergunta com botões, sem texto, é uma resposta completa.
+    if (!aiResponse && !pendingInteractive) {
       fallbackUsed = true;
       fallbackReason = toolsExecuted.length > 0 
         ? `empty_response_after_tools:${toolsExecuted.join(',')}` 
@@ -2437,19 +2493,31 @@ serve(async (req) => {
     const splitMessages = (agent.formatting_rules as { split_messages?: boolean } | null)?.split_messages === true;
     // Texto que só ecoa o encerramento ("Conversa encerrada.") nunca vai para o cliente.
     const cleanResponse = aiResponse ? stripCloseEcho(aiResponse) : aiResponse;
-    const bubbles = (splitMessages ? splitIntoBubbles(cleanResponse) : (cleanResponse ? [cleanResponse] : []))
-      .map((b) => stripCloseEcho(b)).filter((b) => b.length > 0);
+    // Depois de passar para a equipe ou encerrar, o agente não faz mais perguntas.
+    const interactive: InteractivePayload | null =
+      pendingInteractive && !toolsExecuted.includes('transfer_to_human') && !toolsExecuted.includes('end_conversation')
+        ? pendingInteractive
+        : null;
+    // A pergunta vai com os botões: uma mensagem de texto igual a ela sairia duplicada.
+    const bubbles = withoutQuestionEcho(
+      (splitMessages ? splitIntoBubbles(cleanResponse) : (cleanResponse ? [cleanResponse] : []))
+        .map((b) => stripCloseEcho(b)).filter((b) => b.length > 0),
+      interactive?.body,
+    );
+    const interactiveText = interactive ? interactiveFallbackText(interactive) : '';
 
     // 7. Check if this is test mode - don't send to WhatsApp, just return response
     if (isTestMode) {
       await logByokUsage();
       console.log(`AI Agent TEST MODE response - ${responseTime}ms, ${tokensUsed} tokens, tools: ${toolsExecuted.join(', ') || 'none'}`);
-      
+
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           response: cleanResponse,
-          bubbles,
+          // O simulador não tem botões: mostra a pergunta como texto numerado.
+          bubbles: interactive ? [...bubbles, interactiveText] : bubbles,
+          interactive,
           responseTime,
           tokensUsed,
           toolsExecuted,
@@ -2460,7 +2528,13 @@ serve(async (req) => {
     }
 
     // 8. Send response via WhatsApp (production mode)
-    for (const [index, bubble] of bubbles.entries()) {
+    // A pergunta com botões vai por último, depois do texto, e para junto se o cliente escrever.
+    const outgoing: Array<{ message: string; interactive?: InteractivePayload }> = [
+      ...bubbles.map((b) => ({ message: b })),
+      ...(interactive ? [{ message: '', interactive }] : []),
+    ];
+    let interactiveSent = false;
+    for (const [index, item] of outgoing.entries()) {
       // Pausa curta entre as mensagens, para chegarem em ordem e como quem está digitando.
       if (index > 0) await new Promise((resolve) => setTimeout(resolve, 1500));
       // O cliente escreveu enquanto esta resposta era montada: para aqui. A chamada da
@@ -2472,7 +2546,7 @@ serve(async (req) => {
           .eq('thread_id', threadId).eq('direction', 'inbound').is('deleted_at', null)
           .gt('created_at', new Date(startTime).toISOString());
         if ((newerInbound ?? 0) > 0) {
-          console.log(`[ai-agent-respond] cliente escreveu durante a resposta; parou em ${index}/${bubbles.length}`);
+          console.log(`[ai-agent-respond] cliente escreveu durante a resposta; parou em ${index}/${outgoing.length}`);
           break;
         }
       }
@@ -2480,7 +2554,8 @@ serve(async (req) => {
         organizationId,
         contactId,
         threadId,
-        message: bubble,
+        message: item.message,
+        ...(item.interactive ? { interactive: item.interactive } : {}),
         isAgentMessage: true,
         agentId: agent.id,
         senderName: agent.name,
@@ -2489,6 +2564,7 @@ serve(async (req) => {
         console.error('Error sending WhatsApp message:', sendError);
         throw new Error('Failed to send WhatsApp message');
       }
+      if (item.interactive) interactiveSent = true;
     }
 
     // Enviar para uma conversa resolvida a reabre. Se o agente encerrou nesta resposta,
@@ -2527,7 +2603,7 @@ serve(async (req) => {
       contact_id: contactId,
       thread_id: threadId,
       input_message: message,
-      output_message: aiResponse,
+      output_message: interactiveSent ? [aiResponse, interactiveText].filter(Boolean).join('\n\n') : aiResponse,
       context_used: {
         contact: contact ? { name: contact.full_name, stage: contact.lifecycle_stage } : null,
         company: company ? { name: company.name } : null,
