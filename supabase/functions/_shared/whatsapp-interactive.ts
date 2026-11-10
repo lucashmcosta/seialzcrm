@@ -7,7 +7,10 @@ export type InteractiveButton = { id: string; title: string };
 export type InteractiveRow = { id: string; title: string; description?: string };
 export type InteractiveSection = { title?: string; rows: InteractiveRow[] };
 
-type Common = { body: string; header?: string; footer?: string };
+/** Mídia no topo (só botões e link; a Meta não aceita em lista). Enviada por link público. */
+export type InteractiveHeaderMedia = { type: "image" | "video" | "document"; url: string; filename?: string };
+
+type Common = { body: string; header?: string; headerMedia?: InteractiveHeaderMedia; footer?: string };
 
 export type InteractivePayload =
   | (Common & { kind: "buttons"; buttons: InteractiveButton[] })
@@ -43,7 +46,18 @@ export function slugId(title: string, index: number): string {
 
 /** Preenche ids ausentes e corta espaços. Não altera limites: isso é papel de validate. */
 export function normalizeInteractive(p: InteractivePayload): InteractivePayload {
-  const common = { body: clean(p.body), header: clean(p.header) || undefined, footer: clean(p.footer) || undefined };
+  const media = p.headerMedia
+    ? { type: p.headerMedia.type, url: clean(p.headerMedia.url), ...(clean(p.headerMedia.filename) ? { filename: clean(p.headerMedia.filename) } : {}) }
+    : undefined;
+  const headerText = media ? "" : clean(p.header);
+  const keepMedia = p.kind !== "list" ? media : undefined;
+  const common = {
+    body: clean(p.body),
+    // Com mídia no topo não há título em texto. Campos vazios ficam de fora.
+    ...(headerText ? { header: headerText } : {}),
+    ...(keepMedia ? { headerMedia: keepMedia } : {}),
+    ...(clean(p.footer) ? { footer: clean(p.footer) } : {}),
+  };
   const uniq = (items: { id?: string; title: string }[]) => {
     const seen = new Set<string>();
     return items.map((it, i) => {
@@ -81,6 +95,13 @@ export function validateInteractive(p: InteractivePayload | null | undefined): s
   if (len(p.body) > L.body) e.push(`O texto passa de ${L.body} caracteres.`);
   if (len(p.header) > L.header) e.push(`O título passa de ${L.header} caracteres.`);
   if (len(p.footer) > L.footer) e.push(`O rodapé passa de ${L.footer} caracteres.`);
+  if (p.headerMedia) {
+    if (p.kind === "list") e.push("Lista não aceita imagem, vídeo ou PDF no topo.");
+    if (!["image", "video", "document"].includes(p.headerMedia.type)) e.push("Tipo de mídia do topo inválido.");
+    if (!clean(p.headerMedia.url)) e.push("Escolha o arquivo de imagem, vídeo ou PDF do topo.");
+    else if (!/^https:\/\/\S+$/i.test(clean(p.headerMedia.url))) e.push("A mídia do topo precisa de um link https.");
+    if (clean(p.header)) e.push("Use título em texto ou mídia no topo, não os dois.");
+  }
   if (p.kind === "buttons") {
     const bs = Array.isArray(p.buttons) ? p.buttons : [];
     if (bs.length < 1 || bs.length > L.buttonsMax) e.push(`Use de 1 a ${L.buttonsMax} botões.`);
@@ -127,7 +148,12 @@ export function validateInteractive(p: InteractivePayload | null | undefined): s
 
 /** Corpo do campo `interactive` da Cloud API. */
 export function toMetaInteractive(p: InteractivePayload): Record<string, unknown> {
-  const header = p.header ? { header: { type: "text", text: p.header } } : {};
+  const m = p.headerMedia;
+  const header = m
+    ? { header: m.type === "document"
+        ? { type: "document", document: { link: m.url, ...(m.filename ? { filename: m.filename } : {}) } }
+        : { type: m.type, [m.type]: { link: m.url } } }
+    : p.header ? { header: { type: "text", text: p.header } } : {};
   const footer = p.footer ? { footer: { text: p.footer } } : {};
   const body = { body: { text: p.body } };
   if (p.kind === "buttons") {

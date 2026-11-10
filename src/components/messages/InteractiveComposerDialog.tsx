@@ -84,7 +84,7 @@ export function InteractiveComposerDialog({ open, onOpenChange, initial, organiz
           <DialogDescription>A cliente toca na opção em vez de digitar a resposta.</DialogDescription>
         </DialogHeader>
 
-        <InteractiveEditor value={value} onChange={setValue} problems={touched ? problems : []} />
+        <InteractiveEditor value={value} onChange={setValue} problems={touched ? problems : []} organizationId={organizationId} />
 
         <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-[1fr_auto] sm:items-end">
           <div className="space-y-1">

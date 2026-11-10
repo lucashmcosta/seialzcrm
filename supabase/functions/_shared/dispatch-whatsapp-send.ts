@@ -387,7 +387,13 @@ export async function dispatchWhatsAppSend(
     }
     payload = resolved.provider === "meta_cloud_api"
       ? { ...payload, interactive }
-      : { ...payload, interactive: undefined, message: interactiveFallbackText(interactive) };
+      : {
+        ...payload,
+        interactive: undefined,
+        message: interactiveFallbackText(interactive),
+        // Mídia no topo: sai como mídia com o texto numerado na legenda.
+        ...(interactive.headerMedia ? { mediaUrl: interactive.headerMedia.url, mediaType: interactive.headerMedia.type } : {}),
+      };
   }
 
 
