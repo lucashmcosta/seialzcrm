@@ -505,7 +505,6 @@ function DesktopMessagesList() {
   }, [searchQuery]);
   const [filter, setFilter, , filterHydrated] = usePersistedFilters<ThreadFilter | null>('messages.filter', null);
   // Fichas de status removidas: lista sempre mostra conversas abertas.
-  const effectiveFilter = 'all_open' as ThreadFilter;
   const appliedSmartDefaultRef = useRef(false);
   
   // Media preview state
@@ -549,6 +548,13 @@ function DesktopMessagesList() {
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
   // "Para responder": só conversas em que o cliente mandou a última mensagem (a vez é da equipe).
   const [toReplyOnly, setToReplyOnly] = usePersistedFilters<boolean>('messages.toReplyOnly', false);
+  // "Resolvidas": conversas encerradas (pela equipe ou pelo agente). Exclusivo com "Para responder".
+  const [resolvedOnly, setResolvedOnly] = usePersistedFilters<boolean>('messages.resolvedOnly', false);
+  const showList = (view: 'all' | 'to_reply' | 'resolved') => {
+    setToReplyOnly(view === 'to_reply');
+    setResolvedOnly(view === 'resolved');
+  };
+  const effectiveFilter = (resolvedOnly ? 'resolved' : 'all_open') as ThreadFilter;
   const [assigneeFilterOpen, setAssigneeFilterOpen] = useState(false);
 
   const [selectedEndpointDetails, setSelectedEndpointDetails] = useState<{ threadId: string; endpoint: any | null } | null>(null);
@@ -888,7 +894,8 @@ function DesktopMessagesList() {
     endpointIds: activeEndpointFilterIdList,
     assignedUserIds: assigneeFilter.filter((v) => v !== 'unassigned'),
     unassignedOnly: assigneeFilter.includes('unassigned'),
-    toReplyOnly,
+    toReplyOnly: toReplyOnly && !resolvedOnly,
+    resolvedOnly,
   });
 
 
@@ -1927,7 +1934,7 @@ function DesktopMessagesList() {
 
   const filteredThreads = threads?.filter((thread) => {
     // Search is applied server-side via rpc_list_message_threads (p_search).
-    if (toReplyOnly && displayThreadStatus(thread.status, thread.last_message_direction) !== 'reply') return false;
+    if (toReplyOnly && !resolvedOnly && displayThreadStatus(thread.status, thread.last_message_direction) !== 'reply') return false;
     // Status filter
 
     // Treat resolved threads with no client reply yet as still "pending" — they
@@ -1942,7 +1949,7 @@ function DesktopMessagesList() {
       case 'all_open':
         return isOpenLike;
       case 'resolved':
-        return thread.status === 'resolved' && (thread.last_inbound_at || thread.whatsapp_last_inbound_at);
+        return thread.status === 'resolved';
       default:
         return true;
     }
@@ -1982,9 +1989,9 @@ function DesktopMessagesList() {
   // Fase Final — vazio contextual da lista: distingue "sem conversas" de
   // "busca/filtro sem resultado". Não altera nenhuma query.
   const hasActiveListFilters =
-    searchQuery.trim().length > 0 || endpointFilter !== 'all' || assigneeFilter.length > 0 || toReplyOnly;
+    searchQuery.trim().length > 0 || endpointFilter !== 'all' || assigneeFilter.length > 0 || toReplyOnly || resolvedOnly;
   const clearListFilters = () => {
-    setToReplyOnly(false);
+    showList('all');
     setSearchQuery('');
     setEndpointFilter('all');
     setAssigneeFilter([]);
@@ -2159,13 +2166,18 @@ function DesktopMessagesList() {
                 />
               </div>
               <div className="mb-3 flex gap-1.5" role="group" aria-label={locale === 'pt-BR' ? 'Mostrar' : 'Show'}>
-                <Button type="button" size="sm" variant={toReplyOnly ? 'outline' : 'default'} className="h-7 rounded-full px-3 text-xs" aria-pressed={!toReplyOnly} onClick={() => setToReplyOnly(false)}>
-                  {locale === 'pt-BR' ? 'Todas' : 'All'}
-                </Button>
-                <Button type="button" size="sm" variant={toReplyOnly ? 'default' : 'outline'} className="h-7 rounded-full px-3 text-xs" aria-pressed={toReplyOnly} onClick={() => setToReplyOnly(true)}
-                  title={locale === 'pt-BR' ? 'Conversas em que o cliente mandou a última mensagem' : 'Conversations where the customer sent the last message'}>
-                  {locale === 'pt-BR' ? 'Para responder' : 'To reply'}
-                </Button>
+                {([
+                  { key: 'all', label: locale === 'pt-BR' ? 'Todas' : 'All', title: undefined },
+                  { key: 'to_reply', label: locale === 'pt-BR' ? 'Para responder' : 'To reply', title: locale === 'pt-BR' ? 'Conversas em que o cliente mandou a última mensagem' : 'Conversations where the customer sent the last message' },
+                  { key: 'resolved', label: locale === 'pt-BR' ? 'Resolvidas' : 'Resolved', title: locale === 'pt-BR' ? 'Conversas encerradas pela equipe ou pelo agente' : 'Conversations closed by the team or the agent' },
+                ] as const).map((opt) => {
+                  const active = resolvedOnly ? opt.key === 'resolved' : toReplyOnly ? opt.key === 'to_reply' : opt.key === 'all';
+                  return (
+                    <Button key={opt.key} type="button" size="sm" variant={active ? 'default' : 'outline'} className="h-7 rounded-full px-3 text-xs" aria-pressed={active} title={opt.title} onClick={() => showList(opt.key)}>
+                      {opt.label}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
             </>)}
