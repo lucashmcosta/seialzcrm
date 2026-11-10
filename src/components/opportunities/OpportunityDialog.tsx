@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
+import { mensagemErroStatus } from '@/lib/opportunityClose';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -199,7 +200,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
       onOpenChange(false);
     } catch (error) {
       console.error('Error saving opportunity:', error);
-      toast.error(t('common.error'));
+      toast.error(mensagemErroStatus(error) ?? t('common.error'));
     } finally {
       setSubmitting(false);
     }

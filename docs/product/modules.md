@@ -21,7 +21,7 @@ Extraído das rotas registradas em `src/App.tsx` e das páginas em `src/pages/`.
 
 Layout `SettingsLayout` (breadcrumbs, sem headers próprios). Sub-rotas:
 
-`general`, `theme`, `users`, `permissions`, `billing`, `pipeline`, `duplicates`, `custom-fields`, `tags`, `documents`, `integrations`, `customer-service`, `whatsapp-templates`, `whatsapp-snippets`, `ai-agent`, `ai-providers`, `intelligence`, `api-webhooks`, `products`, `knowledge-base`, `edit-kb`, `audit-logs`, `round-robin`, `trash`.
+`general`, `theme`, `users`, `permissions`, `billing`, `pipeline`, `loss-reasons` (motivos de perda — [ADR-0013](../decisions/0013-loss-reasons.md)), `duplicates`, `custom-fields`, `tags`, `documents`, `integrations`, `customer-service`, `whatsapp-templates`, `whatsapp-snippets`, `ai-agent`, `ai-providers`, `intelligence`, `api-webhooks`, `products`, `knowledge-base`, `edit-kb`, `audit-logs`, `round-robin`, `trash`.
 
 ## Admin (`AdminProtectedRoute` — layout `AdminLayout`, MFA obrigatório)
 

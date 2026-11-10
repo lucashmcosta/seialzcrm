@@ -3,7 +3,9 @@ import {
   lossErrorMessage,
   reorderLossItems,
   stageRuleDetailOptions,
+  validateLossChoice,
   type LossDetail,
+  type LossOptions,
   type LossReason,
 } from '../src/lib/lossReasons';
 
@@ -41,4 +43,43 @@ test('erros do banco viram texto para a pessoa', () => {
     .toBe('Você não tem permissão para alterar os motivos de perda.');
   expect(lossErrorMessage({ message: 'algo inesperado' })).toBeNull();
   expect(lossErrorMessage(null)).toBeNull();
+});
+
+const opts = (extra: Partial<LossOptions> = {}): LossOptions => ({
+  reason_required: true,
+  detail_mode: 'optional',
+  reasons: [
+    { id: 'A', code: 'A', name: 'Sem direito', details: [
+      { id: 'A1', code: 'A1', name: 'Nunca contribuiu', help_text: null, requires_description: false },
+      { id: 'A7', code: 'A7', name: 'Outro caso', help_text: null, requires_description: true },
+    ] },
+    // motivo cujos detalhes são todos só de automação: a pessoa não vê nenhum
+    { id: 'B', code: 'B', name: 'Parou de responder', details: [] },
+  ],
+  ...extra,
+});
+
+test('diálogo cobra o motivo só quando é obrigatório', () => {
+  expect(validateLossChoice(opts(), null, null, '')).toBe('Escolha o motivo da perda.');
+  expect(validateLossChoice(opts({ reason_required: false }), null, null, '')).toBeNull();
+  // org sem motivo ativo: o banco devolve reason_required=false e nada é cobrado
+  expect(validateLossChoice({ reason_required: false, detail_mode: 'optional', reasons: [] }, null, null, '')).toBeNull();
+});
+
+test('detalhe obrigatório só quando o motivo tem detalhe que a pessoa pode escolher', () => {
+  expect(validateLossChoice(opts({ detail_mode: 'required' }), 'A', null, '')).toBe('Escolha o detalhe da perda.');
+  expect(validateLossChoice(opts({ detail_mode: 'required' }), 'B', null, '')).toBeNull();
+  expect(validateLossChoice(opts({ detail_mode: 'optional' }), 'A', null, '')).toBeNull();
+});
+
+test('detalhe que exige descrição não passa sem texto', () => {
+  expect(validateLossChoice(opts(), 'A', 'A7', '   ')).toBe('Este detalhe exige uma descrição.');
+  expect(validateLossChoice(opts(), 'A', 'A7', 'Extrato sem contribuição')).toBeNull();
+  expect(validateLossChoice(opts(), 'A', 'A1', '')).toBeNull();
+});
+
+test('erros novos de perda viram mensagem real', () => {
+  expect(lossErrorMessage({ message: 'loss_reason_required' })).toBe('Escolha o motivo da perda.');
+  expect(lossErrorMessage({ message: 'forbidden_correct_loss' })).toContain('Corrigir motivo de perda');
+  expect(lossErrorMessage({ message: 'opportunity_already_lost' })).toBe('Esta oportunidade já está perdida.');
 });

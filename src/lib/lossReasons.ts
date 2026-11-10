@@ -111,3 +111,25 @@ export function lossErrorMessage(error: unknown): string | null {
  * (sem motivo, sem detalhe, sem descrição). Mantém o null tipado sem `any`.
  */
 export const rpcNullable = (value: string | null | undefined) => (value ?? null) as string;
+
+/** Resposta de list_loss_reason_options_v1: só o que a pessoa pode escolher. */
+export interface LossOptionDetail { id: string; code: string; name: string; help_text: string | null; requires_description: boolean }
+export interface LossOptionReason { id: string; code: string; name: string; details: LossOptionDetail[] }
+export interface LossOptions { reason_required: boolean; detail_mode: LossDetailMode; reasons: LossOptionReason[] }
+
+export const EMPTY_LOSS_OPTIONS: LossOptions = { reason_required: false, detail_mode: 'optional', reasons: [] };
+
+/**
+ * Mesmas regras do banco para quem marca é pessoa (fn_resolve_loss_choice_v1), para o diálogo avisar antes de
+ * salvar. O banco continua sendo quem decide. Devolve o texto do problema ou null.
+ */
+export function validateLossChoice(options: LossOptions, reasonId: string | null, detailId: string | null, description: string) {
+  const reason = options.reasons.find((r) => r.id === reasonId) ?? null;
+  if (!reason) return options.reason_required ? uiText('Escolha o motivo da perda.') : null;
+  const detail = reason.details.find((d) => d.id === detailId) ?? null;
+  if (!detail) {
+    return options.detail_mode === 'required' && reason.details.length > 0 ? uiText('Escolha o detalhe da perda.') : null;
+  }
+  if (detail.requires_description && !description.trim()) return uiText('Este detalhe exige uma descrição.');
+  return null;
+}

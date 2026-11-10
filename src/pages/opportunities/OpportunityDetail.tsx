@@ -28,11 +28,12 @@ import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactConversations } from '@/components/contacts/ContactConversations';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
-import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
+import { LossDialog } from '@/components/opportunities/loss/LossDialog';
+import { OpportunityLossHistory } from '@/components/opportunities/loss/OpportunityLossHistory';
 import { OpportunityCloseDialog } from '@/components/opportunities/OpportunityCloseDialog';
 import { OpportunityReadinessCard } from '@/components/opportunities/OpportunityReadinessCard';
 import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
-import { mensagemErroStatus, transitionOpportunityStage } from '@/lib/opportunityClose';
+import { mensagemErroStatus } from '@/lib/opportunityClose';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { ContractSignatureEntry } from '@/components/signature/ContractSignatureEntry';
@@ -184,58 +185,25 @@ export default function OpportunityDetail() {
     }).format(value);
   };
 
-  const applyStatusChange = async (newStatus: 'won' | 'lost', closeDate: string) => {
-    if (!opportunity || !organization) return;
-    const targetStage = stages.find((s) => s.type === newStatus);
-    if (!targetStage) return;
-
-    try {
-      const result = await transitionOpportunityStage({
-        organizationId: organization.id,
-        opportunityId: opportunity.id,
-        targetStageId: targetStage.id,
-        closeDate,
-        source: 'opportunity_detail',
-      });
-      if (!result.ok) throw new Error(result.error || 'closing_requirements_missing');
-
-      toast({ title: t('opportunities.updated') });
-      setPendingStatus(null);
-      fetchOpportunity();
-    } catch (error) {
-      console.error(`Error marking as ${newStatus}:`, error);
-      toast({ title: t('common.error'), description: mensagemErroStatus(error) ?? undefined, variant: 'destructive' });
-    }
-  };
-
   const handleMarkWon = async () => {
     if (!opportunity) return;
     setPendingStatus('won');
   };
 
-  const handleMarkLost = async () => {
+  const handleMarkLost = () => {
     if (!opportunity) return;
-    if (opportunity.close_date) {
-      await applyStatusChange('lost', opportunity.close_date);
-    } else {
-      setPendingStatus('lost');
-    }
+    setPendingStatus('lost');
   };
 
+  // Perdida volta para a etapa em que estava ao perder; ganha, para a primeira etapa aberta.
   const handleReopen = async () => {
     if (!opportunity || !organization) return;
-    const firstOpenStage = stages.find((s) => s.type === 'open') || stages[0];
-    if (!firstOpenStage) return;
     try {
-      const { error } = await supabase
-        .from('opportunities')
-        .update({
-          status: 'open',
-          pipeline_stage_id: firstOpenStage.id,
-          close_date: null,
-          updated_by: userProfile?.id || null,
-        } as any)
-        .eq('id', opportunity.id);
+      const { error } = await supabase.rpc('reopen_opportunity_v1', {
+        _organization_id: organization.id,
+        _opportunity_id: opportunity.id,
+        _source: 'opportunity_detail',
+      });
       if (error) throw error;
       toast({ title: t('opportunities.updated') });
       fetchOpportunity();
@@ -404,6 +372,9 @@ export default function OpportunityDetail() {
               <ProcessClassificationSlot opportunityId={opportunity.id} />
               <CommercialAttributionPanel key={opportunity.id} entityType="opportunity" entityId={opportunity.id} contactId={opportunity.contact_id} />
               <CustomFieldsCard module="opportunities" recordId={opportunity.id} />
+              <OpportunityLossHistory opportunityId={opportunity.id} isLost={opportunity.status === 'lost'}
+                canCorrect={!!permissions.v2?.ferramentas?.corrigir_motivo_perda}
+                reloadKey={`${opportunity.status}:${opportunity.pipeline_stage_id}`} onChanged={fetchOpportunity} />
               <Card>
                 <CardContent className="pt-6 space-y-4">
                   <div>
@@ -481,11 +452,14 @@ export default function OpportunityDetail() {
           initialCloseDate={opportunity.close_date}
           source="opportunity_detail_mobile"
           onSuccess={fetchOpportunity}
-        /> : <CloseDatePromptDialog
+        /> : <LossDialog
           open={pendingStatus === 'lost'}
           onOpenChange={(o) => !o && setPendingStatus(null)}
-          title="Marcar como Perdido"
-          onConfirm={(date) => pendingStatus && applyStatusChange(pendingStatus, date)}
+          opportunityIds={[opportunity.id]}
+          opportunityTitle={opportunity.title}
+          initialCloseDate={opportunity.close_date}
+          source="opportunity_detail_mobile"
+          onSuccess={fetchOpportunity}
         />}
       </MobileLayout>
     );
@@ -688,6 +662,9 @@ export default function OpportunityDetail() {
               <ProcessClassificationSlot opportunityId={opportunity.id} />
               <CommercialAttributionPanel key={opportunity.id} entityType="opportunity" entityId={opportunity.id} contactId={opportunity.contact_id} />
               <CustomFieldsCard module="opportunities" recordId={opportunity.id} />
+              <OpportunityLossHistory opportunityId={opportunity.id} isLost={opportunity.status === 'lost'}
+                canCorrect={!!permissions.v2?.ferramentas?.corrigir_motivo_perda}
+                reloadKey={`${opportunity.status}:${opportunity.pipeline_stage_id}`} onChanged={fetchOpportunity} />
               <Card>
                 <CardContent className="pt-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -864,11 +841,14 @@ export default function OpportunityDetail() {
         initialCloseDate={opportunity.close_date}
         source="opportunity_detail"
         onSuccess={fetchOpportunity}
-      /> : <CloseDatePromptDialog
+      /> : <LossDialog
         open={pendingStatus === 'lost'}
         onOpenChange={(o) => !o && setPendingStatus(null)}
-        title="Marcar como Perdido"
-        onConfirm={(date) => pendingStatus && applyStatusChange(pendingStatus, date)}
+        opportunityIds={[opportunity.id]}
+        opportunityTitle={opportunity.title}
+        initialCloseDate={opportunity.close_date}
+        source="opportunity_detail"
+        onSuccess={fetchOpportunity}
       />}
     </Layout>
   );
