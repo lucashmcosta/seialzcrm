@@ -95,6 +95,25 @@ async function plamev(
   return dados;
 }
 
+/** Coordenadas do CEP (BrasilAPI; só o CEP sai daqui). Guarda por 1h na instância. */
+async function coordenadasDoCep(cep: string): Promise<{ lat: number; lng: number }> {
+  const chave = `cep:${cep}`;
+  const hit = cache.get(chave);
+  if (hit && hit.ate > Date.now()) return hit.valor as { lat: number; lng: number };
+  let res: Response;
+  try {
+    res = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`, { signal: AbortSignal.timeout(10_000) });
+  } catch {
+    throw new L.Recusa(502, "cep_indisponivel");
+  }
+  if (res.status === 404 || res.status === 400) throw new L.Recusa(422, "cep_inexistente");
+  if (!res.ok) throw new L.Recusa(502, "cep_indisponivel");
+  const ponto = L.coordenadasCep(await res.json().catch(() => null));
+  if (!ponto) throw new L.Recusa(422, "cep_sem_localizacao");
+  cache.set(chave, { ate: Date.now() + UMA_HORA, valor: ponto });
+  return ponto;
+}
+
 /** Uma chamada à API da Plamev, devolvida ao widget em simular/solicitar ("Ver payload"). */
 interface Chamada { metodo: string; url: string; status: number; ms: number; enviado: unknown; recebido: unknown }
 
@@ -337,6 +356,13 @@ Deno.serve(async (req) => {
         .eq("organization_id", org).in("opportunity_id", ids).order("created_at", { ascending: false }).limit(20);
       return (data ?? []) as unknown as CotacaoLinha[];
     };
+    const oportunidadeAbertaDoContato = async (contatoId: string | null) => {
+      if (!contatoId) return null;
+      const { data } = await userClient.from("opportunities").select("id, contact_id")
+        .eq("organization_id", org).eq("contact_id", contatoId).eq("status", "open").is("deleted_at", null)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      return (data ?? null) as { id: string; contact_id: string | null } | null;
+    };
     const contatoDoPedido = (opp: { contact_id: string | null } | null) =>
       opp?.contact_id ?? (body.contact_id != null ? L.guid(body.contact_id, "contact_id") : null);
 
@@ -427,9 +453,17 @@ Deno.serve(async (req) => {
       case "rede": {
         const cep = L.cep(body.cep);
         const raio = L.raioKm(body.raio_km);
-        const raw = await plamev(token, "Credenciados/BuscarRedeCredenciadaPorLocalidade",
-          { body: { Cep: cep, Raio: String(raio) }, cacheOrg: org, naoEncontrado: true });
-        return json(200, { credenciados: raw ? L.rede(raw).slice(0, 50) : [] });
+        try {
+          const raw = await plamev(token, "Credenciados/BuscarRedeCredenciadaPorLocalidade",
+            { body: { Cep: cep, Raio: String(raio) }, cacheOrg: org, naoEncontrado: true });
+          return json(200, { credenciados: raw ? L.rede(raw).slice(0, 50) : [] });
+        } catch (e) {
+          // "CEP não encontrado." vem até para CEP que existe: busca pelas coordenadas do CEP.
+          if (!(e instanceof L.Recusa && e.codigo === "plamev_error")) throw e;
+        }
+        const ponto = await coordenadasDoCep(cep);
+        const raw = await plamev(token, "Credenciados/BuscaCredenciados", { body: { Lat: ponto.lat, Lng: ponto.lng, Raio: raio * 1000 } });
+        return json(200, { credenciados: L.redePorCoordenadas(raw, raio).slice(0, 50) });
       }
 
       case "pagamento": {
@@ -526,7 +560,8 @@ Deno.serve(async (req) => {
         const pedido = L.pedidoSimulacao(body);
         const cliente = L.cliente(body);
         // Confere a oportunidade ANTES de gravar na Plamev: sem acesso, não cria cotação lá.
-        const opp = await oportunidade(body.opportunity_id);
+        // Pela conversa/contato (sem oportunidade na tela): salva na oportunidade aberta mais recente do contato.
+        const opp = await oportunidade(body.opportunity_id) ?? await oportunidadeAbertaDoContato(contatoDoPedido(null));
         const raw = await plamev(token, "Cotacoes/SolicitaCotacaoPet", { body: L.corpoCotacao(pedido, cliente, CONSULTOR), trace });
         const r = L.resultado(raw);
         console.log(`[plamev-quote] cotação gravada org=${org} user=${me.id} opp=${opp?.id ?? "-"}`);

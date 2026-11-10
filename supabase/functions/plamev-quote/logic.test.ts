@@ -213,6 +213,25 @@ Deno.test("rede: sem clínica no raio a Plamev manda um objeto com RedeCredencia
   assertEquals(L.rede(vazio), []);
 });
 
+Deno.test("rede por coordenadas: filtra o raio, só ativos visíveis, mais perto primeiro", () => {
+  const cred = (id: string, km: number, extra: Record<string, string> = {}) => ({
+    Credenciados: { Id: id, Situacao: "1", ExibeSite: "1", Bloqueado: "0", NomeFantasia: `Clínica ${id}`, Logradouro: "Rua A",
+      Numero: "1", Bairro: "Sé", Cidade: "São Paulo", Estado: "São Paulo", Cep: "01001-000", Ddd: "11", Telefone: "33334444", ...extra },
+    DistanciaLinhaReta: km,
+  });
+  const r = L.redePorCoordenadas([cred("longe", 13.5), cred("b", 3.24), cred("a", 1.3), cred("inativa", 1, { Situacao: "0" }),
+    cred("oculta", 1, { ExibeSite: "0" }), cred("bloq", 1, { Bloqueado: "1" })], 5);
+  assertEquals(r.map((c) => c.id), ["a", "b"]);
+  assertEquals(r[1], { id: "b", nome: "Clínica b", endereco: "Rua A, 1", bairro: "Sé", cidade: "São Paulo", estado: "São Paulo",
+    cep: "01001000", telefone: "(11) 33334444", distanciaKm: 3.2, volante: false, observacao: "" });
+});
+
+Deno.test("coordenadas do CEP (BrasilAPI v2)", () => {
+  assertEquals(L.coordenadasCep({ location: { coordinates: { latitude: "-23.55", longitude: "-46.63" } } }), { lat: -23.55, lng: -46.63 });
+  assertEquals(L.coordenadasCep({ location: { coordinates: {} } }), null);
+  assertEquals(L.coordenadasCep(null), null);
+});
+
 Deno.test("rede: CEP e raio validados", () => {
   assertEquals(L.cep("01310-100"), "01310100");
   assertEquals(recusa(() => L.cep("123")).codigo, "invalid_cep");
