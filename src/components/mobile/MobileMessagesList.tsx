@@ -209,13 +209,15 @@ export function MobileMessagesList() {
   const hasAIIntegration = useHasTextAi(organization?.id);
 
   // Fetch threads via RPC (replaces N+1 query)
-  const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'] });
+  const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'], resolvedOnly: filter === 'resolved' });
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId);
   const threadPerms = useThreadPerms(selectedThread ? { assigned_user_id: (selectedThread as any).assigned_user_id ?? null, business_context: selectedThreadBusinessContext ?? 'sales' } : null);
 
   // Set default filter
   useEffect(() => {
+    // Na aba Resolvidas a lista muda de tamanho; não volta sozinha para as abertas.
+    if (filter === 'resolved') return;
     if (threads && threads.length > 0 && userProfile?.id) {
       const hasMine = threads.some(t => t.assigned_user_id === userProfile.id && ['open', 'awaiting_client', 'in_progress'].includes(t.status));
       setFilter(hasMine ? 'mine' : 'unassigned');
@@ -651,7 +653,7 @@ export function MobileMessagesList() {
       case 'mine': return thread.assigned_user_id === userProfile?.id && isOpenLike;
       case 'unassigned': return !thread.assigned_user_id && (thread.status === 'open' || isPendingFirstReply);
       case 'all_open': return isOpenLike;
-      case 'resolved': return thread.status === 'resolved' && (thread.last_inbound_at || (thread as any).whatsapp_last_inbound_at);
+      case 'resolved': return thread.status === 'resolved';
       default: return true;
     }
   });
