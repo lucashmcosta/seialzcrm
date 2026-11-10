@@ -1,46 +1,40 @@
-# Cliente de teste "Cliente Teste App" — Central Trabalhista
+# Motivos de perda com detalhe (Seialz Sales)
 
-Nada foi criado nem alterado ainda. Antes de executar, preciso da sua decisão nos 3 pontos de bloqueio abaixo.
+## O que encontrei hoje (respondendo a pergunta em aberto para o Junior)
+- Nenhuma organizacao guarda motivo de perda hoje. `opportunities` so tem `status`, `lost_at` e `lost_at_source`; nao ha campo de motivo nem texto livre. O unico `lost_reason` existente (em `opportunity_behavior_snapshot`) esta vazio em todas as linhas.
+- Ha 20.367 oportunidades perdidas em 5 organizacoes. Nada sera preenchido retroativamente; nao ha texto antigo a preservar.
+- Nao existe cadastro de "pipelines": cada organizacao tem um unico funil (`pipeline_stages` por organizacao). [INCERTO] O filtro "motivo vale para pipelines selecionados" nao tem onde se apoiar hoje.
 
-## Bloqueios (decisão sua)
+## Decisao necessaria antes de construir
+O filtro por pipeline do documento depende de multiplos pipelines, que nao existem. Proposta: nesta entrega guardar o campo "Pipelines = Todos" e deixar a escolha por pipeline como [TODO] ate existir cadastro de pipelines. A "regra por etapa" funciona normalmente, pois as etapas existem.
 
-1. **O telefone já está em uso.** +55 11 96429-8621 já pertence ao contato **"Joao Teste"** (c90e9e78…, CPF diferente, já cliente, 9 oportunidades). A prevenção de duplicados pode juntar o novo contato com o Joao Teste, e no Nammux/App o login pode cair no contato errado. Opções:
-   - a) criar o contato novo sem telefone (se a regra permitir — veja o item 2);
-   - b) usar outro número real seu;
-   - c) usar o próprio Joao Teste em vez de criar um novo.
-2. **O "Ganho" da Central está bloqueado por requisitos** (modo "exigir"). Pelo caminho normal, a oportunidade só fecha com tudo isto:
-   - telefone preenchido (então a opção 1a não funciona);
-   - CPF **verificado** pela consulta de cadastro — um CPF fictício pode voltar como inválido ou não encontrado e travar o fechamento;
-   - endereço completo;
-   - documentos: CTPS, comprovante de residência e um documento de identidade (RG, RNE ou CNH) — preciso de arquivos fictícios;
-   - classificação do processo feita.
-   Quer que eu siga esses passos com dados fictícios (endereço, arquivos de exemplo, classificação), ou fechar como Ganho usando a liberação interna que já existe? A liberação pula a checagem, então o caminho não fica igual ao de um cliente real.
-3. **O CPF 207.492.652-99** passa no cálculo do dígito, mas não sei se a consulta de cadastro aceita. Se der "não encontrado", o item 2 trava.
+## Entrega em 3 fases
 
-## O que dispara quando vira Ganho (lido no banco)
+### Fase 1 — Cadastro e marcacao pela pessoa
+- Tabelas por organizacao: motivos, detalhes, regras gerais (motivo obrigatorio = sim; detalhe = opcional) e historico de perdas (motivo, detalhe, descricao, etapa, quem marcou: pessoa ou automacao, data/hora). Nunca sobrescrito.
+- Tela em Configuracoes > Sales > Motivos de perda (somente administrador): motivos e detalhes com codigo, ordem, situacao, texto de ajuda, exige descricao, quem pode marcar.
+- Integridade no servidor: codigo imutavel apos uso e nunca reaproveitado; usado nao apaga, so inativa; detalhe nao troca de motivo; inativar motivo esconde seus detalhes.
+- Janela "Marcar como Perdida" em todos os pontos que hoje marcam perda (detalhe, Kanban, acoes em lote, ficha nas Mensagens): so motivos/detalhes ativos e marcaveis por pessoas.
+- Regras validadas no servidor (funcao unica de marcar perda + bloqueio em mudanca direta de status), para nenhuma tela escapar.
+- Migracao segura: organizacao sem motivos cadastrados continua marcando perda como antes, mesmo com "motivo obrigatorio = sim" (regra so passa a valer quando houver pelo menos um motivo ativo).
+- Reabrir: volta para a etapa onde estava; a perda anterior fica no historico.
+- Corrigir motivo de perda ja gravada: permissao nova no RBAC V2 ("Corrigir motivo de perda"), registrando quem, quando e valor anterior.
 
-| Automação | Efeito | Fica no Seialz? | Como evitar |
-|---|---|---|---|
-| Aviso "Oportunidade ganha" | notificação para o responsável | sim | sem problema |
-| Contato vira "cliente" | muda a etapa do contato | sim | é o esperado |
-| Fotografia do fechamento, histórico de etapas, registro de auditoria | registros internos | sim | sem problema |
-| **Evento de compra para a Meta (anúncios)** | envia "Purchase" para a Meta, ligado na Central (214 eventos em 30 dias) | **não** | não dá para desligar só para um contato sem mexer na automação. O contato de teste não tem origem em anúncio, então a Meta deve ignorar, mas o envio acontece |
-| **Integração Nammux (opportunity.won)** | cria o cliente e o processo no Nammux | **não** (é o objetivo) | mantido |
-| Documentos pós-ganho para o Nammux | envia os documentos do item 2 | não (Nammux) | é o esperado |
-| Webhooks de teste (webhook.site) | — | — | já estão desligados |
+### Fase 2 — Automacao e integracao
+- Perda por codigo do detalhe para automacoes, agente de IA e API; codigo invalido/inativo e recusado e o erro fica registrado e visivel para o administrador.
+- Regra por etapa: detalhe aplicado quando a oportunidade para naquela etapa sem resposta; regra apontando para detalhe inativo vira pendencia visivel.
+- Evento de perda (webhook) com codigo do motivo, codigo do detalhe, descricao, etapa e quem marcou.
+- [INCERTO] Qual mecanismo atual define "parou sem resposta" — verificar automacoes existentes no inicio da fase.
 
-Não encontrei mensagem automática de WhatsApp ou e-mail para o contato, cobrança, nem contrato ou assinatura que disparem no Ganho. A assinatura (SuvSign) só sai quando alguém envia pela tela. **[INCERTO]** Não sei se o Nammux manda mensagem ao cliente depois de criar o processo; isso tem que ser conferido do lado do Nammux.
+### Fase 3 — Relatorio
+- Perdas por motivo e detalhe (quantidade e %), agrupado por codigo, com filtros por etapa, periodo, origem e responsavel; separacao pessoa x automacao; inativos aparecem nos periodos usados.
 
-## Marcar como teste
+## Fora do escopo
+Lista padrao de motivos, sugestao por IA, motivos de ganho, terceiro nivel.
 
-Os contatos não têm um campo "teste" ou "excluir de relatórios". Sem criar um campo novo (o que mudaria a estrutura), o contato entra em relatórios, funil e métricas. Sugestão: usar o nome "Cliente Teste App" e excluir depois.
-
-## Execução (depois da sua autorização)
-
-1. Criar o contato na Central (nome, CPF e telefone conforme a sua decisão).
-2. Criar a oportunidade no funil da Central, na etapa "Novo", sem responsável, para não entrar no rodízio da equipe. **[INCERTO]** O rodízio pode atribuir alguém automaticamente.
-3. Cumprir os requisitos de fechamento conforme a sua decisão no item 2.
-4. Mover para "Ganho" pelo mesmo caminho da tela.
-5. Conferir o evento enviado ao Nammux e a resposta, e trazer os IDs do cliente e do processo lá, se a resposta trouxer.
-
-Não haverá alteração de código, automações, funis ou outros contatos, e nada para publicar: são só dados.
+## Detalhes tecnicos
+- Novas tabelas com GRANT + RLS por `organization_id = ANY(current_user_org_ids())`; escrita de cadastro so por admin do sistema da org; historico gravado apenas por RPC SECURITY DEFINER.
+- RPC `rpc_mark_opportunity_lost_v1` (pessoa) e `rpc_mark_opportunity_lost_by_code_v1` (automacao/API), sem overloads.
+- Trigger em `opportunities` impede `status = lost` sem passar pela RPC quando a organizacao tem motivos ativos.
+- Testes de cada regra dos criterios de aceite; ADR novo em `docs/decisions/` e doc em `docs/modules/opportunities/`.
+- Pergunta: comecar so pela Fase 1, ligada primeiro em uma organizacao piloto?
