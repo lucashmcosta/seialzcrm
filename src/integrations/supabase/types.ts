@@ -10159,6 +10159,282 @@ export type Database = {
           },
         ]
       }
+      opportunity_loss_corrections: {
+        Row: {
+          corrected_at: string
+          corrected_by: string | null
+          id: string
+          loss_id: string
+          new_description: string | null
+          new_detail_code: string | null
+          new_detail_id: string | null
+          new_reason_code: string | null
+          new_reason_id: string | null
+          old_description: string | null
+          old_detail_code: string | null
+          old_detail_id: string | null
+          old_reason_code: string | null
+          old_reason_id: string | null
+          opportunity_id: string
+          organization_id: string
+        }
+        Insert: {
+          corrected_at?: string
+          corrected_by?: string | null
+          id?: string
+          loss_id: string
+          new_description?: string | null
+          new_detail_code?: string | null
+          new_detail_id?: string | null
+          new_reason_code?: string | null
+          new_reason_id?: string | null
+          old_description?: string | null
+          old_detail_code?: string | null
+          old_detail_id?: string | null
+          old_reason_code?: string | null
+          old_reason_id?: string | null
+          opportunity_id: string
+          organization_id: string
+        }
+        Update: {
+          corrected_at?: string
+          corrected_by?: string | null
+          id?: string
+          loss_id?: string
+          new_description?: string | null
+          new_detail_code?: string | null
+          new_detail_id?: string | null
+          new_reason_code?: string | null
+          new_reason_id?: string | null
+          old_description?: string | null
+          old_detail_code?: string | null
+          old_detail_id?: string | null
+          old_reason_code?: string | null
+          old_reason_id?: string | null
+          opportunity_id?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
+      opportunity_loss_reason_details: {
+        Row: {
+          automation_only: boolean
+          code: string
+          created_at: string
+          created_by: string | null
+          help_text: string | null
+          id: string
+          is_active: boolean
+          name: string
+          order_index: number
+          organization_id: string
+          reason_id: string
+          requires_description: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          automation_only?: boolean
+          code: string
+          created_at?: string
+          created_by?: string | null
+          help_text?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          order_index?: number
+          organization_id: string
+          reason_id: string
+          requires_description?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          automation_only?: boolean
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          help_text?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          order_index?: number
+          organization_id?: string
+          reason_id?: string
+          requires_description?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      opportunity_loss_reasons: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          order_index: number
+          organization_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          order_index?: number
+          organization_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          order_index?: number
+          organization_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      opportunity_loss_settings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          detail_mode: string
+          organization_id: string
+          reason_required: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          detail_mode?: string
+          organization_id: string
+          reason_required?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          detail_mode?: string
+          organization_id?: string
+          reason_required?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      opportunity_loss_stage_rules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          detail_id: string
+          id: string
+          organization_id: string
+          stage_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          detail_id: string
+          id?: string
+          organization_id: string
+          stage_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          detail_id?: string
+          id?: string
+          organization_id?: string
+          stage_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      opportunity_losses: {
+        Row: {
+          actor_type: string
+          actor_user_id: string | null
+          automation_ref: string | null
+          close_date: string | null
+          created_at: string
+          description: string | null
+          detail_code: string | null
+          detail_id: string | null
+          id: string
+          lost_at: string
+          opportunity_id: string
+          organization_id: string
+          reason_code: string | null
+          reason_id: string | null
+          reopened_at: string | null
+          reopened_by: string | null
+          reopened_to_stage_id: string | null
+          source: string
+          stage_id_at_loss: string | null
+        }
+        Insert: {
+          actor_type?: string
+          actor_user_id?: string | null
+          automation_ref?: string | null
+          close_date?: string | null
+          created_at?: string
+          description?: string | null
+          detail_code?: string | null
+          detail_id?: string | null
+          id?: string
+          lost_at?: string
+          opportunity_id: string
+          organization_id: string
+          reason_code?: string | null
+          reason_id?: string | null
+          reopened_at?: string | null
+          reopened_by?: string | null
+          reopened_to_stage_id?: string | null
+          source?: string
+          stage_id_at_loss?: string | null
+        }
+        Update: {
+          actor_type?: string
+          actor_user_id?: string | null
+          automation_ref?: string | null
+          close_date?: string | null
+          created_at?: string
+          description?: string | null
+          detail_code?: string | null
+          detail_id?: string | null
+          id?: string
+          lost_at?: string
+          opportunity_id?: string
+          organization_id?: string
+          reason_code?: string | null
+          reason_id?: string | null
+          reopened_at?: string | null
+          reopened_by?: string | null
+          reopened_to_stage_id?: string | null
+          source?: string
+          stage_id_at_loss?: string | null
+        }
+        Relationships: []
+      }
       organization_api_keys: {
         Row: {
           api_key: string
@@ -16266,6 +16542,54 @@ export type Database = {
       kairos_db_stats: { Args: never; Returns: Json }
       kairos_diagnose: { Args: never; Returns: Json }
       kairos_table_stats: { Args: never; Returns: Json }
+      can_manage_loss_reasons: { Args: { _org: string }; Returns: boolean }
+      correct_opportunity_loss_v1: {
+        Args: {
+          _description: string
+          _detail_id: string
+          _opportunity_id: string
+          _organization_id: string
+          _reason_id: string
+        }
+        Returns: Json
+      }
+      list_loss_reason_options_v1: {
+        Args: { _organization_id: string }
+        Returns: Json
+      }
+      list_loss_stage_rule_issues_v1: {
+        Args: { _organization_id: string }
+        Returns: Json
+      }
+      loss_reason_usage_v1: { Args: { _organization_id: string }; Returns: Json }
+      mark_opportunities_lost_batch_v1: {
+        Args: {
+          _close_date: string
+          _description: string
+          _detail_id: string
+          _opportunity_ids: string[]
+          _organization_id: string
+          _reason_id: string
+          _source: string
+        }
+        Returns: Json
+      }
+      mark_opportunity_lost_v1: {
+        Args: {
+          _close_date: string
+          _description: string
+          _detail_id: string
+          _opportunity_id: string
+          _organization_id: string
+          _reason_id: string
+          _source: string
+        }
+        Returns: Json
+      }
+      reopen_opportunity_v1: {
+        Args: { _opportunity_id: string; _organization_id: string; _source: string }
+        Returns: Json
+      }
       list_entity_documents_v1: {
         Args: {
           _contact_id?: string
