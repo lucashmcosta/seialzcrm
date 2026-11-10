@@ -42,6 +42,9 @@ interface ToolResult {
 }
 
 // Available tools for the agent
+/** Espera antes de responder, para juntar mensagens que o cliente manda em sequência. */
+const BURST_WAIT_MS = 4000;
+
 const AVAILABLE_TOOLS = [
   {
     type: "function",
@@ -568,7 +571,7 @@ async function executeTool(
           last_routing_decision: { action: 'agent_closed', reason: args.reason || 'caso não se encaixa', decided_at: new Date().toISOString() },
         }).eq('id', context.threadId).not('ai_agent_id', 'is', null).is('ai_agent_released_at', null);
         if (error) return { success: false, message: error.message };
-        return { success: true, message: 'Conversa encerrada' };
+        return { success: true, message: 'Feito. Não escreva mais nada ao cliente sobre o encerramento.' };
       }
 
       case 'transfer_to_human': {
@@ -1689,6 +1692,16 @@ serve(async (req) => {
         if (ack) await dispatchWhatsAppSend({ organizationId, contactId, threadId, message: ack, isAgentMessage: true, agentId: agent.id, senderName: agent.name });
         return skip(reason);
       };
+      // Cliente que manda várias mensagens seguidas: espera um pouco e só a chamada da última
+      // responde, já lendo todas. Sem isso, cada mensagem gerava uma resposta ao mesmo tempo.
+      if (!followUp) {
+        await new Promise((resolve) => setTimeout(resolve, BURST_WAIT_MS));
+        const { count: newer } = await supabase.from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('thread_id', threadId).eq('direction', 'inbound').is('deleted_at', null)
+          .gt('created_at', new Date(startTime).toISOString());
+        if ((newer ?? 0) > 0) return skip('superseded_by_newer_message');
+      }
       if (followUp) {
         // Não é mensagem do cliente: instrução para o agente escrever a retomada.
         message = followUpInstruction(followUp.attempt, followUp.total);
@@ -2422,7 +2435,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: true, status: 'followup_skipped' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     const splitMessages = (agent.formatting_rules as { split_messages?: boolean } | null)?.split_messages === true;
-    const bubbles = splitMessages ? splitIntoBubbles(aiResponse) : (aiResponse ? [aiResponse] : []);
+    // Texto que só ecoa o encerramento ("Conversa encerrada.") nunca vai para o cliente.
+    const isCloseEcho = (t: string) => toolsExecuted.includes('end_conversation') && /^(conversa\s+)?encerrad[ao]\.?$/i.test(t.trim());
+    const bubbles = (splitMessages ? splitIntoBubbles(aiResponse) : (aiResponse ? [aiResponse] : [])).filter((b) => !isCloseEcho(b));
 
     // 7. Check if this is test mode - don't send to WhatsApp, just return response
     if (isTestMode) {
