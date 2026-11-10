@@ -290,8 +290,10 @@ function campanha(raw: Json) {
 export function resultado(raw: Json) {
   const mensalidade = num(raw?.ValorMensalidade ?? raw?.ValorTotal);
   const camp = campanha(raw);
-  // Com campanha, a mensalidade é a primeira fatura depois da adesão (a 1ª fatura é a adesão).
-  const recorrente = camp?.faturas.find((f, i) => i > 0 && !/ades[aã]o/i.test(f.periodo));
+  // Com campanha, a mensalidade é a primeira fatura depois da adesão (a 1ª fatura é a adesão). Período único
+  // ("Todas as Faturas", campanha SLIM de 2026-11-10) vale para adesão e mensalidade.
+  const recorrente = camp?.faturas.find((f, i) => i > 0 && !/ades[aã]o/i.test(f.periodo))
+    ?? (camp?.faturas.length === 1 && !/ades[aã]o/i.test(camp.faturas[0].periodo) ? camp.faturas[0] : undefined);
   const totalMensalidade = recorrente ? recorrente.total : num(raw?.ValorTotalMensalidade ?? raw?.ValorTotal);
   return {
     mensalidade,
@@ -401,6 +403,46 @@ export function rede(raw: Json) {
       observacao: s(c?.CredenciadosObservacaoGeral).slice(0, 300),
     };
   }).filter((c) => c.nome).sort((a, b) => a.distanciaKm - b.distanciaKm);
+}
+
+/** Latitude/longitude do CEP pela BrasilAPI (`/api/cep/v2`); null se ela não tiver a localização. */
+export function coordenadasCep(raw: Json): { lat: number; lng: number } | null {
+  const c = raw?.location?.coordinates;
+  const lat = Number(c?.latitude);
+  const lng = Number(c?.longitude);
+  if (!c?.latitude || !c?.longitude || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
+/**
+ * `Credenciados/BuscaCredenciados` (Lat/Lng): plano B quando a busca por CEP da Plamev diz "CEP não encontrado" para CEP
+ * que existe (acontece com a maioria; conferido em 2026-11-09). Ela ignora o raio e devolve a rede toda com
+ * `DistanciaLinhaReta` em km: o raio é filtrado aqui. Só entra credenciado ativo, exibido no site e não bloqueado.
+ */
+export function redePorCoordenadas(raw: Json, raioKm: number) {
+  const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  return lista(raw).map((item) => {
+    const c = item?.Credenciados ?? {};
+    const ddd = s(c.Ddd).replace(/\D/g, "");
+    const fone = s(c.Telefone).replace(/\D/g, "");
+    const visivel = s(c.Situacao) === "1" && s(c.ExibeSite) !== "0" && s(c.Bloqueado) !== "1";
+    return {
+      visivel,
+      id: s(c.Id),
+      nome: s(c.NomeFantasia) || s(c.NomeCredenciado) || s(c.Nome),
+      endereco: [s(c.Logradouro), s(c.Numero)].filter(Boolean).join(", "),
+      bairro: s(c.Bairro),
+      cidade: s(c.Cidade),
+      estado: s(c.Estado),
+      cep: s(c.Cep).replace(/\D/g, ""),
+      telefone: fone ? (ddd ? `(${ddd}) ${fone}` : fone) : "",
+      distanciaKm: Math.round(Number(item?.DistanciaLinhaReta) * 10) / 10 || 0,
+      volante: false,
+      observacao: "",
+    };
+  }).filter((c) => c.visivel && c.nome && c.distanciaKm <= raioKm)
+    .map(({ visivel: _, ...c }) => c)
+    .sort((a, b) => a.distanciaKm - b.distanciaKm);
 }
 
 /**

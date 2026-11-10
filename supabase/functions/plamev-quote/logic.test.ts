@@ -180,6 +180,15 @@ Deno.test("campanha: mensalidade vem de ComposicaoCampanha (resposta real de 202
   assertEquals(dois.campanha?.faturas[0].total, 139.96);
 });
 
+Deno.test("campanha com período único (Todas as Faturas): é a mensalidade", () => {
+  const pet = (nome: string, total: string) => ({ PetNome: nome, Linhas: [{ Periodo: "Todas as Faturas", Total: total, Detalhes: [] }] });
+  const r = L.resultado({
+    ValorMensalidade: 119.98, ValorTotalMensalidade: 97.48, ValorAdesao: 97.48,
+    ComposicaoCampanha: { NomeCampanha: "SLIM", TotalAdesao: "77.98", Tabela: [pet("Luna", "39.99"), pet("Tyler", "37.99")] },
+  });
+  assertEquals([r.totalMensalidade, r.descontosMensalidade, r.adesao], [77.98, -42, 77.98]);
+});
+
 Deno.test("sem ComposicaoCampanha: continua usando os campos antigos", () => {
   const r = L.resultado({ ValorMensalidade: 149.99, ValorTotalMensalidade: 139.99, ValorDescontosMensalidades: -10, ValorAdesao: 89.99 });
   assertEquals([r.totalMensalidade, r.descontosMensalidade, r.adesao, r.campanha], [139.99, -10, 89.99, null]);
@@ -211,6 +220,25 @@ Deno.test("rede: sem clínica no raio a Plamev manda um objeto com RedeCredencia
     EnderecoPesquisado: { cep: "69980000", cidade: { nome: "Cruzeiro do Sul" }, estado: { sigla: "AC" } }, RedeCredenciada: [],
   };
   assertEquals(L.rede(vazio), []);
+});
+
+Deno.test("rede por coordenadas: filtra o raio, só ativos visíveis, mais perto primeiro", () => {
+  const cred = (id: string, km: number, extra: Record<string, string> = {}) => ({
+    Credenciados: { Id: id, Situacao: "1", ExibeSite: "1", Bloqueado: "0", NomeFantasia: `Clínica ${id}`, Logradouro: "Rua A",
+      Numero: "1", Bairro: "Sé", Cidade: "São Paulo", Estado: "São Paulo", Cep: "01001-000", Ddd: "11", Telefone: "33334444", ...extra },
+    DistanciaLinhaReta: km,
+  });
+  const r = L.redePorCoordenadas([cred("longe", 13.5), cred("b", 3.24), cred("a", 1.3), cred("inativa", 1, { Situacao: "0" }),
+    cred("oculta", 1, { ExibeSite: "0" }), cred("bloq", 1, { Bloqueado: "1" })], 5);
+  assertEquals(r.map((c) => c.id), ["a", "b"]);
+  assertEquals(r[1], { id: "b", nome: "Clínica b", endereco: "Rua A, 1", bairro: "Sé", cidade: "São Paulo", estado: "São Paulo",
+    cep: "01001000", telefone: "(11) 33334444", distanciaKm: 3.2, volante: false, observacao: "" });
+});
+
+Deno.test("coordenadas do CEP (BrasilAPI v2)", () => {
+  assertEquals(L.coordenadasCep({ location: { coordinates: { latitude: "-23.55", longitude: "-46.63" } } }), { lat: -23.55, lng: -46.63 });
+  assertEquals(L.coordenadasCep({ location: { coordinates: {} } }), null);
+  assertEquals(L.coordenadasCep(null), null);
 });
 
 Deno.test("rede: CEP e raio validados", () => {

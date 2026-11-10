@@ -307,15 +307,16 @@ export function PlamevQuoteForm({ organizationId: org, opportunityId, contactId 
     setGravando(true);
     try {
       const r = await chamar<{ resultado: Resultado; salvaNaOportunidade?: boolean; payload?: ChamadaPlamev[] }>(org, 'solicitar', {
-        ...pedidoAgora, cliente, opportunity_id: opportunityId,
+        ...pedidoAgora, cliente, opportunity_id: opportunityId, contact_id: opportunityId ? null : contactId,
         resumo_pets: pets.map((p) => ({ nome: p.nome.trim(), plano: planoDe(p.coberturaId)?.tipoNome ?? '' })),
       });
       setCotacao(r.resultado);
       setPayloadGravar(r.payload ?? null);
-      if (opportunityId) await qc.invalidateQueries({ queryKey: contextoKey(org, opportunityId, contactId) });
+      if (opportunityId || contactId) await qc.invalidateQueries({ queryKey: contextoKey(org, opportunityId, contactId) });
       toast({
         title: `Cotação ${r.resultado.numeroCotacao ?? ''} gravada na Plamev`,
-        description: r.salvaNaOportunidade ? 'Salva também na oportunidade.' : undefined,
+        description: r.salvaNaOportunidade ? 'Salva também na oportunidade.'
+          : contactId || opportunityId ? 'Não ficou salva no CRM: o contato não tem oportunidade aberta.' : undefined,
       });
     } catch (e) {
       setPayloadGravar(e instanceof ErroPlamev ? e.payload : null);
@@ -539,6 +540,7 @@ export function PlamevQuoteForm({ organizationId: org, opportunityId, contactId 
             Grava a cotação de verdade na Plamev, com estes dados.
             {doContato && ' Preenchido com o contato; confira antes de gravar.'}
             {opportunityId && ' A cotação fica salva nesta oportunidade.'}
+            {!opportunityId && contactId && ' A cotação fica salva na oportunidade aberta do contato.'}
           </p>
           <div className="grid grid-cols-2 gap-2">
             <Input className="col-span-2 h-8" placeholder="Nome completo" value={cliente.nome} onChange={setC('nome')} />
