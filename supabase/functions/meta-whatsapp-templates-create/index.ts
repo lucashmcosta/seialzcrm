@@ -4,7 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
-import { metaWaPostJson, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
+import { metaWaPostJson, metaWaResumableUpload, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
 import { resolveAppSecretForIntegration } from "../_shared/meta-whatsapp/credentials.ts";
 
 function json(status: number, body: Record<string, unknown>) {
@@ -14,7 +14,20 @@ function json(status: number, body: Record<string, unknown>) {
   });
 }
 
-import { buildComponents, normalizeLang, type CreateInput } from "./components.ts";
+import {
+  buildComponents,
+  fileNameFromUrl,
+  guessMimeFromUrl,
+  headerFormatOf,
+  isAllowedSampleUrl,
+  localTemplateType,
+  MEDIA_LIMITS,
+  normalizeLang,
+  validateSampleMedia,
+  validateTemplateInput,
+  type CreateInput,
+  type MediaHeaderFormat,
+} from "./components.ts";
 import { handleAuthentication } from "./auth.ts";
 
 serve(async (req) => {
@@ -33,6 +46,13 @@ serve(async (req) => {
     }
     if (!/^[a-z][a-z0-9_]*$/.test(name)) {
       return json(400, { error: "invalid_name", message: "Use letras minúsculas, números e underscores" });
+    }
+    const invalid = validateTemplateInput(input);
+    if (invalid) return json(422, { error: "invalid_template", message: invalid });
+    const headerFormat = headerFormatOf(input);
+    const headerMediaUrl = headerFormat !== "TEXT" ? (input.headerMediaUrl || "").trim() : "";
+    if (headerMediaUrl && !isAllowedSampleUrl(headerMediaUrl, Deno.env.get("SUPABASE_URL")!, organizationId)) {
+      return json(422, { error: "invalid_header_media", message: "O arquivo do cabeçalho precisa ser enviado pelo formulário de templates." });
     }
 
     const supabase = createClient(
@@ -67,7 +87,51 @@ serve(async (req) => {
 
     const lang = normalizeLang(language);
     const cat = (category || "").toUpperCase();
-    const components = buildComponents(input);
+
+    // Cabeçalho de mídia: baixa o exemplo do storage da org e sobe na Meta (Resumable Upload).
+    let headerHandle: string | undefined;
+    if (headerMediaUrl) {
+      const format = headerFormat as MediaHeaderFormat;
+      // O upload é feito no app dono do token: Embedded Signup = app da plataforma.
+      const appId = String(
+        ca.app_id || cv.app_id || (ca.source === "embedded_signup" ? Deno.env.get("FACEBOOK_APP_ID") ?? "" : ""),
+      ).trim();
+      if (!appId) {
+        return json(422, {
+          error: "missing_app_id",
+          message: "Esta conta Meta não tem o App ID salvo. Reconecte a conta para criar templates com mídia.",
+        });
+      }
+      const mediaRes = await fetch(headerMediaUrl);
+      if (!mediaRes.ok) {
+        return json(422, { error: "header_media_download_failed", message: "Não foi possível ler o arquivo do cabeçalho. Envie novamente." });
+      }
+      const declared = Number(mediaRes.headers.get("content-length") || 0);
+      if (declared > MEDIA_LIMITS[format].maxBytes) {
+        await mediaRes.body?.cancel();
+        return json(422, { error: "invalid_header_media", message: validateSampleMedia(format, MEDIA_LIMITS[format].types[0], declared) });
+      }
+      const bytes = new Uint8Array(await mediaRes.arrayBuffer());
+      let mime = (mediaRes.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+      if (!mime || mime === "application/octet-stream") mime = guessMimeFromUrl(headerMediaUrl) || mime;
+      const mediaErr = validateSampleMedia(format, mime, bytes.byteLength);
+      if (mediaErr) return json(422, { error: "invalid_header_media", message: mediaErr });
+      try {
+        headerHandle = await metaWaResumableUpload(appId, bytes, mime, fileNameFromUrl(headerMediaUrl), { accessToken, appSecret });
+      } catch (e) {
+        if (e instanceof MetaWaGraphError) {
+          const errAny = e.error as any;
+          return json(422, {
+            error: "meta_upload_failed",
+            message: `A Meta recusou o arquivo do cabeçalho: ${errAny.error_user_msg || errAny.message || "erro desconhecido"}`,
+            meta_error: e.error,
+          });
+        }
+        throw e;
+      }
+    }
+
+    const components = buildComponents(input, headerHandle);
 
     let metaResponse: any;
     try {
@@ -119,12 +183,12 @@ serve(async (req) => {
       meta_waba_id: String(wabaId),
       friendly_name: name,
       language: lang,
-      template_type: "text",
+      template_type: localTemplateType(input),
       category: cat,
       status,
       rejection_reason: status === "rejected" ? rejectedReason : null,
       body: input.body,
-      header: input.header || null,
+      header: headerFormat === "TEXT" ? (input.header || null) : null,
       footer: input.footer || null,
       variables: input.variables || [],
       components,
@@ -132,6 +196,14 @@ serve(async (req) => {
       is_active: true,
       last_synced_at: new Date().toISOString(),
       metadata: {
+        // Reaproveitado no envio quando nenhuma mídia é informada (meta-whatsapp-send).
+        ...(headerMediaUrl
+          ? {
+            header_format: headerFormat,
+            header_media_url: headerMediaUrl,
+            header_media_filename: fileNameFromUrl(headerMediaUrl),
+          }
+          : {}),
         meta_cloud: {
           waba_id: String(wabaId),
           template_id: metaTemplateId,

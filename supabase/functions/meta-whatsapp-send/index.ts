@@ -176,6 +176,7 @@ serve(async (req) => {
       endpointId: explicitEndpointIdRaw,
       manualReplyEndpointId,
       templateId, templateVariables, templateHeaderImageUrl, templateButtonUrls, sensitiveTemplate,
+      templateHeaderText, templateCouponCode,
       type: payloadType, templateName: directTemplateName,
       languageCode: directLanguageCode, components: directComponents,
       migrationContext,
@@ -646,7 +647,7 @@ serve(async (req) => {
     if (isTemplateSend && templateId) {
       const { data: tpl, error: tplErr } = await supabase
         .from("whatsapp_templates")
-        .select("id, organization_id, organization_integration_id, meta_waba_id, provider, status, meta_template_name, language, body, components, friendly_name, allowed_purposes")
+        .select("id, organization_id, organization_integration_id, meta_waba_id, provider, status, meta_template_name, language, body, components, friendly_name, allowed_purposes, metadata")
         .eq("id", templateId)
         .maybeSingle();
       if (tplErr || !tpl) return jsonResponse(404, { error: "template_not_found" });
@@ -783,10 +784,17 @@ serve(async (req) => {
         outboundTemplateComponents = directComponents;
       } else {
         try {
+          // Sem mídia no pedido, usa o exemplo gravado na criação do template.
+          const tplMeta = (templateRow?.metadata ?? {}) as Record<string, unknown>;
+          const storedMediaUrl = typeof tplMeta.header_media_url === "string" ? tplMeta.header_media_url : undefined;
           const built = buildMetaTemplateComponents(templateComponentsTemplate, {
             body: templateVariables ?? {},
             headerImageUrl: templateHeaderImageUrl,
+            headerMediaUrl: templateHeaderImageUrl ? undefined : storedMediaUrl,
+            headerFilename: typeof tplMeta.header_media_filename === "string" ? tplMeta.header_media_filename : undefined,
+            headerText: typeof templateHeaderText === "string" ? templateHeaderText : undefined,
             buttonUrls: templateButtonUrls,
+            couponCode: typeof templateCouponCode === "string" ? templateCouponCode : undefined,
           }, templateBodyText || "");
           renderedPreview = built.preview;
           outboundTemplateComponents = built.components;

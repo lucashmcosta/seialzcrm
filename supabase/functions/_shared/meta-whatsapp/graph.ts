@@ -123,6 +123,41 @@ export async function metaWaUploadMedia(
   return json;
 }
 
+/**
+ * Resumable Upload API: envia um arquivo de exemplo e devolve o handle usado em
+ * example.header_handle na criação de templates com cabeçalho de mídia.
+ * 1) POST /{app_id}/uploads → { id: "upload:..." }
+ * 2) POST /{upload_session_id} (Authorization: OAuth, file_offset: 0) → { h }
+ */
+export async function metaWaResumableUpload(
+  appId: string,
+  fileBytes: Uint8Array,
+  mimeType: string,
+  fileName: string,
+  opts: MetaWaCallOpts,
+): Promise<string> {
+  const search = new URLSearchParams();
+  await appendProof(search, opts);
+  search.set("file_name", fileName);
+  search.set("file_length", String(fileBytes.byteLength));
+  search.set("file_type", mimeType);
+  const startRes = await fetch(`${META_WA_BASE}/${appId}/uploads?${search.toString()}`, { method: "POST" });
+  const start = await startRes.json().catch(() => ({}));
+  if (!startRes.ok || start.error || typeof start.id !== "string") {
+    throw new MetaWaGraphError(startRes.status, start.error || { message: `Upload session HTTP ${startRes.status}` });
+  }
+  const upRes = await fetch(`${META_WA_BASE}/${start.id}`, {
+    method: "POST",
+    headers: { Authorization: `OAuth ${opts.accessToken}`, file_offset: "0" },
+    body: fileBytes as unknown as BodyInit,
+  });
+  const up = await upRes.json().catch(() => ({}));
+  if (!upRes.ok || up.error || typeof up.h !== "string" || !up.h) {
+    throw new MetaWaGraphError(upRes.status, up.error || { message: `Upload HTTP ${upRes.status}` });
+  }
+  return up.h;
+}
+
 /** Lookup de URL temporária do Graph para um media_id inbound. */
 export async function metaWaGetMediaUrl(
   mediaId: string,

@@ -332,9 +332,14 @@ export const metaWhatsAppService = {
     category: string;
     body: string;
     header?: string;
+    headerExample?: string;
+    headerFormat?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+    /** URL pública (bucket whatsapp-media da org) do arquivo de exemplo. */
+    headerMediaUrl?: string;
     footer?: string;
     variables?: { key: string; name: string; example: string }[];
     buttons?: { id: string; title: string }[];
+    actions?: { type: 'url' | 'phone' | 'copy_code'; title: string; value: string; example?: string }[];
     authentication?: {
       add_security_recommendation: boolean;
       code_expiration_minutes: number;
