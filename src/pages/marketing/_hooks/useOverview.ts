@@ -62,22 +62,38 @@ async function fetchKPIs(orgId: string, from: Date, to: Date): Promise<OverviewK
     .gte('created_at', fromTs)
     .lte('created_at', toTs);
 
+  // Abertas: oportunidades dos contatos de anúncio que chegaram no período.
   let opps_open = 0, wins = 0, revenue = 0;
   if (oppContacts && oppContacts.length) {
     const ids = oppContacts.map(c => c.id);
-    // Chunk if needed (here <= some hundred)
-    const { data: opps } = await supabase
-      .from('opportunities')
-      .select('status, amount')
-      .in('contact_id', ids)
-      .is('deleted_at', null);
-    for (const o of opps || []) {
-      if (o.status === 'open') opps_open++;
-      else if (o.status === 'won') {
-        wins++;
-        revenue += Number(o.amount || 0);
-      }
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data: opps, error } = await supabase
+        .from('opportunities')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('status', 'open')
+        .in('contact_id', ids.slice(i, i + 200))
+        .is('deleted_at', null);
+      if (error) throw error;
+      opps_open += (opps || []).length;
     }
+  }
+
+  // Vendas: contam pela data da venda (won_at), não pela chegada do contato.
+  // Antes, uma venda de hoje de um lead que chegou ontem sumia ao filtrar "Hoje".
+  const { data: won, error: wonErr } = await supabase
+    .from('opportunities')
+    .select('amount, contact:contacts!inner(marketing_campaign_id)')
+    .eq('organization_id', orgId)
+    .eq('status', 'won')
+    .is('deleted_at', null)
+    .not('contact.marketing_campaign_id', 'is', null)
+    .gte('won_at', fromTs)
+    .lte('won_at', toTs);
+  if (wonErr) throw wonErr;
+  for (const o of won || []) {
+    wins++;
+    revenue += Number(o.amount || 0);
   }
 
   const leadsN = Number(leads || 0);
