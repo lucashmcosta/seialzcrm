@@ -65,7 +65,9 @@ export function useOrgWhatsAppEndpoints(organizationId: string | undefined) {
         .eq('organization_id', organizationId)
         .eq('channel', 'whatsapp')
         .eq('is_active', true)
-        .not('sender_sid', 'is', null)
+        // Evolution não usa sender_sid (a instância fica em evolution_instances);
+        // sem esta exceção o número Evolution some do seletor e das respostas rápidas.
+        .or('sender_sid.not.is.null,provider.eq.evolution_api')
         .neq('status', 'offline')
         .order('external_address', { ascending: true });
 
