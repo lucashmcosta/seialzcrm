@@ -1,5 +1,6 @@
 import {
   EMBEDDED_SOURCE,
+  findMovedNumberRow,
   generateTwoStepPin,
   planEmbeddedWrite,
   resolveSignupAssets,
@@ -133,4 +134,29 @@ Deno.test('app secret: embedded signup reads the platform secret from env at run
   same(platformAppSecretFor({ source: 'embedded_signup', app_secret_encrypted: null }, () => 'v1'), 'v1');
   same(platformAppSecretFor({ source: 'embedded_signup', app_secret_encrypted: null }, () => 'v2-rotated'), 'v2-rotated');
   same(platformAppSecretFor({ source: 'embedded_signup' }, () => undefined), undefined);
+});
+
+Deno.test('número que mudou de conta na Meta reaproveita a linha antiga', () => {
+  const org = 'org-1';
+  const rows = [{ id: 'oi-velha', connected_account: { source: EMBEDDED_SOURCE, waba_id: 'waba-velha' } }];
+  const ep = { id: 'ep-1', organization_id: org, organization_integration_id: 'oi-velha', provider: 'meta_cloud_api', sender_sid: 'pn-1' };
+  same(findMovedNumberRow({ organizationId: org, hasRowForNewWaba: false, endpointByPhoneId: ep, orgRows: rows })?.id, 'oi-velha');
+  // Com a linha antiga re-apontada, o plano re-autoriza o mesmo número.
+  same(planEmbeddedWrite({
+    organizationId: org,
+    existingWaba: { id: 'oi-velha', source: EMBEDDED_SOURCE },
+    endpointByPhoneId: ep,
+    endpointByAddress: ep,
+  }), { action: 'reauthorize', organizationIntegrationId: 'oi-velha', endpointId: 'ep-1' });
+});
+
+Deno.test('não reaproveita linha em outros casos', () => {
+  const org = 'org-1';
+  const rows = [{ id: 'oi-velha', connected_account: { source: EMBEDDED_SOURCE } }];
+  const ep = { id: 'ep-1', organization_id: org, organization_integration_id: 'oi-velha', provider: 'meta_cloud_api', sender_sid: 'pn-1' };
+  same(findMovedNumberRow({ organizationId: org, hasRowForNewWaba: true, endpointByPhoneId: ep, orgRows: rows }), null);
+  same(findMovedNumberRow({ organizationId: org, hasRowForNewWaba: false, endpointByPhoneId: null, orgRows: rows }), null);
+  same(findMovedNumberRow({ organizationId: org, hasRowForNewWaba: false, endpointByPhoneId: { ...ep, organization_id: 'outra' }, orgRows: rows }), null);
+  const manual = [{ id: 'oi-velha', connected_account: { source: 'manual' } }];
+  same(findMovedNumberRow({ organizationId: org, hasRowForNewWaba: false, endpointByPhoneId: ep, orgRows: manual }), null);
 });
