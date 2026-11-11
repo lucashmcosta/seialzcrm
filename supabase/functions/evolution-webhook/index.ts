@@ -28,6 +28,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { logEvolution, newRequestId } from "../_shared/evolution/logger.ts";
 import { callerKey, rateLimit } from "../_shared/evolution/rate-limit.ts";
+import { evolutionTemplateText } from "../_shared/evolution/template-text.ts";
 import { resolveInboundSuggestedAssignee } from "../_shared/inbound-assignee.ts";
 import { autoCreateInboundOpportunity, type OpportunityTrigger } from "../_shared/inbound-opportunity.ts";
 import { normalizeEvolutionState } from "../_shared/evolution/state.ts";
@@ -420,6 +421,12 @@ function parseMessagesUpsert(data: unknown): ParsedMessage | null {
         type: "interactive_reply",
         interactive: { kind: "interactive_response" },
       };
+    }
+
+    // Mensagem com botões de outra empresa (boleto, lembrete): o texto vem no payload.
+    if (!content) {
+      const tplText = evolutionTemplateText(message);
+      if (tplText) content = tplText;
     }
 
     // Poll

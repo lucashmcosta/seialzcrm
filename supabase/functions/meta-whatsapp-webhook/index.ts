@@ -13,6 +13,7 @@
 // Mídia, outbound, templates e handleStatus permanecem inalterados.
 import { metaInboundInteractiveReply } from "../_shared/whatsapp-interactive.ts";
 import { inboundEventKey, isDuplicateAuditError } from "./audit-key.ts";
+import { classifySpecialInbound } from "./special-inbound.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -360,10 +361,17 @@ serve(async (req) => {
             kind: "message",
           });
 
+          // Sem auditId = a Meta reenviou o mesmo wamid (ou a auditoria falhou).
+          // Reenvio já tratado ou em andamento não pode gravar nem acionar a IA de novo.
+          if (!auditId && wamid && await isInboundAlreadyHandled(supabase, endpoint.organization_id, wamid)) {
+            console.log("[meta-wa-webhook] duplicate_inbound_skipped", { wamid });
+            continue;
+          }
+
           try {
             const result = await handleInbound(supabase, endpoint, msg, value);
             await updateInboundEventStatus(supabase, auditId, {
-              processStatus: result.error ? "failed" : "processed",
+              processStatus: result.error ? "failed" : result.skipped ? "skipped" : "processed",
               processError: result.error ?? null,
               resultingMessageId: result.messageId,
               resultingThreadId: result.threadId,
@@ -706,10 +714,17 @@ async function triggerAiAgentOrFlagHuman(
 // ============================================================
 async function handleInbound(
   supabase: any, endpoint: any, msg: any, value: any,
-): Promise<{ messageId: string | null; threadId: string | null; error: string | null }> {
+): Promise<{ messageId: string | null; threadId: string | null; error: string | null; skipped?: string }> {
   const fromE164 = "+" + String(msg.from).replace(/^\+/, "");
   const wamid = msg.id as string;
   const profileName = value?.contacts?.[0]?.profile?.name ?? "";
+
+  // Álbum, reação removida etc.: não vira mensagem (fica só no registro de entrada).
+  const special = classifySpecialInbound(msg);
+  if (special?.action === "skip") {
+    console.log("[meta-wa-webhook] special_inbound_skipped", { wamid, reason: special.reason });
+    return { messageId: null, threadId: null, error: null, skipped: special.reason };
+  }
 
   // 1) Resolver inbound_settings
   const { settings: inboundSettings, source: settingsSource } =
@@ -971,6 +986,9 @@ async function handleInbound(
   // Escolha num botão ou lista: guarda o id da opção, não só o texto.
   const interactiveReply = metaInboundInteractiveReply(msg);
 
+  // Aviso legível no lugar de "[mensagem não suportada: ...]".
+  if (special?.action === "notice") content = special.content;
+
   // 9) Reply context
   const replyToMessageId = await resolveReplyToMessageId(
     supabase, endpoint.organization_id, msg?.context?.id,
@@ -1022,12 +1040,41 @@ async function handleInbound(
     supabase, endpoint.organization_id, contactId, content, mediaType,
   );
 
-  // 13) AI agent ou needs_human_attention
-  await triggerAiAgentOrFlagHuman(
-    supabase, endpoint.organization_id, threadId, contactId, content,
-  );
+  // 13) AI agent ou needs_human_attention (avisos como "apagou uma mensagem" não pedem resposta)
+  if (!(special?.action === "notice" && !special.triggerAi)) {
+    await triggerAiAgentOrFlagHuman(
+      supabase, endpoint.organization_id, threadId, contactId, content,
+    );
+  }
 
   return { messageId: insertedMessageId, threadId, error: null };
+}
+
+// Reenvio do mesmo wamid: pula se a mensagem já foi gravada ou se o primeiro
+// processamento ainda está em andamento (até 10 min). Se o primeiro falhou, processa de novo.
+async function isInboundAlreadyHandled(
+  supabase: any, organizationId: string, wamid: string,
+): Promise<boolean> {
+  const { data: existing } = await supabase
+    .from("messages")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("whatsapp_message_sid", wamid)
+    .eq("direction", "inbound")
+    .limit(1);
+  if (existing?.length) return true;
+
+  const { data: event } = await supabase
+    .from("integration_inbound_events")
+    .select("process_status, received_at")
+    .eq("idempotency_key", inboundEventKey({ kind: "message", wamid, messageType: null }))
+    .maybeSingle();
+  if (!event) return false;
+  if (event.process_status === "processed" || event.process_status === "skipped") return true;
+  if (event.process_status === "received") {
+    return Date.now() - new Date(event.received_at).getTime() < 10 * 60 * 1000;
+  }
+  return false;
 }
 
 async function handleStatus(
