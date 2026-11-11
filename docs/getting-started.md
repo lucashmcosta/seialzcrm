@@ -76,3 +76,5 @@ Segredos de edge functions (`LOVABLE_API_KEY`, `VOYAGE_API_KEY`, `SENTRY_DSN`, `
 - **Tela quebrada após deploy:** chunks lazy expirados — `retryImport` em `src/App.tsx` já retenta 2×; hard refresh resolve.
 - **Health checks:** `/health` e `/dev/health` (frontend), edge fns `health` e `outbox-health`.
 - **Cuidado:** o banco é produção. Nunca rodar INSERT/UPDATE em massa sem ler "Janelas e cuidados" em `operations/README.md` (`messages` tem 12 triggers; workers rodam a cada 30s).
+
+- `AUXILIUS_OTP_HMAC_SECRET`: segredo HMAC da Auxilius para `whatsapp-otp-send` (Edge secret).
