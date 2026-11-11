@@ -34,6 +34,7 @@ import {
 import {
   EMBEDDED_ERROR_MESSAGES,
   EMBEDDED_SOURCE,
+  findMovedNumberRow,
   generateTwoStepPin,
   multiWabaEnabledFor,
   planEmbeddedWrite,
@@ -183,21 +184,32 @@ serve(async (req) => {
     // Linhas legadas têm meta_waba_id nulo e a WABA só em connected_account.
     const rowWaba = (r: { meta_waba_id: string | null; connected_account: unknown }) =>
       r.meta_waba_id ?? ((r.connected_account ?? {}) as Record<string, unknown>).waba_id ?? null;
-    const wabaRow = (orgWaRows ?? []).find((r) => rowWaba(r) === wabaId) ?? null;
-    // Sem multi-WABA, telas/funções legadas leem a integração da org com maybeSingle:
-    // uma 2ª linha quebraria essas leituras. Só re-autoriza a mesma WABA nesse caso.
-    if ((orgWaRows ?? []).some((r) => rowWaba(r) !== wabaId)) {
-      const { data: flag } = await admin
-        .from("feature_flags").select("is_enabled, organization_ids")
-        .eq("name", "meta_multi_waba").maybeSingle();
-      if (!multiWabaEnabledFor(flag, organizationId)) return fail(409, "another_waba_connected");
-    }
+    const exactWabaRow = (orgWaRows ?? []).find((r) => rowWaba(r) === wabaId) ?? null;
     const { data: epByPhone } = await admin
       .from("communication_endpoints")
       .select("id, organization_id, organization_integration_id, provider, sender_sid, purpose")
       .eq("sender_sid", phoneNumberId)
       .in("provider", ["meta_cloud_api", "meta_cloud_api_coexistence"])
       .maybeSingle();
+    // Mesmo número que mudou de conta na Meta: re-aponta a linha antiga para a WABA nova.
+    const movedRow = findMovedNumberRow({
+      organizationId,
+      hasRowForNewWaba: !!exactWabaRow,
+      endpointByPhoneId: epByPhone ?? null,
+      orgRows: orgWaRows ?? [],
+    });
+    const wabaRow = exactWabaRow ?? movedRow;
+    if (movedRow) {
+      console.log("[meta-wa-es] number_moved_waba", { from: rowWaba(movedRow), to: wabaId, phoneNumberId });
+    }
+    // Sem multi-WABA, telas/funções legadas leem a integração da org com maybeSingle:
+    // uma 2ª linha quebraria essas leituras. Só re-autoriza a mesma WABA nesse caso.
+    if ((orgWaRows ?? []).some((r) => r.id !== wabaRow?.id && rowWaba(r) !== wabaId)) {
+      const { data: flag } = await admin
+        .from("feature_flags").select("is_enabled, organization_ids")
+        .eq("name", "meta_multi_waba").maybeSingle();
+      if (!multiWabaEnabledFor(flag, organizationId)) return fail(409, "another_waba_connected");
+    }
     const digits = phoneE164.slice(1);
     const { data: sameOrgWa } = await admin
       .from("communication_endpoints")
@@ -301,6 +313,7 @@ serve(async (req) => {
     if (plan.action === "reauthorize") {
       const { error } = await admin.from("organization_integrations").update({
         is_enabled: true,
+        meta_waba_id: wabaId,
         connected_account: connectedAccount,
         config_values: configValues,
         connected_at: nowIso,

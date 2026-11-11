@@ -147,6 +147,25 @@ export function planEmbeddedWrite(input: {
   return { action: "insert" };
 }
 
+/**
+ * Número que mudou de conta na Meta (ex.: migração para Messaging Account): a WABA nova
+ * ainda não tem linha, mas o mesmo phone_number_id já é endpoint desta org, ligado a uma
+ * linha conectada por Embedded Signup. Devolve essa linha para ser re-apontada à WABA nova,
+ * mantendo número, conversas e histórico. Testes em tests/meta-whatsapp-embedded-signup.test.ts.
+ */
+export function findMovedNumberRow<R extends { id: string; connected_account: unknown }>(input: {
+  organizationId: string;
+  hasRowForNewWaba: boolean;
+  endpointByPhoneId: ExistingEndpointRow | null;
+  orgRows: R[];
+}): R | null {
+  const { organizationId, hasRowForNewWaba, endpointByPhoneId: ep, orgRows } = input;
+  if (hasRowForNewWaba || !ep || ep.organization_id !== organizationId || !ep.organization_integration_id) return null;
+  const row = orgRows.find((r) => r.id === ep.organization_integration_id) ?? null;
+  const source = ((row?.connected_account ?? {}) as Record<string, unknown>).source;
+  return row && source === EMBEDDED_SOURCE ? row : null;
+}
+
 /** PIN de 6 dígitos para a verificação em duas etapas do número (registro Cloud API). */
 export function generateTwoStepPin(): string {
   const buf = new Uint32Array(1);
@@ -167,7 +186,7 @@ export const EMBEDDED_ERROR_MESSAGES: Record<string, string> = {
   phone_in_other_integration: "Este número já está conectado nesta organização por outra integração.",
   address_in_use: "Já existe um número WhatsApp igual nesta organização (outro provedor). Use a migração de provedor.",
   another_waba_connected:
-    "Esta organização já tem outra conta do WhatsApp conectada. Desconecte-a antes de conectar uma nova.",
+    "Esta organização já tem outra conta do WhatsApp com outro número. Fale com o suporte para conectar mais de uma conta.",
 };
 
 /** Flag `meta_multi_waba` (mesma regra do hook useMetaMultiWabaFlag). */
