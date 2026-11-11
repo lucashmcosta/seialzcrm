@@ -8,8 +8,8 @@
 
 ## O que será feito
 1. Criar a conta pelo mesmo caminho da tela de Usuários (função `create-user`), executada com a sessão de um Admin atual da Auxilius (lcosta@). Isso pede sua aprovação na hora de entrar como esse usuário.
-2. Dados: e-mail njunior@auxilius.com.br, nome "Nelson Junior", perfil Admin, organização Auxilius.
-3. Senha temporária forte gerada na hora e enviada só para você no chat; troque no primeiro acesso.
+2. Dados: e-mail njunior@auxilius.com.br, nome "Junior Domingos", perfil Admin, organização Auxilius.
+3. Senha: a informada por você (6 dígitos). Se o servidor recusar por ser fraca, paro e peço outra; nada é criado nesse caso. Recomendo trocá-la no primeiro acesso.
 4. Conferir no banco: conta criada, vínculo ativo na Auxilius com perfil Admin, e que nenhuma organização extra foi criada para ele. Se surgir uma organização vazia, ela é apontada para você antes de qualquer remoção.
 
 ## Não será alterado
