@@ -5,3 +5,4 @@
 
 - `client-portal-otp-send` envia OTP direto pela Meta sem tocar em message_threads/messages e audita só em `client_portal_otp_log` (service_role) — porque o código não pode aparecer na Inbox nem para atendentes.
 - Chat do App do cliente: conversas vivem no projeto do App; o Seialz só guarda o último estado em `client_portal_chat_events` (sem texto) e fala com `portal-staff` exclusivamente via `client-portal-staff-proxy` (8 operações, org/staff da sessão) — porque o segredo HMAC não pode ir ao navegador e o chat não é thread de WhatsApp.
+- `whatsapp-otp-send` é o envio genérico S2S de OTP por template AUTHENTICATION: cada org habilitada tem seu próprio secret HMAC mapeado em `ORG_SECRET_NAMES` (logic.ts), registra só em `whatsapp_otp_send_log` (hash do telefone, sem código) e não toca threads/mensagens — porque a assinatura prova a org e o código não pode aparecer na Inbox.

@@ -50,3 +50,7 @@ Os **domínios técnicos** (agrupamento por ownership de objetos do banco, herda
 | observability | [`platform/observability/`](../platform/observability/README.md) (Kairos Mission Control é projeto à parte) | webhook_logs?, import_logs, kairos_* RPCs, user_sessions | health | — |
 
 **Sem dono ainda (classificar na Onda 3):** documentation, compliance_blocks, coupons/coupon_redemptions, saved_views, support_categories, support_sla_configs, webhook_field_mappings, organization_usage_metrics, import_logs.
+
+## whatsapp-otp-send
+
+Envio servidor a servidor de código de login (template AUTHENTICATION da Meta). verify_jwt=false; HMAC por organização (`AUXILIUS_OTP_HMAC_SECRET` para Auxilius). Registra em `whatsapp_otp_send_log` sem o código.
