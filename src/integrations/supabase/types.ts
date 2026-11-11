@@ -15294,6 +15294,50 @@ export type Database = {
           },
         ]
       }
+      whatsapp_otp_send_log: {
+        Row: {
+          created_at: string
+          error_code: string | null
+          id: string
+          meta_message_id: string | null
+          organization_id: string
+          phone_hash: string
+          phone_last4: string
+          status: string
+          template_name: string
+        }
+        Insert: {
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          meta_message_id?: string | null
+          organization_id: string
+          phone_hash: string
+          phone_last4: string
+          status: string
+          template_name: string
+        }
+        Update: {
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          meta_message_id?: string | null
+          organization_id?: string
+          phone_hash?: string
+          phone_last4?: string
+          status?: string
+          template_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_otp_send_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_template_actions: {
         Row: {
           created_at: string | null
