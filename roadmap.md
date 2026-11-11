@@ -97,4 +97,4 @@
 - [x] Nota nula → texto padrão; repetido só se processado; publicado
 - [ ] Teste com 1 certificação real — aguarda Nammux publicar envio
 
-- [ ] Criar admin Junior Domingos (njunior@auxilius.com.br) na Auxilius — aguardando login de um Admin da Auxilius no preview
+- [x] Criar admin Junior Domingos (njunior@auxilius.com.br) na Auxilius
