@@ -272,3 +272,6 @@ verify_jwt = true
 
 [functions.plamev-materiais-ia]
 verify_jwt = false
+
+[functions.whatsapp-otp-send]
+verify_jwt = false
