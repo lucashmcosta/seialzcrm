@@ -3617,6 +3617,219 @@ export type Database = {
         }
         Relationships: []
       }
+      conversation_analyses: {
+        Row: {
+          analysis: Json | null
+          analysis_version: string
+          audio_count: number
+          closed_at: string | null
+          completion_tokens: number | null
+          contact_id: string | null
+          cost_usd: number | null
+          created_at: string
+          error: string | null
+          id: string
+          lead_message_count: number
+          message_count: number
+          model: string
+          opened_at: string | null
+          opportunity_id: string
+          organization_id: string
+          outcome: string
+          owner_user_id: string | null
+          prompt_tokens: number | null
+          run_id: string
+          stage_before_close: string | null
+          status: string
+          team_message_count: number
+          transcript_chars: number
+          updated_at: string
+        }
+        Insert: {
+          analysis?: Json | null
+          analysis_version: string
+          audio_count?: number
+          closed_at?: string | null
+          completion_tokens?: number | null
+          contact_id?: string | null
+          cost_usd?: number | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          lead_message_count?: number
+          message_count?: number
+          model: string
+          opened_at?: string | null
+          opportunity_id: string
+          organization_id: string
+          outcome: string
+          owner_user_id?: string | null
+          prompt_tokens?: number | null
+          run_id: string
+          stage_before_close?: string | null
+          status?: string
+          team_message_count?: number
+          transcript_chars?: number
+          updated_at?: string
+        }
+        Update: {
+          analysis?: Json | null
+          analysis_version?: string
+          audio_count?: number
+          closed_at?: string | null
+          completion_tokens?: number | null
+          contact_id?: string | null
+          cost_usd?: number | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          lead_message_count?: number
+          message_count?: number
+          model?: string
+          opened_at?: string | null
+          opportunity_id?: string
+          organization_id?: string
+          outcome?: string
+          owner_user_id?: string | null
+          prompt_tokens?: number | null
+          run_id?: string
+          stage_before_close?: string | null
+          status?: string
+          team_message_count?: number
+          transcript_chars?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_analyses_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_analyses_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
+            foreignKeyName: "conversation_analyses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_analyses_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "conversation_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_analysis_runs: {
+        Row: {
+          analysis_version: string
+          budget_usd: number
+          completion_tokens: number | null
+          cost_usd: number | null
+          counts: Json | null
+          created_at: string
+          created_by: string | null
+          error: string | null
+          estimated_cost_usd: number | null
+          finished_at: string | null
+          id: string
+          kind: string
+          model: string
+          organization_id: string
+          params: Json
+          parent_run_id: string | null
+          prompt_tokens: number | null
+          provider: string
+          provider_batch_id: string | null
+          result: Json | null
+          status: string
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          analysis_version: string
+          budget_usd: number
+          completion_tokens?: number | null
+          cost_usd?: number | null
+          counts?: Json | null
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          estimated_cost_usd?: number | null
+          finished_at?: string | null
+          id?: string
+          kind: string
+          model: string
+          organization_id: string
+          params?: Json
+          parent_run_id?: string | null
+          prompt_tokens?: number | null
+          provider?: string
+          provider_batch_id?: string | null
+          result?: Json | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          analysis_version?: string
+          budget_usd?: number
+          completion_tokens?: number | null
+          cost_usd?: number | null
+          counts?: Json | null
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          estimated_cost_usd?: number | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          model?: string
+          organization_id?: string
+          params?: Json
+          parent_run_id?: string | null
+          prompt_tokens?: number | null
+          provider?: string
+          provider_batch_id?: string | null
+          result?: Json | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_analysis_runs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_analysis_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_analysis_runs_parent_run_id_fkey"
+            columns: ["parent_run_id"]
+            isOneToOne: false
+            referencedRelation: "conversation_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupon_redemptions: {
         Row: {
           coupon_id: string
@@ -16513,6 +16726,39 @@ export type Database = {
           p_type: string
         }
         Returns: boolean
+      }
+      conversation_analysis_candidates: {
+        Args: {
+          p_days: number
+          p_lost: number
+          p_org: string
+          p_seed: string
+          p_won: number
+        }
+        Returns: {
+          closed_at: string
+          contact_id: string
+          opened_at: string
+          opportunity_id: string
+          outcome: string
+          owner_user_id: string
+          stage_before_close: string
+        }[]
+      }
+      conversation_analysis_messages: {
+        Args: { p_opportunity_ids: string[]; p_org: string }
+        Returns: {
+          content: string
+          direction: string
+          is_template: boolean
+          media_type: string
+          opportunity_id: string
+          sender_agent_id: string
+          sender_type: string
+          sender_user_id: string
+          sent_at: string
+          transcript: string
+        }[]
       }
       correct_opportunity_loss_v1: {
         Args: {
