@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, agentIdentityLine, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, agentIdentityLine, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -102,4 +102,35 @@ Deno.test("stripCloseEcho tira o eco sozinho e variações", () => {
 Deno.test("stripCloseEcho não mexe em texto normal", () => {
   assertEquals(stripCloseEcho("Se mudar alguma coisa, é só me chamar."), "Se mudar alguma coisa, é só me chamar.");
   assertEquals(stripCloseEcho("A licença foi encerrada em março?"), "A licença foi encerrada em março?");
+});
+
+Deno.test("pergunta repetida com outras palavras depois da ferramenta sai uma vez", () => {
+  const antes = "Anotado, dia 7 de março. Falta pouco, mamãe.\n\nHoje você trabalha? De carteira assinada, como MEI, por conta própria, ou não está trabalhando?";
+  const depois = "Conta pra mim, mamãe: hoje você trabalha de carteira assinada, como MEI, por conta própria, ou não está trabalhando?";
+  assertEquals(joinAgentText([antes], depois), antes);
+});
+
+Deno.test("retorno repetido depois da ferramenta sai uma vez, frase nova fica", () => {
+  const antes = "Vou conferir seu caso com cuidado e te retorno hoje, a partir das 8h, por aqui mesmo.";
+  const depois = "Pronto, já deixei tudo anotado para a equipe. Você recebe o retorno por aqui hoje, a partir das 8h.";
+  assertEquals(joinAgentText([antes], depois), antes + "\n\nPronto, já deixei tudo anotado para a equipe.");
+});
+
+Deno.test("resposta sem ferramenta não muda", () => {
+  const t = "Hoje você trabalha? Conta pra mim: hoje você trabalha?";
+  assertEquals(joinAgentText([], t), t);
+});
+
+Deno.test("texto novo depois da ferramenta continua", () => {
+  assertEquals(joinAgentText(["Anotei a data do parto."], "Você consegue me mandar o extrato do INSS?"),
+    "Anotei a data do parto.\n\nVocê consegue me mandar o extrato do INSS?");
+});
+
+Deno.test("depois de encerrar ou passar para a equipe, o texto de depois não vai", () => {
+  assertEquals(agentReplyText(["Se mudar alguma coisa, é só me chamar."], "Se ficar alguma dúvida, estou por aqui.", true),
+    "Se mudar alguma coisa, é só me chamar.");
+  // Sem texto antes, o de depois é a resposta.
+  assertEquals(agentReplyText([], "Se mudar alguma coisa, é só me chamar.", true), "Se mudar alguma coisa, é só me chamar.");
+  // Sem encerrar, segue a regra normal.
+  assertEquals(agentReplyText(["Anotei."], "Qual a data do parto?", false), "Anotei.\n\nQual a data do parto?");
 });
