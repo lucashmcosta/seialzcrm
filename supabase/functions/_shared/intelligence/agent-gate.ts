@@ -54,11 +54,44 @@ export function joinAgentText(before: string[], final: string): string {
   });
   const squash = (t: string) => t.replace(/\s+/g, " ");
   // O modelo às vezes repete no fim, em um texto só, o que já escreveu antes da ferramenta.
-  return parts.filter((t, i) => {
+  const whole = parts.filter((t, i) => {
     const earlier = parts.slice(0, i);
     if (earlier.length === 0) return true;
     return !squash(earlier.join(" ")).includes(squash(t));
-  }).join("\n\n");
+  });
+  // Ou repete com outras palavras ("Conta pra mim: hoje você trabalha...?").
+  // Só o texto depois da ferramenta é conferido; uma resposta sem ferramenta fica igual.
+  const known = new Set<string>(whole.length ? contentWords(whole[0]) : []);
+  return whole.map((part, i) => {
+    if (i === 0) return part;
+    return part.split(/\n{2,}/).map((paragraph) => paragraph.split(/(?<=[.!?…])\s+/).filter((sentence) => {
+      const words = contentWords(sentence);
+      const repeated = words.length >= 3 && words.filter((w) => known.has(w)).length / words.length >= 0.8;
+      words.forEach((w) => known.add(w));
+      return !repeated;
+    }).join(" ")).filter((p) => p.trim()).join("\n\n");
+  }).filter((t) => t.trim()).join("\n\n");
+}
+
+const STOP_WORDS = new Set(("que com para por uma uns umas dos das nos nas não sim seu sua seus suas meu minha " +
+  "você vocês ele ela isso esse essa este esta aqui mas ser foi tem ter são está estou").split(" "));
+
+function contentWords(text: string): string[] {
+  return (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => (w.length >= 3 || /\d/.test(w)) && !STOP_WORDS.has(w));
+}
+
+/** Vai junto com o resultado da ferramenta quando o agente já escreveu algo antes dela. */
+export const AFTER_TOOL_HINT =
+  "O cliente já vai receber o texto que você escreveu antes desta ferramenta. Não repita nem reescreva " +
+  "esse texto. Escreva só o que ainda falta dizer; se não falta nada, não escreva nada.";
+
+/**
+ * Resposta final do agente. Depois de encerrar ou passar para a equipe, o que já foi escrito
+ * antes da ferramenta é a despedida: o texto de depois ("estou por aqui") não vai.
+ */
+export function agentReplyText(before: string[], final: string, closedByTool: boolean): string {
+  const hasBefore = before.some((t) => (t ?? "").trim());
+  return joinAgentText(before, closedByTool && hasBefore ? "" : final);
 }
 
 /** A mensagem atual já está no histórico; enviá-la de novo faria o modelo vê-la duas vezes. */

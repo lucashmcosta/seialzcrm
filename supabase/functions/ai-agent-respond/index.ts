@@ -10,7 +10,7 @@ import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
 import { buildChoicesInteractive, withoutQuestionEcho } from "../_shared/intelligence/agent-choices.ts";
 import { interactiveFallbackText, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
-import { agentIdentityLine, agentInputKind, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
+import { agentIdentityLine, agentInputKind, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -46,6 +46,8 @@ interface ToolResult {
 // Available tools for the agent
 /** Espera antes de responder, para juntar mensagens que o cliente manda em sequência. */
 const BURST_WAIT_MS = 4000;
+
+const CLOSING_TOOLS = new Set(['end_conversation', 'transfer_to_human']);
 
 const AVAILABLE_TOOLS = [
   {
@@ -2096,6 +2098,8 @@ serve(async (req) => {
     };
     let modelUsed = '';
     const toolsExecuted: string[] = [];
+    // Encerrou ou passou para a equipe com sucesso nesta resposta.
+    let closedByTool = false;
     // Pergunta com botões (send_choices): não sai na hora; vai depois do texto da resposta.
     // Roda também no modo de teste, para o simulador mostrar a pergunta.
     let pendingInteractive = null as InteractivePayload | null;
@@ -2211,11 +2215,16 @@ serve(async (req) => {
             { contactId, organizationId, threadId, agentId, timezone: agent.working_hours?.timezone }
           );
 
+          if (CLOSING_TOOLS.has(toolUse.name) && (result as { success?: boolean })?.success !== false) closedByTool = true;
           toolResults.push({
             type: 'tool_result',
             tool_use_id: toolUse.id,
             content: JSON.stringify(result),
           });
+        }
+        // Sem este aviso o modelo reescreve, depois da ferramenta, o que já tinha escrito.
+        if (claudeData.content.some((c: any) => c.type === 'text' && c.text?.trim())) {
+          toolResults.push({ type: 'text', text: AFTER_TOOL_HINT });
         }
 
         // Continue conversation with tool results
@@ -2287,7 +2296,8 @@ serve(async (req) => {
       emptyDetail = `stop_reason: ${claudeData.stop_reason}`;
 
       // If response is empty after tool execution, retry without tools to force a text response
-      if (!aiResponse && toolsExecuted.length > 0) {
+      // Só pede de novo se nada foi escrito: com texto de antes da ferramenta, a resposta já está pronta.
+      if (!aiResponse && toolsExecuted.length > 0 && !claudeText.some((t) => t.trim())) {
         console.log('Claude: Empty response after tool execution, requesting final response without tools...');
         console.log(`Claude debug - stop_reason: ${claudeData.stop_reason}, content_types: ${claudeData.content?.map((c: any) => c.type).join(', ')}`);
         
@@ -2326,7 +2336,7 @@ serve(async (req) => {
         }
       }
 
-      aiResponse = joinAgentText(claudeText, aiResponse);
+      aiResponse = agentReplyText(claudeText, aiResponse, closedByTool);
     } else if (integrationSlug === 'openai-gpt') {
       const model = configValues.default_model || 'gpt-4o-mini';
       modelUsed = model;
@@ -2403,6 +2413,7 @@ serve(async (req) => {
             { contactId, organizationId, threadId, agentId, timezone: agent.working_hours?.timezone }
           );
 
+          if (CLOSING_TOOLS.has(toolCall.function.name) && (result as { success?: boolean })?.success !== false) closedByTool = true;
           toolResults.push({
             tool_call_id: toolCall.id,
             role: 'tool',
@@ -2413,6 +2424,7 @@ serve(async (req) => {
         // Continue conversation with tool results
         openaiMessages.push(responseMessage);
         openaiMessages.push(...toolResults);
+        if (responseMessage.content?.trim()) openaiMessages.push({ role: 'user', content: AFTER_TOOL_HINT });
 
         const retryBody: any = {
           model,
@@ -2447,7 +2459,7 @@ serve(async (req) => {
 
       aiResponse = responseMessage?.content || '';
       emptyDetail = `finish_reason: ${openaiData.choices?.[0]?.finish_reason}`;
-      aiResponse = joinAgentText(openaiText, aiResponse);
+      aiResponse = agentReplyText(openaiText, aiResponse, closedByTool);
 
       // Log para debug de resposta vazia em modelos de raciocínio
       if (!aiResponse && responseMessage) {
