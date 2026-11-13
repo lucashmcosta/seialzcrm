@@ -10,7 +10,7 @@ import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
 import { buildChoicesInteractive, withoutQuestionEcho } from "../_shared/intelligence/agent-choices.ts";
 import { interactiveFallbackText, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
-import { agentIdentityLine, agentInputKind, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
+import { agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,8 +44,13 @@ interface ToolResult {
 }
 
 // Available tools for the agent
-/** Espera antes de responder, para juntar mensagens que o cliente manda em sequência. */
-const BURST_WAIT_MS = 4000;
+/**
+ * Espera antes de responder, para juntar mensagens que o cliente manda em sequência. Com 4 s,
+ * respostas curtas mandadas com 5 s de intervalo ("Sim", "Como porteiro") recebiam uma resposta cada.
+ */
+const BURST_WAIT_MS = 10000;
+/** Mensagens da conversa que o agente lê. Com 20, ele esquecia o começo e repetia perguntas. */
+const HISTORY_LIMIT = 80;
 
 const CLOSING_TOOLS = new Set(['end_conversation', 'transfer_to_human']);
 
@@ -1752,11 +1757,12 @@ serve(async (req) => {
         // Não é mensagem do cliente: instrução para o agente escrever a retomada.
         message = followUpInstruction(followUp.attempt, followUp.total);
       }
-      const { data: latest } = followUp ? { data: null } : await supabase.from('messages').select('id, media_type')
+      const { data: latest } = followUp ? { data: null } : await supabase.from('messages').select('id, media_type, content')
         .eq('thread_id', threadId).eq('direction', 'inbound').is('deleted_at', null)
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
       const inputKind = followUp ? 'text' : agentInputKind(latest?.media_type);
       if (inputKind === 'unsupported_media') return await handOffWithAck('unsupported_media');
+      if (inputKind === 'attachment') message = attachmentNote(latest!.media_type, latest!.content);
       if (inputKind === 'audio') {
         // Pode rodar junto com a fila: a transcrição não duplica. Sem texto, passa para uma pessoa.
         await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/transcribe-audio`, {
@@ -1875,7 +1881,7 @@ serve(async (req) => {
         .is('deleted_at', null)
         .neq('direction', 'internal')
         .order('created_at', { ascending: false })
-        .limit(20),
+        .limit(HISTORY_LIMIT),
       
       // Contact memories - PERSISTENT MEMORY
       supabase
@@ -2065,7 +2071,7 @@ serve(async (req) => {
     });
     const conversationMessages = withoutRepeatedLast(
       isTestMode && Array.isArray(testHistory)
-        ? testHistory.slice(-20).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: String(m.content ?? '').slice(0, 1000) }))
+        ? testHistory.slice(-HISTORY_LIMIT).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: String(m.content ?? '').slice(0, 1000) }))
         : storedMessages,
       message,
     );
