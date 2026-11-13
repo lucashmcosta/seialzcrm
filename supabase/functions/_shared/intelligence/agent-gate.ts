@@ -41,7 +41,8 @@ export function attachmentNote(mediaType: string, caption: string | null | undef
   // Em documento o texto é o nome do arquivo, que costuma ter CPF e nome: não vai ao modelo.
   const text = kind.startsWith("document") ? "" : (caption ?? "").trim();
   const shown = text && !/^\[[^\]]*\]$/.test(text) ? ` com o texto: "${text.slice(0, 500)}"` : "";
-  return `[O cliente enviou ${label}${shown}. Você não consegue ver o conteúdo do arquivo: não diga o que tem nele.]`;
+  return `[O cliente enviou ${label}${shown}. Você não consegue ver nem conferir o arquivo: não diga o que tem nele, ` +
+    `não diga que conferiu e não pergunte o que é cada arquivo. Agradeça e siga; quem confere é a equipe.]`;
 }
 
 export const AGENT_HANDOFF_ACK = "Recebi! Vou passar para uma pessoa da nossa equipe conferir, e ela continua com você aqui mesmo.";

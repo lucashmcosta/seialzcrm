@@ -2037,7 +2037,7 @@ serve(async (req) => {
     // 7. Search for relevant knowledge (RAG) - ONLY use INBOUND (user) messages for context
     // Assistant messages pollute semantic similarity and cause RAG to miss relevant chunks
     const recentUserMessages = messageHistory
-      .filter(m => m.direction === 'inbound')
+      .filter(m => m.direction === 'inbound' && agentInputKind(m.media_type) !== 'attachment') // nome de arquivo não vai à busca
       .slice(-3) // Last 3 user messages only
       .map(m => m.content || '')
       .join(' ');
@@ -2063,6 +2063,11 @@ serve(async (req) => {
       : { data: [] as Array<{ message_id: string; transcript: string | null }> };
     const heardById = new Map((heardAudios ?? []).map((a: any) => [a.message_id, a.transcript]));
     const storedMessages = messageHistory.map((msg: any) => {
+      // Anexo do cliente entra como aviso, nunca pelo texto salvo: em documento ele é o nome do
+      // arquivo, que costuma ter CPF e nome.
+      if (msg.direction === 'inbound' && agentInputKind(msg.media_type) === 'attachment') {
+        return { role: 'user', content: attachmentNote(msg.media_type, msg.content) };
+      }
       const { content, source } = effectiveContent({ content: msg.content, mediaType: msg.media_type, transcript: heardById.get(msg.id) ?? null });
       return {
         role: msg.direction === 'inbound' ? 'user' : 'assistant',

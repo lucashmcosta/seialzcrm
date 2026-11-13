@@ -26,8 +26,10 @@ Deno.test("áudio é escutado; foto, documento, vídeo e figurinha seguem com o 
   assertEquals(agentInputKind("location"), "unsupported_media");
 });
 Deno.test("anexo chega ao agente como aviso, sem nome de arquivo de documento", () => {
-  assertEquals(attachmentNote("image", "[Imagem]"),
-    "[O cliente enviou uma foto. Você não consegue ver o conteúdo do arquivo: não diga o que tem nele.]");
+  const photo = attachmentNote("image", "[Imagem]");
+  assertEquals(photo.startsWith("[O cliente enviou uma foto. Você não consegue ver nem conferir o arquivo"), true);
+  assertEquals(photo.includes("não pergunte o que é cada arquivo"), true);
+  assertEquals(photo.includes("[Imagem]"), false);
   assertEquals(attachmentNote("image", "frente do RG").includes('com o texto: "frente do RG"'), true);
   const doc = attachmentNote("document", "CTPS_123.456.789-00.pdf");
   assertEquals(doc.includes("um documento"), true);
