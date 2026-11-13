@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, agentIdentityLine, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, agentIdentityLine, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -18,11 +18,20 @@ Deno.test("vendedor que entrou na conversa assume", () => {
   assertEquals(decideAgentGate({ ...mine, assigned_user_id: "u1" }, "a1", false), "take_over");
   assertEquals(decideAgentGate({ ...mine, needs_human_attention: true }, "a1", false), "take_over");
 });
-Deno.test("só áudio é escutado; outra mídia vai para humano", () => {
+Deno.test("áudio é escutado; foto, documento, vídeo e figurinha seguem com o agente; o resto vai para humano", () => {
   assertEquals(agentInputKind(null), "text");
   assertEquals(agentInputKind("audio"), "audio");
   assertEquals(agentInputKind("audio/ogg"), "audio");
-  for (const m of ["image", "document", "video", "sticker"]) assertEquals(agentInputKind(m), "unsupported_media");
+  for (const m of ["image", "document", "video", "sticker", "image/jpeg"]) assertEquals(agentInputKind(m), "attachment");
+  assertEquals(agentInputKind("location"), "unsupported_media");
+});
+Deno.test("anexo chega ao agente como aviso, sem nome de arquivo de documento", () => {
+  assertEquals(attachmentNote("image", "[Imagem]"),
+    "[O cliente enviou uma foto. Você não consegue ver o conteúdo do arquivo: não diga o que tem nele.]");
+  assertEquals(attachmentNote("image", "frente do RG").includes('com o texto: "frente do RG"'), true);
+  const doc = attachmentNote("document", "CTPS_123.456.789-00.pdf");
+  assertEquals(doc.includes("um documento"), true);
+  assertEquals(doc.includes("123"), false);
 });
 Deno.test("aviso da passagem é configurável e pode não existir", () => {
   assertEquals(DEFAULT_HANDOFF_ACK, AGENT_HANDOFF_ACK);

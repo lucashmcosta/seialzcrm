@@ -14,12 +14,34 @@ export function decideAgentGate(thread: AgentThreadState | null, agentId: string
   return "respond";
 }
 
-export type AgentInput = "text" | "audio" | "unsupported_media";
+export type AgentInput = "text" | "audio" | "attachment" | "unsupported_media";
 
-/** O agente escuta áudio; imagem, vídeo e documento ainda vão para uma pessoa. */
+const ATTACHMENT_LABELS: Record<string, string> = {
+  image: "uma foto",
+  document: "um documento",
+  video: "um vídeo",
+  sticker: "uma figurinha",
+};
+
+/**
+ * O agente escuta áudio. Foto, documento, vídeo e figurinha ele não vê, mas sabe que chegaram e
+ * segue a conversa (por exemplo, agradece o documento que pediu). Outro tipo vai para uma pessoa.
+ */
 export function agentInputKind(mediaType: string | null | undefined): AgentInput {
   if (!mediaType) return "text";
-  return mediaType.toLowerCase().startsWith("audio") ? "audio" : "unsupported_media";
+  const kind = mediaType.toLowerCase();
+  if (kind.startsWith("audio")) return "audio";
+  return Object.keys(ATTACHMENT_LABELS).some((k) => kind.startsWith(k)) ? "attachment" : "unsupported_media";
+}
+
+/** O que o agente lê no lugar do anexo: o tipo, a legenda, e o aviso de que ele não vê o conteúdo. */
+export function attachmentNote(mediaType: string, caption: string | null | undefined): string {
+  const kind = mediaType.toLowerCase();
+  const label = Object.entries(ATTACHMENT_LABELS).find(([k]) => kind.startsWith(k))?.[1] ?? "um arquivo";
+  // Em documento o texto é o nome do arquivo, que costuma ter CPF e nome: não vai ao modelo.
+  const text = kind.startsWith("document") ? "" : (caption ?? "").trim();
+  const shown = text && !/^\[[^\]]*\]$/.test(text) ? ` com o texto: "${text.slice(0, 500)}"` : "";
+  return `[O cliente enviou ${label}${shown}. Você não consegue ver o conteúdo do arquivo: não diga o que tem nele.]`;
 }
 
 export const AGENT_HANDOFF_ACK = "Recebi! Vou passar para uma pessoa da nossa equipe conferir, e ela continua com você aqui mesmo.";

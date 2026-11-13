@@ -7,6 +7,8 @@ Configurável em `/settings/ai-agent` e `/settings/ai-providers`.
 - Multi-model: Claude, OpenAI, Gemini — uniqueness por org.
 - Suporte a modelos de raciocínio + recuperação de resposta vazia.
 - Limite de mensagens por agente por thread via `ai_agent_logs`.
+- Lê as últimas 80 mensagens da conversa (`HISTORY_LIMIT`). Antes de responder, espera 10 s (`BURST_WAIT_MS`) e só a chamada da última mensagem do cliente responde, já lendo todas.
+- Áudio entra pela transcrição. Foto, documento, vídeo e figurinha o agente não vê: ele recebe um aviso do tipo de anexo (sem o nome do arquivo de documento) e segue a conversa. Outros tipos passam para uma pessoa.
 - Memória de longo prazo por contato (`contact_memories`) + flow classifier de feedback (`classify-agent-feedback`).
 - Regras de segurança conversacional: sem botões numerados no texto, apenas templates nativos.
 - Regras anti-alucinação para pagamento PIX/link.
