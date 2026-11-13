@@ -224,3 +224,16 @@ Garantido no banco e no servidor, não só na tela:
 ## Pontos para o jurídico (não alterados no motor)
 
 1. **"Recebeu a rescisão?" em "Sem registro".** A tela esconde a pergunta, mas o motor lê `resc` se ela vier na entrada (`motor.ts`, verbas rescisórias). Como a SPEC manda não enviar perguntas escondidas, o motor assume `nada` (verbas cheias) quando a saída é "Sem registro" e o 13º/férias eram pagos. Nos casos-ouro, 6 casos aleatórios divergem só por isso. Confirmar com o Renan se é o comportamento desejado.
+
+## Pedido de correção em aberto bloqueia o ganho (22/10)
+
+Migração `20261022120000_classificacao_pedidos_de_correcao.sql` (rollback em `supabase/rollback/`).
+
+- O pedido só pode ser decidido com a oportunidade aberta. Ganhar com o pedido pendente deixava o pedido travado
+  (caso real em 22/10, resolvido reabrindo). Agora o pedido em aberto (pendente, ou liberado sem a nova
+  classificação) é o item `process_classification_correction` do avaliador, como os documentos: no enforce bloqueia o
+  ganho, no monitor só avisa. Vale com o widget ligado, mesmo sem "exigir classificação para ganhar".
+- `pc_pending_corrections(_org)`: lista os pedidos em aberto para quem tem `ferramentas.liberar_correcao` (ou o
+  Admin). Sem faixa nem comissão. Aparece no topo de `/classificacoes`; a decisão continua no card da oportunidade.
+- Teste: `supabase/tests/process_classification_pedidos_correcao.sql`. Ensaio em prod (com RAISE no fim): 800
+  oportunidades da CT, 0 mudanças em `can_close`, 0 mudanças nos outros itens.

@@ -22,7 +22,7 @@ import { dataHora, formatarBRL, NOME_FAIXA } from '@/components/process-classifi
 import { ResumoEntrada } from '@/components/process-classification/ResumoEntrada';
 import { ResultadoCompleto } from '@/components/process-classification/settings/calibracao/Janelas';
 import { useProcessClassificationEnabled } from '@/components/process-classification/useProcessClassificationEnabled';
-import { podeVerRelatorioClassificacoes } from '@/components/process-classification/permissoes';
+import { podeLiberarCorrecao, podeVerRelatorioClassificacoes } from '@/components/process-classification/permissoes';
 import { usePermissions } from '@/hooks/usePermissions';
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- respostas das RPCs pc_report* (supabase/migrations/20261018210000_process_classification_reports.sql) */
@@ -106,6 +106,7 @@ function Relatorio() {
     <Alert><AlertDescription>O widget Classificação do processo não está ligado nesta organização.</AlertDescription></Alert>
   ) : (
     <div className="space-y-4">
+      <PedidosDeCorrecao />
       {/* Filtros */}
       <div className="grid gap-3 rounded-md border bg-card p-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="space-y-1"><Label className="text-xs">De</Label><Input type="date" value={f.de} max={f.ate} onChange={(e) => set({ de: e.target.value })} /></div>
@@ -208,6 +209,47 @@ function Relatorio() {
     </div>
   );
   return isMobile ? <MobileLayout>{pagina_}</MobileLayout> : <Layout>{pagina_}</Layout>;
+}
+
+/** Pedidos de correção em aberto (pendentes, ou liberados sem a nova classificação). A decisão é no card da oportunidade. */
+function PedidosDeCorrecao() {
+  const { organization } = useOrganization();
+  const { permissions } = usePermissions();
+  const org = organization?.id ?? '';
+  const pode = podeLiberarCorrecao(permissions);
+  const { data } = useQuery({
+    queryKey: ['pc-pending-corrections', org],
+    enabled: !!org && pode,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('pc_pending_corrections' as never, { _org: org } as never);
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+  if (!pode || !data?.length) return null;
+  return (
+    <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+      <div>
+        <p className="text-sm font-medium">Pedidos de correção em aberto ({data.length})</p>
+        <p className="text-xs text-muted-foreground">Abra a oportunidade e decida no card "Classificação do processo". Enquanto o pedido estiver em aberto, a oportunidade não pode ser ganha.</p>
+      </div>
+      <div className="divide-y rounded-md border bg-card">
+        {data.map((p) => (
+          <Link key={p.id} to={`/opportunities/${p.oportunidadeId}`} className="flex flex-wrap items-center justify-between gap-2 p-2 text-sm hover:bg-muted/50">
+            <span className="min-w-0">
+              <span className="font-medium text-primary">{p.oportunidade ?? 'Oportunidade'}</span>
+              <span className="block text-xs text-muted-foreground">{p.vendedor ?? 'Vendedor'} · {dataHora(p.criadoEm)}</span>
+            </span>
+            <span className="flex gap-1">
+              {p.oportunidadeStatus !== 'open' && <Badge variant="destructive">{p.oportunidadeStatus === 'won' ? 'ganha: reabra para decidir' : 'fechada: reabra para decidir'}</Badge>}
+              {p.proprio && <Badge variant="outline">seu pedido: outro gestor decide</Badge>}
+              <Badge variant={p.status === 'pending' ? 'secondary' : 'outline'}>{p.status === 'pending' ? 'aguardando decisão' : 'liberado: vendedor refaz'}</Badge>
+            </span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Resumo({ rotulo, valor, cor }: { rotulo: string; valor: string; cor?: string }) {

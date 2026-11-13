@@ -61,6 +61,9 @@ export function OpportunityReadinessCard({ organizationId, opportunityId, onGoTo
             {item.status === 'missing' && item.action === 'classify' && (
               <span className="text-xs text-muted-foreground">{compact ? uiText('Na tela da oportunidade') : 'Card "Classificação do processo"'}</span>
             )}
+            {item.status === 'missing' && item.action === 'decide_correction' && (
+              <span className="text-xs text-muted-foreground">O gestor decide no card "Classificação do processo"</span>
+            )}
           </div>
         ))}
         {evaluation.mode === 'monitor' && evaluation.missing_count > 0 && (

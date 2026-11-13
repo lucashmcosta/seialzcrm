@@ -110,6 +110,7 @@ export function OpportunityCloseDialog(props: Props) {
                   </span>
                   {item.status === 'missing' && item.action === 'edit_contact' && props.contactId && <Button asChild variant="link" size="sm"><Link to={`/contacts/${props.contactId}/edit`}>Corrigir contato</Link></Button>}
                   {item.status === 'missing' && item.action === 'classify' && <span className="text-xs text-muted-foreground">Classifique na Visão geral da oportunidade</span>}
+                  {item.status === 'missing' && item.action === 'decide_correction' && <span className="text-xs text-muted-foreground">O gestor libera ou recusa na Visão geral da oportunidade</span>}
                 </div>
               ))}
             </div>
