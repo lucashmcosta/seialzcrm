@@ -22,5 +22,5 @@ function render(nodes: WaNode[]): ReactNode {
 // Mostra a mensagem como o WhatsApp mostra. Sem HTML: o texto do cliente nunca vira marcação.
 export function WhatsAppFormattedText({ content, className = '' }: WhatsAppFormattedTextProps) {
   const nodes = useMemo(() => parseWhatsAppText(content), [content]);
-  return <div className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${className}`}>{render(nodes)}</div>;
+  return <div className={`whitespace-pre-wrap break-words [overflow-wrap:anywhere] min-w-0 text-sm leading-relaxed ${className}`}>{render(nodes)}</div>;
 }
