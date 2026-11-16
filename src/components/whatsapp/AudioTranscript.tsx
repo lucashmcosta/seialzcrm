@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CaretDown, CaretUp } from '@phosphor-icons/react';
-import { supabase } from '@/integrations/supabase/client';
+import { loadTranscript } from '@/lib/audioTranscriptBatch';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 
 const POLL_MS = 10_000;
@@ -18,16 +18,7 @@ export function AudioTranscript({ messageId }: { messageId: string }) {
     // Sem linha ainda: tenta mais um pouco. Linha vazia (filtrada) já é resposta final.
     refetchInterval: (query) =>
       query.state.data === null && query.state.dataUpdateCount <= MAX_POLLS ? POLL_MS : false,
-    queryFn: async (): Promise<string | null> => {
-      const { data: rows, error } = await supabase
-        .from('audio_transcriptions')
-        .select('transcript')
-        .eq('message_id', messageId)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (error) throw error;
-      return rows?.[0]?.transcript ?? null;
-    },
+    queryFn: () => loadTranscript(messageId),
   });
 
   const text = data?.trim();
