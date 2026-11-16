@@ -1,3 +1,4 @@
+// @ts-nocheck — executado com bun test
 import { test, expect, mock } from 'bun:test';
 mock.module('@/integrations/supabase/client', () => ({ supabase: {} }));
 const { createTranscriptLoader } = await import('./audioTranscriptBatch');
