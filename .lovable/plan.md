@@ -1,16 +1,16 @@
-# Erro "useOrganizationContext must be used within an OrganizationProvider"
+# Falsos alarmes do Sentry vindos da pré-visualização (Auth e Organização)
 
 ## O que está acontecendo
-O erro não acontece para os usuários do sistema publicado. O rastro mostra que ele veio da pré-visualização do editor, no momento em que o código é atualizado ao vivo (recarga automática após uma alteração). Nessa hora, o arquivo da organização é recarregado e cria uma "nova" caixa de contexto, enquanto a parte de telefonia ainda procura a antiga. Por um instante ela não encontra a organização e quebra. Um recarregamento da página resolve sozinho. A ordem no app está correta (organização envolve telefonia).
+Os dois erros ("useAuthContext must be used within an AuthProvider" e "useOrganizationContext must be used within an OrganizationProvider") são do mesmo tipo. Os dois vêm da pré-visualização do editor, no momento em que ela se atualiza sozinha depois de uma mudança no código. Nessa hora, o arquivo de login/organização é recarregado. As partes que dependem dele (Widgets, Telefonia) ficam por um instante sem encontrá-lo e quebram. Recarregar a página resolve. Quem usa o sistema publicado não é afetado. A ordem no app está correta.
 
 ## O que muda
-1. Separar a "caixa" do contexto de organização em um arquivo próprio, que não é recarregado quando o resto muda. Assim a atualização ao vivo não quebra mais a telefonia.
-2. Não enviar ao Sentry erros vindos da pré-visualização de desenvolvimento (só produção), para não poluir o painel com falsos alarmes.
+1. Separar a "caixa" dos contextos de login e de organização em arquivos próprios, que não são recarregados nessas atualizações. Assim, Widgets e Telefonia não quebram mais.
+2. O Sentry passa a receber apenas erros do sistema publicado, sem os da pré-visualização.
 
 ## Fora do escopo
-Telefonia, permissões, banco e comportamento das telas continuam iguais.
+Login, organização, widgets, telefonia, permissões e banco continuam funcionando igual.
 
 ## Detalhes técnicos
-- Novo `src/contexts/organizationContextObject.ts` com `createContext` + tipo `OrganizationContextType`; `OrganizationContext.tsx` importa de lá (exports públicos inalterados).
-- `src/instrument.ts`: só chamar `Sentry.init` quando `import.meta.env.PROD` (ou `enabled: import.meta.env.PROD`).
-- Verificar build e abrir a pré-visualização para confirmar que nada quebrou.
+- Novos `src/contexts/authContextObject.ts` e `src/contexts/organizationContextObject.ts`, com `createContext` e os tipos. `AuthContext.tsx` e `OrganizationContext.tsx` passam a importar deles, sem mudar os exports públicos.
+- `src/instrument.ts`: `enabled: import.meta.env.PROD` no `Sentry.init`.
+- Conferir o build e abrir a pré-visualização logado.
