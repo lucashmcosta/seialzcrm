@@ -331,6 +331,8 @@ function parseMessagesUpsert(data: unknown): ParsedMessage | null {
           message_id: isString(rKey.id) ? (rKey.id as string) : undefined,
         },
       };
+      // A reação aparece com a mensagem reagida citada em cima.
+      if (!quotedId && isString(rKey.id)) quotedId = rKey.id as string;
     }
 
     // Location (static)

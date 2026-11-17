@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { classifySpecialInbound, UNREADABLE_NOTICE } from "./special-inbound.ts";
+import { classifySpecialInbound, replyTargetWamid, UNREADABLE_NOTICE } from "./special-inbound.ts";
 
 const unsupported = (sub: string) => ({
   type: "unsupported",
@@ -40,4 +40,10 @@ Deno.test("texto, mídia e botões não são afetados", () => {
   assertEquals(classifySpecialInbound({ type: "text", text: { body: "oi" } }), null);
   assertEquals(classifySpecialInbound({ type: "image", image: { id: "1" } }), null);
   assertEquals(classifySpecialInbound({ type: "interactive", interactive: { type: "button_reply" } }), null);
+});
+
+Deno.test("resposta e reação apontam para a mensagem original", () => {
+  assertEquals(replyTargetWamid({ type: "text", context: { id: "wamid.A" } }), "wamid.A");
+  assertEquals(replyTargetWamid({ type: "reaction", reaction: { emoji: "👍", message_id: "wamid.B" } }), "wamid.B");
+  assertEquals(replyTargetWamid({ type: "text", text: { body: "oi" } }), null);
 });
