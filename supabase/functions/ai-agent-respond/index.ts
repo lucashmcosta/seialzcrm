@@ -739,16 +739,26 @@ async function executeTool(
           return { success: false, message: 'Data/hora inválida' };
         }
 
-        const { error } = await supabase
+        // Um lembrete do agente por conversa: um novo substitui o que ainda não saiu.
+        // Sem isso, duas respostas seguidas marcavam o mesmo lembrete e o cliente recebia dois.
+        const { data: pendingFollowUp } = await supabase
           .from('scheduled_messages')
-          .insert({
+          .select('id')
+          .eq('thread_id', context.threadId).eq('created_by', 'agent').eq('status', 'pending')
+          .order('created_at', { ascending: false }).limit(1).maybeSingle();
+        const followUpRow = {
+          content: args.message,
+          scheduled_at: scheduledAt.toISOString(),
+          reason: args.reason || null,
+          ai_agent_id: context.agentId ?? null,
+        };
+        const { error } = pendingFollowUp
+          ? await supabase.from('scheduled_messages').update(followUpRow).eq('id', pendingFollowUp.id).eq('status', 'pending')
+          : await supabase.from('scheduled_messages').insert({
+            ...followUpRow,
             organization_id: context.organizationId,
             contact_id: context.contactId,
             thread_id: context.threadId,
-            content: args.message,
-            scheduled_at: scheduledAt.toISOString(),
-            reason: args.reason || null,
-            ai_agent_id: context.agentId ?? null,
             created_by: 'agent',
             status: 'pending',
           });
@@ -1595,6 +1605,7 @@ Em caso de conflito com estas regras gerais, valem as INSTRUÇÕES PERSONALIZADA
 8. Revise as ÚLTIMAS 3 mensagens do usuário para detectar correções ("não", "quis dizer", "na verdade")
 9. NUNCA use tags [BUTTONS] ou formate opções como lista numerada (1. 2. 3.)
 10. NUNCA ofereça "escolha uma opção" - responda de forma natural e fluída
+11. O cliente pode mandar áudio: você recebe por escrito o que ele falou. Se ele perguntar se pode mandar áudio, diga que pode. Você responde sempre por escrito.
 `;
 
   if (enabledTools.includes('send_payment_link')) {
@@ -1765,6 +1776,17 @@ serve(async (req) => {
       const { data: latest } = followUp ? { data: null } : await supabase.from('messages').select('id, media_type, content')
         .eq('thread_id', threadId).eq('direction', 'inbound').is('deleted_at', null)
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      // Duas mensagens no mesmo segundo abrem duas chamadas, e nenhuma vê a outra como mais nova.
+      // Só a chamada que marcar a última mensagem do cliente responde; a outra para aqui.
+      if (!followUp && latest) {
+        const { data: claimed, error: claimError } = await supabase.from('message_threads')
+          .update({ ai_agent_reply_claim_message_id: latest.id })
+          .eq('id', threadId)
+          .or(`ai_agent_reply_claim_message_id.is.null,ai_agent_reply_claim_message_id.neq.${latest.id}`)
+          .select('id');
+        if (claimError) console.warn('[ai-agent-respond] não marcou a resposta da conversa', claimError.message);
+        else if (!claimed?.length) return skip('reply_already_claimed');
+      }
       const inputKind = followUp ? 'text' : agentInputKind(latest?.media_type);
       if (inputKind === 'unsupported_media') return await handOffWithAck('unsupported_media');
       if (inputKind === 'attachment') message = attachmentNote(latest!.media_type, latest!.content);
@@ -2625,6 +2647,15 @@ serve(async (req) => {
       // O cliente escreveu enquanto esta resposta era montada: para aqui. A chamada da
       // mensagem nova responde, já lendo tudo, e não saem duas respostas parecidas.
       // Na passagem para a equipe, termina de enviar: depois dela o agente não responde mais.
+      // Outra chamada já passou a conversa para a equipe: depois da passagem o agente não fala mais.
+      if (!toolsExecuted.includes('transfer_to_human')) {
+        const { data: owner } = await supabase.from('message_threads')
+          .select('ai_agent_released_at, assigned_user_id').eq('id', threadId).maybeSingle();
+        if (owner?.ai_agent_released_at || owner?.assigned_user_id) {
+          console.log(`[ai-agent-respond] conversa já foi para a equipe; parou em ${index}/${outgoing.length}`);
+          break;
+        }
+      }
       if (!followUp && !toolsExecuted.includes('transfer_to_human')) {
         const { count: newerInbound } = await supabase.from('messages')
           .select('id', { count: 'exact', head: true })

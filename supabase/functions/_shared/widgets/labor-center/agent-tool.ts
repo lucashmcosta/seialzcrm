@@ -114,7 +114,7 @@ export function runLaborCaseForAgent(input: LaborCalcInput, filingDate?: string)
     teamNote, result,
     modelMessage: [
       `O cálculo da rescisão vai para o cliente logo depois do seu texto, igual ao que a equipe manda. Total que ele deveria ter recebido: ${brl(sim.total)}.${received}`,
-      'Escreva no máximo uma frase curta antes do cálculo. Não repita os valores da lista e não prometa resultado: é uma estimativa, a equipe confirma.',
+      'Antes do cálculo, escreva só uma frase curta, como "Fiz uma estimativa da sua rescisão.", e a próxima pergunta. Não repita os valores da lista e não prometa resultado. Não diga que a equipe confirma: o cálculo já avisa que é estimativa.',
       better.length ? `Perguntas que ainda melhoram o cálculo, se fizer sentido na conversa:\n${ask(better)}` : '',
     ].filter(Boolean).join('\n'),
   };
@@ -135,7 +135,7 @@ Passe tudo o que o cliente já contou sobre UM contrato. A ferramenta responde o
 ## CALCULADORA DA RESCISÃO
 - Use **${LABOR_CALC_TOOL}** assim que souber salário, data de entrada, se saiu, a data de saída e como saiu. Passe todos os fatos que o cliente já contou; o que ele disse não saber vai em nao_sabe.
 - Se a ferramenta disser o que falta, pergunte só isso, uma coisa por vez. Não pergunte de novo o que já está nos fatos. Enquanto ela não mandar o cálculo, não diga que fez estimativa.
-- Quando ela mandar o cálculo, escreva no máximo uma frase curta antes e não repita os valores. É uma estimativa: a equipe confirma o valor.
+- Quando ela mandar o cálculo, escreva antes só uma frase curta, como "Fiz uma estimativa da sua rescisão.", e não repita os valores. Não diga que a equipe confirma: o cálculo já avisa que é estimativa.
 - Nunca escreva valores de rescisão por conta própria, sem a ferramenta.
 `,
   run(args, ctx) {

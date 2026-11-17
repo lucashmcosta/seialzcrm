@@ -13,5 +13,7 @@
 | `intelligence_settings` | 9 col — config de provider por org |
 | `intelligence_settings_audit` | 6 col — audit |
 | `organization_integrations` | Credenciais BYOK |
+| `message_threads.ai_agent_reply_claim_message_id` | última mensagem do cliente que já tem uma chamada do agente respondendo. Evita duas respostas para mensagens do mesmo segundo |
+| `scheduled_messages` (`created_by = 'agent'`) | um lembrete pendente do agente por conversa: um novo substitui o anterior |
 
 Grants padrão `authenticated` + `service_role`. Sem `anon`.
