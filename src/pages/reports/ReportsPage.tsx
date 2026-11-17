@@ -34,6 +34,7 @@ import { StageDistribution } from '@/components/reports/StageDistribution';
 import UserDetailDialog from '@/components/reports/UserDetailDialog';
 import { ServiceResponseDetailDialog } from '@/components/reports/ServiceResponseDetailDialog';
 import { ReportFilters } from '@/components/reports/ReportFilters';
+import { LossReasonsCard } from '@/components/reports/LossReasonsCard';
 import {
   computeRange,
   computeExplicitPreviousRange,
@@ -582,6 +583,17 @@ export default function ReportsPage() {
             <Suspense fallback={<BlockFallback className="h-72" />}>
               <SalesTrendChart data={trend} formatCurrency={formatCurrency} loading={loading} />
             </Suspense>
+
+            {/* Motivos de perda */}
+            {organization && filtersHydrated && (
+              <LossReasonsCard
+                organizationId={organization.id}
+                fromDay={fmtDay(range.from)}
+                toDay={fmtDay(range.to)}
+                ownerId={ownerId}
+                locale={locale}
+              />
+            )}
 
             {/* Funnel + Distribution */}
             <Suspense fallback={<BlockFallback className="h-64" />}>
