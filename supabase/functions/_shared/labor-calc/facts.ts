@@ -6,8 +6,8 @@
  * em silêncio: toda premissa usada volta na saída, e todo fato aplicável e não perguntado
  * vira pergunta pendente.
  */
-import { nightMinutesPerDay, parseTime } from './jornada';
-import { NOTICE_LABEL, TERMINATION_LABEL, defaultNotice, type NoticeKind, type Termination } from './prescription';
+import { nightMinutesPerDay, parseTime } from './jornada.ts';
+import { NOTICE_LABEL, TERMINATION_LABEL, defaultNotice, type NoticeKind, type Termination } from './prescription.ts';
 
 export type FactKind = 'money' | 'number' | 'int' | 'date' | 'time' | 'bool' | 'enum' | 'text';
 export type FactStatus = 'confirmado' | 'nao_sabe';

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calcularCaso, caseSummaryText, FACT_KEYS, FACTS, severanceClientText, type Facts, type PedidoKey,
 } from '../src/widgets/labor-center/calc';
-import { nightMinutesPerDay, parseTime, scheduleHours } from '../src/widgets/labor-center/calc/jornada';
+import { nightMinutesPerDay, parseTime, scheduleHours } from '../supabase/functions/_shared/labor-calc/jornada.ts';
 
 const c = (v: unknown) => ({ value: v, source: 'lead' as const });
 const pedido = (r: ReturnType<typeof calcularCaso>, k: PedidoKey) => r.pedidos.find((p) => p.key === k)!;

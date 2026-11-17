@@ -1,6 +1,6 @@
-import { addDays, addYears, avos, avos13, fullYears, maxDate, monthsReal } from './dates';
-import { FGTS_FINE_RATE, indemnifiedNoticeDays, noticeDays, type NoticeKind, type Termination } from './prescription';
-import type { Line } from './reflexes';
+import { addDays, addYears, avos, avos13, fullYears, maxDate, monthsReal } from './dates.ts';
+import { FGTS_FINE_RATE, indemnifiedNoticeDays, noticeDays, type NoticeKind, type Termination } from './prescription.ts';
+import type { Line } from './reflexes.ts';
 
 export interface SeveranceInput {
   /** Remuneração de referência (salário + adicional fixo). */

@@ -1,8 +1,8 @@
 /** Mensagem da rescisão para mandar ao cliente (WhatsApp: *negrito*, _itálico_). */
-import { fmtDate, toDate } from './dates';
-import type { SeveranceSimulation } from './engine';
-import { brl } from './money';
-import { TERMINATION_LABEL } from './prescription';
+import { fmtDate, toDate } from './dates.ts';
+import type { SeveranceSimulation } from './engine.ts';
+import { brl } from './money.ts';
+import { TERMINATION_LABEL } from './prescription.ts';
 
 /** Rótulos internos → texto para o cliente. FGTS vai para a conta do FGTS, não para a mão. */
 function clientLabel(label: string): string {

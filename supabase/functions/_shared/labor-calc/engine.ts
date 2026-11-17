@@ -2,14 +2,14 @@
  * Motor do caso trabalhista: fatos → elegibilidade, pedidos, faixa de valor, premissas e perguntas.
  * Puro (sem I/O).
  */
-import { fmtDate, monthsReal, toDate, todayYMD } from './dates';
-import { FACTS, FACT_BY_KEY, type FactDef, type FactKey, type Facts, type InsalubrityAnswer, type FgtsDeposited, type SeverancePaid, type Peek } from './facts';
-import { parseTime, scheduleHours, type ScheduleHours } from './jornada';
-import { brl, fmtNum, parseNum } from './money';
-import { calcPrescription, defaultNotice, FGTS_FINE_RATE, type NoticeKind, type PrescriptionStatus, type Termination } from './prescription';
-import { breakMonthly, calcAllowance, nightMonthly, overtimeMonthly, type InsalubrityGrade } from './rates';
-import { withReflexes, type Line } from './reflexes';
-import { calcSeverance } from './severance';
+import { fmtDate, monthsReal, toDate, todayYMD } from './dates.ts';
+import { FACTS, FACT_BY_KEY, type FactDef, type FactKey, type Facts, type InsalubrityAnswer, type FgtsDeposited, type SeverancePaid, type Peek } from './facts.ts';
+import { parseTime, scheduleHours, type ScheduleHours } from './jornada.ts';
+import { brl, fmtNum, parseNum } from './money.ts';
+import { calcPrescription, defaultNotice, FGTS_FINE_RATE, type NoticeKind, type PrescriptionStatus, type Termination } from './prescription.ts';
+import { breakMonthly, calcAllowance, nightMonthly, overtimeMonthly, type InsalubrityGrade } from './rates.ts';
+import { withReflexes, type Line } from './reflexes.ts';
+import { calcSeverance } from './severance.ts';
 
 /** Salário mínimo nacional vigente (Decreto 12.797/2025). Atualizar a cada decreto anual. */
 export const MINIMUM_WAGE = 1621;

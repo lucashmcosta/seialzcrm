@@ -1,12 +1,5 @@
 /**
- * Motor da calculadora da Central Trabalhista (puro, sem I/O).
- * Testado em tests/labor-center*.test.ts.
+ * O motor da calculadora mora em supabase/functions/_shared/labor-calc: o mesmo código roda
+ * aqui no widget da equipe e no agente de IA, para o cálculo ser sempre igual.
  */
-export * from './engine';
-export * from './facts';
-export { brl, fmtNum, parseNum } from './money';
-export { fmtDate, todayYMD, toDate } from './dates';
-export { parseTime, fmtTime } from './jornada';
-export type { Line } from './reflexes';
-export { TERMINATION_LABEL, type Termination } from './prescription';
-export { severanceClientText } from './clientText';
+export * from '../../../../supabase/functions/_shared/labor-calc/index.ts';
