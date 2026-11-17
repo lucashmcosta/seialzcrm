@@ -1,4 +1,4 @@
-import { addDays, addYears, daysBetween, fullYears, maxDate, monthsReal, toDate } from './dates';
+import { addDays, addYears, daysBetween, fullYears, maxDate, monthsReal, toDate } from './dates.ts';
 
 export type Termination = 'sem_justa_causa' | 'rescisao_indireta' | 'acordo' | 'pedido_demissao' | 'justa_causa';
 

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { avos, avos13, toDate } from '../src/widgets/labor-center/calc/dates';
-import { parseNum } from '../src/widgets/labor-center/calc/money';
-import { calcPrescription, noticeDays } from '../src/widgets/labor-center/calc/prescription';
-import { calcAllowance, hourlyRate, nightMonthly, overtimeMonthly } from '../src/widgets/labor-center/calc/rates';
-import { withReflexes } from '../src/widgets/labor-center/calc/reflexes';
-import { calcSeverance } from '../src/widgets/labor-center/calc/severance';
+import { avos, avos13, toDate } from '../supabase/functions/_shared/labor-calc/dates.ts';
+import { parseNum } from '../supabase/functions/_shared/labor-calc/money.ts';
+import { calcPrescription, noticeDays } from '../supabase/functions/_shared/labor-calc/prescription.ts';
+import { calcAllowance, hourlyRate, nightMonthly, overtimeMonthly } from '../supabase/functions/_shared/labor-calc/rates.ts';
+import { withReflexes } from '../supabase/functions/_shared/labor-calc/reflexes.ts';
+import { calcSeverance } from '../supabase/functions/_shared/labor-calc/severance.ts';
 
 const D = (s: string) => toDate(s)!;
 const ALL = { dsr: true, decimo: true, ferias: true, fgts: true };

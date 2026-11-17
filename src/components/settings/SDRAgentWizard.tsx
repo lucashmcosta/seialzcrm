@@ -46,6 +46,7 @@ interface ToolsTriggers {
   update_qualification: string;
   end_conversation?: string;
   send_choices?: string;
+  calculate_labor_case?: string;
 }
 
 interface ComplianceRules {
@@ -163,6 +164,7 @@ const AVAILABLE_TOOLS = [
   { id: 'update_qualification', name: 'Atualizar Qualificação', description: 'Registra dados de qualificação do lead' },
   { id: 'end_conversation', name: 'Encerrar conversa', description: 'Encerra quando o caso não se encaixa; reabre se o cliente voltar a escrever' },
   { id: 'send_choices', name: 'Perguntas com botões', description: 'Faz perguntas de opções fixas com botões ou lista no WhatsApp (texto numerado onde não há botões)' },
+  { id: 'calculate_labor_case', name: 'Calculadora da rescisão', description: 'Usa a calculadora da Central Trabalhista e manda ao cliente o mesmo cálculo da rescisão que a equipe manda. Só funciona com o widget Central Trabalhista ligado' },
 ];
 
 const STEPS = [
@@ -270,6 +272,7 @@ const DEFAULT_TOOLS_TRIGGERS: ToolsTriggers = {
   update_qualification: 'Quando coletar informações de qualificação (BANT, MEDDIC, etc.)',
   end_conversation: 'Quando o caso não se encaixa e você já se despediu',
   send_choices: 'Quando a pergunta tiver poucas opções fixas (plano, horário, sim/não)',
+  calculate_labor_case: 'Quando souber salário, entrada, saída e como saiu',
 };
 
 const initialWizardData: WizardData = {

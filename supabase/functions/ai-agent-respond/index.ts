@@ -12,6 +12,7 @@ import { buildChoicesInteractive, withoutQuestionEcho } from "../_shared/intelli
 import { interactiveFallbackText, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
 import { agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE } from "../_shared/intelligence/agent-gate.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
+import { LABOR_CALC_CLIENT_HEADER, LABOR_CALC_TOOL, LABOR_CALC_WIDGET_KEY, laborCaseToolParameters, runLaborCaseForAgent } from "../_shared/labor-calc/agent.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -360,6 +361,19 @@ Use para perguntas com opções fixas (ex.: plano, horário, sim/não, tipo de s
         },
         required: ["question", "options"],
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: LABOR_CALC_TOOL,
+      description: `Calculadora trabalhista da equipe (a mesma do widget da Central Trabalhista).
+
+Passe tudo o que o cliente já contou sobre UM contrato. A ferramenta responde o que ainda falta perguntar, ou manda ao cliente o cálculo da rescisão, igual ao que a equipe manda.
+- Chame quando já souber salário, data de entrada, se saiu, a data de saída e como saiu. Chame de novo se o cliente corrigir um dado.
+- Datas sem ano: use o ano mais provável pela conversa.
+- O cálculo é enviado depois do seu texto. Não escreva os valores você mesmo.`,
+      parameters: laborCaseToolParameters(),
     },
   },
 ];
@@ -1596,6 +1610,16 @@ Em caso de conflito com estas regras gerais, valem as INSTRUÇÕES PERSONALIZADA
 10. NUNCA ofereça "escolha uma opção" - responda de forma natural e fluída
 `;
 
+  if (enabledTools.includes(LABOR_CALC_TOOL)) {
+    prompt += `
+## CALCULADORA DA RESCISÃO
+- Use **${LABOR_CALC_TOOL}** assim que souber salário, data de entrada, se saiu, a data de saída e como saiu. Passe todos os fatos que o cliente já contou; o que ele disse não saber vai em nao_sabe.
+- Se a ferramenta disser o que falta, pergunte só isso, uma coisa por vez. Não pergunte de novo o que já está nos fatos.
+- Quando ela mandar o cálculo, escreva no máximo uma frase curta antes e não repita os valores. É uma estimativa: a equipe confirma o valor.
+- Nunca escreva valores de rescisão por conta própria, sem a ferramenta.
+`;
+  }
+
   if (enabledTools.includes('send_payment_link')) {
     prompt += `
 ## ⛔ REGRAS CRÍTICAS DE PAGAMENTO - NUNCA VIOLE
@@ -1785,9 +1809,17 @@ serve(async (req) => {
 
     // Include mark_name_asked automatically when update_contact is enabled
     const baseTools = (agent.enabled_tools as string[]) || ['update_contact', 'transfer_to_human'];
-    const enabledTools = baseTools.includes('update_contact') && !baseTools.includes('mark_name_asked') && !agent.custom_instructions
+    const toolsWithName = baseTools.includes('update_contact') && !baseTools.includes('mark_name_asked') && !agent.custom_instructions
       ? [...baseTools, 'mark_name_asked']
       : baseTools;
+    // A calculadora só vale na org que tem o widget da Central Trabalhista ligado.
+    let laborWidgetOn = false;
+    if (toolsWithName.includes(LABOR_CALC_TOOL)) {
+      const { data: widget } = await supabase.from('organization_widgets').select('is_enabled')
+        .eq('organization_id', organizationId).eq('widget_key', LABOR_CALC_WIDGET_KEY).maybeSingle();
+      laborWidgetOn = widget?.is_enabled === true;
+    }
+    const enabledTools = laborWidgetOn ? toolsWithName : toolsWithName.filter((t) => t !== LABOR_CALC_TOOL);
 
     // 2. Check working hours
     const workingHours = agent.working_hours as WorkingHours;
@@ -2125,6 +2157,19 @@ serve(async (req) => {
     // Pergunta com botões (send_choices): não sai na hora; vai depois do texto da resposta.
     // Roda também no modo de teste, para o simulador mostrar a pergunta.
     let pendingInteractive = null as InteractivePayload | null;
+    // Cálculo da rescisão (calculadora da equipe): sai depois do texto, e o resumo vira nota para a equipe.
+    let pendingCalc = null as { clientText: string; teamNote: string | null } | null;
+    const takeLaborCalc = (args: any): ToolResult => {
+      if (followUp) return { success: false, message: 'A calculadora não é usada na retomada.' };
+      const out = runLaborCaseForAgent(args ?? {});
+      if (!out.clientText) return { success: true, message: out.modelMessage };
+      const total = out.result.severance ? out.clientText.split('\n').find((l) => l.startsWith('*Total')) ?? '' : '';
+      // Mesmo cálculo já mandado nesta conversa: não manda de novo.
+      const alreadySent = storedMessages.some((m) => m.role === 'assistant' && m.content.startsWith(LABOR_CALC_CLIENT_HEADER) && (!total || m.content.includes(total)));
+      if (alreadySent) return { success: true, message: 'Este mesmo cálculo já foi mandado nesta conversa. Não mande de novo nem repita os valores.' };
+      pendingCalc = { clientText: out.clientText, teamNote: out.teamNote };
+      return { success: true, message: out.modelMessage };
+    };
     const takeChoices = (args: any): ToolResult => {
       if (followUp) return { success: false, message: 'Perguntas com opções não são usadas na retomada.' };
       if (pendingInteractive) return { success: false, message: 'Já existe uma pergunta com opções nesta resposta. Use só uma.' };
@@ -2230,7 +2275,7 @@ serve(async (req) => {
           console.log(`Claude wants to use tool: ${toolUse.name}`);
           toolsExecuted.push(toolUse.name);
           
-          const result = toolUse.name === 'send_choices' ? takeChoices(toolUse.input) : isTestMode ? { success: true, message: 'Simulado no modo de teste' } : await executeTool(
+          const result = toolUse.name === 'send_choices' ? takeChoices(toolUse.input) : toolUse.name === LABOR_CALC_TOOL ? takeLaborCalc(toolUse.input) : isTestMode ? { success: true, message: 'Simulado no modo de teste' } : await executeTool(
             supabase,
             toolUse.name,
             toolUse.input,
@@ -2428,7 +2473,7 @@ serve(async (req) => {
           console.log(`OpenAI wants to use tool: ${toolCall.function.name}`);
           toolsExecuted.push(toolCall.function.name);
 
-          const result = toolCall.function.name === 'send_choices' ? takeChoices(JSON.parse(toolCall.function.arguments || '{}')) : isTestMode ? { success: true, message: 'Simulado no modo de teste' } : await executeTool(
+          const result = toolCall.function.name === 'send_choices' ? takeChoices(JSON.parse(toolCall.function.arguments || '{}')) : toolCall.function.name === LABOR_CALC_TOOL ? takeLaborCalc(JSON.parse(toolCall.function.arguments || '{}')) : isTestMode ? { success: true, message: 'Simulado no modo de teste' } : await executeTool(
             supabase,
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments || '{}'),
@@ -2500,8 +2545,8 @@ serve(async (req) => {
     let fallbackUsed = false;
     let fallbackReason = '';
     
-    // Só a pergunta com botões, sem texto, é uma resposta completa.
-    if (!aiResponse && !pendingInteractive) {
+    // Só a pergunta com botões ou o cálculo, sem texto, já é uma resposta completa.
+    if (!aiResponse && !pendingInteractive && !pendingCalc) {
       fallbackUsed = true;
       fallbackReason = toolsExecuted.length > 0 
         ? `empty_response_after_tools:${toolsExecuted.join(',')}` 
@@ -2539,6 +2584,8 @@ serve(async (req) => {
       interactive?.body,
     );
     const interactiveText = interactive ? interactiveFallbackText(interactive) : '';
+    // Depois de encerrar, o cálculo não vai. Na passagem para a equipe, vai: ajuda quem assume.
+    const calcText = pendingCalc && !toolsExecuted.includes('end_conversation') ? (pendingCalc as { clientText: string }).clientText : null;
 
     // 7. Check if this is test mode - don't send to WhatsApp, just return response
     if (isTestMode) {
@@ -2550,7 +2597,7 @@ serve(async (req) => {
           success: true,
           response: cleanResponse,
           // O simulador não tem botões: mostra a pergunta como texto numerado.
-          bubbles: interactive ? [...bubbles, interactiveText] : bubbles,
+          bubbles: [...bubbles, ...(calcText ? [calcText] : []), ...(interactive ? [interactiveText] : [])],
           interactive,
           responseTime,
           tokensUsed,
@@ -2565,9 +2612,11 @@ serve(async (req) => {
     // A pergunta com botões vai por último, depois do texto, e para junto se o cliente escrever.
     const outgoing: Array<{ message: string; interactive?: InteractivePayload }> = [
       ...bubbles.map((b) => ({ message: b })),
+      ...(calcText ? [{ message: calcText }] : []),
       ...(interactive ? [{ message: '', interactive }] : []),
     ];
     let interactiveSent = false;
+    let calcSent = false;
     for (const [index, item] of outgoing.entries()) {
       // Pausa curta entre as mensagens, para chegarem em ordem e como quem está digitando.
       if (index > 0) await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -2599,6 +2648,18 @@ serve(async (req) => {
         throw new Error('Failed to send WhatsApp message');
       }
       if (item.interactive) interactiveSent = true;
+      if (calcText && item.message === calcText) calcSent = true;
+    }
+
+    // O resumo do cálculo fica como nota para a equipe, igual ao "copiar resumo" do widget.
+    const calcNote = (pendingCalc as { teamNote: string | null } | null)?.teamNote;
+    if (calcSent && calcNote) {
+      const { error: calcNoteError } = await supabase.from('messages').insert({
+        organization_id: organizationId, thread_id: threadId, content: calcNote, direction: 'internal',
+        is_internal_note: true, sender_type: 'system', sender_agent_id: agent.id, sender_name: agent.name,
+        sent_at: new Date().toISOString(),
+      });
+      if (calcNoteError) console.warn('[ai-agent-respond] não gravou o resumo do cálculo', calcNoteError.message);
     }
 
     // Enviar para uma conversa resolvida a reabre. Se o agente encerrou nesta resposta,
