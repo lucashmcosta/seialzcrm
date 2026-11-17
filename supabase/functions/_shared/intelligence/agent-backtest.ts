@@ -88,3 +88,11 @@ export function countOutcomes(outcomes: BacktestOutcome[]): Record<BacktestOutco
   for (const o of outcomes) counts[o]++;
   return counts;
 }
+
+/** Resposta "Rate limit exceeded ... Retry after 55753ms." do Supabase: quanto esperar, ou null. */
+export function rateLimitWaitMs(body: unknown): number | null {
+  const text = typeof body === "string" ? body : JSON.stringify(body ?? "");
+  if (!/rate limit/i.test(text)) return null;
+  const ms = text.match(/retry after (\d+)\s*ms/i)?.[1];
+  return ms ? Number(ms) : 60_000;
+}
