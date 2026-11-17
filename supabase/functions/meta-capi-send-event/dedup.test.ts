@@ -278,3 +278,10 @@ Deno.test("eventos de mensagens: um por oportunidade e tipo; sem oportunidade n�
   assertEquals(deterministicEventId("o", "LeadSubmitted", "c", null), null);
   assertEquals(deterministicEventId("o", "PageView", "c", "p"), null);
 });
+
+Deno.test("formato de mensagens tem chave própria (não colide com o formato atual)", () => {
+  assertEquals(deterministicEventId("o", "Purchase", "c", "p", true), "o:bm:Purchase:p");
+  assertEquals(deterministicEventId("o", "LeadSubmitted", "c", "p", true), "o:bm:LeadSubmitted:p");
+  assertEquals(deterministicEventId("o", "Purchase", "c", "p", false), "o:Purchase:p");
+  assertEquals(deterministicEventId("o", "Lead", "c", null, true), null);
+});
