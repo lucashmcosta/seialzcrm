@@ -25,6 +25,7 @@ Configurável em `/settings/ai-agent` e `/settings/ai-providers`.
 - Principal: `ai-agent-respond` (2372 LOC — 🔴 candidato a decomposição, ver dívida técnica).
 - Ad-hoc: `ai-generate` (374 LOC).
 - Suporte: `classify-agent-feedback`, `analyze-message`, `transcribe-audio`, `scheduled-messages-cron`.
+- Teste com conversas antigas: `agent-backtest` (só admin da org). Repassa conversas reais ao agente em modo de teste (nada vai ao cliente), com a chave de IA da org, e grava o resultado em `agent_backtest_runs`. Ações `dry_run` (conta e estima o custo, sem gastar), `run` (em segundo plano; recusa se o custo estimado passar de `budget_usd`) e `status`. Cenário `labor_calc`: conversas em que a equipe mandou o cálculo da rescisão do widget; compara o total que o agente mandaria com o da equipe. Regras puras em `_shared/intelligence/agent-backtest.ts`, testes em `tests/agent-backtest.test.ts`.
 
 ## Providers / BYOK
 Ver `integrations/byok/` e `integrations/lovable-ai-gateway/`. Override por org via `organization_integrations` e `intelligence_settings`.
