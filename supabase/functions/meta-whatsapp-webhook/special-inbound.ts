@@ -53,3 +53,9 @@ export function classifySpecialInbound(msg: any): SpecialInbound | null {
 
   return null;
 }
+
+/** Mensagem nossa que o cliente respondeu ou reagiu, para aparecer citada na conversa. */
+// deno-lint-ignore no-explicit-any
+export function replyTargetWamid(msg: any): string | null {
+  return msg?.context?.id ?? msg?.reaction?.message_id ?? null;
+}

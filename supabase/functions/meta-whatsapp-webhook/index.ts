@@ -13,7 +13,7 @@
 // Mídia, outbound, templates e handleStatus permanecem inalterados.
 import { metaInboundInteractiveReply } from "../_shared/whatsapp-interactive.ts";
 import { inboundEventKey, isDuplicateAuditError } from "./audit-key.ts";
-import { classifySpecialInbound } from "./special-inbound.ts";
+import { classifySpecialInbound, replyTargetWamid } from "./special-inbound.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -989,9 +989,9 @@ async function handleInbound(
   // Aviso legível no lugar de "[mensagem não suportada: ...]".
   if (special?.action === "notice") content = special.content;
 
-  // 9) Reply context
+  // 9) Mensagem respondida ou reagida
   const replyToMessageId = await resolveReplyToMessageId(
-    supabase, endpoint.organization_id, msg?.context?.id,
+    supabase, endpoint.organization_id, replyTargetWamid(msg),
   );
 
   // 10) Insert message
