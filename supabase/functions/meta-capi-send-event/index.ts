@@ -1,10 +1,10 @@
-// force rebuild 2026-05-11T07:00 - rollback to system_generated per CAPI v25.0 doc
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
 import { authorizeSendEvent } from "./auth.ts";
+import { buildMessagingCustomData, buildMessagingUserData, type CapiRule, MESSAGING_EVENTS, pickRule, singleValue } from "./messaging.ts";
 import { claimLogRow, findSentDuplicate, isRealSentRow, isTestSend, resolveEventId, resolveTestEventCode, testNeedsCode } from "./dedup.ts";
 
 const META_API_VERSION = Deno.env.get("META_GRAPH_API_VERSION") || "v25.0";
@@ -118,6 +118,40 @@ async function getAccessToken(admin: any, orgId: string, ca: any): Promise<strin
   return resolved?.token ?? null;
 }
 
+// ── Formato de mensagens (business_messaging) ──────────────────────────────
+// WABA e página são lidos na hora, da conexão da org (não de uma cópia salva na config da CAPI,
+// que pode ficar vazia ou desatualizada).
+async function resolveWabaId(admin: any, orgId: string, ca: any): Promise<string | null> {
+  const { data } = await admin.from("organization_integrations")
+    .select("connected_account, admin_integrations!inner(slug)")
+    .eq("organization_id", orgId).eq("is_enabled", true)
+    .eq("admin_integrations.slug", "meta-whatsapp-cloud");
+  const wabas = ((data ?? []) as any[]).map((r) => r.connected_account?.waba_id ?? null);
+  const only = singleValue(wabas);
+  if (only) return only;
+  // Mais de uma conta de WhatsApp: só usa a da config se ela for uma delas.
+  const configured = ca?.whatsapp_business_account_id ? String(ca.whatsapp_business_account_id) : null;
+  return configured && wabas.includes(configured) ? configured : null;
+}
+
+async function resolvePageId(admin: any, orgId: string, ca: any): Promise<string | null> {
+  const { data } = await admin.from("meta_assets").select("external_id")
+    .eq("organization_id", orgId).eq("asset_type", "page").eq("selection_state", "selected");
+  const only = singleValue(((data ?? []) as any[]).map((r) => r.external_id));
+  if (only) return only;
+  return ca?.page_id ? String(ca.page_id) : null;
+}
+
+async function resolveCtwaClid(admin: any, orgId: string, contact: any): Promise<string | null> {
+  if (contact?.id) {
+    const { data, error } = await admin.rpc("fn_capi_first_ctwa_clid", {
+      p_organization_id: orgId, p_contact_id: contact.id,
+    });
+    if (!error && typeof data === "string" && data) return data;
+  }
+  return contact?.ad_referral_ctwa_clid || null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -175,6 +209,19 @@ serve(async (req) => {
     const ca = (oi.connected_account || {}) as any;
     const pixelId = ca.pixel_id;
     if (!pixelId) return json({ error: "Pixel ID não configurado" }, 400);
+
+    // Formato por org: 'legacy' (padrão) ou 'business_messaging'.
+    const { data: capiSettings } = await admin.from("capi_org_settings")
+      .select("event_format").eq("organization_id", organization_id).maybeSingle();
+    // Teste do formato novo antes de ligar: só com test_event_code explícito no corpo
+    // (o evento cai em "Eventos de teste" da Meta e não liga nada em produção).
+    const testFormatOverride = (test === true || test === "true") && typeof bodyTestEventCode === "string"
+      && bodyTestEventCode.trim() !== "" && body?.format_override === "business_messaging";
+    const messagingFormat = capiSettings?.event_format === "business_messaging" || testFormatOverride;
+    if (messagingFormat && (!MESSAGING_EVENTS.has(event_name) || !opportunity_id)) {
+      // Ex.: 'Lead' de contato novo não existe nesse canal; eventos são por oportunidade.
+      return json({ skipped: "not_a_messaging_event", event_name });
+    }
 
     // ── Dedup (ver dedup.ts) ── antes de resolver token / chamar a Meta.
     const eventTime = Math.floor(Date.now() / 1000);
@@ -250,13 +297,41 @@ serve(async (req) => {
     if (opportunity_id) {
       const { data } = await admin
         .from("opportunities")
-        .select("id, title, amount, currency")
+        .select("id, title, amount, currency, status")
         .eq("id", opportunity_id)
         .maybeSingle();
       opportunity = data;
     }
 
-    const sourceUrl = ca.default_event_source_url || undefined;
+    let eventPayload: Record<string, unknown>;
+    let sourceUrl: string | undefined;
+    if (messagingFormat) {
+      const [wabaId, pageId, ctwaClid, rulesRes] = await Promise.all([
+        resolveWabaId(admin, organization_id, ca),
+        resolvePageId(admin, organization_id, ca),
+        resolveCtwaClid(admin, organization_id, contact),
+        admin.from("capi_event_rules")
+          .select("trigger_type, event_name, value_mode, fixed_value, currency")
+          .eq("organization_id", organization_id).eq("is_active", true),
+      ]);
+      const built = buildMessagingUserData(await buildUserData(contact), { wabaId, ctwaClid, pageId });
+      if (!built.ok) {
+        console.warn("[capi] messaging event not sent", { event_name, reason: built.reason });
+        return json({ error: "messaging_event_incomplete", reason: built.reason });
+      }
+      const rule = pickRule((rulesRes.data ?? []) as CapiRule[], event_name, opportunity?.status === "won");
+      const customData = buildMessagingCustomData(rule, opportunity?.amount);
+      eventPayload = {
+        event_name,
+        event_time: eventTime,
+        event_id: eventId,
+        action_source: "business_messaging",
+        messaging_channel: "whatsapp",
+        user_data: built.userData,
+      };
+      if (customData) eventPayload.custom_data = customData;
+    } else {
+    sourceUrl = ca.default_event_source_url || undefined;
     const userData = await buildUserData(contact);
 
     // NÃO injetar IP/UA do servidor (pg_net / Supabase). Esses campos só fazem sentido
@@ -300,7 +375,7 @@ serve(async (req) => {
     const contactSource: string = (contact?.source || "").toLowerCase();
     const actionSource = contactSource.startsWith("landing_page") ? "website" : "system_generated";
 
-    const eventPayload: Record<string, unknown> = {
+    eventPayload = {
       event_name,
       event_time: eventTime,
       event_id: eventId,
@@ -309,6 +384,7 @@ serve(async (req) => {
     };
     if (sourceUrl) eventPayload.event_source_url = sourceUrl;
     if (Object.keys(customData).length > 0) eventPayload.custom_data = customData;
+    }
 
     const requestBody: Record<string, unknown> = {
       data: [eventPayload],
