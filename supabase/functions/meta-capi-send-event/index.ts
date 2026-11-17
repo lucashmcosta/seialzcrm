@@ -224,7 +224,21 @@ serve(async (req) => {
     }
 
     // ── Dedup (ver dedup.ts) ── antes de resolver token / chamar a Meta.
-    const eventTime = Math.floor(Date.now() / 1000);
+    // Data do evento: agora. Exceção (só formato de mensagens): recuperação dos últimos 7 dias
+    // pelo backend (service/internal) ou retry de um evento desses, com a data original.
+    const nowSec = Math.floor(Date.now() / 1000);
+    const SEVEN_DAYS = 7 * 24 * 3600;
+    const withinWindow = (t: number) => Number.isFinite(t) && t <= nowSec + 60 && t > nowSec - SEVEN_DAYS + 300;
+    let eventTime = nowSec;
+    if (messagingFormat) {
+      const callerKind = (authz as any).caller?.kind;
+      const requested = Number(body?.event_time);
+      const fromLog = logRow?.event_time ? Math.floor(new Date(logRow.event_time).getTime() / 1000) : NaN;
+      if (logRow && withinWindow(fromLog)) eventTime = fromLog;
+      else if (!logRow && (callerKind === "service" || callerKind === "internal") && withinWindow(requested)) {
+        eventTime = Math.floor(requested);
+      }
+    }
     const testEventCode = resolveTestEventCode({
       bodyTest: test,
       bodyCode: bodyTestEventCode,
@@ -237,6 +251,7 @@ serve(async (req) => {
     }
     const isTest = isTestSend(test, testEventCode);
     const { eventId, dedup } = resolveEventId({
+      messaging: messagingFormat,
       logRow,
       organizationId: organization_id,
       eventName: event_name,
@@ -250,6 +265,7 @@ serve(async (req) => {
         return json({ skipped: "duplicate", capi_event_log_id: logRow.id });
       }
       const dup = await findSentDuplicate(admin, {
+        messaging: messagingFormat,
         organizationId: organization_id,
         eventName: event_name,
         eventId,

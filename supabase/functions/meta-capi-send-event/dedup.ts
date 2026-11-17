@@ -65,7 +65,15 @@ export function deterministicEventId(
   eventName: string,
   contactId?: string | null,
   opportunityId?: string | null,
+  messaging = false,
 ): string | null {
+  // Formato de mensagens: chave própria ("bm"), para que um evento já enviado no formato antigo
+  // não bloqueie o do formato novo (são conjuntos/canais diferentes na Meta).
+  if (messaging) {
+    return opportunityId && (eventName === "Purchase" || OPP_SCOPED_EVENTS.has(eventName))
+      ? `${organizationId}:bm:${eventName}:${opportunityId}`
+      : null;
+  }
   if (eventName === "Lead" && contactId) return `${organizationId}:Lead:${contactId}`;
   if (eventName === "Purchase" && opportunityId) return `${organizationId}:Purchase:${opportunityId}`;
   // Eventos de mensagens (LeadSubmitted, QualifiedLead...): um por oportunidade e por tipo.
@@ -97,8 +105,9 @@ export function resolveEventId(p: {
   opportunityId?: string | null;
   isTest: boolean;
   eventTime: number;
+  messaging?: boolean;
 }): EventIdDecision {
-  const key = deterministicEventId(p.organizationId, p.eventName, p.contactId, p.opportunityId);
+  const key = deterministicEventId(p.organizationId, p.eventName, p.contactId, p.opportunityId, !!p.messaging);
   const dedup = !p.isTest && key !== null;
   // Retry/reprocessamento: SEMPRE reaproveita o event_id da linha (Meta deduplica pelo mesmo id).
   if (p.logRow?.event_id) return { eventId: String(p.logRow.event_id), dedup };
@@ -118,6 +127,11 @@ export function isRealSentRow(row: LogRow | null | undefined): boolean {
   return true;
 }
 
+export function isMessagingRow(row: LogRow): boolean {
+  const ev = row?.payload?.data?.[0];
+  return ev?.action_source === "business_messaging";
+}
+
 const DUP_COLS = "id, event_id, status, test_event_code, payload, attempt_count, last_attempt_at, updated_at";
 
 // Procura envio real anterior do MESMO evento de negócio (read-only).
@@ -131,6 +145,7 @@ export async function findSentDuplicate(admin: AdminClient, p: {
   contactId?: string | null;
   opportunityId?: string | null;
   excludeId?: string | null;
+  messaging?: boolean;
 }): Promise<LogRow | null> {
   const { data: byId, error: e1 } = await admin
     .from("capi_event_log")
@@ -155,9 +170,12 @@ export async function findSentDuplicate(admin: AdminClient, p: {
     .eq(col, val)
     .eq("status", "sent")
     .is("test_event_code", null)
-    .limit(5);
+    .limit(20);
   if (e2) throw e2;
-  return (rows || []).find((r: LogRow) => r.id !== p.excludeId && isRealSentRow(r)) ?? null;
+  // Só conta como duplicado o envio do MESMO formato (mensagens x atual).
+  return (rows || []).find((r: LogRow) =>
+    r.id !== p.excludeId && isRealSentRow(r) && isMessagingRow(r) === !!p.messaging
+  ) ?? null;
 }
 
 export type ClaimResult =
