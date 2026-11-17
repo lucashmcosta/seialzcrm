@@ -2179,7 +2179,7 @@ serve(async (req) => {
     // Roda também no modo de teste, para o simulador mostrar a pergunta.
     let pendingInteractive = null as InteractivePayload | null;
     // Ferramenta de widget: a mensagem pronta dela sai depois do texto, e a nota vai para a equipe.
-    const pendingWidget: Array<{ clientText: string | null; teamNote: string | null }> = [];
+    const pendingWidget: Array<{ widgetKey: string; clientText: string | null; teamNote: string | null }> = [];
     const isWidgetTool = (name: string) => widgetTools.some((w) => w.name === name);
     const takeWidgetTool = async (name: string, args: any): Promise<ToolResult> => {
       const tool = widgetTools.find((w) => w.name === name)!;
@@ -2187,7 +2187,7 @@ serve(async (req) => {
       try {
         // No modo de teste vale a conversa do teste, e não a do banco.
         const out = await tool.run(args ?? {}, { supabase, organizationId, isTestMode: !!isTestMode, history: conversationMessages });
-        if (out.clientText || out.teamNote) pendingWidget.push({ clientText: out.clientText ?? null, teamNote: out.teamNote ?? null });
+        if (out.clientText || out.teamNote) pendingWidget.push({ widgetKey: tool.widgetKey, clientText: out.clientText ?? null, teamNote: out.teamNote ?? null });
         return { success: true, message: out.modelMessage };
       } catch (e) {
         console.error(`[ai-agent-respond] ferramenta de widget ${name} falhou`, (e as Error).message);
@@ -2685,11 +2685,13 @@ serve(async (req) => {
     }
 
     // A nota da ferramenta de widget (ex.: resumo do cálculo) fica para a equipe, depois que a mensagem saiu.
-    for (const note of widgetSent ? pendingWidget.map((w) => w.teamNote).filter((n): n is string => !!n) : []) {
+    // A marca agent_widget_result diz que o cliente já recebeu o resultado: se ele sumir depois
+    // das retomadas, a rotina agent-followups passa a conversa para a equipe.
+    for (const w of widgetSent ? pendingWidget.filter((x) => !!x.teamNote) : []) {
       const { error: noteInsertError } = await supabase.from('messages').insert({
-        organization_id: organizationId, thread_id: threadId, content: note, direction: 'internal',
+        organization_id: organizationId, thread_id: threadId, content: w.teamNote, direction: 'internal',
         is_internal_note: true, sender_type: 'system', sender_agent_id: agent.id, sender_name: agent.name,
-        sent_at: new Date().toISOString(),
+        sent_at: new Date().toISOString(), metadata: { agent_widget_result: w.widgetKey },
       });
       if (noteInsertError) console.warn('[ai-agent-respond] não gravou a nota da ferramenta de widget', noteInsertError.message);
     }

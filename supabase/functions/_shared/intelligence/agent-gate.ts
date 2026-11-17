@@ -217,3 +217,23 @@ export function toWhatsAppText(text: string): string {
     .replace(/\[([^\]\n]+)\]\([^)]*\)/g, "$1")
     .replace(/^#{1,6}\s+/gm, "");
 }
+
+/** Depois da última retomada sem resposta, quanto esperar antes de passar a conversa quente para a equipe. */
+export const SILENT_HANDOFF_AFTER_MS = 2 * 3600 * 1000;
+
+/**
+ * Conversa quente parada: o cliente já recebeu o resultado de uma ferramenta de widget (ex.: o cálculo),
+ * o agente fez todas as retomadas e ele não respondeu a nenhuma. Aí vale uma pessoa da equipe tentar.
+ */
+export function shouldHandOffSilent(t: {
+  hasWidgetResult: boolean;
+  followupCount: number;
+  followupTotal: number;
+  lastFollowupAt: string | null;
+  lastInboundAt: string | null;
+}, now = Date.now()): boolean {
+  if (!t.hasWidgetResult || t.followupTotal < 1 || t.followupCount < t.followupTotal || !t.lastFollowupAt) return false;
+  const followupAt = new Date(t.lastFollowupAt).getTime();
+  if (t.lastInboundAt && new Date(t.lastInboundAt).getTime() >= followupAt) return false;
+  return now - followupAt >= SILENT_HANDOFF_AFTER_MS;
+}

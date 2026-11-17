@@ -14,6 +14,7 @@
 | `intelligence_settings_audit` | 6 col — audit |
 | `organization_integrations` | Credenciais BYOK |
 | `message_threads.ai_agent_reply_claim_message_id` | última mensagem do cliente que já tem uma chamada do agente respondendo. Evita duas respostas para mensagens do mesmo segundo |
+| `messages.metadata.agent_widget_result` | marca a nota interna do resultado de uma ferramenta de widget (ex.: cálculo). Se o cliente não responder às retomadas, 2 h depois da última o `agent-followups` passa a conversa para a equipe (`silent_after_widget_result`) |
 | `scheduled_messages` (`created_by = 'agent'`) | um lembrete pendente do agente por conversa: um novo substitui o anterior |
 
 Grants padrão `authenticated` + `service_role`. Sem `anon`.
