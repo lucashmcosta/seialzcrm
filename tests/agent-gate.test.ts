@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
+import { typingIndicatorBody } from "../supabase/functions/_shared/meta-whatsapp/typing.ts";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, agentIdentityLine, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, agentIdentityLine, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -144,4 +145,30 @@ Deno.test("depois de encerrar ou passar para a equipe, o texto de depois não va
   assertEquals(agentReplyText([], "Se mudar alguma coisa, é só me chamar.", true), "Se mudar alguma coisa, é só me chamar.");
   // Sem encerrar, segue a regra normal.
   assertEquals(agentReplyText(["Anotei."], "Qual a data do parto?", false), "Anotei.\n\nQual a data do parto?");
+});
+
+Deno.test("mensagem que se cruzou com a resposta vai para o fim e avisa o agente", () => {
+  const h = [
+    { role: "assistant", content: "Tinha hora extra no holerite?" },
+    { role: "user", content: "Sim" },
+    { role: "user", content: "178 valor que eles pagam" },
+    { role: "assistant", content: "Aparecia algum valor de hora extra?" },
+  ];
+  const r = placeCurrentMessage(h, "178 valor que eles pagam");
+  assertEquals(r.crossed, true);
+  assertEquals(r.history.map((m) => m.content), ["Tinha hora extra no holerite?", "Sim", "Aparecia algum valor de hora extra?"]);
+  assertEquals(CROSSED_REPLY_NOTE.includes("INSTRUÇÃO INTERNA"), true);
+});
+Deno.test("sem cruzamento: a mensagem atual sai do fim e nada muda", () => {
+  const h = [{ role: "assistant", content: "Oi" }, { role: "user", content: "5 de maio" }];
+  assertEquals(placeCurrentMessage(h, "5 de maio"), { history: h.slice(0, 1), crossed: false });
+  assertEquals(placeCurrentMessage(h, "outra"), { history: h, crossed: false });
+  // Mensagem igual a uma antiga, que já teve resposta e não é a última do cliente: não mexe.
+  const old = [{ role: "user", content: "Sim" }, { role: "assistant", content: "Ok" }, { role: "user", content: "Não" }];
+  assertEquals(placeCurrentMessage(old, "Sim"), { history: old, crossed: false });
+});
+Deno.test("digitando no WhatsApp marca como lida e mostra o aviso", () => {
+  assertEquals(typingIndicatorBody("wamid.X"), {
+    messaging_product: "whatsapp", status: "read", message_id: "wamid.X", typing_indicator: { type: "text" },
+  });
 });
