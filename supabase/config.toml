@@ -225,6 +225,11 @@ verify_jwt = false
 [functions.conversation-analysis]
 verify_jwt = false
 
+# Teste do agente com conversas antigas. Como a conversation-analysis: `requireOrgAdmin`
+# valida o JWT em código.
+[functions.agent-backtest]
+verify_jwt = false
+
 # Leitura de CNPJ em documento anexado. Valida o JWT do usuário em código (a
 # consulta ao documento passa pela RLS dele) e roda hoje com verify_jwt
 # desligado, como as demais; precisa estar declarada para um deploy pela CLI

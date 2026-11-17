@@ -2165,7 +2165,8 @@ serve(async (req) => {
       if (!out.clientText) return { success: true, message: out.modelMessage };
       const total = out.result.severance ? out.clientText.split('\n').find((l) => l.startsWith('*Total')) ?? '' : '';
       // Mesmo cálculo já mandado nesta conversa: não manda de novo.
-      const alreadySent = storedMessages.some((m) => m.role === 'assistant' && m.content.startsWith(LABOR_CALC_CLIENT_HEADER) && (!total || m.content.includes(total)));
+      // No modo de teste vale a conversa do teste, e não a do banco.
+      const alreadySent = conversationMessages.some((m) => m.role === 'assistant' && m.content.startsWith(LABOR_CALC_CLIENT_HEADER) && (!total || m.content.includes(total)));
       if (alreadySent) return { success: true, message: 'Este mesmo cálculo já foi mandado nesta conversa. Não mande de novo nem repita os valores.' };
       pendingCalc = { clientText: out.clientText, teamNote: out.teamNote };
       return { success: true, message: out.modelMessage };
