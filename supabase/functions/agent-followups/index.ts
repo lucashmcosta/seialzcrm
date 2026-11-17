@@ -2,11 +2,14 @@
 // 1. Retomada: quem parou de responder enquanto a conversa está com o agente recebe uma
 //    retomada curta escrita pelo próprio agente (ai-agent-respond com followUp).
 // 2. Mensagens que o agente agendou (scheduled_messages, created_by = 'agent').
+// 3. Conversa quente parada: o cliente recebeu o resultado de um widget (ex.: o cálculo), não
+//    respondeu a nenhuma retomada e passaram 2 h da última. Vai para a equipe (rodízio).
 // Tudo só dentro da janela de 24 h do WhatsApp e em conversas que continuam com o agente.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { validateServiceRoleAuth } from "../_shared/auth.ts";
 import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
+import { SILENT_HANDOFF_AFTER_MS, shouldHandOffSilent } from "../_shared/intelligence/agent-gate.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -21,7 +24,7 @@ serve(async (req) => {
   // Repassa a mesma credencial interna que chamou esta rotina (o JWT de service_role do agendador):
   // a variável SUPABASE_SERVICE_ROLE_KEY pode estar no formato novo, que o agente não reconhece.
   const forwardAuth = req.headers.get("authorization") ?? `Bearer ${serviceKey}`;
-  const result = { followups: 0, followup_errors: 0, scheduled_sent: 0, scheduled_skipped: 0 };
+  const result = { followups: 0, followup_errors: 0, scheduled_sent: 0, scheduled_skipped: 0, silent_handoffs: 0 };
 
   // 1. Retomadas
   const { data: due, error: claimError } = await supabase.rpc("fn_agent_followup_claim", { _limit: 20 });
@@ -76,6 +79,38 @@ serve(async (req) => {
       .update(error ? { status: "failed", error_message: error.message } : { status: "sent", sent_at: new Date().toISOString() })
       .eq("id", msg.id);
     if (!error) result.scheduled_sent++;
+  }
+
+  // 3. Conversa quente parada vai para a equipe
+  const { data: silent } = await supabase.from("message_threads")
+    .select("id, ai_followup_count, ai_followup_last_at, ai_agents:ai_agent_id!inner(is_enabled, followup_enabled, followup_delays_minutes)")
+    .not("ai_agent_id", "is", null).is("ai_agent_released_at", null).is("assigned_user_id", null)
+    .gte("ai_followup_count", 1)
+    .lte("ai_followup_last_at", new Date(Date.now() - SILENT_HANDOFF_AFTER_MS).toISOString())
+    .gte("ai_followup_last_at", new Date(Date.now() - 48 * 3600 * 1000).toISOString())
+    .limit(50);
+  for (const t of (silent ?? []) as any[]) {
+    const agent = t.ai_agents as { is_enabled: boolean; followup_enabled: boolean; followup_delays_minutes: number[] | null } | null;
+    if (!agent?.is_enabled || !agent.followup_enabled) continue;
+    const { data: lastIn } = await supabase.from("messages").select("sent_at")
+      .eq("thread_id", t.id).eq("direction", "inbound").is("deleted_at", null)
+      .order("sent_at", { ascending: false }).limit(1).maybeSingle();
+    const { count: widgetResults } = await supabase.from("messages").select("id", { count: "exact", head: true })
+      .eq("thread_id", t.id).eq("is_internal_note", true).not("metadata->agent_widget_result", "is", null);
+    const go = shouldHandOffSilent({
+      hasWidgetResult: (widgetResults ?? 0) > 0,
+      followupCount: t.ai_followup_count ?? 0,
+      followupTotal: agent.followup_delays_minutes?.length ?? 0,
+      lastFollowupAt: t.ai_followup_last_at,
+      lastInboundAt: lastIn?.sent_at ?? null,
+    });
+    if (!go) continue;
+    const { error } = await supabase.rpc("fn_agent_release_thread", {
+      _thread: t.id, _reason: "silent_after_widget_result",
+      _summary: "O cliente recebeu o resultado (ex.: o cálculo) e não respondeu às retomadas do agente. Vale uma pessoa da equipe tentar.",
+    });
+    if (error) console.error("[agent-followups] não passou a conversa parada", t.id, error.message);
+    else result.silent_handoffs++;
   }
 
   console.log("[agent-followups]", result);
