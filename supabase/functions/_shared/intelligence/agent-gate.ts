@@ -180,11 +180,11 @@ export const FOLLOWUP_SKIP = "NADA";
 export function followUpInstruction(attempt: number, total: number): string {
   const last = attempt >= total;
   return `[INSTRUÇÃO INTERNA, não é mensagem do cliente] O cliente não respondeu a sua última mensagem. ` +
-    `Escreva uma retomada curta e gentil, em uma ou duas frases: chame pelo nome se souber, diga que viu que ele não respondeu, ` +
-    `pergunte se ainda tem interesse e ofereça ajuda. Exemplo de tom: "Rafaela, vi que você não respondeu minha última mensagem. ` +
-    `Você ainda tem interesse? Posso te ajudar?" Não copie o exemplo palavra por palavra. ` +
-    (attempt > 1 ? `Esta é a tentativa ${attempt}: use outras palavras e lembre, em poucas palavras, a pergunta que ficou pendente. ` : "") +
-    (last ? "É a última tentativa: deixe claro, com leveza, que você continua por aqui quando ele puder responder. " : "") +
+    `Escreva uma retomada bem curta: no máximo 2 frases curtas, cerca de 120 letras, terminando com a pergunta que ficou pendente. ` +
+    `Chame pelo nome se souber. Exemplo de tom: "Rafaela, ainda quer ver seu caso? Ficou faltando a data em que você saiu." ` +
+    `Não copie o exemplo palavra por palavra. Não diga "vi que você não respondeu" nem "sem problema", e não explique o motivo da pergunta. ` +
+    (attempt > 1 ? `Esta é a tentativa ${attempt}: use outras palavras. ` : "") +
+    (last ? "É a última tentativa: diga, em poucas palavras, que você continua por aqui. " : "") +
     `Não se apresente de novo, não fale de preço e não pressione. ` +
     `Se você já encerrou esta conversa (o caso não se encaixa e você se despediu) ou se a sua última mensagem não pedia resposta, responda apenas ${FOLLOWUP_SKIP}. ` +
     `Tentativa ${attempt} de ${total}.`;
