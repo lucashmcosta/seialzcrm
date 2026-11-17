@@ -4,10 +4,11 @@
  * É o mesmo motor do widget da equipe: o agente passa os fatos que o cliente contou, e a
  * mensagem da rescisão que sai para o cliente é a mesma que a equipe copia no widget.
  */
-import { brl } from './money.ts';
-import { caseSummaryText, calcularCaso, type CaseResult } from './engine.ts';
-import { FACTS, FACT_KEYS, type FactKey, type Facts } from './facts.ts';
-import { severanceClientText } from './clientText.ts';
+import { brl } from './calc/money.ts';
+import { caseSummaryText, calcularCaso, type CaseResult } from './calc/engine.ts';
+import { FACTS, FACT_KEYS, type FactKey, type Facts } from './calc/facts.ts';
+import { severanceClientText } from './calc/clientText.ts';
+import type { WidgetAgentTool } from '../agent-tools.ts';
 
 export const LABOR_CALC_TOOL = 'calculate_labor_case';
 /** O widget que liga a calculadora na org. A chave antiga ficou para não perder o que já estava ligado. */
@@ -101,7 +102,7 @@ export function runLaborCaseForAgent(input: LaborCalcInput, filingDate?: string)
     return {
       clientText: null, teamNote, result,
       modelMessage: questions.length
-        ? `Ainda não dá para mandar o cálculo da rescisão. Falta perguntar (uma coisa por vez, na ordem):\n${ask(questions)}\nDepois chame a ferramenta de novo com tudo.`
+        ? `Ainda não dá para mandar o cálculo da rescisão. Não diga que fez estimativa nem que vai mandar valor. Falta perguntar (uma coisa por vez, na ordem):\n${ask(questions)}\nDepois chame a ferramenta de novo com tudo.`
         : 'Não há cálculo de rescisão para este caso (o contrato não terminou). Não fale em valores.',
     };
   }
@@ -113,8 +114,43 @@ export function runLaborCaseForAgent(input: LaborCalcInput, filingDate?: string)
     teamNote, result,
     modelMessage: [
       `O cálculo da rescisão vai para o cliente logo depois do seu texto, igual ao que a equipe manda. Total que ele deveria ter recebido: ${brl(sim.total)}.${received}`,
-      'Escreva no máximo uma frase curta antes do cálculo. Não repita os valores da lista e não prometa resultado: é uma estimativa, a equipe confirma.',
+      'Antes do cálculo, escreva só uma frase curta, como "Fiz uma estimativa da sua rescisão.", e a próxima pergunta. Não repita os valores da lista e não prometa resultado. Não diga que a equipe confirma: o cálculo já avisa que é estimativa.',
       better.length ? `Perguntas que ainda melhoram o cálculo, se fizer sentido na conversa:\n${ask(better)}` : '',
     ].filter(Boolean).join('\n'),
   };
 }
+
+/** A calculadora como ferramenta do agente, no formato genérico de ferramenta de widget. */
+export const laborCenterAgentTool: WidgetAgentTool = {
+  widgetKey: LABOR_CALC_WIDGET_KEY,
+  name: LABOR_CALC_TOOL,
+  description: `Calculadora trabalhista da equipe (a mesma do widget da Central Trabalhista).
+
+Passe tudo o que o cliente já contou sobre UM contrato. A ferramenta responde o que ainda falta perguntar, ou manda ao cliente o cálculo da rescisão, igual ao que a equipe manda.
+- Chame quando já souber salário, data de entrada, se saiu, a data de saída e como saiu. Chame de novo se o cliente corrigir um dado.
+- Datas sem ano: use o ano mais provável pela conversa.
+- O cálculo é enviado depois do seu texto. Não escreva os valores você mesmo.`,
+  parameters: laborCaseToolParameters(),
+  prompt: `
+## CALCULADORA DA RESCISÃO
+- Use **${LABOR_CALC_TOOL}** assim que souber salário, data de entrada, se saiu, a data de saída e como saiu. Passe todos os fatos que o cliente já contou; o que ele disse não saber vai em nao_sabe.
+- Se a ferramenta disser o que falta, pergunte só isso, uma coisa por vez. Não pergunte de novo o que já está nos fatos. Enquanto ela não mandar o cálculo, não diga que fez estimativa.
+- Quando ela mandar o cálculo, escreva antes só uma frase curta, como "Fiz uma estimativa da sua rescisão.", e não repita os valores. Não diga que a equipe confirma: o cálculo já avisa que é estimativa.
+- Nunca escreva valores de rescisão por conta própria, sem a ferramenta.
+`,
+  run(args, ctx) {
+    const out = runLaborCaseForAgent((args ?? {}) as LaborCalcInput);
+    if (!out.clientText) return { modelMessage: out.modelMessage };
+    const total = out.clientText.split('\n').find((l) => l.startsWith('*Total')) ?? '';
+    // Mesmo cálculo já mandado nesta conversa: não manda de novo.
+    const alreadySent = ctx.history.some((m) => m.role === 'assistant' && m.content.startsWith(LABOR_CALC_CLIENT_HEADER) && (!total || m.content.includes(total)));
+    if (alreadySent) return { modelMessage: 'Este mesmo cálculo já foi mandado nesta conversa. Não mande de novo nem repita os valores.' };
+    return { modelMessage: out.modelMessage, clientText: out.clientText, teamNote: out.teamNote };
+  },
+  async readAttachment(attachment, ctx) {
+    if (attachment.mediaType !== 'document') return null;
+    // Só carrega o leitor de PDF quando chega um documento.
+    const { readCtpsPdf } = await import('./ctps-reader.ts');
+    return readCtpsPdf(ctx.supabase, attachment.mediaUrls, attachment.content);
+  },
+};

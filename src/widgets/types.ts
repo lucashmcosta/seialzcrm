@@ -23,4 +23,15 @@ export interface WidgetDefinition {
   Preview?: ComponentType;
   /** Página de configuração do widget em /settings/widgets/:key (carregada sob demanda). Cada página faz o próprio controle de acesso. */
   settings?: () => Promise<{ default: ComponentType<{ organizationId: string }> }>;
+  /** Ferramentas que o widget dá ao agente de IA (o servidor só as usa com o widget ligado na org). */
+  agentTools?: WidgetAgentToolInfo[];
+}
+
+export interface WidgetAgentToolInfo {
+  /** Nome da ferramenta no servidor (_shared/widgets/agent-tools.ts). */
+  id: string;
+  name: string;
+  description: string;
+  /** Gatilho sugerido no assistente do agente. */
+  trigger: string;
 }

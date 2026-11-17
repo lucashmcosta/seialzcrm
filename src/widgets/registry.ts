@@ -23,6 +23,12 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     contextMode: 'none',
     Component: LaborCenterWidget,
     Preview: LaborCenterPreview,
+    agentTools: [{
+      id: 'calculate_labor_case',
+      name: 'Calculadora da rescisão',
+      description: 'Usa a calculadora da Central Trabalhista e manda ao cliente o mesmo cálculo da rescisão que a equipe manda. Lê as datas da carteira de trabalho digital em PDF. Só funciona com o widget ligado',
+      trigger: 'Quando souber salário, entrada, saída e como saiu',
+    }],
   },
   {
     key: 'tic_tac_toe',

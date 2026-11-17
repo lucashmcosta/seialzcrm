@@ -1,5 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { buildReplay, classifyCase, countOutcomes, parseBrl, parseCalcText, rateLimitWaitMs } from "../supabase/functions/_shared/intelligence/agent-backtest.ts";
+import { buildReplay, rateLimitWaitMs } from "../supabase/functions/_shared/intelligence/agent-backtest.ts";
+import { classifyCase, countOutcomes, parseBrl, parseCalcText } from "../supabase/functions/_shared/widgets/labor-center/backtest.ts";
 
 const calc = (total: string) => `*Cálculo da sua rescisão*\nDispensa sem justa causa · 01/09/2025 a 31/10/2026\nSalário considerado: R$ 3.080,00\n\n• Saldo: R$ 1,00\n\n*Total que você deveria ter recebido: ${total}*\n\n_Valores estimados._`;
 

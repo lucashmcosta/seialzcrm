@@ -12,8 +12,11 @@
 //  - status:  devolve a rodada (contagens, custo real e cada caso quando terminar).
 import { corsHeaders, json } from "../_shared/intelligence/byok-shared.ts";
 import { requireOrgAdmin } from "../_shared/intelligence/authz.ts";
-import { buildReplay, classifyCase, countOutcomes, parseCalcText, rateLimitWaitMs, type BacktestOutcome, type StoredMessage } from "../_shared/intelligence/agent-backtest.ts";
-import { LABOR_CALC_CLIENT_HEADER, LABOR_CALC_TOOL } from "../_shared/labor-calc/agent.ts";
+import { buildReplay, rateLimitWaitMs, type StoredMessage } from "../_shared/intelligence/agent-backtest.ts";
+// Cenário labor_calc: vem do widget Central Trabalhista.
+import { classifyCase, countOutcomes, parseCalcText, type BacktestOutcome } from "../_shared/widgets/labor-center/backtest.ts";
+import { LABOR_CALC_CLIENT_HEADER, LABOR_CALC_TOOL } from "../_shared/widgets/labor-center/agent-tool.ts";
+import { activeWidgetTools } from "../_shared/widgets/agent-tools.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
@@ -137,9 +140,9 @@ async function run(admin: Admin, orgId: string, userId: string, body: any, calle
   return json({ run_id: runRow.id, ...p });
 }
 
-async function conversationBefore(admin: Admin, ref: CaseRef): Promise<StoredMessage[]> {
+async function conversationBefore(admin: Admin, orgId: string, agentTools: string[], ref: CaseRef): Promise<StoredMessage[]> {
   const { data } = await admin.from("messages")
-    .select("id, content, direction, media_type, sent_at")
+    .select("id, content, direction, media_type, media_urls, sent_at")
     .eq("thread_id", ref.thread_id).is("deleted_at", null).neq("direction", "internal")
     .lt("sent_at", ref.calc_at)
     .order("sent_at", { ascending: false }).limit(120);
@@ -151,13 +154,28 @@ async function conversationBefore(admin: Admin, ref: CaseRef): Promise<StoredMes
       .in("message_id", audioIds).order("created_at", { ascending: true });
     for (const a of t ?? []) if (a.transcript) heard.set(a.message_id, a.transcript);
   }
-  return rows.map((m: any) => ({ content: m.content, direction: m.direction, media_type: m.media_type, transcript: heard.get(m.id) ?? null }));
+  // O que os widgets leem dos anexos, como no agente de verdade (últimos 3 documentos do cliente).
+  const notes = new Map<string, string>();
+  const readers = (await activeWidgetTools(admin, orgId, agentTools)).filter((w) => w.readAttachment);
+  if (readers.length) {
+    const docs = rows.filter((m: any) => m.direction === "inbound" && m.media_type === "document").slice(-3);
+    for (const m of docs) {
+      const found: string[] = [];
+      for (const r of readers) {
+        const note = await r.readAttachment!({ mediaType: m.media_type, content: m.content, mediaUrls: m.media_urls }, { supabase: admin });
+        if (note) found.push(note);
+      }
+      if (found.length) notes.set(m.id, found.join("\n"));
+    }
+  }
+  return rows.map((m: any) => ({ content: m.content, direction: m.direction, media_type: m.media_type, transcript: heard.get(m.id) ?? null, note: notes.get(m.id) ?? null }));
 }
 
-async function testOne(admin: Admin, agentId: string, ref: CaseRef, callerAuth: string) {
+async function testOne(admin: Admin, orgId: string, agentId: string, agentTools: string[], ref: CaseRef, callerAuth: string) {
   const team = parseCalcText(ref.team_text);
-  const replay = buildReplay(await conversationBefore(admin, ref));
-  const base = { thread: ref.thread_id.slice(0, 8), calc_at: ref.calc_at, team_total: team?.total ?? null, team_header: team?.header ?? null };
+  const before = await conversationBefore(admin, orgId, agentTools, ref);
+  const replay = buildReplay(before);
+  const base = { thread: ref.thread_id.slice(0, 8), calc_at: ref.calc_at, team_total: team?.total ?? null, team_header: team?.header ?? null, read_document: before.some((m) => !!m.note) };
   if (!replay) return { ...base, outcome: "erro" as BacktestOutcome, error: "sem mensagem do cliente antes do cálculo" };
 
   const call = () => fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-agent-respond`, {
@@ -192,11 +210,13 @@ async function testOne(admin: Admin, agentId: string, ref: CaseRef, callerAuth: 
 
 async function execute(admin: Admin, orgId: string, agentId: string, runId: string, startedAt: string, limit: number, callerAuth: string) {
   const cases = await findCases(admin, orgId, limit);
+  const { enabled_tools } = await loadAgent(admin, orgId, agentId);
+  const agentTools = (enabled_tools ?? []) as string[];
   const results: any[] = [];
   for (let i = 0; i < cases.length; i += CONCURRENCY) {
     const chunkStart = Date.now();
     const chunk = await Promise.all(cases.slice(i, i + CONCURRENCY).map((c) =>
-      testOne(admin, agentId, c, callerAuth).catch((e) => ({ thread: c.thread_id.slice(0, 8), outcome: "erro" as BacktestOutcome, error: (e as Error).message }))));
+      testOne(admin, orgId, agentId, agentTools, c, callerAuth).catch((e) => ({ thread: c.thread_id.slice(0, 8), outcome: "erro" as BacktestOutcome, error: (e as Error).message }))));
     results.push(...chunk);
     const spent = Date.now() - chunkStart;
     if (spent < MIN_CHUNK_MS) await new Promise((r) => setTimeout(r, MIN_CHUNK_MS - spent));

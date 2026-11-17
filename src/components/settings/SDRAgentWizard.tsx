@@ -22,6 +22,7 @@ import {
   Smiley, Briefcase, Shield, WarningCircle
 } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
+import { WIDGET_REGISTRY } from '@/widgets/registry';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -46,7 +47,8 @@ interface ToolsTriggers {
   update_qualification: string;
   end_conversation?: string;
   send_choices?: string;
-  calculate_labor_case?: string;
+  /** Ferramentas que vêm dos widgets (ex.: calculate_labor_case). */
+  [widgetTool: string]: string | undefined;
 }
 
 interface ComplianceRules {
@@ -152,7 +154,7 @@ const AI_PROVIDERS = [
 const normalizeAiProvider = (provider?: string | null) =>
   provider && AI_PROVIDERS.some((p) => p.value === provider) ? provider : 'auto';
 
-const AVAILABLE_TOOLS = [
+const CORE_TOOLS = [
   { id: 'update_contact', name: 'Atualizar Contato', description: 'Permite corrigir nome, email, telefone e empresa do contato' },
   { id: 'create_opportunity', name: 'Criar Oportunidade', description: 'Cria negócio quando cliente demonstra interesse' },
   { id: 'create_task', name: 'Criar Tarefa', description: 'Agenda follow-ups e ações futuras para a equipe' },
@@ -164,7 +166,12 @@ const AVAILABLE_TOOLS = [
   { id: 'update_qualification', name: 'Atualizar Qualificação', description: 'Registra dados de qualificação do lead' },
   { id: 'end_conversation', name: 'Encerrar conversa', description: 'Encerra quando o caso não se encaixa; reabre se o cliente voltar a escrever' },
   { id: 'send_choices', name: 'Perguntas com botões', description: 'Faz perguntas de opções fixas com botões ou lista no WhatsApp (texto numerado onde não há botões)' },
-  { id: 'calculate_labor_case', name: 'Calculadora da rescisão', description: 'Usa a calculadora da Central Trabalhista e manda ao cliente o mesmo cálculo da rescisão que a equipe manda. Só funciona com o widget Central Trabalhista ligado' },
+];
+// Ferramentas que os widgets dão ao agente ficam no catálogo de widgets, não aqui.
+const WIDGET_TOOLS = WIDGET_REGISTRY.flatMap((w) => (w.agentTools ?? []).map((t) => ({ ...t, widgetName: w.name })));
+const AVAILABLE_TOOLS = [
+  ...CORE_TOOLS,
+  ...WIDGET_TOOLS.map((t) => ({ id: t.id, name: t.name, description: `${t.description} (widget ${t.widgetName})` })),
 ];
 
 const STEPS = [
@@ -272,7 +279,7 @@ const DEFAULT_TOOLS_TRIGGERS: ToolsTriggers = {
   update_qualification: 'Quando coletar informações de qualificação (BANT, MEDDIC, etc.)',
   end_conversation: 'Quando o caso não se encaixa e você já se despediu',
   send_choices: 'Quando a pergunta tiver poucas opções fixas (plano, horário, sim/não)',
-  calculate_labor_case: 'Quando souber salário, entrada, saída e como saiu',
+  ...Object.fromEntries(WIDGET_TOOLS.map((t) => [t.id, t.trigger])),
 };
 
 const initialWizardData: WizardData = {

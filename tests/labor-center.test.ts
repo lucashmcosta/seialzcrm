@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { avos, avos13, toDate } from '../supabase/functions/_shared/labor-calc/dates.ts';
-import { parseNum } from '../supabase/functions/_shared/labor-calc/money.ts';
-import { calcPrescription, noticeDays } from '../supabase/functions/_shared/labor-calc/prescription.ts';
-import { calcAllowance, hourlyRate, nightMonthly, overtimeMonthly } from '../supabase/functions/_shared/labor-calc/rates.ts';
-import { withReflexes } from '../supabase/functions/_shared/labor-calc/reflexes.ts';
-import { calcSeverance } from '../supabase/functions/_shared/labor-calc/severance.ts';
+import { avos, avos13, toDate } from '../supabase/functions/_shared/widgets/labor-center/calc/dates.ts';
+import { parseNum } from '../supabase/functions/_shared/widgets/labor-center/calc/money.ts';
+import { calcPrescription, noticeDays } from '../supabase/functions/_shared/widgets/labor-center/calc/prescription.ts';
+import { calcAllowance, hourlyRate, nightMonthly, overtimeMonthly } from '../supabase/functions/_shared/widgets/labor-center/calc/rates.ts';
+import { withReflexes } from '../supabase/functions/_shared/widgets/labor-center/calc/reflexes.ts';
+import { calcSeverance } from '../supabase/functions/_shared/widgets/labor-center/calc/severance.ts';
 
 const D = (s: string) => toDate(s)!;
 const ALL = { dsr: true, decimo: true, ferias: true, fgts: true };
