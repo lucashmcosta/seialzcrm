@@ -12,14 +12,17 @@
 //  - status:  devolve a rodada (contagens, custo real e cada caso quando terminar).
 import { corsHeaders, json } from "../_shared/intelligence/byok-shared.ts";
 import { requireOrgAdmin } from "../_shared/intelligence/authz.ts";
-import { buildReplay, classifyCase, countOutcomes, parseCalcText, type BacktestOutcome, type StoredMessage } from "../_shared/intelligence/agent-backtest.ts";
+import { buildReplay, classifyCase, countOutcomes, parseCalcText, rateLimitWaitMs, type BacktestOutcome, type StoredMessage } from "../_shared/intelligence/agent-backtest.ts";
 import { LABOR_CALC_CLIENT_HEADER, LABOR_CALC_TOOL } from "../_shared/labor-calc/agent.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
 const MAX_CASES = 60;
 const MAX_BUDGET_USD = 20;
-const CONCURRENCY = 4;
+const CONCURRENCY = 3;
+/** O Supabase limita chamadas entre funções no mesmo pedido (~30 por minuto): cada grupo de 3 leva no mínimo 9 s. */
+const MIN_CHUNK_MS = 9_000;
+const MAX_RATE_LIMIT_WAIT_MS = 65_000;
 /** Custo por resposta quando a org ainda não tem histórico de uso do agente. */
 const FALLBACK_COST_PER_CALL = 0.03;
 /** Margem sobre a média: a conversa antiga pode ser maior que a média. */
@@ -46,7 +49,7 @@ Deno.serve(async (req) => {
   try {
     switch (body.action) {
       case "dry_run": return json(await plan(admin, orgId, body));
-      case "run": return await run(admin, orgId, auth.userId, body);
+      case "run": return await run(admin, orgId, auth.userId, body, req.headers.get("authorization") ?? "");
       case "status": return await status(admin, orgId, String(body.run_id ?? ""));
       default: return json({ error: "unknown_action" }, 400);
     }
@@ -111,7 +114,9 @@ async function plan(admin: Admin, orgId: string, body: any) {
   };
 }
 
-async function run(admin: Admin, orgId: string, userId: string, body: any) {
+// O agente aceita no modo de teste o login de quem é da org (como o simulador). A chave de
+// serviço do ambiente pode estar no formato novo, que o agente não reconhece.
+async function run(admin: Admin, orgId: string, userId: string, body: any, callerAuth: string) {
   const agentId = String(body.agent_id ?? "");
   const budget = Number(body.budget_usd ?? 0);
   if (!(budget > 0) || budget > MAX_BUDGET_USD) throw new HttpError(400, "invalid_budget", `budget_usd entre 0 e ${MAX_BUDGET_USD}.`);
@@ -125,7 +130,7 @@ async function run(admin: Admin, orgId: string, userId: string, body: any) {
     estimated_cost_usd: p.estimated_cost_usd, params: { limit: p.cases }, created_by: userId,
   }).select("id, created_at").single();
   if (error) throw new HttpError(500, "run_insert_failed", error.message);
-  EdgeRuntime.waitUntil(execute(admin, orgId, agentId, runRow.id, runRow.created_at, p.cases).catch(async (e) => {
+  EdgeRuntime.waitUntil(execute(admin, orgId, agentId, runRow.id, runRow.created_at, p.cases, callerAuth).catch(async (e) => {
     console.error("[agent-backtest] rodada falhou", (e as Error).message);
     await admin.from("agent_backtest_runs").update({ status: "failed", error: (e as Error).message, finished_at: new Date().toISOString() }).eq("id", runRow.id);
   }));
@@ -149,18 +154,26 @@ async function conversationBefore(admin: Admin, ref: CaseRef): Promise<StoredMes
   return rows.map((m: any) => ({ content: m.content, direction: m.direction, media_type: m.media_type, transcript: heard.get(m.id) ?? null }));
 }
 
-async function testOne(admin: Admin, agentId: string, ref: CaseRef) {
+async function testOne(admin: Admin, agentId: string, ref: CaseRef, callerAuth: string) {
   const team = parseCalcText(ref.team_text);
   const replay = buildReplay(await conversationBefore(admin, ref));
   const base = { thread: ref.thread_id.slice(0, 8), calc_at: ref.calc_at, team_total: team?.total ?? null, team_header: team?.header ?? null };
   if (!replay) return { ...base, outcome: "erro" as BacktestOutcome, error: "sem mensagem do cliente antes do cálculo" };
 
-  const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-agent-respond`, {
+  const call = () => fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-agent-respond`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+    headers: { "Content-Type": "application/json", Authorization: callerAuth },
     body: JSON.stringify({ agentId, contactId: ref.contact_id, threadId: ref.thread_id, isTestMode: true, history: replay.history, message: replay.message }),
   });
-  const out = await res.json().catch(() => ({}));
+  let res = await call();
+  let out = await res.json().catch(() => ({}));
+  // Bateu no limite de chamadas entre funções: espera o tempo que ele pede e tenta de novo, uma vez.
+  const wait = rateLimitWaitMs(out);
+  if (wait != null) {
+    await new Promise((r) => setTimeout(r, Math.min(wait + 1000, MAX_RATE_LIMIT_WAIT_MS)));
+    res = await call();
+    out = await res.json().catch(() => ({}));
+  }
   if (!res.ok || out?.success === false) return { ...base, outcome: "erro" as BacktestOutcome, error: String(out?.error ?? `HTTP ${res.status}`) };
 
   const bubbles: string[] = Array.isArray(out.bubbles) ? out.bubbles : [];
@@ -177,14 +190,18 @@ async function testOne(admin: Admin, agentId: string, ref: CaseRef) {
   };
 }
 
-async function execute(admin: Admin, orgId: string, agentId: string, runId: string, startedAt: string, limit: number) {
+async function execute(admin: Admin, orgId: string, agentId: string, runId: string, startedAt: string, limit: number, callerAuth: string) {
   const cases = await findCases(admin, orgId, limit);
   const results: any[] = [];
   for (let i = 0; i < cases.length; i += CONCURRENCY) {
+    const chunkStart = Date.now();
     const chunk = await Promise.all(cases.slice(i, i + CONCURRENCY).map((c) =>
-      testOne(admin, agentId, c).catch((e) => ({ thread: c.thread_id.slice(0, 8), outcome: "erro" as BacktestOutcome, error: (e as Error).message }))));
+      testOne(admin, agentId, c, callerAuth).catch((e) => ({ thread: c.thread_id.slice(0, 8), outcome: "erro" as BacktestOutcome, error: (e as Error).message }))));
     results.push(...chunk);
-    await admin.from("agent_backtest_runs").update({ counts: { done: results.length, total: cases.length } }).eq("id", runId);
+    const spent = Date.now() - chunkStart;
+    if (spent < MIN_CHUNK_MS) await new Promise((r) => setTimeout(r, MIN_CHUNK_MS - spent));
+    // Grava a cada grupo: se a função for interrompida pelo limite de tempo, o que já rodou fica.
+    await admin.from("agent_backtest_runs").update({ cases: results, counts: { done: results.length, total: cases.length } }).eq("id", runId);
   }
   // Custo real: o modo de teste registra o uso sem conversa (entity_id vazio).
   const { data: usage } = await admin.from("ai_usage_logs").select("estimated_cost_usd")
