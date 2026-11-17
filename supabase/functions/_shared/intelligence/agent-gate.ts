@@ -204,3 +204,16 @@ export function stripCloseEcho(text: string): string {
 export function isFollowUpSkip(text: string | null | undefined): boolean {
   return (text ?? "").trim().replace(/[."']/g, "").toUpperCase() === FOLLOWUP_SKIP;
 }
+
+/**
+ * O modelo às vezes escreve em Markdown, que o WhatsApp não entende: **negrito** aparece com os
+ * asteriscos e [nome](#) aparece com colchetes. Passa para o formato do WhatsApp.
+ */
+export function toWhatsAppText(text: string): string {
+  return text
+    .replace(/\*\*([^*\n]+?)\*\*/g, "*$1*")
+    .replace(/__([^_\n]+?)__/g, "_$1_")
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, "$1 ($2)")
+    .replace(/\[([^\]\n]+)\]\([^)]*\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "");
+}

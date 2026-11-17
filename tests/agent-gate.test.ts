@@ -1,7 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { typingIndicatorBody } from "../supabase/functions/_shared/meta-whatsapp/typing.ts";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, agentIdentityLine, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, agentIdentityLine, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -171,4 +171,11 @@ Deno.test("digitando no WhatsApp marca como lida e mostra o aviso", () => {
   assertEquals(typingIndicatorBody("wamid.X"), {
     messaging_product: "whatsapp", status: "read", message_id: "wamid.X", typing_indicator: { type: "text" },
   });
+});
+
+Deno.test("Markdown vira formato do WhatsApp", () => {
+  assertEquals(toWhatsAppText("foi **com** ou **sem** justa causa?"), "foi *com* ou *sem* justa causa?");
+  assertEquals(toWhatsAppText("Imagina, [Ana](#), foi um prazer."), "Imagina, Ana, foi um prazer.");
+  assertEquals(toWhatsAppText("Veja [aqui](https://x.com/a)"), "Veja aqui (https://x.com/a)");
+  assertEquals(toWhatsAppText("### Documentos\n*Cálculo* _ok_"), "Documentos\n*Cálculo* _ok_");
 });
