@@ -123,6 +123,26 @@ export function withoutRepeatedLast<T extends { role: string; content: string }>
   return last && last.role === "user" && last.content.trim() === message.trim() ? history.slice(0, -1) : history;
 }
 
+export const CROSSED_REPLY_NOTE = "[INSTRUÇÃO INTERNA, não mostre ao cliente: a mensagem abaixo chegou enquanto a sua última resposta era enviada, então essa resposta não leu esta mensagem. Não repita o que você acabou de dizer nem refaça uma pergunta que o cliente já respondeu. Responda só ao que ele disse agora.]";
+
+/**
+ * Mensagem do cliente que se cruzou com a resposta do agente: no histórico ela aparece antes
+ * dessa resposta, que não a leu. Sem ajuste, o modelo vê a mensagem duas vezes e acha que já
+ * respondeu. Tira a mensagem do meio, para ela ir só no fim, e diz se houve o cruzamento.
+ */
+export function placeCurrentMessage<T extends { role: string; content: string }>(history: T[], message: string): { history: T[]; crossed: boolean } {
+  const target = message.trim().slice(0, 1000);
+  let lastUser = -1;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].role === "user") { lastUser = i; break; }
+  }
+  if (lastUser < 0 || history[lastUser].content.trim().slice(0, 1000) !== target) return { history, crossed: false };
+  return {
+    history: [...history.slice(0, lastUser), ...history.slice(lastUser + 1)],
+    crossed: lastUser < history.length - 1,
+  };
+}
+
 /** Tokens que custam como entrada normal: gravar no cache custa 1,25x e ler custa 0,1x. */
 export function billableInputTokens(usage: { input_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } | null | undefined): number {
   return Math.round((usage?.input_tokens ?? 0) + (usage?.cache_creation_input_tokens ?? 0) * 1.25 + (usage?.cache_read_input_tokens ?? 0) * 0.1);

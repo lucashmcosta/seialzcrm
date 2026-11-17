@@ -10,7 +10,8 @@ import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
 import { buildChoicesInteractive, withoutQuestionEcho } from "../_shared/intelligence/agent-choices.ts";
 import { interactiveFallbackText, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
-import { agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast } from "../_shared/intelligence/agent-gate.ts";
+import { agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE } from "../_shared/intelligence/agent-gate.ts";
+import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1746,6 +1747,9 @@ serve(async (req) => {
       // Cliente que manda várias mensagens seguidas: espera um pouco e só a chamada da última
       // responde, já lendo todas. Sem isso, cada mensagem gerava uma resposta ao mesmo tempo.
       if (!followUp) {
+        // "Digitando..." enquanto espera e monta a resposta: o cliente tende a esperar em vez de
+        // mandar outra mensagem que se cruza com a resposta. Não segura a resposta se falhar.
+        showTypingIndicator(supabase, threadId);
         await new Promise((resolve) => setTimeout(resolve, BURST_WAIT_MS));
         const { count: newer } = await supabase.from('messages')
           .select('id', { count: 'exact', head: true })
@@ -2074,12 +2078,19 @@ serve(async (req) => {
         content: (source === 'none' ? (msg.content || '') : content).slice(0, 1000),
       };
     });
-    const conversationMessages = withoutRepeatedLast(
-      isTestMode && Array.isArray(testHistory)
-        ? testHistory.slice(-HISTORY_LIMIT).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: String(m.content ?? '').slice(0, 1000) }))
-        : storedMessages,
-      message,
-    );
+    // Fora do teste, a mensagem atual pode ter se cruzado com a última resposta do agente.
+    const placed = isTestMode && Array.isArray(testHistory)
+      ? {
+        history: withoutRepeatedLast(
+          testHistory.slice(-HISTORY_LIMIT).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: String(m.content ?? '').slice(0, 1000) })),
+          message,
+        ),
+        crossed: false,
+      }
+      : followUp ? { history: storedMessages, crossed: false } : placeCurrentMessage(storedMessages, message);
+    const conversationMessages = placed.history;
+    if (placed.crossed) console.log('[ai-agent-respond] mensagem do cliente se cruzou com a última resposta');
+    const promptMessage = placed.crossed ? `${CROSSED_REPLY_NOTE}\n\n${message}` : message;
 
     // Filter enabled tools
     // Na retomada o agente só escreve: nada de passar para a equipe, agendar ou salvar dados.
@@ -2132,7 +2143,7 @@ serve(async (req) => {
       // Build messages with history
       const claudeMessages = [
         ...conversationMessages,
-        { role: 'user', content: message }
+        { role: 'user', content: promptMessage }
       ];
 
       // A parte fixa do prompt vai para o cache: é a maior parte do custo de cada resposta.
@@ -2366,7 +2377,7 @@ serve(async (req) => {
       const openaiMessages = [
         { role: 'system', content: systemPrompt },
         ...conversationMessages,
-        { role: 'user', content: message },
+        { role: 'user', content: promptMessage },
       ];
 
       const openaiBody: any = {
