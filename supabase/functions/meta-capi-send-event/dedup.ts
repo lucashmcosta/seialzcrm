@@ -19,6 +19,13 @@
 
 // deno-lint-ignore no-explicit-any
 export type AdminClient = any;
+
+/** Eventos do canal de mensagens (além de Purchase) que valem uma vez por oportunidade. */
+export const OPP_SCOPED_EVENTS = new Set([
+  "LeadSubmitted", "QualifiedLead", "InitiateCheckout", "AddToCart", "ViewContent",
+  "OrderCreated", "OrderShipped", "OrderDelivered", "OrderCanceled", "OrderReturned",
+  "CartAbandoned", "RatingProvided", "ReviewProvided",
+]);
 // deno-lint-ignore no-explicit-any
 export type LogRow = Record<string, any>;
 
@@ -61,6 +68,8 @@ export function deterministicEventId(
 ): string | null {
   if (eventName === "Lead" && contactId) return `${organizationId}:Lead:${contactId}`;
   if (eventName === "Purchase" && opportunityId) return `${organizationId}:Purchase:${opportunityId}`;
+  // Eventos de mensagens (LeadSubmitted, QualifiedLead...): um por oportunidade e por tipo.
+  if (OPP_SCOPED_EVENTS.has(eventName) && opportunityId) return `${organizationId}:${eventName}:${opportunityId}`;
   return null;
 }
 
@@ -132,7 +141,9 @@ export async function findSentDuplicate(admin: AdminClient, p: {
   if (e1) throw e1;
   if (byId && byId.id !== p.excludeId && isRealSentRow(byId)) return byId;
 
-  const col = p.eventName === "Lead" ? "contact_id" : p.eventName === "Purchase" ? "opportunity_id" : null;
+  const col = p.eventName === "Lead"
+    ? "contact_id"
+    : p.eventName === "Purchase" || OPP_SCOPED_EVENTS.has(p.eventName) ? "opportunity_id" : null;
   const val = col === "contact_id" ? p.contactId : col === "opportunity_id" ? p.opportunityId : null;
   if (!col || !val) return null;
 

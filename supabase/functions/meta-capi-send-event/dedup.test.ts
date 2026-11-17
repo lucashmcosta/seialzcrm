@@ -1,6 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   claimLogRow,
+  deterministicEventId,
   findSentDuplicate,
   IN_FLIGHT_MS,
   isRealSentRow,
@@ -269,4 +270,11 @@ Deno.test("teste sem código é recusado; evento normal, reenvio e teste com có
   assertEquals(testNeedsCode(true, "TEST1", false), false);
   assertEquals(testNeedsCode(undefined, null, false), false);
   assertEquals(testNeedsCode(true, null, true), false);
+});
+
+Deno.test("eventos de mensagens: um por oportunidade e tipo; sem oportunidade não deduplica", () => {
+  assertEquals(deterministicEventId("o", "LeadSubmitted", "c", "p"), "o:LeadSubmitted:p");
+  assertEquals(deterministicEventId("o", "QualifiedLead", "c", "p"), "o:QualifiedLead:p");
+  assertEquals(deterministicEventId("o", "LeadSubmitted", "c", null), null);
+  assertEquals(deterministicEventId("o", "PageView", "c", "p"), null);
 });
