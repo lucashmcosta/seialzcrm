@@ -774,7 +774,10 @@ function DesktopMessagesList() {
   // Pede confirmação para evitar o clique por engano que deixava o cliente sem resposta.
   const [agentTakeOver, setAgentTakeOver] = useState<{ threadId: string; agentName: string; run: () => void } | null>(null);
   const guardAgentThread = (threadId: string, run: () => void) => {
-    const agentName = agentThreads?.[threadId];
+    // Mesma fonte do card (linha da lista) e, de reserva, a consulta à parte.
+    const fromRow = (threads?.find((t) => t.id === threadId) as CommercialChatThread | undefined)?.ai_agent_name
+      ?? (pinnedThread?.id === threadId ? pinnedThread.ai_agent_name : null);
+    const agentName = fromRow ?? agentThreads?.[threadId];
     if (agentName) setAgentTakeOver({ threadId, agentName, run });
     else run();
   };
@@ -899,10 +902,37 @@ function DesktopMessagesList() {
   const filterOptions = useCommercialFilterOptions(organization?.id);
 
   // Lista (50 por vez) e contador total usam os MESMOS filtros no servidor.
-  const { threads, total: threadsTotal, loading: threadsLoading, error: threadsError, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useCommercialThreads(filtersForServer);
+  const { threads, pinnedThread, total: threadsTotal, loading: threadsLoading, error: threadsError, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useCommercialThreads(filtersForServer, { pinnedId: selectedThreadId });
+
+  // Filtros salvos que apontam para número/responsável/etapa/etiqueta que não existem mais: tira,
+  // senão o servidor continuaria filtrando sem nada visível na tela.
+  useEffect(() => {
+    const f = commercialFilters;
+    const patch: Partial<CommercialThreadFilters> = {};
+    if (endpointFilterOptions.length && f.endpointIds.length) {
+      const valid = new Set(endpointFilterOptions.flatMap((o) => o.endpointIds));
+      const kept = f.endpointIds.filter((id) => valid.has(id));
+      if (kept.length !== f.endpointIds.length) patch.endpointIds = kept;
+    }
+    if (assigneeFilterUsers.length && f.assignedUserIds.length) {
+      const kept = f.assignedUserIds.filter((id) => assigneeFilterUsers.some((u) => u.id === id));
+      if (kept.length !== f.assignedUserIds.length) patch.assignedUserIds = kept;
+    }
+    if (filterOptions.stages.length && f.stageIds.length) {
+      const kept = f.stageIds.filter((id) => filterOptions.stages.some((st) => st.id === id));
+      if (kept.length !== f.stageIds.length) patch.stageIds = kept;
+    }
+    if (filterOptions.tags.length && f.oppTagIds.length) {
+      const kept = f.oppTagIds.filter((id) => filterOptions.tags.some((t) => t.id === id));
+      if (kept.length !== f.oppTagIds.length) patch.oppTagIds = kept;
+    }
+    if (Object.keys(patch).length) setCommercialFilters({ ...f, ...patch });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endpointFilterOptions, assigneeFilterUsers, filterOptions.stages, filterOptions.tags]);
 
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId)
+    ?? (pinnedThread?.id === selectedThreadId ? pinnedThread : undefined)
     ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
   const threadIdsForEndpointMap = (threads ?? []).map((t) => t.id);
   const threadEndpointMap = useThreadEndpointMap(threadIdsForEndpointMap, hasMultipleEndpoints);

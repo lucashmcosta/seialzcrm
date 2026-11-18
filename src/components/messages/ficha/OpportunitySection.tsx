@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
+import { MoneyInput } from '@/components/common/MoneyInput';
 import { CustomFieldsCard } from '@/components/custom-fields/CustomFieldsCard';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { ContractSignatureEntry } from '@/components/signature/ContractSignatureEntry';
@@ -138,10 +139,9 @@ function OpportunityCard({
   onUpdated: (patch: Partial<FichaOpp>) => void;
 }) {
   const { organization, userProfile } = useOrganization();
-  const [amount, setAmount] = useState(opp.amount == null ? '' : String(opp.amount));
+  const uiLocale = useUiLocale();
   const [closeDate, setCloseDate] = useState((opp.close_date || '').slice(0, 10));
   const [saving, setSaving] = useState(false);
-  useEffect(() => { setAmount(opp.amount == null ? '' : String(opp.amount)); }, [opp.amount]);
   useEffect(() => { setCloseDate((opp.close_date || '').slice(0, 10)); }, [opp.close_date]);
 
   const save = async (patch: Partial<FichaOpp>) => {
@@ -153,7 +153,6 @@ function OpportunityCard({
     setSaving(false);
     if (error) {
       toast.error(error.message || uiText('Não foi possível salvar a oportunidade.'));
-      setAmount(opp.amount == null ? '' : String(opp.amount));
       setCloseDate((opp.close_date || '').slice(0, 10));
       return;
     }
@@ -161,16 +160,14 @@ function OpportunityCard({
     toast.success(uiText('Oportunidade atualizada'));
   };
 
-  const commitAmount = () => {
-    const raw = amount.trim().replace(',', '.');
-    const value = raw === '' ? 0 : Number(raw);
-    if (!Number.isFinite(value) || value < 0) {
+  const commitAmount = (value: number | null) => {
+    const next = value ?? 0;
+    if (!Number.isFinite(next) || next < 0) {
       toast.error(uiText('Valor inválido.'));
-      setAmount(opp.amount == null ? '' : String(opp.amount));
       return;
     }
-    if (value === Number(opp.amount ?? 0)) return;
-    void save({ amount: value });
+    if (next === Number(opp.amount ?? 0)) return;
+    void save({ amount: next });
   };
 
   const commitCloseDate = () => {
@@ -192,18 +189,15 @@ function OpportunityCard({
 
       <div className="space-y-1.5">
         <Label htmlFor={`ficha-amount-${opp.id}`} className="text-xs text-muted-foreground">
-          {uiText('Valor')} ({currency})
+          {uiText('Valor')}
         </Label>
-        <Input
+        <MoneyInput
           id={`ficha-amount-${opp.id}`}
-          type="number"
-          min={0}
-          step="0.01"
-          value={amount}
+          value={opp.amount ?? null}
+          currency={currency}
+          locale={uiLocale === 'en-US' ? 'en-US' : 'pt-BR'}
           disabled={!canEdit || saving}
-          onChange={(e) => setAmount(e.target.value)}
-          onBlur={commitAmount}
-          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+          onCommit={commitAmount}
         />
       </div>
 
