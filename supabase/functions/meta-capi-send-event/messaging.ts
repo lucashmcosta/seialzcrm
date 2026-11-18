@@ -28,13 +28,15 @@ export function buildMessagingUserData(
   const ud: Record<string, unknown> = {};
   for (const k of HASHED_KEYS) if (base[k] !== undefined) ud[k] = base[k];
   ud.whatsapp_business_account_id = ids.wabaId;
+  // A página vai sempre que existir: nos testes de 17/11 só os eventos com page_id
+  // apareceram no Gerenciador de Eventos; com ctwa_clid sozinho a Meta aceitava e não mostrava.
+  if (ids.pageId) ud.page_id = ids.pageId;
   if (ids.ctwaClid) {
     ud.ctwa_clid = ids.ctwaClid;
     return { ok: true, userData: ud, matchedBy: "ctwa_clid" };
   }
   if (!ids.pageId) return { ok: false, reason: "missing_page_id" };
   if (ud.em === undefined && ud.ph === undefined) return { ok: false, reason: "missing_customer_data" };
-  ud.page_id = ids.pageId;
   return { ok: true, userData: ud, matchedBy: "page_id" };
 }
 
