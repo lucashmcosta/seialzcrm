@@ -15,13 +15,15 @@ export function MoneyInput({ id, value, currency, locale, disabled, onCommit, cl
   onCommit: (value: number | null) => void;
   className?: string;
 }) {
-  const [text, setText] = useState(formatMoneyInput(value ?? null, locale));
-  useEffect(() => { setText(formatMoneyInput(value ?? null, locale)); }, [value, locale]);
+  // Zero conta como "sem valor": campo vazio, só com o exemplo 0,00 em cinza.
+  const display = (v: number | null | undefined) => (v ? formatMoneyInput(v, locale) : '');
+  const [text, setText] = useState(display(value));
+  useEffect(() => { setText(display(value)); }, [value, locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const symbol = currencySymbol(currency, locale);
 
   const commit = () => {
     const n = parseMoneyInput(text, locale);
-    setText(formatMoneyInput(n, locale)); // completa os centavos (1.900,5 → 1.900,50)
+    setText(display(n)); // completa os centavos (1.900,5 → 1.900,50); zero volta a ficar vazio
     onCommit(n);
   };
 
@@ -33,7 +35,7 @@ export function MoneyInput({ id, value, currency, locale, disabled, onCommit, cl
         id={id}
         type="text"
         inputMode="decimal"
-        placeholder={formatMoneyInput(0, locale) === '0' ? (locale === 'en-US' ? '0.00' : '0,00') : undefined}
+        placeholder={locale === 'en-US' ? '0.00' : '0,00'}
         autoComplete="off"
         value={text}
         disabled={disabled}
