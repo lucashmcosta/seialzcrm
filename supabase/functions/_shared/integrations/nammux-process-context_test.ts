@@ -1,7 +1,11 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import {
   agendaWhen,
+  brl,
   day,
+  NAMMUX_AGENT_FINANCE_FLAG,
+  nammuxFinanceBlock,
+  type NammuxFinanceRow,
   NAMMUX_AGENT_AGENDA_FLAG,
   nammuxAgendaBlock,
   nammuxContextForAgent,
@@ -32,10 +36,8 @@ const BLOCO_ORIGINAL = `
 Use só estes dados para falar do processo. Se o cliente perguntar algo que não está aqui (data de audiência, link, valor, pagamento, movimentação do tribunal), não invente: diga o que você sabe e passe para a equipe.
 `;
 
-type Row = Record<string, unknown>;
-
 // Cliente em memória: registra as tabelas consultadas e devolve as linhas dadas.
-function fakeSupabase(tables: Record<string, Row[]>, queried: string[] = []) {
+function fakeSupabase(tables: Record<string, unknown[]>, queried: string[] = []) {
   return {
     from(table: string) {
       queried.push(table);
@@ -166,4 +168,61 @@ Deno.test("contato sem negócio ou sem processo: contexto vazio", async () => {
     await nammuxSupportContext(fakeSupabase({ opportunities: [{ id: "opp-1" }] }), "org", "c", () => Promise.resolve(true)),
     "",
   );
+});
+
+const VAZIO: NammuxFinanceRow = {
+  opportunity_id: "opp-1", kind: "agreement", external_id: "", parent_external_id: null, status: null,
+  agreed_on: null, homologated_on: null, installments_count: null, number: null, due_date: null,
+  effective_due_date: null, client_amount: null, paid_on: null, manifestation_due_date: null, amount: null, reversed: null,
+};
+const FINANCEIRO: NammuxFinanceRow[] = [
+  { ...VAZIO, kind: "agreement", external_id: "ac-1", status: "vigente", agreed_on: "2026-10-01", homologated_on: "2026-10-08", installments_count: 3 },
+  { ...VAZIO, kind: "installment", external_id: "pa-2", parent_external_id: "ac-1", number: 2, status: "overdue", due_date: "2026-11-05", client_amount: "700.00", manifestation_due_date: "2026-11-13" },
+  { ...VAZIO, kind: "installment", external_id: "pa-1", parent_external_id: "ac-1", number: 1, status: "paid", due_date: "2026-10-05", client_amount: 700, paid_on: "2026-10-04" },
+  { ...VAZIO, kind: "installment", external_id: "pa-3", parent_external_id: "ac-1", number: 3, status: "open", due_date: "2026-12-05", client_amount: 1400.5 },
+  { ...VAZIO, kind: "payout", external_id: "rp-1", amount: "700.00", paid_on: "2026-10-10", reversed: false },
+  { ...VAZIO, kind: "payout", external_id: "rp-2", amount: "50.00", paid_on: "2026-10-11", reversed: true },
+];
+
+Deno.test("valor em reais", () => {
+  assertEquals(brl(1400.5), "R$ 1.400,50");
+  assertEquals(brl("700.00"), "R$ 700,00");
+  assertEquals(brl(null), null);
+  assertEquals(brl("abc"), null);
+});
+
+Deno.test("bloco do financeiro: acordo, parcelas em ordem e repasse não estornado", () => {
+  const bloco = nammuxFinanceBlock(FINANCEIRO);
+  assertStringIncludes(bloco, "## ACORDO E PAGAMENTOS");
+  assertStringIncludes(bloco, "- Acordo fechado em 01/10/2026 · homologado pelo juiz em 08/10/2026 · 3 parcelas");
+  assertStringIncludes(bloco, "  - Parcela 1 de 3 · vencimento 05/10/2026 · paga em 04/10/2026 · parte do cliente: R$ 700,00");
+  assertStringIncludes(bloco, "  - Parcela 2 de 3 · vencimento 05/11/2026 · venceu e não foi paga; o escritório vai se manifestar no processo até 13/11/2026 · parte do cliente: R$ 700,00");
+  assertStringIncludes(bloco, "  - Parcela 3 de 3 · vencimento 05/12/2026 · ainda não venceu · parte do cliente: R$ 1.400,50");
+  assertStringIncludes(bloco, "- Repasse ao cliente · R$ 700,00 · em 10/10/2026");
+  // parcelas na ordem do número, não na de chegada
+  assertEquals(bloco.indexOf("Parcela 1 de 3") < bloco.indexOf("Parcela 2 de 3"), true);
+  // repasse estornado não aparece
+  assertEquals(bloco.includes("R$ 50,00"), false);
+  assertEquals(nammuxFinanceBlock([]), "");
+});
+
+Deno.test("financeiro só entra com a flag dele; sem acordo, valor continua no 'não invente'", async () => {
+  const tabelas = {
+    opportunities: [{ id: "opp-1" }],
+    nammux_process_snapshots: [{ ...PROCESSO, opportunity_id: "opp-1" }],
+    nammux_process_finance: FINANCEIRO,
+  };
+  const consultadas: string[] = [];
+  const sem = await nammuxSupportContext(fakeSupabase(tabelas, consultadas), "org", "c", () => Promise.resolve(false));
+  assertEquals(sem.includes("ACORDO E PAGAMENTOS"), false);
+  assertEquals(consultadas.includes("nammux_process_finance"), false);
+
+  const com = await nammuxSupportContext(fakeSupabase(tabelas), "org", "c", (f) => Promise.resolve(f === NAMMUX_AGENT_FINANCE_FLAG));
+  assertStringIncludes(com, "## ACORDO E PAGAMENTOS");
+  assertStringIncludes(com, "(data de audiência, link, movimentação do tribunal), não invente");
+
+  const semAcordo = await nammuxSupportContext(
+    fakeSupabase({ ...tabelas, nammux_process_finance: [] }), "org", "c", (f) => Promise.resolve(f === NAMMUX_AGENT_FINANCE_FLAG));
+  assertEquals(semAcordo.includes("ACORDO E PAGAMENTOS"), false);
+  assertStringIncludes(semAcordo, "(data de audiência, link, valor, pagamento, movimentação do tribunal), não invente");
 });

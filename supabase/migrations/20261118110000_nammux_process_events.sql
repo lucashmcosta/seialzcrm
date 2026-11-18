@@ -139,6 +139,8 @@ declare
   v_end timestamptz;
   v_prev timestamptz;
   v_source_updated timestamptz;
+  v_all_day boolean;
+  v_reschedule_seq integer;
   v_row_id uuid;
 begin
   if coalesce(_event_id, '') = '' then
@@ -168,6 +170,8 @@ begin
     v_end := nullif(v_ev->>'end_at', '')::timestamptz;
     v_prev := nullif(v_ev->>'previous_start_at', '')::timestamptz;
     v_source_updated := nullif(v_ev->>'updated_at', '')::timestamptz;
+    v_all_day := coalesce(nullif(v_ev->>'all_day', '')::boolean, false);
+    v_reschedule_seq := coalesce(nullif(v_ev->>'reschedule_seq', '')::integer, 0);
   exception when others then
     return jsonb_build_object('status', 'invalid', 'error', 'malformed_field');
   end;
@@ -196,12 +200,12 @@ begin
     cancel_reason, last_change, removed_at, source_version, source_updated_at, last_event_id
   ) values (
     _organization_id, v_opp, _data->>'external_process_id', v_ev->>'id', v_ev->>'type', nullif(v_ev->>'subtype', ''),
-    v_ev->>'status', v_start, v_end, coalesce((v_ev->>'all_day')::boolean, false),
+    v_ev->>'status', v_start, v_end, v_all_day,
     coalesce(nullif(v_ev->>'timezone', ''), 'America/Sao_Paulo'),
     nullif(v_ev->>'modality', ''), nullif(v_ev->>'location', ''), nullif(v_ev->>'virtual_link', ''),
     coalesce(nullif(v_ev->>'root_event_id', ''), v_ev->>'id'),
     nullif(v_ev->>'rescheduled_from_event_id', ''),
-    coalesce((v_ev->>'reschedule_seq')::integer, 0), v_prev,
+    v_reschedule_seq, v_prev,
     nullif(v_ev->>'cancel_reason', ''), v_change,
     case when v_change = 'removed' then now() end,
     v_version, v_source_updated, _event_id

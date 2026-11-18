@@ -156,9 +156,114 @@ export async function loadNammuxAgenda(supabase: any, organizationId: string, op
   return (data ?? []) as NammuxAgendaRow[];
 }
 
+// ---------- Financeiro (process.finance.changed) ----------
+
+export interface NammuxFinanceRow {
+  opportunity_id: string;
+  kind: "agreement" | "installment" | "payout";
+  external_id: string;
+  parent_external_id: string | null;
+  status: string | null;
+  agreed_on: string | null;
+  homologated_on: string | null;
+  installments_count: number | null;
+  number: number | null;
+  due_date: string | null;
+  effective_due_date: string | null;
+  client_amount: number | string | null;
+  paid_on: string | null;
+  manifestation_due_date: string | null;
+  amount: number | string | null;
+  reversed: boolean | null;
+}
+
+/** "R$ 1.400,00". Nulo ou não numérico devolve null. */
+export function brl(value: number | string | null): string | null {
+  if (value === null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return null;
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n).replace(/\u00a0/g, " ");
+}
+
+function installmentLine(r: NammuxFinanceRow, total: number | null): string {
+  const venc = day(r.due_date);
+  const situacao = r.status === "paid"
+    ? (day(r.paid_on) ? `paga em ${day(r.paid_on)}` : "paga")
+    : r.status === "overdue"
+    ? (day(r.manifestation_due_date)
+      ? `venceu e não foi paga; o escritório vai se manifestar no processo até ${day(r.manifestation_due_date)}`
+      : "venceu e não foi paga")
+    : r.status === "partially_paid"
+    ? "paga em parte"
+    : r.status === "cancelled"
+    ? "cancelada"
+    : "ainda não venceu";
+  const parts = [
+    `Parcela ${r.number ?? "?"}${total ? ` de ${total}` : ""}`,
+    venc ? `vencimento ${venc}` : null,
+    situacao,
+    brl(r.client_amount) ? `parte do cliente: ${brl(r.client_amount)}` : null,
+  ].filter(Boolean);
+  return `  - ${parts.join(" · ")}`;
+}
+
+/** Bloco com acordo, parcelas e repasses. Vazio quando o processo não tem acordo nem repasse. */
+export function nammuxFinanceBlock(rows: NammuxFinanceRow[], processIndex: Record<string, number> = {}): string {
+  const multi = new Set(Object.values(processIndex)).size > 1;
+  const agreements = rows.filter((r) => r.kind === "agreement" && r.status !== "cancelado" && r.status !== "substituido");
+  const payouts = rows.filter((r) => r.kind === "payout" && !r.reversed);
+  const lines: string[] = [];
+
+  for (const a of agreements) {
+    const head = [
+      day(a.agreed_on) ? `Acordo fechado em ${day(a.agreed_on)}` : "Acordo",
+      day(a.homologated_on) ? `homologado pelo juiz em ${day(a.homologated_on)}` : "ainda não homologado pelo juiz",
+      a.installments_count ? `${a.installments_count} parcela${a.installments_count === 1 ? "" : "s"}` : null,
+      multi && processIndex[a.opportunity_id] ? `processo ${processIndex[a.opportunity_id]}` : null,
+    ].filter(Boolean);
+    lines.push(`- ${head.join(" · ")}`);
+    rows
+      .filter((r) => r.kind === "installment" && r.parent_external_id === a.external_id)
+      .sort((x, y) => (x.number ?? 0) - (y.number ?? 0))
+      .forEach((r) => lines.push(installmentLine(r, a.installments_count)));
+  }
+  for (const p of payouts) {
+    const parts = [
+      "Repasse ao cliente",
+      brl(p.amount),
+      day(p.paid_on) ? `em ${day(p.paid_on)}` : null,
+      multi && processIndex[p.opportunity_id] ? `processo ${processIndex[p.opportunity_id]}` : null,
+    ].filter(Boolean);
+    lines.push(`- ${parts.join(" · ")}`);
+  }
+  if (!lines.length) return "";
+  return `
+## ACORDO E PAGAMENTOS (financeiro do escritório)
+${lines.join("\n")}
+Os valores são a parte do cliente. Informe só o que está aqui: não calcule, não some e não estime valor nem data que não apareça na lista. Dúvida sobre valor ou desconto, passe para a equipe.
+`;
+}
+
+// deno-lint-ignore no-explicit-any
+export async function loadNammuxFinance(supabase: any, organizationId: string, opportunityIds: string[]): Promise<NammuxFinanceRow[]> {
+  if (!opportunityIds.length) return [];
+  const { data, error } = await supabase.from("nammux_process_finance")
+    .select("opportunity_id, kind, external_id, parent_external_id, status, agreed_on, homologated_on, installments_count, number, due_date, effective_due_date, client_amount, paid_on, manifestation_due_date, amount, reversed")
+    .eq("organization_id", organizationId)
+    .in("opportunity_id", opportunityIds)
+    .order("created_at", { ascending: true })
+    .limit(80);
+  if (error) {
+    console.warn("[nammux-process-context] não leu o financeiro", error.code ?? "sem_codigo");
+    return [];
+  }
+  return (data ?? []) as NammuxFinanceRow[];
+}
+
 // ---------- Contexto completo do agente de atendimento ----------
 
 export const NAMMUX_AGENT_AGENDA_FLAG = "nammux_agent_agenda";
+export const NAMMUX_AGENT_FINANCE_FLAG = "nammux_agent_finance";
 
 /**
  * Só o agente de atendimento recebe dado do Nammux. Qualquer outro tipo
@@ -208,6 +313,14 @@ export async function nammuxSupportContext(
   if (await isEnabled(NAMMUX_AGENT_AGENDA_FLAG)) {
     covered.agenda = true;
     extra += nammuxAgendaBlock(await loadNammuxAgenda(supabase, organizationId, shownOpportunityIds, now), processIndex);
+  }
+  if (await isEnabled(NAMMUX_AGENT_FINANCE_FLAG)) {
+    const finance = nammuxFinanceBlock(await loadNammuxFinance(supabase, organizationId, shownOpportunityIds), processIndex);
+    // Sem acordo nem repasse não há bloco, e valor/pagamento continua no aviso de "não invente".
+    if (finance) {
+      covered.finance = true;
+      extra += finance;
+    }
   }
   return nammuxProcessBlock(processes, covered) + extra;
 }

@@ -31,3 +31,13 @@ Deno.test("resposta HTTP: 200 encerra, 409 é recusa definitiva, 500 pede reenvi
   assertEquals(responseForApply({}).status, 500);
   assertEquals(responseForApply({ status: "qualquer" }).status, 500);
 });
+
+Deno.test("financeiro é aplicado pela RPC própria", () => {
+  assertEquals(rpcForEvent("process.finance.changed"), "nammux_apply_process_finance");
+  assertEquals(isSupportedEvent("process.finance.changed"), true);
+  // transições vêm no resultado, mas a resposta HTTP não muda
+  assertEquals(
+    responseForApply({ status: "applied", transitions: ["installment_paid"] }),
+    { status: 200, body: { ok: true } },
+  );
+});
