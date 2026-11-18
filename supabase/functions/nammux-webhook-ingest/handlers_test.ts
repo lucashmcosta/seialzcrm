@@ -41,3 +41,8 @@ Deno.test("financeiro é aplicado pela RPC própria", () => {
     { status: 200, body: { ok: true } },
   );
 });
+
+Deno.test("movimentação é aplicada pela RPC própria", () => {
+  assertEquals(rpcForEvent("process.movement.added"), "nammux_apply_process_movement");
+  assertEquals(isSupportedEvent("process.movement.added"), true);
+});

@@ -38,6 +38,7 @@ assinatura, organização e mapeamento e trata cada tipo:
 | `classification.certified` | certificação da classificação pela entrevista | RPC `pc_record_certification` |
 | `process.agenda.changed` | audiência, perícia ou entrevista marcada, remarcada, cancelada ou concluída | `nammux_process_events` |
 | `process.finance.changed` | estado de um acordo, de uma parcela ou de um repasse | `nammux_process_finance` |
+| `process.movement.added` | movimentação relevante do tribunal, já com texto em linguagem simples | `nammux_process_movements` |
 
 Tipo novo entra em `nammux-webhook-ingest/handlers.ts` (uma linha no mapa) com
 uma RPC `nammux_apply_*`. A RPC registra o recibo do evento
@@ -73,6 +74,11 @@ função devolve vazio sem consultar o banco.
 | Processos do cliente | `nammux_process_snapshots` | — (sempre) |
 | Próximas datas | `nammux_process_events` | `nammux_agent_agenda` |
 | Acordo e pagamentos | `nammux_process_finance` | `nammux_agent_finance` |
+| Últimas movimentações | `nammux_process_movements` | `nammux_agent_movements` |
+
+O texto de cada movimentação vem pronto do catálogo do Nammux
+(`seialz_movimentacao_catalogo`), revisado pelo jurídico. O Seialz não gera nem
+reescreve esse texto, e nenhuma IA participa: o agente só repete o que recebeu.
 
 Com a flag desligada o agente recebe o mesmo texto de antes.
 

@@ -260,10 +260,52 @@ export async function loadNammuxFinance(supabase: any, organizationId: string, o
   return (data ?? []) as NammuxFinanceRow[];
 }
 
+// ---------- Movimentações (process.movement.added) ----------
+
+export interface NammuxMovementRow {
+  opportunity_id: string;
+  occurred_at: string;
+  text: string;
+}
+
+/** Bloco com as últimas movimentações relevantes. Vazio quando não há nenhuma. */
+export function nammuxMovementsBlock(rows: NammuxMovementRow[], processIndex: Record<string, number> = {}): string {
+  const multi = new Set(Object.values(processIndex)).size > 1;
+  const lines = rows.map((r) => {
+    const when = day(r.occurred_at);
+    if (!when || !r.text) return null;
+    const suffix = multi && processIndex[r.opportunity_id] ? ` (processo ${processIndex[r.opportunity_id]})` : "";
+    return `- ${when}: ${r.text}${suffix}`;
+  }).filter(Boolean);
+  if (!lines.length) return "";
+  return `
+## ÚLTIMAS MOVIMENTAÇÕES DO PROCESSO (o que aconteceu no tribunal)
+${lines.join("\n")}
+Explique com estas palavras, que já estão em linguagem simples. Não interprete além do que está escrito e não preveja resultado nem prazo. Se o cliente perguntar por algo que não está na lista, diga que não há novidade registrada.
+`;
+}
+
+// deno-lint-ignore no-explicit-any
+export async function loadNammuxMovements(supabase: any, organizationId: string, opportunityIds: string[]): Promise<NammuxMovementRow[]> {
+  if (!opportunityIds.length) return [];
+  const { data, error } = await supabase.from("nammux_process_movements")
+    .select("opportunity_id, occurred_at, text")
+    .eq("organization_id", organizationId)
+    .in("opportunity_id", opportunityIds)
+    .order("occurred_at", { ascending: false })
+    .limit(5);
+  if (error) {
+    console.warn("[nammux-process-context] não leu as movimentações", error.code ?? "sem_codigo");
+    return [];
+  }
+  return (data ?? []) as NammuxMovementRow[];
+}
+
 // ---------- Contexto completo do agente de atendimento ----------
 
 export const NAMMUX_AGENT_AGENDA_FLAG = "nammux_agent_agenda";
 export const NAMMUX_AGENT_FINANCE_FLAG = "nammux_agent_finance";
+export const NAMMUX_AGENT_MOVEMENTS_FLAG = "nammux_agent_movements";
 
 /**
  * Só o agente de atendimento recebe dado do Nammux. Qualquer outro tipo
@@ -321,6 +363,16 @@ export async function nammuxSupportContext(
       covered.finance = true;
       extra += finance;
     }
+  }
+  if (await isEnabled(NAMMUX_AGENT_MOVEMENTS_FLAG)) {
+    // Sem movimentação registrada o bloco fica vazio, mas o assunto está coberto:
+    // o agente não deve mandar o cliente à equipe por falta de novidade.
+    covered.movements = true;
+    const movements = nammuxMovementsBlock(await loadNammuxMovements(supabase, organizationId, shownOpportunityIds), processIndex);
+    extra += movements || `
+## ÚLTIMAS MOVIMENTAÇÕES DO PROCESSO (o que aconteceu no tribunal)
+Não há movimentação relevante registrada até agora. Se o cliente perguntar por novidade, diga que não há novidade registrada e que ele será avisado quando houver.
+`;
   }
   return nammuxProcessBlock(processes, covered) + extra;
 }
