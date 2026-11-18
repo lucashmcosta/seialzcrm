@@ -21,6 +21,7 @@ import { buildReplay, rateLimitWaitMs, type StoredMessage } from "../_shared/int
 import { classifyCase, countOutcomes, parseCalcText, type BacktestOutcome } from "../_shared/widgets/labor-center/backtest.ts";
 import { LABOR_CALC_CLIENT_HEADER, LABOR_CALC_TOOL } from "../_shared/widgets/labor-center/agent-tool.ts";
 import { activeWidgetTools } from "../_shared/widgets/agent-tools.ts";
+import { SUPPORT_QUIET_AFTER_HUMAN_MS } from "../_shared/intelligence/agent-gate.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
@@ -101,24 +102,50 @@ async function findCases(admin: Admin, orgId: string, limit: number): Promise<Ca
   return [...first.values()].sort((a, b) => b.calc_at.localeCompare(a.calc_at)).slice(0, limit);
 }
 
-/** Atendimento: a última resposta da equipe em cada conversa recente da tela de atendimento. */
+/**
+ * Atendimento: o momento em que o agente de fato entraria, isto é, o cliente volta a escrever pelo
+ * menos 2 h depois da última resposta da equipe (antes disso o agente fica quieto). O caso vai até a
+ * resposta seguinte da equipe, para comparar. Um caso por conversa, os mais recentes.
+ */
 async function findSupportCases(admin: Admin, orgId: string, limit: number): Promise<CaseRef[]> {
   const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
-  const { data, error } = await admin.from("messages")
-    .select("thread_id, sent_at, content, thread:message_threads!inner(contact_id, business_context)")
-    .eq("organization_id", orgId).eq("direction", "outbound").eq("sender_type", "user").is("deleted_at", null)
-    .eq("thread.business_context", "customer_service").gte("sent_at", since)
-    .not("content", "is", null)
-    .order("sent_at", { ascending: false })
-    .limit(1000);
-  if (error) throw new HttpError(500, "cases_lookup_failed", error.message);
-  const last = new Map<string, CaseRef>();
-  for (const m of data ?? []) {
-    if (!last.has(m.thread_id) && m.thread?.contact_id && String(m.content).trim().length > 15) {
-      last.set(m.thread_id, { thread_id: m.thread_id, contact_id: m.thread.contact_id, calc_at: m.sent_at, team_text: m.content });
-    }
+  const rows: any[] = [];
+  for (let from = 0; from < 6000; from += 1000) {
+    const { data, error } = await admin.from("messages")
+      .select("thread_id, sent_at, content, direction, sender_type, thread:message_threads!inner(contact_id, business_context)")
+      .eq("organization_id", orgId).is("deleted_at", null).in("direction", ["inbound", "outbound"])
+      .eq("thread.business_context", "customer_service").gte("sent_at", since)
+      .order("sent_at", { ascending: true }).range(from, from + 999);
+    if (error) throw new HttpError(500, "cases_lookup_failed", error.message);
+    rows.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
   }
-  return [...last.values()].slice(0, limit);
+  const byThread = new Map<string, any[]>();
+  for (const m of rows) {
+    const list = byThread.get(m.thread_id) ?? [];
+    list.push(m);
+    byThread.set(m.thread_id, list);
+  }
+  const cases: CaseRef[] = [];
+  for (const [threadId, msgs] of byThread) {
+    let lastHuman: number | null = null;
+    let pending = false;
+    let found: CaseRef | null = null;
+    for (const m of msgs) {
+      const at = new Date(m.sent_at).getTime();
+      const human = m.direction === "outbound" && m.sender_type === "user";
+      if (m.direction === "inbound" && !pending && (lastHuman === null || at - lastHuman >= SUPPORT_QUIET_AFTER_HUMAN_MS)) pending = true;
+      if (human) {
+        if (pending && m.thread?.contact_id && String(m.content ?? "").trim().length > 10) {
+          found = { thread_id: threadId, contact_id: m.thread.contact_id, calc_at: m.sent_at, team_text: m.content };
+        }
+        pending = false;
+        lastHuman = at;
+      }
+    }
+    if (found) cases.push(found);
+  }
+  return cases.sort((a, b) => b.calc_at.localeCompare(a.calc_at)).slice(0, limit);
 }
 
 const casesFor = (scenario: Scenario) => (scenario === "support" ? findSupportCases : findCases);
