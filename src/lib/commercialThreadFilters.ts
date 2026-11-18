@@ -125,9 +125,10 @@ export function toRpcFilters(f: CommercialThreadFilters, extra?: { threadIds?: s
   return out;
 }
 
-/** Quantos filtros do painel estão ativos (a situação/aba e a busca não contam). */
+/** Quantos filtros do painel estão ativos (a busca não conta; a situação conta quando não é "Abertas"). */
 export function countActivePanelFilters(f: CommercialThreadFilters): number {
   let n = 0;
+  if (f.view !== 'open') n++;
   if (f.endpointIds.length) n++;
   if (f.assignedUserIds.length || f.unassigned) n++;
   if (f.handlers.length) n++;
@@ -143,7 +144,7 @@ export function countActivePanelFilters(f: CommercialThreadFilters): number {
 }
 
 export function clearPanelFilters(f: CommercialThreadFilters): CommercialThreadFilters {
-  return { ...EMPTY_FILTERS, view: f.view, search: f.search };
+  return { ...EMPTY_FILTERS, search: f.search };
 }
 
 /** Texto do contador com singular/plural. */

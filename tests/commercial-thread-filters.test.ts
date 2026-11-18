@@ -33,10 +33,10 @@ describe('filtros do Comercial', () => {
     expect(parseFilters(null)).toEqual(EMPTY_FILTERS);
   });
 
-  test('conta e limpa filtros do painel mantendo aba e busca', () => {
+  test('conta e limpa filtros do painel (situação volta para Abertas, busca fica)', () => {
     const f = { ...EMPTY_FILTERS, view: 'resolved' as const, search: 'x', handlers: ['ai' as const], createdFrom: '2026-11-01', createdTo: '2026-11-02' };
-    expect(countActivePanelFilters(f)).toBe(2);
-    expect(clearPanelFilters(f)).toEqual({ ...EMPTY_FILTERS, view: 'resolved', search: 'x' });
+    expect(countActivePanelFilters(f)).toBe(3);
+    expect(clearPanelFilters(f)).toEqual({ ...EMPTY_FILTERS, search: 'x' });
   });
 
   test('contador com singular e plural nas duas línguas', () => {

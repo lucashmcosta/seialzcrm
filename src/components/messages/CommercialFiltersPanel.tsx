@@ -12,7 +12,7 @@ import type { SalesEndpointFilterOption } from '@/hooks/useSalesEndpointFilterOp
 import type { OrgUserFilterOption } from '@/hooks/useOrgUserFilterOptions';
 import type { AdOption, StageOption, TagOption } from '@/hooks/useCommercialFilterOptions';
 import {
-  type CardDisplayPrefs, type CommercialThreadFilters, type OppState, type ThreadHandler,
+  type CardDisplayPrefs, type CommercialThreadFilters, type OppState, type ThreadHandler, type ThreadView,
   clearPanelFilters, countActivePanelFilters,
 } from '@/lib/commercialThreadFilters';
 
@@ -163,6 +163,16 @@ export function CommercialFiltersPanel(p: Props) {
       </PopoverTrigger>
       <PopoverContent align="end" collisionPadding={12} className="w-[340px] max-w-[calc(100vw-24px)] overflow-hidden p-0">
         <div className="no-scrollbar max-h-[70vh] space-y-2 overflow-y-auto overflow-x-hidden p-3">
+          <Row label={L('Situação', 'Status')}>
+            <MultiSelect ariaLabel={L('Situação', 'Status')} allLabel={L('Abertas', 'Open')}
+              options={[
+                { value: 'to_reply', label: L('Para responder', 'To reply') },
+                { value: 'awaiting_client', label: L('Aguardando cliente', 'Awaiting customer') },
+                { value: 'resolved', label: L('Encerradas', 'Closed') },
+              ]}
+              selected={f.view === 'open' ? [] : [f.view]}
+              onChange={(v) => set({ view: ((v.find((x) => x !== f.view) ?? v[0]) || 'open') as ThreadView })} />
+          </Row>
           {p.aiEnabled && (
             <Row label={L('Quem atende', 'Handled by')}>
               <MultiSelect ariaLabel={L('Quem atende', 'Handled by')} allLabel={all} options={handlerOpts} selected={f.handlers}
@@ -258,6 +268,8 @@ export function ActiveFilterChips(p: Pick<Props, 'locale' | 'value' | 'onChange'
   const handlerLabel: Record<ThreadHandler, string> = { ai: L('IA atendendo', 'AI handling'), needs_human: L('Pediu humano', 'Needs human'), none: L('Sem ninguém', 'Nobody') };
   const oppLabel: Record<OppState, string> = { open: L('Com oportunidade aberta', 'Open opportunity'), none: L('Sem oportunidade aberta', 'No open opportunity'), won: L('Ganha', 'Won'), lost: L('Perdida', 'Lost') };
 
+  const viewLabel: Record<ThreadView, string> = { open: L('Abertas', 'Open'), to_reply: L('Para responder', 'To reply'), awaiting_client: L('Aguardando cliente', 'Awaiting customer'), resolved: L('Encerradas', 'Closed') };
+  if (f.view !== 'open') items.push({ key: 'view', label: viewLabel[f.view], clear: () => set({ view: 'open' }) });
   f.handlers.forEach((h) => items.push({ key: `h-${h}`, label: handlerLabel[h], clear: () => set({ handlers: f.handlers.filter((x) => x !== h) }) }));
   if (f.unassigned) items.push({ key: 'unassigned', label: L('Sem responsável', 'Unassigned'), clear: () => set({ unassigned: false }) });
   f.assignedUserIds.forEach((id) => items.push({ key: `u-${id}`, label: p.users.find((u) => u.id === id)?.fullName ?? L('Responsável', 'Owner'), clear: () => set({ assignedUserIds: f.assignedUserIds.filter((x) => x !== id) }) }));

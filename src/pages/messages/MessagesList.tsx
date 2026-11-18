@@ -114,7 +114,7 @@ import { type ChatThread } from '@/hooks/useMessageThreads';
 import { useCommercialThreads, type CommercialChatThread } from '@/hooks/useCommercialThreads';
 import { useCommercialFilterOptions } from '@/hooks/useCommercialFilterOptions';
 import { CommercialFiltersPanel, ActiveFilterChips } from '@/components/messages/CommercialFiltersPanel';
-import { type CommercialThreadFilters, type ThreadView, EMPTY_FILTERS, DEFAULT_CARD_PREFS, parseFilters, parseCardPrefs, countActivePanelFilters, conversationCountLabel } from '@/lib/commercialThreadFilters';
+import { type CommercialThreadFilters, EMPTY_FILTERS, DEFAULT_CARD_PREFS, parseFilters, parseCardPrefs, countActivePanelFilters, conversationCountLabel } from '@/lib/commercialThreadFilters';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { useSalesEndpointFilterOptions } from '@/hooks/useSalesEndpointFilterOptions';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
@@ -586,7 +586,6 @@ function DesktopMessagesList() {
   const [commercialFilters, setCommercialFilters] = usePersistedFilters<CommercialThreadFilters>('messages.filters.v2', EMPTY_FILTERS, parseFilters);
   const [cardPrefs, setCardPrefs] = usePersistedFilters('messages.cardPrefs', DEFAULT_CARD_PREFS, parseCardPrefs);
   const filtersForServer = useMemo(() => ({ ...commercialFilters, search: debouncedSearch }), [commercialFilters, debouncedSearch]);
-  const setView = (view: ThreadView) => setCommercialFilters({ ...commercialFilters, view });
 
   const [selectedEndpointDetails, setSelectedEndpointDetails] = useState<{ threadId: string; endpoint: any | null } | null>(null);
 
@@ -2112,8 +2111,11 @@ function DesktopMessagesList() {
             {/* Header */}
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
-                <h1 className="text-xl font-semibold text-foreground">
+                <h1 className="flex items-baseline gap-2 text-xl font-semibold text-foreground">
                   {t('nav.messages')}
+                  <span className="text-xs font-normal text-muted-foreground" aria-live="polite">
+                    {threadsTotal === null ? '…' : conversationCountLabel(threadsTotal, locale)}
+                  </span>
                 </h1>
                 <div className="flex items-center gap-2">
                   {isOrgSystemAdmin && <Button
@@ -2151,7 +2153,7 @@ function DesktopMessagesList() {
 
                 </div>
               </div>
-              <div className="relative mb-3">
+              <div className="relative mb-2">
                 <SearchLg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder={locale === 'pt-BR' ? 'Buscar conversas...' : 'Search conversations...'}
@@ -2159,21 +2161,6 @@ function DesktopMessagesList() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9"
                 />
-              </div>
-              <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label={locale === 'pt-BR' ? 'Mostrar' : 'Show'}>
-                {([
-                  { key: 'open', label: locale === 'pt-BR' ? 'Abertas' : 'Open', title: locale === 'pt-BR' ? 'Todas as conversas em andamento' : 'All ongoing conversations' },
-                  { key: 'to_reply', label: locale === 'pt-BR' ? 'Para responder' : 'To reply', title: locale === 'pt-BR' ? 'O cliente mandou a última mensagem' : 'The customer sent the last message' },
-                  { key: 'awaiting_client', label: locale === 'pt-BR' ? 'Aguardando cliente' : 'Awaiting customer', title: locale === 'pt-BR' ? 'Nós mandamos a última mensagem' : 'We sent the last message' },
-                  { key: 'resolved', label: locale === 'pt-BR' ? 'Encerradas' : 'Closed', title: locale === 'pt-BR' ? 'Conversas encerradas pela equipe ou pela IA' : 'Conversations closed by the team or the AI' },
-                ] as const).map((opt) => {
-                  const active = commercialFilters.view === opt.key;
-                  return (
-                    <Button key={opt.key} type="button" size="sm" variant={active ? 'default' : 'outline'} className="h-7 rounded-full px-3 text-xs" aria-pressed={active} title={opt.title} onClick={() => setView(opt.key)}>
-                      {opt.label}
-                    </Button>
-                  );
-                })}
               </div>
               <ActiveFilterChips
                 locale={locale}
@@ -2185,16 +2172,11 @@ function DesktopMessagesList() {
                 ads={filterOptions.ads}
                 endpoints={endpointFilterOptions}
               />
-              <p className="text-xs text-muted-foreground" aria-live="polite">
-                {threadsTotal === null
-                  ? (locale === 'pt-BR' ? 'Contando…' : 'Counting…')
-                  : conversationCountLabel(threadsTotal, locale)}
-              </p>
             </div>
             </>)}
 
             {/* Chat List */}
-            <ScrollArea className="flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
+            <div className="no-scrollbar flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
               {threadsLoading ? (
                 <div className="p-4 space-y-4">
                   {[1, 2, 3, 4].map((i) => (
@@ -2287,7 +2269,7 @@ function DesktopMessagesList() {
                   )}
                 </>
               )}
-            </ScrollArea>
+            </div>
         </div>
 
         {/* Right Panel - Chat */}
