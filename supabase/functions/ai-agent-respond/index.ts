@@ -13,6 +13,7 @@ import { interactiveFallbackText, type InteractivePayload } from "../_shared/wha
 import { nammuxContextForAgent, nammuxSupportContext } from "../_shared/integrations/nammux-process-context.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { buildNammuxInterviewTools, nammuxToolDeps, nammuxToolsForAgent } from "../_shared/integrations/nammux-agent-tools.ts";
+import { captureRating, ratingDeps, ratingForAgent } from "../_shared/integrations/support-rating.ts";
 import { decideSupportGate, agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES } from "../_shared/widgets/agent-tools.ts";
@@ -1823,6 +1824,22 @@ serve(async (req) => {
         message = heard;
       }
       if (!message?.trim()) return skip('empty_message');
+
+      // Avaliação "Consegui te ajudar?": só o agente de atendimento, com a flag da org.
+      // Se a mensagem é o Sim/Não da pergunta em aberto, grava e responde um texto fixo,
+      // sem chamar o modelo. Para o comercial isto devolve null sem consultar nada.
+      if (!followUp) {
+        const rated = await ratingForAgent(
+          agent.agent_type,
+          (flag) => featureFlagEnabled(supabase, flag, organizationId),
+          () => captureRating(message, ratingDeps(supabase, threadId)),
+        );
+        if (rated) {
+          if (rated.handOff) await releaseToHuman(supabase, threadId, 'rating_no');
+          await dispatchWhatsAppSend({ organizationId, contactId, threadId, message: rated.reply, isAgentMessage: true, agentId: agent.id, senderName: agent.name });
+          return skip(`support_rating_${rated.answer}`);
+        }
+      }
     }
 
     // Include mark_name_asked automatically when update_contact is enabled
