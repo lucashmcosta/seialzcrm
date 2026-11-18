@@ -37,6 +37,7 @@ assinatura, organização e mapeamento e trata cada tipo:
 | `contact.address.updated` | endereço do contato | RPC `apply_nammux_contact_address` |
 | `classification.certified` | certificação da classificação pela entrevista | RPC `pc_record_certification` |
 | `process.agenda.changed` | audiência, perícia ou entrevista marcada, remarcada, cancelada ou concluída | `nammux_process_events` |
+| `process.finance.changed` | estado de um acordo, de uma parcela ou de um repasse | `nammux_process_finance` |
 
 Tipo novo entra em `nammux-webhook-ingest/handlers.ts` (uma linha no mapa) com
 uma RPC `nammux_apply_*`. A RPC registra o recibo do evento
@@ -47,6 +48,14 @@ depois da nova é ignorada (`source_version`).
 Respostas: `200` aplicado, duplicado ou versão antiga; `409` recusa definitiva
 (payload fora do contrato, negócio inexistente) — o Nammux não reenvia; `5xx`
 falha transitória — o Nammux reenvia com espera crescente.
+
+O evento financeiro traz o estado, não o que aconteceu. `nammux_finance_upsert`
+compara com o estado anterior e deduz a transição (`agreement_closed`,
+`agreement_homologated`, `installment_paid`, `installment_overdue`,
+`payment_reversed`, `payout_done`, `payout_reversed`) na mesma transação que
+grava o novo — por isso cada uma sai uma vez, mesmo com reentrega ou fora de
+ordem. `nammux_process_finance` é só `service_role`: traz apenas a parte do
+cliente em cada parcela, e ninguém lê pela tela.
 
 O payload de cada evento novo tem um arquivo de contrato em
 `supabase/tests/fixtures/nammux/`, igual ao do repositório do Nammux. Um teste
@@ -63,6 +72,7 @@ função devolve vazio sem consultar o banco.
 |---|---|---|
 | Processos do cliente | `nammux_process_snapshots` | — (sempre) |
 | Próximas datas | `nammux_process_events` | `nammux_agent_agenda` |
+| Acordo e pagamentos | `nammux_process_finance` | `nammux_agent_finance` |
 
 Com a flag desligada o agente recebe o mesmo texto de antes.
 
