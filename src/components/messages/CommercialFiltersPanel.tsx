@@ -56,17 +56,17 @@ function MultiSelect({ options, selected, onChange, allLabel, searchable, search
           type="button"
           aria-label={ariaLabel}
           className={cn(
-            'flex h-8 w-full min-w-0 items-center justify-between gap-1 rounded-md border bg-background px-2 text-left text-xs',
+            'flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-full border border-input bg-background px-4 text-left text-sm',
             selected.length ? 'border-primary text-foreground' : 'text-muted-foreground',
           )}
         >
           <span className="truncate">{summary}</span>
-          <CaretDown className="h-3 w-3 shrink-0 opacity-60" />
+          <CaretDown className="h-4 w-4 shrink-0 opacity-60" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-[200px] p-1">
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-[220px] rounded-lg p-1">
         {searchable && (
-          <Input className="mb-1 h-7 text-xs" placeholder={searchPlaceholder} value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input className="mb-1 h-9 text-sm" placeholder={searchPlaceholder} value={q} onChange={(e) => setQ(e.target.value)} />
         )}
         <div className="no-scrollbar max-h-56 overflow-y-auto overflow-x-hidden">
           {visible.map((o) => {
@@ -78,10 +78,10 @@ function MultiSelect({ options, selected, onChange, allLabel, searchable, search
                 role="menuitemcheckbox"
                 aria-checked={on}
                 onClick={() => toggle(o.value)}
-                className="flex w-full min-w-0 items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                className="flex w-full min-w-0 items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
               >
-                <span className={cn('flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border', on ? 'border-primary bg-primary text-primary-foreground' : 'border-border')}>
-                  {on && <Check className="h-2.5 w-2.5" weight="bold" />}
+                <span className={cn('flex h-4 w-4 shrink-0 items-center justify-center rounded border', on ? 'border-primary bg-primary text-primary-foreground' : 'border-border')}>
+                  {on && <Check className="h-3 w-3" weight="bold" />}
                 </span>
                 {o.color !== undefined && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: o.color || '#94a3b8' }} />}
                 <span className="truncate">{o.label}</span>
@@ -89,10 +89,10 @@ function MultiSelect({ options, selected, onChange, allLabel, searchable, search
               </button>
             );
           })}
-          {visible.length === 0 && <p className="px-2 py-1.5 text-xs text-muted-foreground">—</p>}
+          {visible.length === 0 && <p className="px-2 py-1.5 text-sm text-muted-foreground">—</p>}
         </div>
         {selected.length > 0 && (
-          <button type="button" onClick={() => onChange([])} className="mt-1 w-full rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-muted">
+          <button type="button" onClick={() => onChange([])} className="mt-1 w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted">
             {allLabel}
           </button>
         )}
@@ -103,20 +103,29 @@ function MultiSelect({ options, selected, onChange, allLabel, searchable, search
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2">
-      <span className="text-xs text-muted-foreground">{label}</span>
+    <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-3">
+      <span className="text-sm font-medium leading-none text-foreground">{label}</span>
       <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function StackRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <span className="block text-sm font-medium leading-none text-foreground">{label}</span>
+      {children}
     </div>
   );
 }
 
 function DateRange({ from, to, onChange, labels }: { from: string; to: string; onChange: (from: string, to: string) => void; labels: [string, string] }) {
   return (
-    <div className="grid grid-cols-2 gap-1.5 min-w-0">
+    <div className="grid min-w-0 grid-cols-2 gap-2">
       <input type="date" aria-label={labels[0]} value={from} max={to || undefined} onChange={(e) => onChange(e.target.value, to)}
-        className="h-8 w-full min-w-0 rounded-md border bg-background px-1.5 text-xs" />
+        className="h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-sm" />
       <input type="date" aria-label={labels[1]} value={to} min={from || undefined} onChange={(e) => onChange(from, e.target.value)}
-        className="h-8 w-full min-w-0 rounded-md border bg-background px-1.5 text-xs" />
+        className="h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-sm" />
     </div>
   );
 }
@@ -155,14 +164,14 @@ export function CommercialFiltersPanel(p: Props) {
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="h-8 gap-1.5" title={L('Filtros', 'Filters')}>
           <FunnelSimple className="h-4 w-4" />
-          <span className="text-xs">{L('Filtros', 'Filters')}</span>
+          <span className="text-sm">{L('Filtros', 'Filters')}</span>
           {activeCount > 0 && (
             <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">{activeCount}</span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" collisionPadding={12} className="w-[340px] max-w-[calc(100vw-24px)] overflow-hidden p-0">
-        <div className="no-scrollbar max-h-[70vh] space-y-2 overflow-y-auto overflow-x-hidden p-3">
+      <PopoverContent align="end" collisionPadding={12} className="w-[420px] max-w-[calc(100vw-24px)] overflow-hidden rounded-xl p-0">
+        <div className="no-scrollbar max-h-[75vh] space-y-3 overflow-y-auto overflow-x-hidden p-4">
           <Row label={L('Situação', 'Status')}>
             <MultiSelect ariaLabel={L('Situação', 'Status')} allLabel={L('Abertas', 'Open')}
               options={[
@@ -218,27 +227,27 @@ export function CommercialFiltersPanel(p: Props) {
                 onChange={(keys) => set({ endpointIds: [...new Set(p.endpoints.filter((o) => keys.includes(o.key)).flatMap((o) => o.endpointIds))] })} />
             </Row>
           )}
-          <Row label={L('Criada em', 'Created')}>
+          <StackRow label={L('Conversa criada em', 'Conversation created')}>
             <DateRange from={f.createdFrom} to={f.createdTo} labels={[L('Criada de', 'Created from'), L('Criada até', 'Created to')]}
               onChange={(a, b) => set({ createdFrom: a, createdTo: b })} />
-          </Row>
-          <Row label={L('Última mensagem', 'Last message')}>
+          </StackRow>
+          <StackRow label={L('Última mensagem em', 'Last message')}>
             <DateRange from={f.lastFrom} to={f.lastTo} labels={[L('Última mensagem de', 'Last message from'), L('Última mensagem até', 'Last message to')]}
               onChange={(a, b) => set({ lastFrom: a, lastTo: b })} />
-          </Row>
+          </StackRow>
           <Row label={L('Não lidas', 'Unread')}>
             <Switch checked={f.unread} onCheckedChange={(v) => set({ unread: v })} aria-label={L('Só não lidas', 'Unread only')} />
           </Row>
 
-          <div className="border-t pt-2">
-            <p className="mb-1.5 text-xs text-muted-foreground">{L('Exibir no card', 'Show on card')}</p>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+          <div className="border-t pt-3">
+            <p className="mb-2 text-sm font-medium leading-none text-foreground">{L('Exibir no card', 'Show on card')}</p>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
               {([
                 ['stage', L('Etapa', 'Stage')],
                 ['tags', L('Etiquetas', 'Tags')],
                 ['endpoint', L('Número', 'Number')],
               ] as const).map(([k, label]) => (
-                <label key={k} className="flex items-center gap-1.5 text-xs">
+                <label key={k} className="flex items-center gap-2 text-sm">
                   <Switch checked={p.cardPrefs[k]} onCheckedChange={(v) => p.onCardPrefsChange({ ...p.cardPrefs, [k]: v })} />
                   {label}
                 </label>
@@ -246,7 +255,7 @@ export function CommercialFiltersPanel(p: Props) {
             </div>
           </div>
         </div>
-        <div className="flex items-center justify-between border-t px-3 py-2">
+        <div className="flex items-center justify-between border-t px-4 py-3">
           <Button variant="ghost" size="sm" disabled={activeCount === 0} onClick={() => p.onChange(clearPanelFilters(f))}>
             {L('Limpar filtros', 'Clear filters')}
           </Button>

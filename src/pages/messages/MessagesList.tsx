@@ -2111,10 +2111,13 @@ function DesktopMessagesList() {
             {/* Header */}
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
-                <h1 className="flex items-baseline gap-2 text-xl font-semibold text-foreground">
+                <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
                   {t('nav.messages')}
-                  <span className="text-xs font-normal text-muted-foreground" aria-live="polite">
-                    {threadsTotal === null ? '…' : conversationCountLabel(threadsTotal, locale)}
+                  <span aria-live="polite" title={threadsTotal === null ? undefined : conversationCountLabel(threadsTotal, locale)}>
+                    <span className="sr-only">{threadsTotal === null ? '' : conversationCountLabel(threadsTotal, locale)}</span>
+                    <Badge color="gray" size="md" aria-hidden="true">
+                      {threadsTotal === null ? '…' : threadsTotal.toLocaleString(locale === 'en-US' ? 'en-US' : 'pt-BR')}
+                    </Badge>
                   </span>
                 </h1>
                 <div className="flex items-center gap-2">
