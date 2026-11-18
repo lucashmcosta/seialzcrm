@@ -3413,7 +3413,7 @@ function DesktopMessagesList() {
           <CommercialFichaPanel
             open={fichaOpen}
             contactId={selectedThread.contact_id}
-            onContactChanged={refetchThreads}
+            onContactChanged={() => { void refetchThreads(); setOppReloadKey((k) => k + 1); }}
             onClose={() => setFichaOpen(false)}
             opportunities={contactOpportunities}
             stages={pipelineStages}

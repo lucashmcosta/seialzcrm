@@ -14,6 +14,10 @@ import { canonicalContactName, digits, formatCpf, type OperatingCountryCode } fr
 import { classifyContactDbError, cpfInputError } from '@/lib/contactRules';
 import { findEmailDuplicates } from '@/lib/contactUpdate';
 import { useRegistryLookup } from '@/hooks/useRegistryLookup';
+import { OwnerSelector } from '@/components/common/OwnerSelector';
+import { OwnerSelectorReadOnly } from './OpportunitySection';
+import { useOrgUserFilterOptions } from '@/hooks/useOrgUserFilterOptions';
+import { ContactOwnerCascadeDialog } from '@/components/contacts/ContactOwnerCascadeDialog';
 import { CheckCircle, SpinnerGap, Warning } from '@phosphor-icons/react';
 
 type ContactRow = {
@@ -24,6 +28,7 @@ type ContactRow = {
   email: string | null;
   cpf: string | null;
   phone: string | null;
+  owner_user_id: string | null;
 };
 
 type FieldKey = 'full_name' | 'first_name' | 'last_name' | 'email' | 'cpf';
@@ -65,6 +70,9 @@ export function ContactQuickEdit({
     },
   });
   const [cpfChecking, setCpfChecking] = useState(false);
+  const orgUsers = useOrgUserFilterOptions(organization?.id);
+  // Troca do responsável do contato: abre a confirmação (conversa e oportunidades podem ir junto).
+  const [pendingOwner, setPendingOwner] = useState<string | null | undefined>(undefined);
 
   const contact = useQuery({
     queryKey,
@@ -72,7 +80,7 @@ export function ContactQuickEdit({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('contacts')
-        .select('id, full_name, first_name, last_name, email, cpf, phone')
+        .select('id, full_name, first_name, last_name, email, cpf, phone, owner_user_id')
         .eq('id', contactId)
         .maybeSingle();
       if (error) throw error;
@@ -298,6 +306,33 @@ export function ContactQuickEdit({
       </div>
       {field('email', 'E-mail', { placeholder: 'nome@exemplo.com', inputMode: 'email' })}
       {isBrazil && field('cpf', 'CPF', { placeholder: '000.000.000-00', inputMode: 'numeric' })}
+      <div className="space-y-1.5">
+        <Label className="text-xs text-muted-foreground">{uiText('Responsável')}</Label>
+        {canEdit ? (
+          <OwnerSelector
+            size="sm"
+            value={contact.data.owner_user_id ?? null}
+            onChange={(userId) => { if (userId !== (contact.data?.owner_user_id ?? null)) setPendingOwner(userId); }}
+            placeholder={uiText('Sem responsável')}
+          />
+        ) : (
+          <OwnerSelectorReadOnly value={contact.data.owner_user_id ?? null} />
+        )}
+      </div>
+      {pendingOwner !== undefined && (
+        <ContactOwnerCascadeDialog
+          open
+          contactId={contactId}
+          newOwnerId={pendingOwner}
+          newOwnerName={orgUsers.find((u) => u.id === pendingOwner)?.fullName ?? uiText('Sem responsável')}
+          onCancel={() => setPendingOwner(undefined)}
+          onDone={async () => {
+            setPendingOwner(undefined);
+            await qc.invalidateQueries({ queryKey });
+            onSaved?.();
+          }}
+        />
+      )}
       {children}
       {!canEdit && (
         <p className="text-xs text-muted-foreground">{uiText('Você não tem permissão para editar contatos.')}</p>

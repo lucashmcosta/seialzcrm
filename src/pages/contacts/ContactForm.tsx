@@ -34,6 +34,9 @@ import {
 } from '@/lib/regional';
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 import { classifyContactDbError, cpfInputError } from '@/lib/contactRules';
+import { ContactOwnerCascadeDialog } from '@/components/contacts/ContactOwnerCascadeDialog';
+import { uiText } from '@/lib/ui-locale';
+import { useOrgUserFilterOptions } from '@/hooks/useOrgUserFilterOptions';
 
 /**
  * Porta em TS a função public.normalize_phone_br do banco.
@@ -102,6 +105,10 @@ export function ContactFormView({
   const { organization, userProfile, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { lookup, isBrazil } = useRegistryLookup();
+  // Responsável do contato é o principal: ao trocar e salvar, pergunta se conversa e oportunidades vão junto.
+  const originalOwnerRef = useRef<string | null | undefined>(undefined);
+  const [ownerCascade, setOwnerCascade] = useState<string | null | undefined>(undefined);
+  const orgUsersForOwner = useOrgUserFilterOptions(organization?.id);
   const isEdit = !!id;
 
   const [formData, setFormData] = useState({
@@ -226,7 +233,7 @@ export function ContactFormView({
         company_id: data.company_id || null,
         lifecycle_stage: data.lifecycle_stage || 'lead',
         do_not_contact: data.do_not_contact || false,
-        owner_user_id: data.owner_user_id || null,
+        owner_user_id: (originalOwnerRef.current = data.owner_user_id || null),
         cpf: formatCpf(data.cpf),
         rg: data.rg || '',
         rg_issuer: data.rg_issuer || '',
@@ -649,6 +656,13 @@ export function ContactFormView({
         return;
       }
       toast.success(t('contacts.updated'));
+      const savedOwner = contactData.owner_user_id || null;
+      if (originalOwnerRef.current !== undefined && savedOwner !== originalOwnerRef.current) {
+        originalOwnerRef.current = savedOwner;
+        setLoading(false);
+        setOwnerCascade(savedOwner); // abre a pergunta; navega quando ela fechar
+        return;
+      }
       navigate(`/contacts/${id}`);
     } else {
       const { data, error } = await supabase
@@ -703,6 +717,17 @@ export function ContactFormView({
 
   return (
     <Shell>
+      {ownerCascade !== undefined && id && (
+        <ContactOwnerCascadeDialog
+          open
+          mode="after"
+          contactId={id}
+          newOwnerId={ownerCascade}
+          newOwnerName={orgUsersForOwner.find((u) => u.id === ownerCascade)?.fullName ?? uiText('Sem responsável')}
+          onCancel={() => { setOwnerCascade(undefined); navigate(`/contacts/${id}`); }}
+          onDone={() => { setOwnerCascade(undefined); navigate(`/contacts/${id}`); }}
+        />
+      )}
       <div className="flex flex-col h-full">
         {!embedded && <div className="border-b bg-background/95 backdrop-blur">
           <div className="flex items-center gap-4 px-6 py-4">
