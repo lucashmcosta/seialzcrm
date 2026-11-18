@@ -64,7 +64,7 @@ function MultiSelect({ options, selected, onChange, allLabel, searchable, search
           <CaretDown className="h-4 w-4 shrink-0 opacity-60" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-[220px] rounded-lg p-1">
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-[220px] rounded-lg border-border/60 p-1 shadow-[0_10px_30px_-8px_rgba(15,23,42,0.18)]">
         {searchable && (
           <Input className="mb-1 h-9 text-sm" placeholder={searchPlaceholder} value={q} onChange={(e) => setQ(e.target.value)} />
         )}
@@ -170,7 +170,7 @@ export function CommercialFiltersPanel(p: Props) {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" collisionPadding={12} className="w-[420px] max-w-[calc(100vw-24px)] overflow-hidden rounded-xl p-0">
+      <PopoverContent align="end" collisionPadding={12} className="w-[420px] max-w-[calc(100vw-24px)] overflow-hidden rounded-xl border-border/60 p-0 shadow-[0_12px_40px_-8px_rgba(15,23,42,0.18),0_4px_12px_-4px_rgba(15,23,42,0.08)]">
         <div className="no-scrollbar max-h-[75vh] space-y-3 overflow-y-auto overflow-x-hidden p-4">
           <Row label={L('Situação', 'Status')}>
             <MultiSelect ariaLabel={L('Situação', 'Status')} allLabel={L('Abertas', 'Open')}
