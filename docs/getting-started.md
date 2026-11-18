@@ -78,3 +78,4 @@ Segredos de edge functions (`LOVABLE_API_KEY`, `VOYAGE_API_KEY`, `SENTRY_DSN`, `
 - **Cuidado:** o banco é produção. Nunca rodar INSERT/UPDATE em massa sem ler "Janelas e cuidados" em `operations/README.md` (`messages` tem 12 triggers; workers rodam a cada 30s).
 
 - `AUXILIUS_OTP_HMAC_SECRET`: segredo HMAC da Auxilius para `whatsapp-otp-send` (Edge secret).
+- `CLIENT_PORTAL_NOTIFY_URL`: endpoint do backend do App do cliente que envia notificação, usado por `nammux-notice-dispatch` (Edge secret, opcional). Sem ele os avisos automáticos saem só por WhatsApp.
