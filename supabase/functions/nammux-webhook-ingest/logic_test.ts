@@ -7,3 +7,7 @@ Deno.test("nota nula vira texto padrão", () => {
 Deno.test("nota preenchida é mantida", () => {
   assertEquals(notaCertificacao(" Sem testemunha ", "Ana"), "Sem testemunha");
 });
+Deno.test("log de entrada usa a chave única da tabela", async () => {
+  const { INBOUND_LOG_CONFLICT } = await import("./logic.ts");
+  assertEquals(INBOUND_LOG_CONFLICT, "organization_id,direction,external_event_id");
+});

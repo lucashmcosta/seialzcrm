@@ -56,6 +56,21 @@ async function hmacSha256Hex(secret: string, message: string): Promise<string> {
     .join("");
 }
 
+/**
+ * Entidade do evento. `integration_events` guarda `aggregate_type` / `aggregate_id`;
+ * o tipo TS antigo dizia `entity_type` / `entity_id`, que não existem na tabela,
+ * e o envelope saía com `entity: {}`.
+ */
+export function eventEntity(event: unknown): { type: string | undefined; id: string | undefined } {
+  const e = (event ?? {}) as Record<string, unknown>;
+  const pick = (a: unknown, b: unknown) =>
+    typeof a === "string" && a ? a : typeof b === "string" && b ? b : undefined;
+  return {
+    type: pick(e.aggregate_type, e.entity_type),
+    id: pick(e.aggregate_id, e.entity_id),
+  };
+}
+
 export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<HandlerResult> => {
   const cfg = await loadNammuxConfig(ctx.supabase, ctx.event.organization_id);
   if (!cfg) {
@@ -100,6 +115,7 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
   }
 
   const seialzOrgId = ctx.event.organization_id;
+  const entity = eventEntity(ctx.event);
   const basePayload = (ctx.event.payload ?? {}) as Record<string, unknown>;
   const data = {
     ...basePayload,
@@ -116,10 +132,7 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
     organization_id: seialzOrgId,
     target_organization_id: targetOrgId,
     correlation_id: ctx.event.id,
-    entity: {
-      type: ctx.event.entity_type,
-      id: ctx.event.entity_id,
-    },
+    entity,
     occurred_at: ctx.event.occurred_at,
     data,
   };
@@ -166,7 +179,9 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
       typeof externalPayload?.external_process_id === "string"
         ? externalPayload.external_process_id
         : undefined,
-    entityType: ctx.event.entity_type,
-    internalId: ctx.event.entity_id,
+    // O worker só grava external_mappings quando há `externalId`, e o Nammux só
+    // devolve `external_process_id` — o mesmo id que o snapshot de entrada grava.
+    entityType: entity.type,
+    internalId: entity.id,
   };
 };

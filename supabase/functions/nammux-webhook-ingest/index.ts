@@ -5,7 +5,7 @@ import {
   camposAlterados,
   ErroCalculo,
 } from "../_shared/classificacao/certificar.ts";
-import { notaCertificacao } from "./logic.ts";
+import { INBOUND_LOG_CONFLICT, notaCertificacao } from "./logic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,6 +45,18 @@ async function hmacSha256Hex(secret: string, message: string): Promise<string> {
   return Array.from(new Uint8Array(signature))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
+}
+
+// Resultado do evento no log, um por (organização, direção, id do evento).
+// É upsert, não insert: a tabela tem índice único nessa chave, e o insert de um
+// evento que falhou antes e agora deu certo batia nele em silêncio. O evento
+// nunca constava como `processed` e era reprocessado a cada reenvio.
+// deno-lint-ignore no-explicit-any
+async function recordInbound(admin: any, row: Record<string, unknown>) {
+  const { error } = await admin
+    .from("nammux_sync_events")
+    .upsert(row, { onConflict: INBOUND_LOG_CONFLICT });
+  if (error) console.error("nammux_sync_events write failed", error.message);
 }
 
 Deno.serve(async (req) => {
@@ -178,7 +190,7 @@ Deno.serve(async (req) => {
 
     const result = (applied ?? {}) as Record<string, unknown>;
     const ignoredAsStale = result.ignored_as_stale === true;
-    await admin.from("nammux_sync_events").insert({
+    await recordInbound(admin, {
       organization_id: organizationId,
       opportunity_id: result.opportunity_id ?? null,
       external_event_id: eventId,
@@ -248,7 +260,7 @@ Deno.serve(async (req) => {
     } catch (e) {
       if (!(e instanceof ErroCalculo)) throw e;
       // Erro de entrada é permanente: reenviar o mesmo evento não conserta.
-      await admin.from("nammux_sync_events").insert({
+      await recordInbound(admin, {
         organization_id: organizationId,
         opportunity_id: opportunityId,
         external_event_id: eventId,
@@ -282,7 +294,7 @@ Deno.serve(async (req) => {
       const codigo = /pc:([a-z_]+)/.exec(certError.message ?? "")?.[1] ?? "certification_failed";
       const permanente = codigo !== "certification_failed";
       console.error("certification failed", codigo);
-      await admin.from("nammux_sync_events").insert({
+      await recordInbound(admin, {
         organization_id: organizationId,
         opportunity_id: opportunityId,
         external_event_id: eventId,
@@ -297,7 +309,7 @@ Deno.serve(async (req) => {
     }
 
     const r = (gravado ?? {}) as { outcome?: string; finalBand?: string | null; finalCommission?: number };
-    await admin.from("nammux_sync_events").insert({
+    await recordInbound(admin, {
       organization_id: organizationId,
       opportunity_id: opportunityId,
       external_event_id: eventId,
@@ -334,7 +346,7 @@ Deno.serve(async (req) => {
       })
       .eq("organization_id", organizationId)
       .eq("opportunity_id", opportunityId);
-    await admin.from("nammux_sync_events").insert({
+    await recordInbound(admin, {
       organization_id: organizationId,
       opportunity_id: opportunityId,
       external_event_id: eventId,
@@ -342,7 +354,8 @@ Deno.serve(async (req) => {
       direction: "inbound",
       status: "error",
       error: message,
-      summary: data,
+      // Só o id: o corpo do evento não é copiado para o log.
+      summary: { failed_inbound_event_id: data.failed_inbound_event_id ?? null },
       occurred_at: envelope.occurred_at ?? null,
     });
     return json(200, { ok: true });
@@ -422,7 +435,7 @@ Deno.serve(async (req) => {
     );
   }
 
-  await admin.from("nammux_sync_events").insert({
+  await recordInbound(admin, {
     organization_id: organizationId,
     opportunity_id: opportunityId,
     external_event_id: eventId,
