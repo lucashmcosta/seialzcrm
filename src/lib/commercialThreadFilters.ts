@@ -6,6 +6,9 @@ export type ThreadView = 'open' | 'to_reply' | 'awaiting_client' | 'resolved';
 export type ThreadHandler = 'ai' | 'needs_human' | 'none';
 export type OppState = 'open' | 'none' | 'won' | 'lost';
 export type ThreadOrigin = 'ad' | 'organic';
+export type ThreadWindow = 'open' | 'closed';
+/** Opções de "parada há mais de X dias". */
+export const IDLE_DAY_OPTIONS = [1, 3, 7, 15, 30] as const;
 
 export interface CommercialThreadFilters {
   view: ThreadView;
@@ -25,6 +28,10 @@ export interface CommercialThreadFilters {
   origin: ThreadOrigin | '';
   adIds: string[];
   unread: boolean;
+  /** Sem mensagem (de nenhum lado) há mais de N dias; 0 = sem filtro. */
+  idleDays: number;
+  /** Janela de 24h do WhatsApp pela última mensagem do cliente. */
+  window: ThreadWindow | '';
 }
 
 export const EMPTY_FILTERS: CommercialThreadFilters = {
@@ -44,6 +51,8 @@ export const EMPTY_FILTERS: CommercialThreadFilters = {
   origin: '',
   adIds: [],
   unread: false,
+  idleDays: 0,
+  window: '',
 };
 
 /** Itens do card que cada pessoa escolhe ver (o "com quem está" é sempre visível). */
@@ -79,6 +88,8 @@ export function parseFilters(raw: unknown): CommercialThreadFilters {
     origin: r.origin === 'ad' || r.origin === 'organic' ? r.origin : '',
     adIds: strArr(r.adIds),
     unread: r.unread === true,
+    idleDays: (IDLE_DAY_OPTIONS as readonly number[]).includes(Number(r.idleDays)) ? Number(r.idleDays) : 0,
+    window: r.window === 'open' || r.window === 'closed' ? r.window : '',
   };
 }
 
@@ -121,6 +132,8 @@ export function toRpcFilters(f: CommercialThreadFilters, extra?: { threadIds?: s
   if (f.origin) out.origin = f.origin;
   if (f.adIds.length) out.ad_ids = f.adIds;
   if (f.unread) out.unread = true;
+  if (f.idleDays > 0) out.idle_days = f.idleDays;
+  if (f.window) out.window = f.window;
   if (extra?.threadIds?.length) out.thread_ids = extra.threadIds;
   return out;
 }
@@ -140,6 +153,8 @@ export function countActivePanelFilters(f: CommercialThreadFilters): number {
   if (f.origin) n++;
   if (f.adIds.length) n++;
   if (f.unread) n++;
+  if (f.idleDays > 0) n++;
+  if (f.window) n++;
   return n;
 }
 

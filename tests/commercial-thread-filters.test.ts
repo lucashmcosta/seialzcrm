@@ -4,6 +4,13 @@ import {
 } from '../src/lib/commercialThreadFilters';
 
 describe('filtros do Comercial', () => {
+  test('parada há X dias e janela vão para o servidor e contam no painel', () => {
+    const f = { ...EMPTY_FILTERS, idleDays: 3, window: 'closed' as const };
+    expect(toRpcFilters(f)).toEqual({ view: 'open', idle_days: 3, window: 'closed' });
+    expect(countActivePanelFilters(f)).toBe(2);
+    expect(parseFilters({ idleDays: 4, window: 'x' })).toMatchObject({ idleDays: 0, window: '' });
+  });
+
   test('padrão manda só a situação', () => {
     expect(toRpcFilters(EMPTY_FILTERS)).toEqual({ view: 'open' });
   });

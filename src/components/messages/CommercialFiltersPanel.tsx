@@ -12,8 +12,8 @@ import type { SalesEndpointFilterOption } from '@/hooks/useSalesEndpointFilterOp
 import type { OrgUserFilterOption } from '@/hooks/useOrgUserFilterOptions';
 import type { AdOption, StageOption, TagOption } from '@/hooks/useCommercialFilterOptions';
 import {
-  type CardDisplayPrefs, type CommercialThreadFilters, type OppState, type ThreadHandler, type ThreadView,
-  clearPanelFilters, countActivePanelFilters,
+  type CardDisplayPrefs, type CommercialThreadFilters, type OppState, type ThreadHandler, type ThreadView, type ThreadWindow,
+  IDLE_DAY_OPTIONS, clearPanelFilters, countActivePanelFilters,
 } from '@/lib/commercialThreadFilters';
 
 interface Props {
@@ -235,6 +235,21 @@ export function CommercialFiltersPanel(p: Props) {
             <DateRange from={f.lastFrom} to={f.lastTo} labels={[L('Última mensagem de', 'Last message from'), L('Última mensagem até', 'Last message to')]}
               onChange={(a, b) => set({ lastFrom: a, lastTo: b })} />
           </StackRow>
+          <Row label={L('Parada há', 'Idle for')}>
+            <MultiSelect ariaLabel={L('Parada há mais de', 'Idle for more than')} allLabel={L('Qualquer tempo', 'Any time')}
+              options={IDLE_DAY_OPTIONS.map((d) => ({ value: String(d), label: pt ? `Mais de ${d} ${d === 1 ? 'dia' : 'dias'}` : `More than ${d} ${d === 1 ? 'day' : 'days'}` }))}
+              selected={f.idleDays ? [String(f.idleDays)] : []}
+              onChange={(v) => { const pick = v.find((x) => x !== String(f.idleDays)) ?? v[0]; set({ idleDays: pick ? Number(pick) : 0 }); }} />
+          </Row>
+          <Row label={L('Janela 24h', '24h window')}>
+            <MultiSelect ariaLabel={L('Janela de 24 horas', '24-hour window')} allLabel={L('Todas', 'All')}
+              options={[
+                { value: 'open', label: L('Aberta (pode responder)', 'Open (can reply)') },
+                { value: 'closed', label: L('Vencida (só modelo)', 'Expired (template only)') },
+              ]}
+              selected={f.window ? [f.window] : []}
+              onChange={(v) => { const pick = v.find((x) => x !== f.window) ?? v[0]; set({ window: (pick ?? '') as ThreadWindow | '' }); }} />
+          </Row>
           <Row label={L('Não lidas', 'Unread')}>
             <Switch checked={f.unread} onCheckedChange={(v) => set({ unread: v })} aria-label={L('Só não lidas', 'Unread only')} />
           </Row>
@@ -292,6 +307,8 @@ export function ActiveFilterChips(p: Pick<Props, 'locale' | 'value' | 'onChange'
   const selectedNumbers = p.endpoints.filter((o) => o.endpointIds.some((id) => f.endpointIds.includes(id)));
   selectedNumbers.forEach((o) => items.push({ key: `e-${o.key}`, label: o.address, clear: () => set({ endpointIds: f.endpointIds.filter((id) => !o.endpointIds.includes(id)) }) }));
   if (f.unread) items.push({ key: 'unread', label: L('Não lidas', 'Unread'), clear: () => set({ unread: false }) });
+  if (f.idleDays > 0) items.push({ key: 'idle', label: pt ? `Parada há +${f.idleDays} ${f.idleDays === 1 ? 'dia' : 'dias'}` : `Idle ${f.idleDays}+ ${f.idleDays === 1 ? 'day' : 'days'}`, clear: () => set({ idleDays: 0 }) });
+  if (f.window) items.push({ key: 'window', label: f.window === 'open' ? L('Janela aberta', 'Window open') : L('Janela vencida', 'Window expired'), clear: () => set({ window: '' }) });
 
   if (!items.length) return null;
   return (
