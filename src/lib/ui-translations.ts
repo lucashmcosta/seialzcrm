@@ -1370,6 +1370,8 @@ Object.assign(uiEnglish, {
   "Devolver à IA": "Return to AI",
   "Encerrar conversa": "Close conversation",
   "Ganhas e perdidas": "Won and lost",
+  "Escolha uma imagem (PNG, JPG ou WEBP).": "Choose an image (PNG, JPG or WEBP).",
+  "A imagem precisa ter até 5 MB.": "The image must be up to 5 MB.",
   "Funil de vendas": "Pipeline",
   "Etapa do ciclo de vida": "Lifecycle stage",
   "Etapa do ciclo de vida para novos contatos": "Lifecycle stage for new contacts",

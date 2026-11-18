@@ -62,7 +62,7 @@ export function Layout({ children }: LayoutProps) {
   const portalUnread = useClientPortalUnreadCount(organization?.id, !!portalChatEnabled);
   const { themePreset } = useTheme();
   // Menu lateral recolhido (só ícones) — preferência por navegador.
-  const { data: orgLogoIcon } = useOrgLogoIcon(organization?.id);
+  const { data: orgLogoIcon, isPending: orgLogoIconPending } = useOrgLogoIcon(organization?.id);
   const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
     try { return window.localStorage.getItem('layout.sidebar.collapsed') === '1'; } catch { return false; }
   });
@@ -255,7 +255,11 @@ export function Layout({ children }: LayoutProps) {
   );
 
   const userInitial = userProfile?.full_name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || '?';
-  const collapsedLogo = (
+  // Enquanto a org ou o ícone ainda não chegaram (e não há cache), mostra um quadrado neutro
+  // em vez de um ícone errado que depois troca.
+  const collapsedLogo = loading || (orgLogoIconPending && !!organization?.id) ? (
+    <div className="h-9 w-9 rounded-lg bg-muted animate-pulse" aria-hidden />
+  ) : (
     <Link to="/dashboard" title={organization?.name || undefined} className="flex items-center justify-center">
       {orgLogoIcon ? (
         <img src={orgLogoIcon} alt={organization?.name} className="h-9 w-9 object-contain rounded-lg" />

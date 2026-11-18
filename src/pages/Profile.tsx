@@ -1,4 +1,4 @@
-import { uiError } from '@/lib/ui-locale';
+import { uiError, uiText } from '@/lib/ui-locale';
 import { profileName } from '@/lib/locale';
 import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
@@ -59,18 +59,21 @@ export default function Profile() {
       }
 
       const file = event.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${userProfile?.id}-${Math.random()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+      if (!user?.id) throw new Error('not_authenticated');
+      if (!file.type.startsWith('image/')) throw new Error(uiText('Escolha uma imagem (PNG, JPG ou WEBP).'));
+      if (file.size > 5 * 1024 * 1024) throw new Error(uiText('A imagem precisa ter até 5 MB.'));
+      const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      // Pasta própria das fotos de perfil: cada pessoa grava só na pasta com o próprio id de login.
+      const filePath = `${user.id}/${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('attachments')
-        .upload(filePath, file, { upsert: true });
+        .from('user-avatars')
+        .upload(filePath, file, { upsert: true, contentType: file.type, cacheControl: '3600' });
 
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('attachments')
+        .from('user-avatars')
         .getPublicUrl(filePath);
 
       setAvatarUrl(publicUrl);
