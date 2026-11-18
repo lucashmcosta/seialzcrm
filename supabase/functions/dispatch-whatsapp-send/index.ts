@@ -51,7 +51,16 @@ Deno.serve(async (req) => {
   }
 
   const auth = await validateCallerAuth(req, parsed.data.organizationId);
-  if (!auth.ok) return json(401, { error: "unauthorized", reason: auth.error });
+  if (!auth.ok) {
+    // O motivo detalhado já foi logado em validateCallerAuth; aqui amarramos à conversa.
+    console.warn("[dispatch-wa] send_rejected_auth", JSON.stringify({
+      reason: auth.error,
+      organization_id: parsed.data.organizationId,
+      thread_id: parsed.data.threadId ?? null,
+      contact_id: parsed.data.contactId ?? null,
+    }));
+    return json(401, { error: "unauthorized", reason: auth.error });
+  }
 
   const authenticatedUserId = auth.kind === "user" ? auth.userId : undefined;
   const payload: WhatsAppSendPayload = {
