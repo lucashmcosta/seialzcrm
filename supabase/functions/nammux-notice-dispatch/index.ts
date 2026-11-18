@@ -23,6 +23,7 @@ import {
   type WhatsAppRoute,
 } from "../_shared/integrations/nammux-notice-core.ts";
 import { renderNoticeFromDb } from "../_shared/integrations/nammux-notice-render.ts";
+import { ratingQuestion } from "../_shared/integrations/support-rating.ts";
 import type { Rendered, RenderResult } from "../_shared/integrations/nammux-notice-texts.ts";
 
 const BATCH = 25;
@@ -191,6 +192,33 @@ serve(async (req) => {
           sendStarted.value ? "unknown_outcome" : "internal_error");
         count(sendStarted.value ? "needs_review" : "retry");
       }
+    }
+  }
+
+  // Avaliação do agente de atendimento: pergunta "Consegui te ajudar?" nas conversas que
+  // esfriaram. A função do banco já reserva a pergunta do dia (uma por conversa) e só
+  // devolve conversa de agente `support`, com a flag da organização ligada.
+  if (Date.now() - startedAt < MAX_RUNTIME_MS) {
+    const { data: ratings, error: ratingError } = await supabase.rpc("support_rating_claim_due", { _limit: 20 });
+    if (ratingError) console.error("[nammux-notice-dispatch] avaliação", ratingError.code ?? "sem_codigo");
+    for (const rating of (ratings ?? []) as Array<{ id: string; organization_id: string; thread_id: string; contact_id: string | null; agent_id: string | null }>) {
+      let sent = false;
+      let messageId: string | null = null;
+      if (rating.contact_id) {
+        const result = await dispatchWhatsAppSend({
+          organizationId: rating.organization_id,
+          contactId: rating.contact_id,
+          threadId: rating.thread_id,
+          interactive: ratingQuestion(),
+          isAgentMessage: true,
+          agentId: rating.agent_id ?? undefined,
+        });
+        sent = !result.error;
+        messageId = typeof result.data?.messageId === "string" ? result.data.messageId : null;
+      }
+      // Falha ou resultado incerto: não repete hoje. Perguntar duas vezes é pior que não perguntar.
+      await supabase.rpc("support_rating_mark_asked", { _rating_id: rating.id, _sent: sent, _message_id: messageId });
+      count(sent ? "rating_asked" : "rating_failed");
     }
   }
 
