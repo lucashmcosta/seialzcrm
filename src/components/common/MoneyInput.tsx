@@ -27,11 +27,13 @@ export function MoneyInput({ id, value, currency, locale, disabled, onCommit, cl
 
   return (
     <div className={cn('relative', className)}>
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{symbol}</span>
+      {/* z-10: o Input do sistema tem camada animada com fundo próprio, que cobria o símbolo. */}
+      <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-sm text-muted-foreground">{symbol}</span>
       <Input
         id={id}
         type="text"
         inputMode="decimal"
+        placeholder={formatMoneyInput(0, locale) === '0' ? (locale === 'en-US' ? '0.00' : '0,00') : undefined}
         autoComplete="off"
         value={text}
         disabled={disabled}
