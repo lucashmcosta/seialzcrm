@@ -9,6 +9,7 @@
 | `message_analyses` | 21 col — análise por mensagem |
 | `conversation_analysis_runs` | rodada de análise da conversa inteira (lote na Anthropic): amostra, teto e custo real, relatório ganhas x perdidas em `result` |
 | `conversation_analyses` | análise de uma conversa inteira por oportunidade fechada, ligada à rodada |
+| `service_conversation_analyses` | análise de uma conversa inteira do atendimento (`customer_service`), uma linha por thread e rodada (`kind = service_conversations`) |
 | `message_response_times` | 12 col |
 | `seller_metrics_daily` | 17 col — rollup diário por vendedor |
 | `organization_usage_metrics` | 10 col |
