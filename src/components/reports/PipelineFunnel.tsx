@@ -18,7 +18,7 @@ export function PipelineFunnel({ stages, formatCurrency, loading }: Props) {
   return (
     <div className="rounded-md border border-border bg-card p-5">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-foreground">Funil do Pipeline</h3>
+        <h3 className="text-sm font-semibold text-foreground">Funil</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Oportunidades abertas por etapa
         </p>

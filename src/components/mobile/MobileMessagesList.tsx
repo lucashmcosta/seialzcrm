@@ -102,8 +102,8 @@ const statusConfig: Record<string, { label: string; labelEn: string; dotColor: s
   reply: { label: 'Responder', labelEn: 'Reply', color: 'text-green-700 dark:text-green-400', dotColor: 'bg-green-500' },
   in_progress: { label: 'Em atendimento', labelEn: 'In progress', color: 'text-blue-700 dark:text-blue-400', dotColor: 'bg-blue-500' },
   awaiting_client: { label: 'Aguardando', labelEn: 'Awaiting', color: 'text-amber-700 dark:text-amber-400', dotColor: 'bg-amber-500' },
-  resolved: { label: 'Resolvida', labelEn: 'Resolved', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
-  closed: { label: 'Fechada', labelEn: 'Closed', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
+  resolved: { label: 'Encerrada', labelEn: 'Closed', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
+  closed: { label: 'Encerrada', labelEn: 'Closed', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
 };
 
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
@@ -218,7 +218,7 @@ export function MobileMessagesList() {
 
   // Set default filter
   useEffect(() => {
-    // Na aba Resolvidas a lista muda de tamanho; não volta sozinha para as abertas.
+    // Na aba Encerradas a lista muda de tamanho; não volta sozinha para as abertas.
     if (filter === 'resolved') return;
     if (threads && threads.length > 0 && userProfile?.id) {
       const hasMine = threads.some(t => t.assigned_user_id === userProfile.id && ['open', 'awaiting_client', 'in_progress'].includes(t.status));
@@ -709,7 +709,7 @@ export function MobileMessagesList() {
     { key: 'mine', label: locale === 'pt-BR' ? 'Minhas' : 'Mine' },
     { key: 'unassigned', label: locale === 'pt-BR' ? 'Não atribuídas' : 'Unassigned' },
     { key: 'all_open', label: locale === 'pt-BR' ? 'Abertas' : 'Open' },
-    { key: 'resolved', label: locale === 'pt-BR' ? 'Resolvidas' : 'Resolved' },
+    { key: 'resolved', label: locale === 'pt-BR' ? 'Encerradas' : 'Closed' },
   ];
 
   const isInChat = !!selectedThreadId;
@@ -903,13 +903,13 @@ export function MobileMessagesList() {
                 {selectedThread && ['open', 'awaiting_client', 'in_progress'].includes(selectedThread.status) && (
                   <DropdownMenuItem disabled={!threadPerms.canClose} title={threadPerms.canClose ? undefined : DENY_CLOSE} onClick={() => handleResolve(selectedThread.id)}>
                     <CheckCircle className="w-4 h-4 mr-2" />
-                    {locale === 'pt-BR' ? 'Resolver' : 'Resolve'}
+                    {locale === 'pt-BR' ? 'Encerrar conversa' : 'Close conversation'}
                   </DropdownMenuItem>
                 )}
                 {selectedThread?.needs_human_attention && hasAIAgent && (
                   <DropdownMenuItem onClick={() => handleReturnToAI(selectedThread.id)}>
                     <Robot className="w-4 h-4 mr-2" />
-                    {locale === 'pt-BR' ? 'Devolver ao AI' : 'Return to AI'}
+                    {locale === 'pt-BR' ? 'Devolver à IA' : 'Return to AI'}
                   </DropdownMenuItem>
                 )}
                 {selectedThread?.status === 'resolved' && (

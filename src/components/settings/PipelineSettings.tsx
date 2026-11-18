@@ -269,7 +269,7 @@ export function PipelineSettings() {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Excluir Estágio do Pipeline"
+        title="Excluir etapa do funil"
         description="Tem certeza que deseja excluir este estágio? Oportunidades neste estágio precisarão ser movidas para outro."
         confirmText="Excluir"
         variant="destructive"

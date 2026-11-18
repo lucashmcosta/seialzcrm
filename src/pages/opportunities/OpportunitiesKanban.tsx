@@ -1233,8 +1233,8 @@ export default function OpportunitiesKanban() {
         <div className="flex flex-col h-full">
           <div className="px-3"><CommercialFilters value={commercialFilters} onChange={setCommercialFilters} />{commercialSavedViews}</div>
           <SeialzTopbar
-            title="Pipeline"
-            count={`${totalDeals} deals · ${formatCurrency(totalPipelineAmount, organization?.default_currency || 'BRL')}`}
+            title={locale === 'en-US' ? 'Pipeline' : 'Funil'}
+            count={`${totalDeals} ${locale === 'en-US' ? (totalDeals === 1 ? 'opportunity' : 'opportunities') : (totalDeals === 1 ? 'oportunidade' : 'oportunidades')} · ${formatCurrency(totalPipelineAmount, organization?.default_currency || 'BRL')}`}
           >
             <div className="relative">
               <MagnifyingGlass size={14} weight="light" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />

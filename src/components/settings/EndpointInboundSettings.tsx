@@ -198,7 +198,7 @@ export function EndpointInboundSettings({ endpointId, integrationFallback }: Pro
 
         {settings.auto_create_contact && (
           <div className="space-y-2">
-            <Label className="text-sm">{uiText("Estágio do ciclo de vida")}</Label>
+            <Label className="text-sm">{uiText("Etapa do ciclo de vida")}</Label>
             <select
               className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               value={settings.default_lifecycle_stage}
