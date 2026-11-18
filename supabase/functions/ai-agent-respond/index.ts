@@ -10,7 +10,10 @@ import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
 import { buildChoicesInteractive, withoutQuestionEcho } from "../_shared/intelligence/agent-choices.ts";
 import { interactiveFallbackText, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
-import { nammuxProcessBlock, loadNammuxProcesses } from "../_shared/integrations/nammux-process-context.ts";
+import { nammuxContextForAgent, nammuxSupportContext } from "../_shared/integrations/nammux-process-context.ts";
+import { featureFlagEnabled } from "../_shared/feature-flags.ts";
+import { buildNammuxInterviewTools, nammuxToolDeps, nammuxToolsForAgent } from "../_shared/integrations/nammux-agent-tools.ts";
+import { captureRating, ratingDeps, ratingForAgent } from "../_shared/integrations/support-rating.ts";
 import { decideSupportGate, agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES } from "../_shared/widgets/agent-tools.ts";
@@ -1821,6 +1824,22 @@ serve(async (req) => {
         message = heard;
       }
       if (!message?.trim()) return skip('empty_message');
+
+      // Avaliação "Consegui te ajudar?": só o agente de atendimento, com a flag da org.
+      // Se a mensagem é o Sim/Não da pergunta em aberto, grava e responde um texto fixo,
+      // sem chamar o modelo. Para o comercial isto devolve null sem consultar nada.
+      if (!followUp) {
+        const rated = await ratingForAgent(
+          agent.agent_type,
+          (flag) => featureFlagEnabled(supabase, flag, organizationId),
+          () => captureRating(message, ratingDeps(supabase, threadId)),
+        );
+        if (rated) {
+          if (rated.handOff) await releaseToHuman(supabase, threadId, 'rating_no');
+          await dispatchWhatsAppSend({ organizationId, contactId, threadId, message: rated.reply, isAgentMessage: true, agentId: agent.id, senderName: agent.name });
+          return skip(`support_rating_${rated.answer}`);
+        }
+      }
     }
 
     // Include mark_name_asked automatically when update_contact is enabled
@@ -1831,6 +1850,13 @@ serve(async (req) => {
     // Ferramentas de widget (ex.: calculadora trabalhista): só com o widget ligado na org.
     const widgetTools = await activeWidgetTools(supabase, organizationId, toolsWithName);
     const enabledTools = toolsWithName.filter((t) => !WIDGET_TOOL_NAMES.has(t) || widgetTools.some((w) => w.name === t));
+    // Ferramentas da integração com o Nammux (agendar entrevista): só o agente de atendimento,
+    // e só com a flag da org ligada. Para o comercial a lista volta vazia, sem consulta nenhuma.
+    widgetTools.push(...await nammuxToolsForAgent(
+      agent.agent_type,
+      (flag) => featureFlagEnabled(supabase, flag, organizationId),
+      () => buildNammuxInterviewTools(nammuxToolDeps(supabase, { organizationId, contactId, threadId: threadId ?? null, isTestMode: !!isTestMode })),
+    ));
 
     // 2. Check working hours
     const workingHours = agent.working_hours as WorkingHours;
@@ -2101,7 +2127,9 @@ serve(async (req) => {
 
     // 8. Build system prompt with RAG knowledge
     // As instruções das ferramentas de widget entram na parte fixa do prompt (vai para o cache).
-    const processBlock = agent.agent_type === 'support' ? nammuxProcessBlock(await loadNammuxProcesses(supabase, organizationId, contactId)) : '';
+    // Dados do Nammux só para o agente de atendimento; o comercial recebe '' e nem consulta.
+    const processBlock = await nammuxContextForAgent(agent.agent_type, () =>
+      nammuxSupportContext(supabase, organizationId, contactId, (flag) => featureFlagEnabled(supabase, flag, organizationId)));
     const basePrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories, retrievedKnowledge) + processBlock;
     const widgetPrompt = widgetToolsPrompt(widgetTools);
     const systemPrompt = !widgetPrompt ? basePrompt

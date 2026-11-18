@@ -6,14 +6,14 @@ import { Classification, type Handler, type HandlerResult } from "./types.ts";
 import { fetchWithClassification } from "./http.ts";
 import { loadActiveIntegrationSecret } from "../integration-credentials.ts";
 
-interface NammuxConfig {
+export interface NammuxConfig {
   webhook_url?: string;
   enabled?: boolean;
   send_opportunity_won?: boolean;
   nammux_organization_id?: string;
 }
 
-function allowedNammuxWebhook(value: string): URL | null {
+export function allowedNammuxWebhook(value: string): URL | null {
   try {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.username || url.password) return null;
@@ -29,7 +29,7 @@ function allowedNammuxWebhook(value: string): URL | null {
 }
 
 // deno-lint-ignore no-explicit-any
-async function loadNammuxConfig(supabase: any, organizationId: string): Promise<NammuxConfig | null> {
+export async function loadNammuxConfig(supabase: any, organizationId: string): Promise<NammuxConfig | null> {
   const { data, error } = await supabase
     .from("organization_integrations")
     .select("config_values, is_enabled, integration:admin_integrations!inner(slug)")
@@ -41,7 +41,7 @@ async function loadNammuxConfig(supabase: any, organizationId: string): Promise<
   return (data.config_values ?? {}) as NammuxConfig;
 }
 
-async function hmacSha256Hex(secret: string, message: string): Promise<string> {
+export async function hmacSha256Hex(secret: string, message: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -56,7 +56,36 @@ async function hmacSha256Hex(secret: string, message: string): Promise<string> {
     .join("");
 }
 
-export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<HandlerResult> => {
+/**
+ * Entidade do evento. `integration_events` guarda `aggregate_type` / `aggregate_id`;
+ * o tipo TS antigo dizia `entity_type` / `entity_id`, que não existem na tabela,
+ * e o envelope saía com `entity: {}`.
+ */
+export function eventEntity(event: unknown): { type: string | undefined; id: string | undefined } {
+  const e = (event ?? {}) as Record<string, unknown>;
+  const pick = (a: unknown, b: unknown) =>
+    typeof a === "string" && a ? a : typeof b === "string" && b ? b : undefined;
+  return {
+    type: pick(e.aggregate_type, e.entity_type),
+    id: pick(e.aggregate_id, e.entity_id),
+  };
+}
+
+/**
+ * O envio de um evento está desligado na configuração da integração?
+ * `send_opportunity_won` desliga o envio de negócio ganho (e do contato que vai
+ * junto); não vale para os outros eventos, que dependem só de `enabled`.
+ */
+export function nammuxSendDisabled(cfg: NammuxConfig, respectSendWon: boolean): boolean {
+  return cfg.enabled === false || (respectSendWon && cfg.send_opportunity_won === false);
+}
+
+export const nammuxSendOpportunityWonHandler: Handler = (ctx) => sendToNammux(ctx, true);
+
+/** Eventos que não são o negócio ganho (ex.: `entrevista.agendada`). */
+export const nammuxSendEventHandler: Handler = (ctx) => sendToNammux(ctx, false);
+
+async function sendToNammux(ctx: Parameters<Handler>[0], respectSendWon: boolean): Promise<HandlerResult> {
   const cfg = await loadNammuxConfig(ctx.supabase, ctx.event.organization_id);
   if (!cfg) {
     return {
@@ -64,10 +93,12 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
       error: "Nammux integration not configured or disabled for this organization",
     };
   }
-  if (cfg.enabled === false || cfg.send_opportunity_won === false) {
+  if (nammuxSendDisabled(cfg, respectSendWon)) {
     return {
       classification: Classification.Permanent,
-      error: "Nammux opportunity.won disabled in config_values (enabled / send_opportunity_won)",
+      error: respectSendWon
+        ? "Nammux opportunity.won disabled in config_values (enabled / send_opportunity_won)"
+        : "Nammux integration disabled in config_values (enabled)",
     };
   }
   const url = allowedNammuxWebhook((cfg.webhook_url ?? "").trim());
@@ -100,6 +131,7 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
   }
 
   const seialzOrgId = ctx.event.organization_id;
+  const entity = eventEntity(ctx.event);
   const basePayload = (ctx.event.payload ?? {}) as Record<string, unknown>;
   const data = {
     ...basePayload,
@@ -116,10 +148,7 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
     organization_id: seialzOrgId,
     target_organization_id: targetOrgId,
     correlation_id: ctx.event.id,
-    entity: {
-      type: ctx.event.entity_type,
-      id: ctx.event.entity_id,
-    },
+    entity,
     occurred_at: ctx.event.occurred_at,
     data,
   };
@@ -166,7 +195,9 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
       typeof externalPayload?.external_process_id === "string"
         ? externalPayload.external_process_id
         : undefined,
-    entityType: ctx.event.entity_type,
-    internalId: ctx.event.entity_id,
+    // O worker só grava external_mappings quando há `externalId`, e o Nammux só
+    // devolve `external_process_id` — o mesmo id que o snapshot de entrada grava.
+    entityType: entity.type,
+    internalId: entity.id,
   };
-};
+}

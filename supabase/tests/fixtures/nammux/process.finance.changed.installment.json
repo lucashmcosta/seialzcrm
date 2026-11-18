@@ -1,0 +1,30 @@
+{
+    "kind": "installment",
+    "reason": "live",
+    "source": "nammux",
+    "version": 1000,
+    "agreement": {
+        "id": "f8000000-0000-4000-8000-00000000000a",
+        "status": "vigente",
+        "agreed_on": "2026-10-01",
+        "homologated_on": "2026-10-08",
+        "installments_count": 6
+    },
+    "installment": {
+        "id": "f9000000-0000-4000-8000-000000000002",
+        "number": 2,
+        "status": "paid",
+        "paid_on": "2026-12-04",
+        "due_date": "2026-12-05",
+        "agreement_id": "f8000000-0000-4000-8000-00000000000a",
+        "client_amount": 700.00,
+        "effective_due_date": "2026-12-07",
+        "manifestation_due_date": null
+    },
+    "schema_version": 1,
+    "organization_id": "f1000000-0000-4000-8000-0000000000c1",
+    "source_config_id": "f5000000-0000-4000-8000-0000000000f1",
+    "external_process_id": "f3000000-0000-4000-8000-0000000000a1",
+    "seialz_opportunity_id": "f6000000-0000-4000-8000-0000000000d1",
+    "seialz_organization_id": "f1000000-0000-4000-8000-0000000000b1"
+}

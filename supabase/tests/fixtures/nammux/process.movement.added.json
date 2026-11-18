@@ -1,0 +1,20 @@
+{
+    "reason": "live",
+    "source": "nammux",
+    "version": 1000,
+    "movement": {
+        "id": "fc000000-0000-4000-8000-000000000001",
+        "code": 11384,
+        "text": "Começou a fase de cálculo: agora a Justiça define os valores devidos.",
+        "tone": "neutra",
+        "notify": true,
+        "catalog_key": "liquidacao",
+        "occurred_at": "2026-11-18T15:00:00+00:00"
+    },
+    "schema_version": 1,
+    "organization_id": "f1000000-0000-4000-8000-0000000000c1",
+    "source_config_id": "f5000000-0000-4000-8000-0000000000f1",
+    "external_process_id": "f3000000-0000-4000-8000-0000000000a1",
+    "seialz_opportunity_id": "f6000000-0000-4000-8000-0000000000d1",
+    "seialz_organization_id": "f1000000-0000-4000-8000-0000000000b1"
+}
