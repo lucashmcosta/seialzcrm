@@ -23,9 +23,9 @@ import { ContactTasks } from '@/components/contacts/ContactTasks';
 
 type View = 'summary' | 'full' | { docs: string };
 
-type SectionKey = 'conversation' | 'contact' | 'opportunities' | 'note' | 'tasks';
-// Abertas por padrão: Conversa e Contato. O resto começa recolhido; a escolha fica salva por pessoa.
-const DEFAULT_OPEN: Record<SectionKey, boolean> = { conversation: true, contact: true, opportunities: false, note: false, tasks: false };
+type SectionKey = 'conversation' | 'contact' | 'opportunities';
+// Abertas por padrão: Conversa e Contato; Oportunidades começa recolhida. A escolha fica salva por pessoa.
+const DEFAULT_OPEN: Record<SectionKey, boolean> = { conversation: true, contact: true, opportunities: false };
 const STORAGE_KEY = 'ficha.sections.v1';
 
 function readOpen(): Record<SectionKey, boolean> {
@@ -133,9 +133,11 @@ export function CommercialFichaPanel({
     >
       {open && (
         <div className={`${width} h-full overflow-y-auto`}>
-          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border sticky top-0 bg-background z-10">
-            <div className="flex items-center gap-1 min-w-0">
-              {view !== 'summary' && (
+          {/* Cabeçalho só onde precisa voltar (cadastro completo / documentos). No resumo, o próprio
+              botão "Atalhos" abre e fecha; em modo gaveta (por cima do chat) fica só um X discreto. */}
+          {view !== 'summary' ? (
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border sticky top-0 bg-background z-10">
+              <div className="flex items-center gap-1 min-w-0">
                 <button
                   type="button"
                   onClick={backToSummary}
@@ -145,21 +147,25 @@ export function CommercialFichaPanel({
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </button>
+                <h2 className="text-sm font-semibold truncate">
+                  {view === 'full' ? uiText('Cadastro completo') : uiText('Documentos')}
+                </h2>
+              </div>
+              {!inline && (
+                <button type="button" onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label={uiText('Fechar atalhos')} title={uiText('Fechar atalhos')}>
+                  <X className="h-4 w-4" />
+                </button>
               )}
-              <h2 className="text-sm font-semibold truncate">
-                {view === 'full' ? uiText('Cadastro completo') : isDocs ? uiText('Documentos') : uiText('Atalhos')}
-              </h2>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label={uiText('Fechar atalhos')}
-              title={uiText('Fechar atalhos')}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          ) : !inline ? (
+            <div className="flex justify-end px-2 pt-2">
+              <button type="button" onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label={uiText('Fechar atalhos')} title={uiText('Fechar atalhos')}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : null}
 
           {!contactId ? (
             <div className="px-4 py-5 space-y-6">
@@ -206,12 +212,9 @@ export function CommercialFichaPanel({
                 reloadKey={reloadKey}
               />
               </FichaSection>
-              <FichaSection title={uiText('Nota rápida')} open={openSections.note} onToggle={() => toggleSection('note')}>
-                <NoteQuickAdd onAddNote={onAddNote} />
-              </FichaSection>
-              <FichaSection title={uiText('Tarefas')} open={openSections.tasks} onToggle={() => toggleSection('tasks')}>
-                <ContactTasks key={`tasks-${contactId}`} contactId={contactId} compact />
-              </FichaSection>
+              {/* Nota e tarefas: ações rápidas, sempre visíveis no fim do painel (não recolhem). */}
+              <NoteQuickAdd onAddNote={onAddNote} />
+              <ContactTasks key={`tasks-${contactId}`} contactId={contactId} compact />
             </div>
           )}
         </div>
