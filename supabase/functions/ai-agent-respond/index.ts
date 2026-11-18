@@ -10,7 +10,8 @@ import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
 import { buildChoicesInteractive, withoutQuestionEcho } from "../_shared/intelligence/agent-choices.ts";
 import { interactiveFallbackText, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
-import { agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
+import { nammuxProcessBlock, loadNammuxProcesses } from "../_shared/integrations/nammux-process-context.ts";
+import { decideSupportGate, agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES } from "../_shared/widgets/agent-tools.ts";
 
@@ -1736,10 +1737,26 @@ serve(async (req) => {
       const { data: threadState } = await supabase.from('message_threads')
         .select('ai_agent_id, ai_agent_released_at, needs_human_attention, assigned_user_id')
         .eq('id', threadId).maybeSingle();
+      if (agent.agent_type === 'support') {
+        // Agente de atendimento: responde conversas de clientes que já têm responsável.
+        if (threadState?.ai_agent_id && threadState.ai_agent_id !== agentId) return skip('other_agent');
+        const { data: lastHuman } = await supabase.from('messages').select('sent_at')
+          .eq('thread_id', threadId).eq('direction', 'outbound').eq('sender_type', 'user').is('deleted_at', null)
+          .order('sent_at', { ascending: false }).limit(1).maybeSingle();
+        const ownedRelease = threadState?.ai_agent_id === agentId ? threadState.ai_agent_released_at : null;
+        const support = decideSupportGate({ releasedAt: ownedRelease, lastHumanReplyAt: lastHuman?.sent_at ?? null });
+        if (support === 'human_active') return skip('human_active');
+        if (support === 'waiting_human') return skip('waiting_human');
+        // Assume a conversa (ou volta a ela depois da passagem). O responsável continua o mesmo.
+        const { error: takeError } = await supabase.from('message_threads').update({
+          ai_agent_id: agentId, ai_agent_released_at: null, ai_agent_release_reason: null,
+        }).eq('id', threadId);
+        if (takeError) console.warn('[ai-agent-respond] não assumiu a conversa de atendimento', takeError.message);
+      }
       const { count: humanReplies } = await supabase.from('messages')
         .select('id', { count: 'exact', head: true })
         .eq('thread_id', threadId).eq('direction', 'outbound').eq('sender_type', 'user');
-      const gate = decideAgentGate(threadState, agentId, (humanReplies ?? 0) > 0);
+      const gate = agent.agent_type === 'support' ? 'respond' : decideAgentGate(threadState, agentId, (humanReplies ?? 0) > 0);
       if (gate === 'human_owns') {
         await supabase.from('message_threads').update({ needs_human_attention: true, updated_at: new Date().toISOString() }).eq('id', threadId);
         return skip('human_owns');
@@ -2084,7 +2101,8 @@ serve(async (req) => {
 
     // 8. Build system prompt with RAG knowledge
     // As instruções das ferramentas de widget entram na parte fixa do prompt (vai para o cache).
-    const basePrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories, retrievedKnowledge);
+    const processBlock = agent.agent_type === 'support' ? nammuxProcessBlock(await loadNammuxProcesses(supabase, organizationId, contactId)) : '';
+    const basePrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories, retrievedKnowledge) + processBlock;
     const widgetPrompt = widgetToolsPrompt(widgetTools);
     const systemPrompt = !widgetPrompt ? basePrompt
       : basePrompt.includes('\n## CONTEXTO DO CONTATO') ? basePrompt.replace('\n## CONTEXTO DO CONTATO', `${widgetPrompt}\n## CONTEXTO DO CONTATO`)

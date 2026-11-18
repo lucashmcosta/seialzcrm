@@ -237,3 +237,37 @@ export function shouldHandOffSilent(t: {
   if (t.lastInboundAt && new Date(t.lastInboundAt).getTime() >= followupAt) return false;
   return now - followupAt >= SILENT_HANDOFF_AFTER_MS;
 }
+
+// ---------- Agente de atendimento (agent_type = 'support') ----------
+
+/** Pessoa da equipe respondeu há menos que isso: o agente de atendimento fica quieto. */
+export const SUPPORT_QUIET_AFTER_HUMAN_MS = 2 * 3600 * 1000;
+/** Depois de passar para a equipe, se ninguém responder em tanto tempo, o agente volta a atender. */
+export const SUPPORT_RESUME_AFTER_HANDOFF_MS = 24 * 3600 * 1000;
+
+export type SupportGate = "respond" | "resume" | "human_active" | "waiting_human";
+
+/**
+ * O agente de atendimento responde conversas que já têm responsável (cliente que já contratou).
+ * Fica quieto enquanto uma pessoa da equipe está conversando; depois de passar a conversa,
+ * espera a pessoa responder. Se ninguém responder em 24 h, volta a atender ("resume").
+ */
+export function decideSupportGate(t: {
+  releasedAt: string | null;
+  lastHumanReplyAt: string | null;
+}, now = Date.now()): SupportGate {
+  const human = t.lastHumanReplyAt ? new Date(t.lastHumanReplyAt).getTime() : null;
+  if (human !== null && now - human < SUPPORT_QUIET_AFTER_HUMAN_MS) return "human_active";
+  if (t.releasedAt) {
+    const released = new Date(t.releasedAt).getTime();
+    const humanAfter = human !== null && human >= released;
+    if (!humanAfter && now - released < SUPPORT_RESUME_AFTER_HANDOFF_MS) return "waiting_human";
+    return "resume";
+  }
+  return "respond";
+}
+
+/** Tipo de agente que atende a conversa, pelo contexto dela. */
+export function agentTypeForThread(businessContext: string | null | undefined): "support" | "sdr" {
+  return businessContext === "customer_service" ? "support" : "sdr";
+}
