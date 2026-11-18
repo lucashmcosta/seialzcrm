@@ -3,11 +3,11 @@ import { buildMessagingCustomData, buildMessagingUserData, MESSAGING_EVENTS, pic
 
 const base = { em: ["e"], ph: ["p"], fn: ["f"], external_id: ["x"], fbc: "fb.1.1.a", lead_id: "1", client_ip_address: "1.1.1.1" };
 
-Deno.test("com ctwa_clid: leva WABA + clid, sem page_id, sem external_id/fbc/lead_id/IP", () => {
+Deno.test("com ctwa_clid: leva WABA + clid + page_id, sem external_id/fbc/lead_id/IP", () => {
   const r = buildMessagingUserData(base, { wabaId: "W", ctwaClid: "C", pageId: "P" });
   if (!r.ok) throw new Error("esperava ok");
   assertEquals(r.matchedBy, "ctwa_clid");
-  assertEquals(r.userData, { em: ["e"], ph: ["p"], fn: ["f"], whatsapp_business_account_id: "W", ctwa_clid: "C" });
+  assertEquals(r.userData, { em: ["e"], ph: ["p"], fn: ["f"], whatsapp_business_account_id: "W", page_id: "P", ctwa_clid: "C" });
 });
 
 Deno.test("sem ctwa_clid: exige page_id e leva dados com hash", () => {
