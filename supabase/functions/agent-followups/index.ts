@@ -9,6 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { validateServiceRoleAuth } from "../_shared/auth.ts";
 import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
+import { checkProactiveContact, DO_NOT_CONTACT_REASON } from "../_shared/contact-consent.ts";
 import { SILENT_HANDOFF_AFTER_MS, shouldHandOffSilent } from "../_shared/intelligence/agent-gate.ts";
 
 const json = (body: unknown, status = 200) =>
@@ -55,6 +56,16 @@ serve(async (req) => {
     .gte("scheduled_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString())
     .limit(50);
   for (const msg of scheduled ?? []) {
+    // Mensagem agendada é contato proativo: não vai para quem pediu para não ser contatado.
+    const consent = await checkProactiveContact(supabase, msg.organization_id, msg.contact_id);
+    if (consent === "unknown") { result.scheduled_skipped++; continue; } // tenta na próxima execução
+    if (consent === "blocked") {
+      await supabase.from("scheduled_messages")
+        .update({ status: "cancelled", error_message: DO_NOT_CONTACT_REASON })
+        .eq("id", msg.id);
+      result.scheduled_skipped++;
+      continue;
+    }
     const { data: thread } = await supabase.from("message_threads")
       .select("ai_agent_id, ai_agent_released_at, assigned_user_id, ai_agents:ai_agent_id(name, is_enabled)")
       .eq("id", msg.thread_id).maybeSingle();

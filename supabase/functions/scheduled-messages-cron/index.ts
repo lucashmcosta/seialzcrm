@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { validateServiceRoleAuth } from "../_shared/auth.ts";
 import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
+import { DO_NOT_CONTACT_REASON, proactiveCheckFromRow } from "../_shared/contact-consent.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -36,7 +37,7 @@ serve(async (req) => {
       .from('scheduled_messages')
       .select(`
         *,
-        contact:contacts(id, phone, full_name),
+        contact:contacts(id, phone, do_not_contact, deleted_at),
         thread:message_threads(id, channel),
         agent:ai_agents(id, name)
       `)
@@ -65,7 +66,17 @@ serve(async (req) => {
       results.processed++;
       
       try {
-        console.log(`[CRON] Processando mensagem ${message.id} para contato ${message.contact?.full_name}`);
+        // Sem nome do contato no log.
+        console.log(`[CRON] Processando mensagem ${message.id}`);
+
+        // Mensagem agendada é contato proativo: não vai para quem pediu para não ser contatado.
+        if (proactiveCheckFromRow(message.contact, false) === "blocked") {
+          await supabase
+            .from('scheduled_messages')
+            .update({ status: 'cancelled', error_message: DO_NOT_CONTACT_REASON })
+            .eq('id', message.id);
+          continue;
+        }
 
         // Verificar se tem telefone
         if (!message.contact?.phone) {
