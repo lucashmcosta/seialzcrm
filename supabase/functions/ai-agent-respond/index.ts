@@ -15,6 +15,7 @@ import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { buildNammuxInterviewTools, nammuxToolDeps, nammuxToolsForAgent } from "../_shared/integrations/nammux-agent-tools.ts";
 import { captureRating, ratingDeps, ratingForAgent } from "../_shared/integrations/support-rating.ts";
 import { decideSupportGate, agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
+import { emptyResponseShape, providerForIntegration, toolArgKeys } from "../_shared/intelligence/agent-log.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES } from "../_shared/widgets/agent-tools.ts";
 
@@ -396,7 +397,8 @@ async function executeTool(
   args: any,
   context: { contactId: string; organizationId: string; threadId: string; agentId?: string; timezone?: string }
 ): Promise<ToolResult> {
-  console.log(`Executing tool: ${toolName}`, args);
+  // Só os nomes dos campos: os valores trazem nome, telefone e o que o cliente contou.
+  console.log(`Executing tool: ${toolName}`, toolArgKeys(args));
 
   try {
     switch (toolName) {
@@ -2119,7 +2121,8 @@ serve(async (req) => {
     const searchContext = message.length < 50 && recentUserMessages 
       ? `${recentUserMessages} ${message}` 
       : message;
-    console.log(`🔍 RAG search context (user messages only): "${searchContext.slice(0, 200)}..."`);
+    // Sem o texto do cliente no log: só o tamanho do que foi usado na busca.
+    console.log(`🔍 RAG search context (user messages only): ${searchContext.length} caracteres`);
     
     // Pass detected productId to RAG search for 2-step product-first + global fallback
     const retrievedKnowledge = await searchRelevantKnowledge(supabase, searchContext, organizationId, agentId, detectedProductId);
@@ -2600,7 +2603,7 @@ serve(async (req) => {
 
       // Log para debug de resposta vazia em modelos de raciocínio
       if (!aiResponse && responseMessage) {
-        console.warn('Empty content from OpenAI. Model:', model, 'Full response:', JSON.stringify(responseMessage));
+        console.warn('Empty content from OpenAI. Model:', model, 'Response shape:', JSON.stringify(emptyResponseShape(responseMessage)));
       }
 
 }
@@ -2805,7 +2808,24 @@ serve(async (req) => {
     });
 
     // 10. Log to ai_usage_logs for billing/analytics
+    // Agente de atendimento sem chave própria: registra provedor, tokens e custo estimado,
+    // como o caminho de chave própria já faz. Os demais agentes seguem como estavam.
+    const managedProvider = providerForIntegration(integrationSlug);
     if (byokProvider) await logByokUsage();
+    else if (agent.agent_type === 'support' && managedProvider) await logAiUsage(supabase as any, {
+      organization_id: organizationId,
+      provider: managedProvider,
+      model: modelUsed,
+      source: 'managed',
+      action: 'ai_agent_respond',
+      integration_slug: integrationSlug,
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: tokensUsed,
+      estimated_cost_usd: await estimateTextCostUsd(supabase as any, managedProvider, modelUsed, promptTokens, completionTokens),
+      entity_type: 'message',
+      entity_id: threadId,
+    });
     else await supabase.from('ai_usage_logs').insert({
       organization_id: organizationId,
       integration_slug: integrationSlug,
