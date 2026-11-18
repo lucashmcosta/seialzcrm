@@ -64,12 +64,53 @@ export function edgeAuthMode(): EdgeAuthMode {
 
 export type CallerAuth =
   | { ok: true; kind: "service_role" | "user"; userId?: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; detail?: string };
 
 // Aceita service_role OU JWT de usuário com vínculo ativo na organização.
 // Nunca lança: qualquer falha vira { ok: false } para o caller decidir
 // (em modo "log" a falha é apenas observada).
 export async function validateCallerAuth(
+  req: Request,
+  organizationId: string,
+): Promise<CallerAuth> {
+  const result = await checkCallerAuth(req, organizationId);
+  if (!result.ok) logAuthRejection(req, organizationId, result.error, result.detail);
+  return result.ok ? result : { ok: false, error: result.error };
+}
+
+// Recusa de chamador SEMPRE vira log estruturado: sem isso um 401 não deixa rastro
+// (incidente 18/11: envio recusado sem saber se foi sessão expirada ou vínculo).
+// Nunca loga o token; só claims não sensíveis (sub, role, exp).
+function jwtClaims(req: Request): { role: string; sub: string | null; exp: number | null } {
+  const raw = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  const parts = raw.split(".");
+  if (parts.length !== 3) return { role: raw ? "not_jwt" : "none", sub: null, exp: null };
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const p = JSON.parse(atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4)));
+    return { role: p.role ?? "unknown", sub: p.sub ?? null, exp: typeof p.exp === "number" ? p.exp : null };
+  } catch (_e) {
+    return { role: "invalid", sub: null, exp: null };
+  }
+}
+
+function logAuthRejection(req: Request, organizationId: string, reason: string, detail?: string): void {
+  const c = jwtClaims(req);
+  const now = Math.floor(Date.now() / 1000);
+  console.warn("[AUTH] caller_rejected", JSON.stringify({
+    fn: new URL(req.url).pathname.split("/").filter(Boolean).pop() ?? null,
+    organization_id: organizationId,
+    reason,
+    detail: detail ?? null,
+    bearer_role: c.role,
+    auth_user_id: c.sub,
+    token_exp: c.exp ? new Date(c.exp * 1000).toISOString() : null,
+    token_expired_seconds_ago: c.exp && c.exp < now ? now - c.exp : null,
+    user_agent: req.headers.get("user-agent") ?? null,
+  }));
+}
+
+async function checkCallerAuth(
   req: Request,
   organizationId: string,
 ): Promise<CallerAuth> {
@@ -86,7 +127,7 @@ export async function validateCallerAuth(
     );
 
     const { data: userData, error: userErr } = await admin.auth.getUser(token);
-    if (userErr || !userData?.user) return { ok: false, error: "invalid_user_jwt" };
+    if (userErr || !userData?.user) return { ok: false, error: "invalid_user_jwt", detail: userErr?.message };
 
     const { data: membership } = await admin
       .from("users")

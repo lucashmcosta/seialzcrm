@@ -142,12 +142,24 @@ function responseFromInvokeError(err: any): Response | null {
   return null;
 }
 
-async function directFetchEdgeFunction(fn: string, payload: WhatsAppSendPayload) {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData.session?.access_token ?? SUPABASE_ANON_KEY;
-  const url = `${SUPABASE_FUNCTIONS_URL}/${fn}`;
+// Token do usuário válido por pelo menos 60s. Aba em segundo plano pode pausar o
+// refresh automático e o getSession() devolver um token já vencido (401 no envio).
+async function freshAccessToken(forceRefresh = false): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const session = data.session;
+  const expiresSoon = !session?.expires_at || session.expires_at * 1000 - Date.now() < 60_000;
+  if (session && (forceRefresh || expiresSoon)) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    if (refreshed.session?.access_token) return refreshed.session.access_token;
+  }
+  return session?.access_token ?? SUPABASE_ANON_KEY;
+}
 
-  const response = await fetch(url, {
+const SESSION_EXPIRED_MESSAGE = "Sua sessão expirou. Recarregue a página (F5) e envie de novo.";
+
+async function directFetchEdgeFunction(fn: string, payload: WhatsAppSendPayload) {
+  const url = `${SUPABASE_FUNCTIONS_URL}/${fn}`;
+  const post = async (accessToken: string) => fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -156,6 +168,17 @@ async function directFetchEdgeFunction(fn: string, payload: WhatsAppSendPayload)
     },
     body: JSON.stringify(payload),
   });
+
+  let response = await post(await freshAccessToken());
+  // 401 de sessão: o servidor recusa ANTES de enviar qualquer coisa, então renovar
+  // e tentar uma vez é seguro (não duplica mensagem).
+  if (response.status === 401) {
+    const reason = await response.clone().json().then((b) => b?.reason).catch(() => null);
+    if (reason === "invalid_user_jwt" || reason === "missing_bearer") {
+      console.warn("[dispatch-wa] 401 de sessão; renovando e tentando de novo", { fn, reason, threadId: payload.threadId ?? null });
+      response = await post(await freshAccessToken(true));
+    }
+  }
 
   const { responseBody, responseJson, responseBodyReadError } = await readResponseBody(response);
 
@@ -175,11 +198,16 @@ async function directFetchEdgeFunction(fn: string, payload: WhatsAppSendPayload)
     const body = typeof responseJson === "object" && responseJson !== null
       ? responseJson as Record<string, any>
       : null;
+    const authReason = response.status === 401 ? body?.reason : null;
     return {
       data: body,
       error: {
         name: "DirectFetchHttpError",
-        message: (() => {
+        message: authReason === "invalid_user_jwt" || authReason === "missing_bearer"
+          ? SESSION_EXPIRED_MESSAGE
+          : authReason === "no_active_membership"
+            ? "Seu usuário não está ativo nesta empresa. Fale com o administrador."
+            : (() => {
           const m = body?.message ?? body?.error ?? body?.details;
           if (typeof m === "string") return m;
           if (m && typeof m === "object") {
