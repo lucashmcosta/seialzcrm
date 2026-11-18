@@ -17,3 +17,8 @@ CREATE POLICY "user_avatars_update_own" ON storage.objects FOR UPDATE TO authent
 DROP POLICY IF EXISTS "user_avatars_delete_own" ON storage.objects;
 CREATE POLICY "user_avatars_delete_own" ON storage.objects FOR DELETE TO authenticated
   USING (bucket_id = 'user-avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+-- Leitura (necessária para o storage devolver/verificar o objeto no envio); a pasta já é pública.
+DROP POLICY IF EXISTS "user_avatars_select" ON storage.objects;
+CREATE POLICY "user_avatars_select" ON storage.objects FOR SELECT TO authenticated
+  USING (bucket_id = 'user-avatars');
