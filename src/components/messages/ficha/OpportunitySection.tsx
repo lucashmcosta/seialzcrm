@@ -229,10 +229,10 @@ function OpportunityCard({
       {canEdit && (
         <div className="grid grid-cols-3 gap-1.5">
           <Button type="button" variant="outline" size="sm" className="px-1 text-xs" onClick={onWon}>
-            <TrendUp className="h-3.5 w-3.5 mr-1 text-green-600" />{uiText('Ganho')}
+            <TrendUp className="h-3.5 w-3.5 mr-1 text-green-600" />{uiText('Ganha')}
           </Button>
           <Button type="button" variant="outline" size="sm" className="px-1 text-xs" onClick={onLost}>
-            <TrendDown className="h-3.5 w-3.5 mr-1 text-red-600" />{uiText('Perdido')}
+            <TrendDown className="h-3.5 w-3.5 mr-1 text-red-600" />{uiText('Perdida')}
           </Button>
           <Button type="button" variant="outline" size="sm" className="px-1 text-xs" onClick={onMoveStage}>
             <ArrowsLeftRight className="h-3.5 w-3.5 mr-1" />{uiText('Etapa')}
@@ -296,7 +296,7 @@ function ClosedOpportunities({ contactId, reloadKey, onOpenDocuments }: {
 
   return (
     <div className="space-y-2 pt-1">
-      <p className="text-xs font-medium text-muted-foreground">{uiText('Fechadas')}</p>
+      <p className="text-xs font-medium text-muted-foreground">{uiText('Ganhas e perdidas')}</p>
       {closed.map((o) => {
         const won = o.status === 'won';
         const date = o.close_date ? format(new Date(`${o.close_date.slice(0, 10)}T12:00:00`), uiDatePattern(), { locale: uiDateLocale() }) : null;

@@ -760,7 +760,7 @@ export function PhoneNumberSettings() {
               {/* Default Lifecycle Stage */}
               {selectedPhone.inbound_settings?.auto_create_contact && (
                 <div className="space-y-2">
-                  <Label>{uiText("Estágio do ciclo de vida para novos contatos")}</Label>
+                  <Label>{uiText("Etapa do ciclo de vida para novos contatos")}</Label>
                   <Select
                     value={selectedPhone.inbound_settings?.default_lifecycle_stage || 'lead'}
                     onValueChange={(value) => updateInboundSetting('default_lifecycle_stage', value)}

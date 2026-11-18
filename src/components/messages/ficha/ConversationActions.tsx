@@ -1,5 +1,5 @@
 // Bloco "Conversa" do painel Atalhos: as mesmas ações do antigo menu "Ações" do
-// cabeçalho (assumir, atribuir, resolver/reabrir, devolver ao AI, ocultar).
+// cabeçalho (assumir, atribuir, encerrar/reabrir, devolver à IA, ocultar).
 // Nenhuma lógica nova: só chama os handlers do MessagesList, com as mesmas
 // permissões (canAssign / canClose) e os mesmos motivos de bloqueio.
 import { UserCheck, CheckCircle, ArrowCounterClockwise, Robot, EyeSlash } from '@phosphor-icons/react';
@@ -58,7 +58,7 @@ export function ConversationActions(p: ConversationActionsProps) {
             disabled={!p.canClose} title={p.canClose ? undefined : p.denyCloseReason}
             onClick={p.onResolve}
           >
-            <CheckCircle className="h-3.5 w-3.5 mr-1" />{uiText('Resolver')}
+            <CheckCircle className="h-3.5 w-3.5 mr-1" />{uiText('Encerrar conversa')}
           </Button>
         )}
         {isResolved && (
@@ -68,7 +68,7 @@ export function ConversationActions(p: ConversationActionsProps) {
         )}
         {p.showReturnToAI && (
           <Button type="button" variant="outline" size="sm" className="px-1 text-xs" onClick={p.onReturnToAI}>
-            <Robot className="h-3.5 w-3.5 mr-1" />{uiText('Devolver ao AI')}
+            <Robot className="h-3.5 w-3.5 mr-1" />{uiText('Devolver à IA')}
           </Button>
         )}
         <Button type="button" variant="outline" size="sm" className="px-1 text-xs" onClick={p.onHide}>

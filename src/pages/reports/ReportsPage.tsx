@@ -511,14 +511,14 @@ export default function ReportsPage() {
                     mono
                   />
                   <KpiCard
-                    label="Pipeline aberto (qtd)"
+                    label="Em aberto (qtd)"
                     value={openCount}
                     icon={Briefcase}
                     accent="warning"
                     loading={loading}
                   />
                   <KpiCard
-                    label="Pipeline aberto (valor)"
+                    label="Em aberto (valor)"
                     value={formatCurrency(openValue)}
                     icon={Trophy}
                     accent="warning"
@@ -679,7 +679,7 @@ export default function ReportsPage() {
                   const dateLabel =
                     detail === 'created'
                       ? `Criada em ${new Date(o.created_at).toLocaleDateString(locale)}`
-                      : `${detail === 'won' ? 'Ganha' : 'Fechada'} em ${parseLocalDate(o.close_date)?.toLocaleDateString(locale) ?? '—'}`;
+                      : `${detail === 'won' ? 'Ganha' : 'Perdida'} em ${parseLocalDate(o.close_date)?.toLocaleDateString(locale) ?? '—'}`;
                   return (
                     <li key={o.id}>
                       <button

@@ -280,7 +280,7 @@ export function IntelligenceConversations({ organizationId }: { organizationId: 
                   <th className="py-2 pr-3 font-medium" scope="col">Anúncio</th>
                   <th className="px-3 py-2 text-right font-medium" scope="col">Conversas</th>
                   <th className="px-3 py-2 text-right font-medium" scope="col">Engajou</th>
-                  <th className="py-2 pl-3 text-right font-medium" scope="col">Ganhos</th>
+                  <th className="py-2 pl-3 text-right font-medium" scope="col">Ganhas</th>
                 </tr>
               </thead>
               <tbody>

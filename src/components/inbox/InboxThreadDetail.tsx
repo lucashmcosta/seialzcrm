@@ -242,7 +242,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
             {thread.status && (
               <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 capitalize flex-shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                {thread.status === 'open' ? 'Aberta' : thread.status === 'pending' ? 'Aguardando' : thread.status === 'resolved' ? 'Resolvida' : thread.status === 'closed' ? 'Fechada' : thread.status}
+                {thread.status === 'open' ? 'Aberta' : thread.status === 'pending' ? 'Aguardando' : thread.status === 'resolved' ? 'Resolvida' : thread.status === 'closed' ? 'Resolvida' : thread.status}
               </span>
             )}
             {thread.status === 'resolved' || thread.status === 'closed' ? (

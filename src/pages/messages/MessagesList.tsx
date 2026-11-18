@@ -242,7 +242,7 @@ const SYSTEM_ACTIVITY_TITLES = new Set(
   ].map((t) => t.toLowerCase()),
 );
 
-// "Devolver ao AI" é anterior à passagem do agente (ai_agent_released_at) e não a desfaz:
+// "Devolver à IA" é anterior à passagem do agente (ai_agent_released_at) e não a desfaz:
 // fica escondido até existir uma devolução que reverta a passagem com segurança.
 const RETURN_TO_AI_ENABLED = false;
 
@@ -271,8 +271,8 @@ const statusConfig: Record<string, { label: string; labelEn: string; color: stri
   reply: { label: 'Responder', labelEn: 'Reply', color: 'text-green-700 dark:text-green-400', dotColor: 'bg-green-500' },
   in_progress: { label: 'Em atendimento', labelEn: 'In progress', color: 'text-blue-700 dark:text-blue-400', dotColor: 'bg-blue-500' },
   awaiting_client: { label: 'Aguardando', labelEn: 'Awaiting', color: 'text-amber-700 dark:text-amber-400', dotColor: 'bg-amber-500' },
-  resolved: { label: 'Resolvida', labelEn: 'Resolved', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
-  closed: { label: 'Fechada', labelEn: 'Closed', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
+  resolved: { label: 'Encerrada', labelEn: 'Closed', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
+  closed: { label: 'Encerrada', labelEn: 'Closed', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
 };
 
 interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
@@ -554,7 +554,7 @@ function DesktopMessagesList() {
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
   // "Para responder": só conversas em que o cliente mandou a última mensagem (a vez é da equipe).
   const [toReplyOnly, setToReplyOnly] = usePersistedFilters<boolean>('messages.toReplyOnly', false);
-  // "Resolvidas": conversas encerradas (pela equipe ou pelo agente). Exclusivo com "Para responder".
+  // "Encerradas": conversas encerradas (pela equipe ou pelo agente). Exclusivo com "Para responder".
   const [resolvedOnly, setResolvedOnly] = usePersistedFilters<boolean>('messages.resolvedOnly', false);
   const showList = (view: 'all' | 'to_reply' | 'resolved') => {
     setToReplyOnly(view === 'to_reply');
@@ -779,7 +779,7 @@ function DesktopMessagesList() {
       })
       .eq('id', threadId);
     if (error) {
-      toast({ variant: 'destructive', description: 'Erro ao resolver conversa' });
+      toast({ variant: 'destructive', description: locale === 'pt-BR' ? 'Erro ao encerrar conversa' : 'Error closing conversation' });
     } else {
       refetchThreads();
     }
@@ -796,7 +796,7 @@ function DesktopMessagesList() {
       })
       .eq('id', threadId);
     if (error) {
-      toast({ variant: 'destructive', description: 'Erro ao devolver ao AI' });
+      toast({ variant: 'destructive', description: locale === 'pt-BR' ? 'Erro ao devolver à IA' : 'Error returning to AI' });
     } else {
       refetchThreads();
     }
@@ -2208,7 +2208,7 @@ function DesktopMessagesList() {
                 {([
                   { key: 'all', label: locale === 'pt-BR' ? 'Todas' : 'All', title: undefined },
                   { key: 'to_reply', label: locale === 'pt-BR' ? 'Para responder' : 'To reply', title: locale === 'pt-BR' ? 'Conversas em que o cliente mandou a última mensagem' : 'Conversations where the customer sent the last message' },
-                  { key: 'resolved', label: locale === 'pt-BR' ? 'Resolvidas' : 'Resolved', title: locale === 'pt-BR' ? 'Conversas encerradas pela equipe ou pelo agente' : 'Conversations closed by the team or the agent' },
+                  { key: 'resolved', label: locale === 'pt-BR' ? 'Encerradas' : 'Closed', title: locale === 'pt-BR' ? 'Conversas encerradas pela equipe ou pela IA' : 'Conversations closed by the team or the agent' },
                 ] as const).map((opt) => {
                   const active = resolvedOnly ? opt.key === 'resolved' : toReplyOnly ? opt.key === 'to_reply' : opt.key === 'all';
                   return (
@@ -2410,7 +2410,7 @@ function DesktopMessagesList() {
                           {['open', 'awaiting_client', 'in_progress'].includes(selectedThread.status) && (
                             <DropdownMenuItem disabled={!threadPerms.canClose} title={threadPerms.canClose ? undefined : DENY_CLOSE} onClick={() => handleResolve(selectedThread.id)}>
                               <CheckCircle className="w-4 h-4 mr-2" />
-                              {locale === 'pt-BR' ? 'Resolver conversa' : 'Resolve'}
+                              {locale === 'pt-BR' ? 'Encerrar conversa' : 'Close conversation'}
                             </DropdownMenuItem>
                           )}
                           {selectedThread.status === 'resolved' && (
@@ -2422,7 +2422,7 @@ function DesktopMessagesList() {
                           {RETURN_TO_AI_ENABLED && selectedThread.needs_human_attention && hasAIAgent && (
                             <DropdownMenuItem onClick={() => handleReturnToAI(selectedThread.id)}>
                               <Robot className="w-4 h-4 mr-2" />
-                              {locale === 'pt-BR' ? 'Devolver ao AI' : 'Return to AI'}
+                              {locale === 'pt-BR' ? 'Devolver à IA' : 'Return to AI'}
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem asChild>
@@ -3669,10 +3669,10 @@ function DesktopMessagesList() {
             {pipelineStages.map((s) => {
               const isCurrent = moveStageOpp?.pipeline_stage_id === s.id;
               const typeLabel = s.type === 'won'
-                ? (locale === 'pt-BR' ? 'Ganho' : 'Won')
+                ? (locale === 'pt-BR' ? 'Ganha' : 'Won')
                 : s.type === 'lost'
-                ? (locale === 'pt-BR' ? 'Perdido' : 'Lost')
-                : (locale === 'pt-BR' ? 'Aberto' : 'Open');
+                ? (locale === 'pt-BR' ? 'Perdida' : 'Lost')
+                : (locale === 'pt-BR' ? 'Aberta' : 'Open');
               const badgeColor: 'success' | 'error' | 'gray' = s.type === 'won' ? 'success' : s.type === 'lost' ? 'error' : 'gray';
               return (
                 <Label

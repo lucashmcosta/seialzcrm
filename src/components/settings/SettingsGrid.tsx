@@ -66,7 +66,7 @@ const settingsGroups: SettingsGroup[] = [
       { icon: GitBranch, label: 'Origens comerciais', description: 'Regras de atribuição e resultados por origem', to: 'commercial-origins', permission: 'canManageSettings' },
       { icon: PuzzlePiece, label: 'Widgets', description: 'Ferramentas abertas dentro das conversas', to: 'widgets', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },
       { icon: Tag, label: 'Etiquetas', description: 'Organize contatos e oportunidades com tags', to: 'tags', permission: 'canManageSettings' },
-      { icon: GitBranch, label: 'Pipeline', description: 'Configure estágios do funil de vendas', to: 'pipeline', permission: 'canManageSettings' },
+      { icon: GitBranch, label: 'Funil de vendas', description: 'Configure as etapas do funil de vendas', to: 'pipeline', permission: 'canManageSettings' },
       { icon: CheckSquare, label: 'Configurações de oportunidade', description: 'Regras de fechamento + documentos exigidos para ganhar', to: 'opportunity-close', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },
       { icon: XCircle, label: 'Motivos de perda', description: 'Motivos, detalhes com código e regras por etapa', to: 'loss-reasons', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },
       { icon: Files, label: 'Documentos', description: 'Catálogo: habilite os tipos que aparecem no upload', to: 'documents', permission: 'canManageSettings' },

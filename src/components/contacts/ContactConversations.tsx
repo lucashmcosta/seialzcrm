@@ -178,8 +178,8 @@ function ConversationCard({ cfg, thread, dateLocale, isPtBr, onOpen, onStart }: 
         open: 'Aberta',
         in_progress: 'Em andamento',
         awaiting_client: 'Aguardando cliente',
-        resolved: 'Resolvida',
-        closed: 'Fechada',
+        resolved: 'Encerrada',
+        closed: 'Encerrada',
       }[s] ?? s;
     }
     return s;

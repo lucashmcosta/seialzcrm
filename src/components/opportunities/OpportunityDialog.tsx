@@ -136,7 +136,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
     if (!organization?.id || !userProfile?.id) return;
 
     if (!titleOnly && closeDateRequired && !formData.close_date) {
-      toast.error('Informe a data de fechamento para estágios de Ganho ou Perdido');
+      toast.error('Informe a data de fechamento para etapas de ganho ou perda');
       return;
     }
 

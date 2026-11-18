@@ -56,7 +56,7 @@ function OutcomeTable({ won, lost }: { won?: Outcome; lost?: Outcome }) {
   };
   const avg = (v: number | null | undefined) => (v == null ? '—' : Number(v).toLocaleString('pt-BR'));
   const rows: Array<[string, string, string]> = [
-    ['Negócios', number(won?.deals ?? 0), number(lost?.deals ?? 0)],
+    ['Oportunidades', number(won?.deals ?? 0), number(lost?.deals ?? 0)],
     ['Com sinal de compra', percent(won, 'with_signal'), percent(lost, 'with_signal')],
     ['Com objeção', percent(won, 'with_objection'), percent(lost, 'with_objection')],
     ['Mensagens do cliente (média)', avg(won?.messages), avg(lost?.messages)],
@@ -68,8 +68,8 @@ function OutcomeTable({ won, lost }: { won?: Outcome; lost?: Outcome }) {
         <thead>
           <tr className="border-b text-left text-xs text-muted-foreground">
             <th className="py-2 pr-3 font-medium" scope="col"><span className="sr-only">Indicador</span></th>
-            <th className="px-3 py-2 text-right font-medium" scope="col">Ganhos</th>
-            <th className="py-2 pl-3 text-right font-medium" scope="col">Perdidos</th>
+            <th className="px-3 py-2 text-right font-medium" scope="col">Ganhas</th>
+            <th className="py-2 pl-3 text-right font-medium" scope="col">Perdidas</th>
           </tr>
         </thead>
         <tbody>
@@ -206,8 +206,8 @@ export function IntelligenceInsights({ organizationId }: { organizationId: strin
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Ganhos x perdidos</CardTitle>
-          <p className="text-xs text-muted-foreground">Negócios fechados no período. Com menos de {MIN_DEALS_FOR_RATE} negócios, a porcentagem não aparece.</p>
+          <CardTitle className="text-base">Ganhas x perdidas</CardTitle>
+          <p className="text-xs text-muted-foreground">Oportunidades ganhas e perdidas no período. Com menos de {MIN_DEALS_FOR_RATE} oportunidades, a porcentagem não aparece.</p>
         </CardHeader>
         <CardContent>
           {hasDeals

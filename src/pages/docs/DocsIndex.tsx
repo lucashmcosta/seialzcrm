@@ -35,7 +35,7 @@ export default function DocsIndex() {
   const modules = [
     { key: 'getting-started', label: 'Primeiros Passos', description: 'Aprenda os conceitos básicos' },
     { key: 'contacts', label: 'Contatos', description: 'Gerenciamento de contatos' },
-    { key: 'opportunities', label: 'Oportunidades', description: 'Pipeline de vendas' },
+    { key: 'opportunities', label: 'Oportunidades', description: 'Funil de vendas' },
     { key: 'tasks', label: 'Tarefas', description: 'Gestão de atividades' },
     { key: 'settings', label: 'Configurações', description: 'Personalize seu CRM' },
     { key: 'integrations', label: 'Integrações', description: 'Conecte suas ferramentas' },

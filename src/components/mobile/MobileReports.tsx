@@ -202,13 +202,13 @@ export function MobileReports(props: MobileReportsProps) {
           accent="primary"
         />
         <MiniKpi
-          label="Pipeline (qtd)"
+          label="Em aberto (qtd)"
           value={loading ? '—' : openCount}
           icon={Briefcase}
           accent="primary"
         />
         <MiniKpi
-          label="Pipeline (valor)"
+          label="Em aberto (valor)"
           value={loading ? '—' : formatCurrency(openValue)}
           icon={Trophy}
           accent="warning"
