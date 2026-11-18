@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { validateServiceRoleAuth } from "../_shared/auth.ts";
+import { verifyServiceRoleAuth } from "../_shared/auth.ts";
 import { escapeXml } from "../_shared/telephony/twilio.ts";
 import {
   deleteTwilioQueue,
@@ -17,7 +17,7 @@ function json(body: unknown, status = 200) {
 }
 
 Deno.serve(async (req) => {
-  if (!validateServiceRoleAuth(req).ok) {
+  if (!(await verifyServiceRoleAuth(req)).ok) {
     return json({ error: "unauthorized" }, 401);
   }
   const admin = createClient(

@@ -26,7 +26,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { resolveOrgAdsAccess } from "../_shared/meta/ads-access.ts";
 import { isTokenError, META_LARGE_THUMBNAIL, metaGraphGet, MetaGraphError } from "../_shared/meta-graph.ts";
 import { notifyOrgUsers } from "../_shared/notify.ts";
-import { validateServiceRoleAuth } from "../_shared/auth.ts";
+import { verifyServiceRoleAuth } from "../_shared/auth.ts";
 
 const DEFAULT_BATCH_LIMIT = 50;
 const META_API_THROTTLE_MS = 200;
@@ -34,7 +34,7 @@ const META_API_THROTTLE_MS = 200;
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const auth = validateServiceRoleAuth(req);
+  const auth = await verifyServiceRoleAuth(req);
   if (!auth.ok) {
     console.warn("Auth failed:", auth.error);
     return json({ error: "Unauthorized", details: auth.error }, 401);
