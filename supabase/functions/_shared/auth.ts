@@ -11,6 +11,12 @@ export function validateServiceRoleAuth(req: Request): { ok: boolean; error?: st
   }
 
   const token = authHeader.replace("Bearer ", "").trim();
+
+  // Chave interna no formato novo do Supabase (sb_secret_..., não é JWT). As funções
+  // chamam umas às outras com SUPABASE_SERVICE_ROLE_KEY, que hoje está nesse formato;
+  // sem isto toda chamada interna aparecia como "não autorizada" (18/11).
+  if (isProjectSecretKey(token)) return { ok: true };
+
   const parts = token.split(".");
   if (parts.length !== 3) {
     return { ok: false, error: "Invalid JWT format" };
@@ -42,6 +48,16 @@ export function validateServiceRoleAuth(req: Request): { ok: boolean; error?: st
   } catch (_e) {
     return { ok: false, error: "Invalid JWT payload" };
   }
+}
+
+// Igual à chave secreta do projeto (comparação em tempo constante). Só aceita chave
+// não-JWT: o JWT legado continua validado pelas claims abaixo.
+function isProjectSecretKey(token: string): boolean {
+  const secret = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "").trim();
+  if (!secret || secret.split(".").length === 3 || token.length !== secret.length) return false;
+  let diff = 0;
+  for (let i = 0; i < token.length; i++) diff |= token.charCodeAt(i) ^ secret.charCodeAt(i);
+  return diff === 0;
 }
 
 // ============================================================================
