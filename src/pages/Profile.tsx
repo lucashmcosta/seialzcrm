@@ -77,6 +77,16 @@ export default function Profile() {
         .getPublicUrl(filePath);
 
       setAvatarUrl(publicUrl);
+      // Salva a foto na hora (antes só ia junto com "Salvar") e atualiza o menu.
+      if (userProfile?.id) {
+        const { error: saveError } = await supabase
+          .from('users')
+          .update({ avatar_url: publicUrl })
+          .eq('id', userProfile.id)
+          .eq('auth_user_id', user.id);
+        if (saveError) throw new Error(t('profile.saveFailed'));
+        await refetch();
+      }
       
       toast({
         title: t('profile.avatarUploaded'),

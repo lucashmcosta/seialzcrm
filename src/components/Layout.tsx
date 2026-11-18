@@ -255,6 +255,15 @@ export function Layout({ children }: LayoutProps) {
   );
 
   const userInitial = userProfile?.full_name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || '?';
+  const userAvatar = (sizeClass: string) => (
+    <div className={`${sizeClass} shrink-0 overflow-hidden bg-primary/10 rounded-full flex items-center justify-center`}>
+      {userProfile?.avatar_url ? (
+        <img src={userProfile.avatar_url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className="text-sm font-semibold text-primary">{userInitial}</span>
+      )}
+    </div>
+  );
   // Enquanto a org ou o ícone ainda não chegaram (e não há cache), mostra um quadrado neutro
   // em vez de um ícone errado que depois troca.
   const collapsedLogo = loading || (orgLogoIconPending && !!organization?.id) ? (
@@ -282,8 +291,8 @@ export function Layout({ children }: LayoutProps) {
   const collapsedUserSection = (
     <div className="flex flex-col items-center gap-2">
       {quickTip(userProfile?.full_name || user?.email || uiText("Usuário"),
-        <Link to="/profile" aria-label={userProfile?.full_name || user?.email || uiText("Usuário")} className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center hover:ring-2 hover:ring-primary/30">
-          <span className="text-sm font-semibold text-primary">{userInitial}</span>
+        <Link to="/profile" aria-label={userProfile?.full_name || user?.email || uiText("Usuário")} className="rounded-full hover:ring-2 hover:ring-primary/30">
+          {userAvatar('w-9 h-9')}
         </Link>)}
       {quickTip(t('auth.signOut'),
         <Button variant="ghost" size="icon" onClick={signOut} aria-label={t('auth.signOut')} className="h-8 w-8">
@@ -312,11 +321,7 @@ export function Layout({ children }: LayoutProps) {
     <div className="space-y-2">
       <Link to="/profile" className="block">
         <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors">
-          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-            <span className="text-sm font-semibold text-primary">
-              {userProfile?.full_name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || '?'}
-            </span>
-          </div>
+          {userAvatar('w-10 h-10')}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate text-foreground">
               {userProfile?.full_name || user?.email || uiText("Usuário")}
