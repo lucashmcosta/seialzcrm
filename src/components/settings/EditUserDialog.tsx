@@ -35,9 +35,11 @@ interface EditUserDialogProps {
   user: EditableUser | null;
   permissionProfiles: PermissionProfile[];
   onSaved: () => void;
+  /** Desativar abre a transferência de carteira (o pai desativa depois de decidir). */
+  onDeactivateRequest?: (membershipId: string) => void;
 }
 
-export function EditUserDialog({ open, onOpenChange, user, permissionProfiles, onSaved }: EditUserDialogProps) {
+export function EditUserDialog({ open, onOpenChange, user, permissionProfiles, onSaved, onDeactivateRequest }: EditUserDialogProps) {
   const { userProfile } = useOrganization();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
@@ -106,7 +108,8 @@ export function EditUserDialog({ open, onOpenChange, user, permissionProfiles, o
         if (profileId !== (user.permission_profile_id || '')) {
           updates.permission_profile_id = profileId || null;
         }
-        if (isActive !== user.is_active) {
+        // Desativar passa pela transferência de carteira (o pai pergunta e desativa).
+        if (isActive !== user.is_active && !(user.is_active && !isActive && onDeactivateRequest)) {
           updates.is_active = isActive;
         }
       }
@@ -119,9 +122,11 @@ export function EditUserDialog({ open, onOpenChange, user, permissionProfiles, o
         if (memErr) throw memErr;
       }
 
+      const askTransfer = !isSelf && user.is_active && !isActive && !!onDeactivateRequest;
       toast({ description: 'Usuário atualizado com sucesso' });
       onSaved();
       onOpenChange(false);
+      if (askTransfer) onDeactivateRequest!(user.membership_id);
     } catch (err: any) {
       console.error(err);
       toast({ variant: 'destructive', description: err.message || 'Erro ao salvar' });

@@ -18,6 +18,7 @@ import { SpinnerGap, UserPlus, CaretDown, EnvelopeSimple, UserCirclePlus, Clock,
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { EditUserDialog, EditableUser } from './EditUserDialog';
+import { PortfolioTransferDialog } from './PortfolioTransferDialog';
 import { TabGroup } from '@/components/common/TabGroup';
 
 function generateStrongPassword() {
@@ -336,7 +337,11 @@ export function UsersSettings() {
     }
   };
 
-  const toggleStatus = async (membershipId: string, currentStatus: boolean) => {
+  // Desativar pergunta para quem vai a carteira (contatos, conversas e oportunidades abertas).
+  const [transferFor, setTransferFor] = useState<{ membership: UserMembership; intent: 'deactivate' | 'transfer' } | null>(null);
+  const memberName = (m: UserMembership) => m.users?.full_name || m.users?.email || 'Usuário';
+
+  const toggleStatus = async (membershipId: string, currentStatus: boolean, rethrow = false) => {
     if (!organization?.id) return;
 
     try {
@@ -403,12 +408,15 @@ export function UsersSettings() {
           .eq('subscription_id', subscription.id);
       }
 
-      toast({
-        description: !currentStatus ? t('settings.userActivated') : t('settings.userDeactivated'),
-      });
+      if (!rethrow) {
+        toast({
+          description: !currentStatus ? t('settings.userActivated') : t('settings.userDeactivated'),
+        });
+      }
       fetchMemberships();
     } catch (error) {
       console.error('Error toggling user status:', error);
+      if (rethrow) throw error;
       toast({
         variant: 'destructive',
         description: t('common.error'),
@@ -614,13 +622,26 @@ export function UsersSettings() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => toggleStatus(membership.id, membership.is_active)}
-                            >
-                              {membership.is_active ? 'Desativar' : 'Ativar'}
-                            </Button>
+                            <div className="flex justify-end gap-2">
+                              {!membership.is_active && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setTransferFor({ membership, intent: 'transfer' })}
+                                >
+                                  Transferir carteira
+                                </Button>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => membership.is_active
+                                  ? setTransferFor({ membership, intent: 'deactivate' })
+                                  : toggleStatus(membership.id, membership.is_active)}
+                              >
+                                {membership.is_active ? 'Desativar' : 'Ativar'}
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -794,7 +815,29 @@ export function UsersSettings() {
         user={editingUser}
         permissionProfiles={assignableProfiles}
         onSaved={fetchMemberships}
+        onDeactivateRequest={(membershipId) => {
+          const m = memberships.find((x) => x.id === membershipId);
+          if (m) setTransferFor({ membership: m, intent: 'deactivate' });
+        }}
       />
+
+      {transferFor && organization?.id && (
+        <PortfolioTransferDialog
+          open
+          organizationId={organization.id}
+          person={{ user_id: transferFor.membership.user_id, name: memberName(transferFor.membership) }}
+          candidates={memberships.filter((m) => m.is_active).map((m) => ({ user_id: m.user_id, name: memberName(m) }))
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))}
+          intent={transferFor.intent}
+          onDeactivate={() => toggleStatus(transferFor.membership.id, true, true)}
+          onClose={() => setTransferFor(null)}
+          onFinished={(message) => {
+            setTransferFor(null);
+            toast({ description: message });
+            fetchMemberships();
+          }}
+        />
+      )}
     </Card>
   );
 }
