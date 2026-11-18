@@ -10,7 +10,8 @@ import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
 import { buildChoicesInteractive, withoutQuestionEcho } from "../_shared/intelligence/agent-choices.ts";
 import { interactiveFallbackText, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
-import { nammuxProcessBlock, loadNammuxProcesses } from "../_shared/integrations/nammux-process-context.ts";
+import { nammuxContextForAgent, nammuxSupportContext } from "../_shared/integrations/nammux-process-context.ts";
+import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { decideSupportGate, agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES } from "../_shared/widgets/agent-tools.ts";
@@ -2101,7 +2102,9 @@ serve(async (req) => {
 
     // 8. Build system prompt with RAG knowledge
     // As instruções das ferramentas de widget entram na parte fixa do prompt (vai para o cache).
-    const processBlock = agent.agent_type === 'support' ? nammuxProcessBlock(await loadNammuxProcesses(supabase, organizationId, contactId)) : '';
+    // Dados do Nammux só para o agente de atendimento; o comercial recebe '' e nem consulta.
+    const processBlock = await nammuxContextForAgent(agent.agent_type, () =>
+      nammuxSupportContext(supabase, organizationId, contactId, (flag) => featureFlagEnabled(supabase, flag, organizationId)));
     const basePrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories, retrievedKnowledge) + processBlock;
     const widgetPrompt = widgetToolsPrompt(widgetTools);
     const systemPrompt = !widgetPrompt ? basePrompt

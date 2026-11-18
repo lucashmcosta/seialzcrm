@@ -6,6 +6,7 @@ import {
   ErroCalculo,
 } from "../_shared/classificacao/certificar.ts";
 import { INBOUND_LOG_CONFLICT, notaCertificacao } from "./logic.ts";
+import { isSupportedEvent, responseForApply, rpcForEvent } from "./handlers.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,15 +110,7 @@ Deno.serve(async (req) => {
 
   const eventId = eventIdHeader || String(envelope.event_id ?? "");
   const eventType = req.headers.get("x-nammux-event-type") || String(envelope.event_type ?? "");
-  if (
-    !eventId ||
-    ![
-      "process.snapshot.updated",
-      "process.sync.failed",
-      "contact.address.updated",
-      "classification.certified",
-    ].includes(eventType)
-  ) {
+  if (!eventId || !isSupportedEvent(eventType)) {
     return json(400, { error: "unsupported_event" });
   }
   if (Number(envelope.schema_version ?? 0) !== 1) {
@@ -140,6 +133,25 @@ Deno.serve(async (req) => {
   const config = (integration?.config_values ?? {}) as Record<string, unknown>;
   if (String(config.nammux_organization_id ?? "") !== sourceOrganizationId) {
     return json(403, { error: "organization_mapping_not_found" });
+  }
+
+  // Tipos aplicados por RPC transacional: recibo, estado e o que depender dele
+  // (avisos) na mesma transação. Reenvio do mesmo evento não faz nada.
+  const applyRpc = rpcForEvent(eventType);
+  if (applyRpc) {
+    const { data: applied, error: applyError } = await admin.rpc(applyRpc, {
+      _organization_id: organizationId,
+      _event_id: eventId,
+      _data: envelope.data ?? {},
+      _occurred_at: envelope.occurred_at ?? null,
+    });
+    if (applyError) {
+      // Só o código: a mensagem do Postgres pode citar valores do payload.
+      console.error("nammux event apply failed", eventType, applyError.code ?? "sem_codigo");
+      return json(500, { error: "apply_failed" });
+    }
+    const out = responseForApply(applied);
+    return json(out.status, out.body);
   }
 
   const { data: duplicate } = await admin

@@ -25,6 +25,47 @@ replay reutiliza o mesmo `document.id`, permitindo que o Nammux mantenha um
 documento canônico com vários vínculos de processo. Arquivos manuais não são
 promovidos a contrato pela simples correspondência do nome.
 
+## Eventos recebidos do Nammux (`nammux-webhook-ingest`)
+
+O Nammux envia eventos assinados (HMAC por organização). O ingest valida
+assinatura, organização e mapeamento e trata cada tipo:
+
+| Evento | O que faz | Onde grava |
+|---|---|---|
+| `process.snapshot.updated` | retrato do processo (etapa, situação, responsável) | `nammux_process_snapshots` |
+| `process.sync.failed` | marca o retrato com erro | `nammux_process_snapshots` |
+| `contact.address.updated` | endereço do contato | RPC `apply_nammux_contact_address` |
+| `classification.certified` | certificação da classificação pela entrevista | RPC `pc_record_certification` |
+| `process.agenda.changed` | audiência, perícia ou entrevista marcada, remarcada, cancelada ou concluída | `nammux_process_events` |
+
+Tipo novo entra em `nammux-webhook-ingest/handlers.ts` (uma linha no mapa) com
+uma RPC `nammux_apply_*`. A RPC registra o recibo do evento
+(`nammux_inbound_receipt`) e grava o estado na mesma transação: o mesmo evento
+entregue duas vezes é aplicado uma vez, e uma versão mais antiga que chega
+depois da nova é ignorada (`source_version`).
+
+Respostas: `200` aplicado, duplicado ou versão antiga; `409` recusa definitiva
+(payload fora do contrato, negócio inexistente) — o Nammux não reenvia; `5xx`
+falha transitória — o Nammux reenvia com espera crescente.
+
+O payload de cada evento novo tem um arquivo de contrato em
+`supabase/tests/fixtures/nammux/`, igual ao do repositório do Nammux. Um teste
+de cada lado garante que produtor e consumidor continuam de acordo.
+
+## Dados do processo para o agente de atendimento
+
+`_shared/integrations/nammux-process-context.ts` monta o que o agente de
+atendimento (`agent_type = 'support'`) sabe do processo do cliente. Só esse
+tipo de agente recebe: para qualquer outro, inclusive o comercial (`sdr`), a
+função devolve vazio sem consultar o banco.
+
+| Bloco | Fonte | Flag por organização (`integration_feature_flags`) |
+|---|---|---|
+| Processos do cliente | `nammux_process_snapshots` | — (sempre) |
+| Próximas datas | `nammux_process_events` | `nammux_agent_agenda` |
+
+Com a flag desligada o agente recebe o mesmo texto de antes.
+
 ## Autenticação
 Credenciais por org em `organization_integrations` (cifradas).
 
