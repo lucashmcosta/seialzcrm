@@ -125,6 +125,7 @@ import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { useOrgUserFilterOptions } from '@/hooks/useOrgUserFilterOptions';
 import { TimelineEventMarker } from '@/components/messages/timeline/TimelineEventMarker';
+import { StickyDayIndicator } from '@/components/messages/timeline/StickyDayIndicator';
 import { FunnelSimple, UserCircle } from '@phosphor-icons/react';
 
 import { formatEndpointIdentity, formatEndpointMigrationAuditLine, whatsappProviderLabel, whatsappProviderShortLabel } from '@/lib/whatsappEndpointDisplay';
@@ -586,6 +587,8 @@ function DesktopMessagesList() {
   // Filtros do Comercial (v2): um objeto só, salvo por usuário, aplicado no servidor (lista + contador).
   const [commercialFilters, setCommercialFilters] = usePersistedFilters<CommercialThreadFilters>('messages.filters.v2', EMPTY_FILTERS, parseFilters);
   const [cardPrefs, setCardPrefs] = usePersistedFilters('messages.cardPrefs', DEFAULT_CARD_PREFS, parseCardPrefs);
+  // Container da conversa aberta (para a data flutuante no topo).
+  const chatScrollWrapRef = useRef<HTMLDivElement>(null);
   const filtersForServer = useMemo(() => ({ ...commercialFilters, search: debouncedSearch }), [commercialFilters, debouncedSearch]);
 
   const [selectedEndpointDetails, setSelectedEndpointDetails] = useState<{ threadId: string; endpoint: any | null } | null>(null);
@@ -2481,6 +2484,8 @@ function DesktopMessagesList() {
                 ) : (
                   <>
                     {/* Área da conversa estilo WhatsApp: fundo ocupa tudo, sem cartão/margem branca. */}
+                    <div ref={chatScrollWrapRef} className="relative flex min-h-0 flex-1 flex-col">
+                    <StickyDayIndicator containerRef={chatScrollWrapRef} deps={[selectedThreadId, messages.length, messagesLoading]} />
                     <ScrollArea className="flex-1 bg-muted/85">
                       {messagesLoading ? (
                         <div className="p-6 space-y-4">
@@ -2630,11 +2635,9 @@ function DesktopMessagesList() {
 
 
                               const separator = showSeparator ? (
-                                <TimelineEventMarker
-                                  key={`sep-${dateKey}`}
-                                  label={formatDateSeparator(itemDate)}
-                                  className="my-3"
-                                />
+                                <div key={`sep-${dateKey}`} data-day-separator={formatDateSeparator(itemDate)}>
+                                  <TimelineEventMarker label={formatDateSeparator(itemDate)} className="my-3" />
+                                </div>
                               ) : null;
 
 
@@ -3090,6 +3093,7 @@ function DesktopMessagesList() {
                         </div>
                       )}
                     </ScrollArea>
+                    </div>
 
                     {/* Input Area */}
                     <div className="border-t border-border p-4 bg-card">
