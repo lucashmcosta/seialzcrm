@@ -106,6 +106,20 @@ As ferramentas seguem o contrato das ferramentas de widget, e só entram para
 organização (`nammuxToolsForAgent`). No modo de teste do agente nada é enviado
 ao Nammux.
 
+## Avisos automáticos ao cliente
+
+Detalhe completo, com o texto de cada aviso: [`avisos-automaticos.md`](./avisos-automaticos.md).
+
+- **Fila** `nammux_notices`. O aviso é planejado na mesma transação que grava o
+  estado vindo do Nammux (ganchos `nammux_after_*`) e tem uma chave de negócio
+  única por organização: reentrega, reparo e remarcação nunca produzem dois.
+- **Regras** `nammux_notice_rules`: padrão global, com ajuste por organização
+  (ligar, desligar, exigir aprovação). **Modelos** `nammux_notice_templates`.
+- **Worker** `nammux-notice-dispatch`, a cada minuto. Confere o estado de agora,
+  escolhe o canal (aplicativo; senão WhatsApp) e registra o desfecho. Resultado
+  incerto não é reenviado: vai para revisão.
+- **Liga por organização** com a flag `nammux_notices`. Desligada, nada é planejado.
+
 ## Autenticação
 Credenciais por org em `organization_integrations` (cifradas).
 

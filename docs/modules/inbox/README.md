@@ -27,3 +27,6 @@ Separado do rodízio comercial: `organizations.cs_round_robin_enabled`, `cs_roun
 
 ## Chat do App do cliente (`/inbox/portal`)
 Tela separada do Atendimento WhatsApp, atrás da flag `client_portal_chat`. Ver ADR-0012. Responder aqui entrega no aplicativo do cliente, não no WhatsApp. Atualiza por Realtime em `client_portal_chat_events` e a cada 30 s.
+
+## Avisos ao cliente (`/inbox/avisos`)
+Tela do Atendimento para os avisos automáticos da integração Nammux, atrás da flag `nammux_notices` (`integration_feature_flags`). Mostra o que espera uma pessoa — aviso aguardando aprovação, envio de resultado incerto, tentativas esgotadas — e o que não saiu nos últimos 7 dias, com a mensagem que o cliente receberia. Aprovar ou recusar exige Atendimentos (ver e editar). Fala só com a edge function `nammux-notices-review`; as tabelas da fila não são legíveis pelo navegador. Detalhe em [`integrations/nammux/avisos-automaticos.md`](../../integrations/nammux/avisos-automaticos.md).
