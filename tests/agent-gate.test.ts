@@ -1,7 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { typingIndicatorBody } from "../supabase/functions/_shared/meta-whatsapp/typing.ts";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, shouldHandOffSilent, agentIdentityLine, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -189,4 +189,17 @@ Deno.test("shouldHandOffSilent: conversa quente sem resposta às retomadas vai p
   assertEquals(shouldHandOffSilent({ ...base, lastFollowupAt: "2026-11-18T13:30:00Z" }, now), false);
   assertEquals(shouldHandOffSilent({ ...base, lastInboundAt: "2026-11-18T12:45:00Z" }, now), false);
   assertEquals(shouldHandOffSilent({ ...base, followupTotal: 0, followupCount: 0 }, now), false);
+});
+
+Deno.test("decideSupportGate: quieto com a equipe conversando, espera a passagem e volta depois de 24 h", () => {
+  const now = Date.parse("2026-11-18T15:00:00Z");
+  assertEquals(decideSupportGate({ releasedAt: null, lastHumanReplyAt: null }, now), "respond");
+  assertEquals(decideSupportGate({ releasedAt: null, lastHumanReplyAt: "2026-11-18T14:00:00Z" }, now), "human_active");
+  assertEquals(decideSupportGate({ releasedAt: null, lastHumanReplyAt: "2026-11-18T10:00:00Z" }, now), "respond");
+  assertEquals(decideSupportGate({ releasedAt: "2026-11-18T09:00:00Z", lastHumanReplyAt: null }, now), "waiting_human");
+  assertEquals(decideSupportGate({ releasedAt: "2026-11-17T09:00:00Z", lastHumanReplyAt: null }, now), "resume");
+  assertEquals(decideSupportGate({ releasedAt: "2026-11-18T09:00:00Z", lastHumanReplyAt: "2026-11-18T10:00:00Z" }, now), "resume");
+  assertEquals(agentTypeForThread("customer_service"), "support");
+  assertEquals(agentTypeForThread("sales"), "sdr");
+  assertEquals(agentTypeForThread(null), "sdr");
 });

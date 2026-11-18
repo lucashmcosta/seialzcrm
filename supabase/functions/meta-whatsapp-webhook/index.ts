@@ -12,6 +12,7 @@
 //
 // Mídia, outbound, templates e handleStatus permanecem inalterados.
 import { metaInboundInteractiveReply } from "../_shared/whatsapp-interactive.ts";
+import { agentTypeForThread } from "../_shared/intelligence/agent-gate.ts";
 import { inboundEventKey, isDuplicateAuditError } from "./audit-key.ts";
 import { classifySpecialInbound, replyTargetWamid } from "./special-inbound.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -663,11 +664,16 @@ async function triggerAiAgentOrFlagHuman(
   contactId: string,
   body: string,
 ): Promise<void> {
+  // Conversa do atendimento vai para o agente de atendimento; as outras, para o de vendas.
+  const { data: ctxThread } = threadId
+    ? await supabase.from("message_threads").select("business_context").eq("id", threadId).maybeSingle()
+    : { data: null };
+  const agentType = agentTypeForThread((ctxThread as { business_context?: string | null } | null)?.business_context);
   const { data: aiAgents, error: agentError } = await supabase
     .from("ai_agents")
     .select("id, is_enabled, max_messages_per_conversation")
     .eq("organization_id", organizationId)
-    .eq("agent_type", "sdr")
+    .eq("agent_type", agentType)
     .eq("is_enabled", true)
     .order("created_at", { ascending: false })
     .limit(1);

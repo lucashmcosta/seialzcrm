@@ -23,6 +23,7 @@
 // verify_jwt=false; auth em código via EVOLUTION_WEBHOOK_SECRET.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { agentTypeForThread } from "../_shared/intelligence/agent-gate.ts";
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
@@ -784,11 +785,16 @@ async function triggerAiAgentOrFlagHuman(
   contactId: string,
   body: string,
 ): Promise<void> {
+  // Conversa do atendimento vai para o agente de atendimento; as outras, para o de vendas.
+  const { data: ctxThread } = threadId
+    ? await service.from("message_threads").select("business_context").eq("id", threadId).maybeSingle()
+    : { data: null };
+  const agentType = agentTypeForThread((ctxThread as { business_context?: string | null } | null)?.business_context);
   const { data: agents } = await service
     .from("ai_agents")
     .select("id")
     .eq("organization_id", organizationId)
-    .eq("agent_type", "sdr")
+    .eq("agent_type", agentType)
     .eq("is_enabled", true)
     .order("created_at", { ascending: false })
     .limit(1);

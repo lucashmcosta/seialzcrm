@@ -1,5 +1,6 @@
 // force rebuild 2026-05-11T05:30 - referral flat-notation parser fix
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { agentTypeForThread } from "../_shared/intelligence/agent-gate.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 import { resolveSalesWhatsappThread } from "../_shared/sales-thread.ts";
@@ -1065,11 +1066,16 @@ serve(async (req) => {
       // ========== AI AGENT AUTO-RESPOND ==========
       // Check if organization has an active AI agent
       // Using .limit(1) instead of .single() to avoid failure when multiple agents exist
+      // Conversa do atendimento vai para o agente de atendimento; as outras, para o de vendas.
+      const { data: ctxThread } = threadId
+        ? await supabase.from('message_threads').select('business_context').eq('id', threadId).maybeSingle()
+        : { data: null };
+      const agentType = agentTypeForThread((ctxThread as { business_context?: string | null } | null)?.business_context);
       const { data: aiAgents, error: agentError } = await supabase
         .from('ai_agents')
         .select('id, is_enabled, max_messages_per_conversation')
         .eq('organization_id', orgId)
-        .eq('agent_type', 'sdr')
+        .eq('agent_type', agentType)
         .eq('is_enabled', true)
         .order('created_at', { ascending: false })
         .limit(1)
