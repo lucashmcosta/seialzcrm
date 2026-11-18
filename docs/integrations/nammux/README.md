@@ -39,6 +39,7 @@ assinatura, organização e mapeamento e trata cada tipo:
 | `process.agenda.changed` | audiência, perícia ou entrevista marcada, remarcada, cancelada ou concluída | `nammux_process_events` |
 | `process.finance.changed` | estado de um acordo, de uma parcela ou de um repasse | `nammux_process_finance` |
 | `process.movement.added` | movimentação relevante do tribunal, já com texto em linguagem simples | `nammux_process_movements` |
+| `interview.booking.rejected` | o horário de entrevista pedido já não estava livre | `nammux_interview_requests` |
 
 Tipo novo entra em `nammux-webhook-ingest/handlers.ts` (uma linha no mapa) com
 uma RPC `nammux_apply_*`. A RPC registra o recibo do evento
@@ -81,6 +82,29 @@ O texto de cada movimentação vem pronto do catálogo do Nammux
 reescreve esse texto, e nenhuma IA participa: o agente só repete o que recebeu.
 
 Com a flag desligada o agente recebe o mesmo texto de antes.
+
+## Entrevista agendada pelo cliente
+
+O cliente marca ou remarca a entrevista conversando com o agente de atendimento.
+O Nammux é a fonte única da agenda: o Seialz não guarda horário.
+
+1. `nammux_interview_slots` (ferramenta do agente) consulta os horários livres na
+   edge function `seialz-interview-slots` do Nammux, com chamada assinada
+   (`_shared/integrations/nammux-client.ts`).
+2. O cliente escolhe. `nammux_schedule_interview` consulta a agenda de novo e
+   chama `nammux_request_interview`, que grava o pedido em
+   `nammux_interview_requests` e o evento `entrevista.agendada` em
+   `integration_events` na mesma transação. O `integration-worker` entrega pelo
+   handler `nammux:send_interview_scheduled`.
+3. O Nammux confere o horário outra vez e cria ou remarca a entrevista.
+4. A volta: `process.agenda.changed` com a entrevista confirma o pedido;
+   `interview.booking.rejected` o recusa. O agente só **pede** o horário; a
+   confirmação ao cliente é outra mensagem.
+
+As ferramentas seguem o contrato das ferramentas de widget, e só entram para
+`agent_type = 'support'` com a flag `nammux_interview_scheduling` ligada na
+organização (`nammuxToolsForAgent`). No modo de teste do agente nada é enviado
+ao Nammux.
 
 ## Autenticação
 Credenciais por org em `organization_integrations` (cifradas).

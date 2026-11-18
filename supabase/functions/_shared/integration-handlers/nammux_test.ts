@@ -19,3 +19,22 @@ Deno.test("nomes antigos continuam aceitos; sem nenhum, fica indefinido", () => 
     { type: "opportunity", id: "a" },
   );
 });
+
+Deno.test("send_opportunity_won desliga o negócio ganho, não os outros eventos", async () => {
+  const { nammuxSendDisabled } = await import("./nammux.ts");
+  // negócio ganho e contato: respeitam os dois interruptores
+  assertEquals(nammuxSendDisabled({ enabled: true, send_opportunity_won: false }, true), true);
+  assertEquals(nammuxSendDisabled({ enabled: false }, true), true);
+  assertEquals(nammuxSendDisabled({}, true), false);
+  // entrevista: só `enabled`
+  assertEquals(nammuxSendDisabled({ enabled: true, send_opportunity_won: false }, false), false);
+  assertEquals(nammuxSendDisabled({ enabled: false, send_opportunity_won: true }, false), true);
+});
+
+Deno.test("entrevista tem handler de envio registrado", async () => {
+  const { resolve } = await import("./registry.ts");
+  const { nammuxSendEventHandler, nammuxSendOpportunityWonHandler } = await import("./nammux.ts");
+  assertEquals(resolve("nammux", "send_interview_scheduled"), nammuxSendEventHandler);
+  assertEquals(resolve("nammux", "send_opportunity_won"), nammuxSendOpportunityWonHandler);
+  assertEquals(resolve("nammux", "send_contact_updated"), nammuxSendOpportunityWonHandler);
+});

@@ -6,14 +6,14 @@ import { Classification, type Handler, type HandlerResult } from "./types.ts";
 import { fetchWithClassification } from "./http.ts";
 import { loadActiveIntegrationSecret } from "../integration-credentials.ts";
 
-interface NammuxConfig {
+export interface NammuxConfig {
   webhook_url?: string;
   enabled?: boolean;
   send_opportunity_won?: boolean;
   nammux_organization_id?: string;
 }
 
-function allowedNammuxWebhook(value: string): URL | null {
+export function allowedNammuxWebhook(value: string): URL | null {
   try {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.username || url.password) return null;
@@ -29,7 +29,7 @@ function allowedNammuxWebhook(value: string): URL | null {
 }
 
 // deno-lint-ignore no-explicit-any
-async function loadNammuxConfig(supabase: any, organizationId: string): Promise<NammuxConfig | null> {
+export async function loadNammuxConfig(supabase: any, organizationId: string): Promise<NammuxConfig | null> {
   const { data, error } = await supabase
     .from("organization_integrations")
     .select("config_values, is_enabled, integration:admin_integrations!inner(slug)")
@@ -41,7 +41,7 @@ async function loadNammuxConfig(supabase: any, organizationId: string): Promise<
   return (data.config_values ?? {}) as NammuxConfig;
 }
 
-async function hmacSha256Hex(secret: string, message: string): Promise<string> {
+export async function hmacSha256Hex(secret: string, message: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -71,7 +71,21 @@ export function eventEntity(event: unknown): { type: string | undefined; id: str
   };
 }
 
-export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<HandlerResult> => {
+/**
+ * O envio de um evento está desligado na configuração da integração?
+ * `send_opportunity_won` desliga o envio de negócio ganho (e do contato que vai
+ * junto); não vale para os outros eventos, que dependem só de `enabled`.
+ */
+export function nammuxSendDisabled(cfg: NammuxConfig, respectSendWon: boolean): boolean {
+  return cfg.enabled === false || (respectSendWon && cfg.send_opportunity_won === false);
+}
+
+export const nammuxSendOpportunityWonHandler: Handler = (ctx) => sendToNammux(ctx, true);
+
+/** Eventos que não são o negócio ganho (ex.: `entrevista.agendada`). */
+export const nammuxSendEventHandler: Handler = (ctx) => sendToNammux(ctx, false);
+
+async function sendToNammux(ctx: Parameters<Handler>[0], respectSendWon: boolean): Promise<HandlerResult> {
   const cfg = await loadNammuxConfig(ctx.supabase, ctx.event.organization_id);
   if (!cfg) {
     return {
@@ -79,10 +93,12 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
       error: "Nammux integration not configured or disabled for this organization",
     };
   }
-  if (cfg.enabled === false || cfg.send_opportunity_won === false) {
+  if (nammuxSendDisabled(cfg, respectSendWon)) {
     return {
       classification: Classification.Permanent,
-      error: "Nammux opportunity.won disabled in config_values (enabled / send_opportunity_won)",
+      error: respectSendWon
+        ? "Nammux opportunity.won disabled in config_values (enabled / send_opportunity_won)"
+        : "Nammux integration disabled in config_values (enabled)",
     };
   }
   const url = allowedNammuxWebhook((cfg.webhook_url ?? "").trim());
@@ -184,4 +200,4 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
     entityType: entity.type,
     internalId: entity.id,
   };
-};
+}
