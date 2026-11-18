@@ -33,7 +33,7 @@ export function ConversationActions(p: ConversationActionsProps) {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{uiText('Conversa')}</h3>
+      <h3 data-ficha-title className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{uiText('Conversa')}</h3>
 
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">{uiText('Responsável pela conversa')}</Label>

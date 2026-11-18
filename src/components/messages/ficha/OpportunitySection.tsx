@@ -70,7 +70,7 @@ export function OpportunitySection({
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{uiText('Oportunidades')}</h3>
+        <h3 data-ficha-title className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{uiText('Oportunidades')}</h3>
         {canEdit && openStages.length > 0 && (
           <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5 mr-1" />{uiText('Nova')}

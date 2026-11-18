@@ -159,7 +159,7 @@ export function ContactTasks({ contactId, opportunityId, compact = false }: Cont
       <CardHeader className={compact ? 'p-0 pb-3' : undefined}>
         <div className="flex items-center justify-between">
           {compact
-            ? <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('contacts.tasksTab')}</h3>
+            ? <h3 data-ficha-title className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('contacts.tasksTab')}</h3>
             : <CardTitle>{t('contacts.tasksTab')}</CardTitle>}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
