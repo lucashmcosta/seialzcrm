@@ -61,6 +61,127 @@ function isProjectSecretKey(token: string): boolean {
 }
 
 // ============================================================================
+// Chave interna conferida por IGUALDADE EXATA.
+//
+// `validateServiceRoleAuth` acima confere um JWT só pelas claims (role, iss,
+// ref, exp): a assinatura não é verificada. Em função com verify_jwt = false o
+// gateway também não verifica, então um token montado por qualquer pessoa com
+// `role: service_role` passava como chamada interna.
+//
+// `verifyServiceRoleAuth` só reconhece as duas chaves internas de verdade:
+//   - SUPABASE_SERVICE_ROLE_KEY, a variável de ambiente da função;
+//   - a chave do cofre que os jobs do pg_cron enviam
+//     (public.get_internal_function_auth_token(), restrita a service_role).
+//
+// SERVICE_AUTH_STRICT (rollout em duas fases, como o EDGE_AUTH_ENFORCE):
+//   "log"     → continua aceitando pelas claims, e registra `service_token_would_deny`
+//               quando o token não é uma das chaves conhecidas (padrão)
+//   "enforce" → só aceita chave conhecida
+// Ligar "enforce" depois de um período sem `service_token_would_deny` de
+// chamador legítimo. Detalhe: docs/operations/proposals/2026-11-18-token-interno-sem-assinatura.md
+// ============================================================================
+
+export type ServiceAuthMode = "log" | "enforce";
+
+export function serviceAuthMode(): ServiceAuthMode {
+  return (Deno.env.get("SERVICE_AUTH_STRICT") || "log").toLowerCase().trim() === "enforce" ? "enforce" : "log";
+}
+
+/** Comparação em tempo constante. */
+export function sameSecret(a: string, b: string): boolean {
+  if (!a || !b || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/** O token é exatamente uma das chaves internas? Lista vazia ou só com vazios: ninguém passa. */
+export function isKnownInternalKey(token: string, knownKeys: Array<string | null | undefined>): boolean {
+  if (!token) return false;
+  let ok = false;
+  for (const key of knownKeys) {
+    // Sem interromper no primeiro acerto, para o tempo não depender de qual chave casou.
+    if (typeof key === "string" && key.trim() && sameSecret(token, key.trim())) ok = true;
+  }
+  return ok;
+}
+
+/**
+ * Decisão, separada da entrada e saída para ser testável.
+ *  - chave conhecida → aceita
+ *  - claims inválidas → recusa (como antes)
+ *  - claims válidas, mas o token não é chave conhecida (pode ser forjado):
+ *      "enforce" recusa; "log" aceita e avisa
+ *  - não foi possível ler a chave do cofre: não há como distinguir o job do
+ *    pg_cron de um token forjado; aceita pelas claims e avisa, para uma falha do
+ *    cofre não parar os jobs
+ */
+export function decideServiceAuth(
+  claims: { ok: boolean; error?: string },
+  isKnownKey: boolean,
+  mode: ServiceAuthMode,
+  vaultAvailable: boolean,
+): { ok: boolean; error?: string; warn?: "would_deny" | "vault_unavailable" } {
+  if (isKnownKey) return { ok: true };
+  if (!claims.ok) return { ok: false, error: claims.error };
+  if (!vaultAvailable) return { ok: true, warn: "vault_unavailable" };
+  if (mode === "enforce") return { ok: false, error: "Service token is not a known internal key" };
+  return { ok: true, warn: "would_deny" };
+}
+
+let vaultKeyCache: { value: string | null; available: boolean; at: number } | null = null;
+const VAULT_KEY_TTL_MS = 5 * 60_000;
+const VAULT_ERROR_TTL_MS = 30_000;
+
+async function vaultInternalKey(): Promise<{ value: string | null; available: boolean }> {
+  const now = Date.now();
+  if (vaultKeyCache && now - vaultKeyCache.at < (vaultKeyCache.available ? VAULT_KEY_TTL_MS : VAULT_ERROR_TTL_MS)) {
+    return vaultKeyCache;
+  }
+  let value: string | null = null;
+  let available = false;
+  try {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+      auth: { persistSession: false },
+    });
+    const { data, error } = await admin.rpc("get_internal_function_auth_token");
+    if (!error) {
+      available = true;
+      value = typeof data === "string" && data ? data : null;
+    }
+  } catch (_e) {
+    available = false;
+  }
+  vaultKeyCache = { value, available, at: now };
+  return vaultKeyCache;
+}
+
+/** Substitui `validateServiceRoleAuth` nas funções: mesma resposta, com a chave conferida. */
+export async function verifyServiceRoleAuth(req: Request): Promise<{ ok: boolean; error?: string }> {
+  const claims = validateServiceRoleAuth(req);
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  const envKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  // A chave da função resolve a maioria das chamadas sem ir ao cofre.
+  if (isKnownInternalKey(token, [envKey])) return { ok: true };
+  if (!claims.ok) return { ok: false, error: claims.error };
+
+  const vault = await vaultInternalKey();
+  const mode = serviceAuthMode();
+  const decision = decideServiceAuth(claims, isKnownInternalKey(token, [vault.value]), mode, vault.available);
+  if (decision.warn) {
+    // Nunca o token: só de onde veio e o que as claims dizem.
+    const c = jwtClaims(req);
+    console.warn(`[AUTH] service_token_${decision.warn}`, JSON.stringify({
+      fn: new URL(req.url).pathname.split("/").filter(Boolean).pop() ?? null,
+      mode,
+      bearer_role: c.role,
+      user_agent: req.headers.get("user-agent") ?? null,
+    }));
+  }
+  return decision.ok ? { ok: true } : { ok: false, error: decision.error };
+}
+
+// ============================================================================
 // EDGE_AUTH — validação de chamador com rollout faseado.
 // Plano: docs/operations/proposals/2026-07-05-edge-auth-hardening.md
 //
@@ -130,7 +251,7 @@ async function checkCallerAuth(
   req: Request,
   organizationId: string,
 ): Promise<CallerAuth> {
-  const sr = validateServiceRoleAuth(req);
+  const sr = await verifyServiceRoleAuth(req);
   if (sr.ok) return { ok: true, kind: "service_role" };
 
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();

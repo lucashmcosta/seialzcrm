@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { notifyOrgUsers } from "../_shared/notify.ts";
-import { validateServiceRoleAuth } from "../_shared/auth.ts";
+import { verifyServiceRoleAuth } from "../_shared/auth.ts";
 import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
 
 function normalizePhoneToE164(phone: string): string {
@@ -41,7 +41,7 @@ function canonicalStandardKeys(q: { field_type?: string | null; mapped_to_contac
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const auth = validateServiceRoleAuth(req);
+  const auth = await verifyServiceRoleAuth(req);
   if (!auth.ok) {
     console.warn("Auth failed:", auth.error);
     return json({ error: "Unauthorized", details: auth.error }, 401);

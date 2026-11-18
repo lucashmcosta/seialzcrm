@@ -7,7 +7,7 @@
 // Tudo só dentro da janela de 24 h do WhatsApp e em conversas que continuam com o agente.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validateServiceRoleAuth } from "../_shared/auth.ts";
+import { verifyServiceRoleAuth } from "../_shared/auth.ts";
 import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
 import { SILENT_HANDOFF_AFTER_MS, shouldHandOffSilent } from "../_shared/intelligence/agent-gate.ts";
 
@@ -15,7 +15,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 serve(async (req) => {
-  const auth = validateServiceRoleAuth(req);
+  const auth = await verifyServiceRoleAuth(req);
   if (!auth.ok) return json({ error: "unauthorized", reason: auth.error }, 401);
 
   const url = Deno.env.get("SUPABASE_URL")!;

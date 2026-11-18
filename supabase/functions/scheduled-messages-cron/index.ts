@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { validateServiceRoleAuth } from "../_shared/auth.ts";
+import { verifyServiceRoleAuth } from "../_shared/auth.ts";
 import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
 
 const corsHeaders = {
@@ -15,7 +15,7 @@ serve(async (req) => {
   }
 
   // AuthN: only service_role JWT (e.g. pg_cron / internal schedulers) may invoke this.
-  const auth = validateServiceRoleAuth(req);
+  const auth = await verifyServiceRoleAuth(req);
   if (!auth.ok) {
     console.warn('[CRON] Unauthorized invocation:', auth.error);
     return new Response(

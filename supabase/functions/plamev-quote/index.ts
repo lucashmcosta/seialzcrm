@@ -38,7 +38,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { validateServiceRoleAuth } from "../_shared/auth.ts";
+import { verifyServiceRoleAuth } from "../_shared/auth.ts";
 import { decryptIntegrationSecret, encryptIntegrationSecret } from "../_shared/integration-credentials.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@1.4.0";
 import { base64DoMaterial, blocosMateriais, chaveClaude, perguntarClaude } from "./ia.ts";
@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
   let body: any;
   try { body = await req.json(); } catch { return json(400, { error: "invalid_json" }); }
   if (body?.action === L.CRON_ACTION) {
-    if (!validateServiceRoleAuth(req).ok) return json(401, { error: "unauthorized" });
+    if (!(await verifyServiceRoleAuth(req)).ok) return json(401, { error: "unauthorized" });
     try {
       const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
       return json(200, await cronPagamentos(db));
