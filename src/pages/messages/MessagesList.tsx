@@ -339,9 +339,9 @@ const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = fals
       className={(state) =>
         cn(
           'group relative flex items-center gap-3 border-b border-border/50 py-2.5 px-3 select-none cursor-pointer transition-colors',
-          'shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:bg-muted/40',
+          'shadow-[0_2px_4px_-1px_rgba(15,23,42,0.10)] hover:bg-muted/40',
           state.isFocused && 'outline-2 -outline-offset-2 outline-ring',
-          state.isSelected && 'bg-accent shadow-[0_2px_8px_rgba(15,23,42,0.08)] hover:bg-accent',
+          state.isSelected && 'z-[1] bg-accent shadow-[0_4px_14px_-2px_rgba(15,23,42,0.18)] hover:bg-accent',
           typeof className === 'function' ? className(state) : className
         )
       }
