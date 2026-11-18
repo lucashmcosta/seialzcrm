@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { NavItemType, SidebarNavigationProps } from "../config";
 import { SidebarNavItem } from "./sidebar-nav-item";
 import { SidebarNavGroup } from "./sidebar-nav-group";
@@ -28,6 +29,8 @@ export const SidebarNavigationSimple = ({
   };
 
   return (
+    // Dicas do menu recolhido: abrem em ~80ms e, passando de um ícone a outro, na hora.
+    <TooltipProvider delayDuration={80} skipDelayDuration={400}>
     <div className={cn("flex h-full flex-col border-r bg-card transition-[width] duration-200", collapsed ? "w-16" : "w-64")}>
       {/* Header / Logo */}
       {(collapsed ? collapsedLogo : logo) && (
@@ -74,5 +77,6 @@ export const SidebarNavigationSimple = ({
         </>
       )}
     </div>
+    </TooltipProvider>
   );
 };

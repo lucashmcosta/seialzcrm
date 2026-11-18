@@ -110,7 +110,11 @@ import { interpolateSnippet, buildSnippetVars } from '@/lib/interpolateSnippet';
 import { SnippetsPickerPanel, extractSnippetQuery } from '@/components/whatsapp/SnippetsPicker';
 import { useAI } from '@/hooks/useAI';
 import { useHasTextAi } from '@/hooks/useHasTextAi';
-import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
+import { type ChatThread } from '@/hooks/useMessageThreads';
+import { useCommercialThreads, type CommercialChatThread } from '@/hooks/useCommercialThreads';
+import { useCommercialFilterOptions } from '@/hooks/useCommercialFilterOptions';
+import { CommercialFiltersPanel, ActiveFilterChips } from '@/components/messages/CommercialFiltersPanel';
+import { type CommercialThreadFilters, EMPTY_FILTERS, DEFAULT_CARD_PREFS, parseFilters, parseCardPrefs, countActivePanelFilters, conversationCountLabel } from '@/lib/commercialThreadFilters';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { useSalesEndpointFilterOptions } from '@/hooks/useSalesEndpointFilterOptions';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
@@ -119,10 +123,9 @@ import { useThreadLastMessageMeta } from '@/hooks/messages/useThreadLastMessageM
 import { LastMessagePreview } from '@/components/messages/LastMessagePreview';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
-import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
-import { AssigneeFilterDialog } from '@/components/messages/AssigneeFilterDialog';
 import { useOrgUserFilterOptions } from '@/hooks/useOrgUserFilterOptions';
 import { TimelineEventMarker } from '@/components/messages/timeline/TimelineEventMarker';
+import { StickyDayIndicator } from '@/components/messages/timeline/StickyDayIndicator';
 import { FunnelSimple, UserCircle } from '@phosphor-icons/react';
 
 import { formatEndpointIdentity, formatEndpointMigrationAuditLine, whatsappProviderLabel, whatsappProviderShortLabel } from '@/lib/whatsappEndpointDisplay';
@@ -298,9 +301,11 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   aiEnabled?: boolean;
   /** Nome do agente de IA que está atendendo esta conversa agora (antes da passagem). */
   agentName?: string | null;
+  /** O que a pessoa escolheu ver no card ("Exibir no card"). */
+  cardPrefs?: { stage: boolean; tags: boolean; endpoint: boolean };
 }
 
-const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = false, agentName = null, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = false, agentName = null, cardPrefs, onHide, endpointAddress, endpointPurpose, endpointProvider, endpointIsActive, officialNumbers, lastMessageMediaType, lastMessageStatus, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[displayThreadStatus(value.status, value.last_message_direction)] || statusConfig.open;
@@ -334,9 +339,10 @@ const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = fals
       textValue={value.contact_name}
       className={(state) =>
         cn(
-          'group relative flex items-center gap-3 border-b border-border/60 py-2.5 px-3 select-none cursor-pointer',
+          'group relative flex items-center gap-3 border-b border-border/50 py-2.5 px-3 select-none cursor-pointer transition-colors',
+          'shadow-[0_2px_4px_-1px_rgba(15,23,42,0.10)] hover:bg-muted/40',
           state.isFocused && 'outline-2 -outline-offset-2 outline-ring',
-          state.isSelected && 'bg-accent',
+          state.isSelected && 'z-[1] bg-accent shadow-[0_4px_14px_-2px_rgba(15,23,42,0.18)] hover:bg-accent',
           typeof className === 'function' ? className(state) : className
         )
       }
@@ -349,14 +355,14 @@ const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = fals
               {value.contact_name}
             </span>
             {/* Fase Final — badge compacto com estado REAL do endpoint */}
-            <RouteBadge
+            {(cardPrefs?.endpoint ?? true) && <RouteBadge
               address={endpointAddress ?? null}
               provider={endpointProvider ?? null}
               /* Estado nunca derivado de campo legado: sem dado de endpoint o
                  badge fica indeterminado (não renderiza aviso de legado). */
               state={!endpointAddress ? 'unknown' : endpointIsActive === false ? 'offline' : 'online'}
               variant="compact"
-            />
+            />}
 
             {(value.unread) && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
@@ -393,15 +399,15 @@ const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = fals
               </span>
             </>
           )}
-          {agentName && !value.assigned_user_name && (
+          {(agentName ?? (value as Partial<CommercialChatThread>).ai_agent_name) && !value.assigned_user_name && !(aiEnabled && value.needs_human_attention) && (
             <>
               <span className="text-[10px] text-muted-foreground/60 shrink-0">·</span>
               <span
                 className="inline-flex items-center gap-1 shrink-0 text-primary"
-                title={locale === 'pt-BR' ? `${agentName} está atendendo. Passa para a equipe quando precisar.` : `${agentName} is handling this conversation`}
+                title={(() => { const n = agentName ?? (value as Partial<CommercialChatThread>).ai_agent_name; return locale === 'pt-BR' ? `${n} está atendendo. Passa para a equipe quando precisar.` : `${n} is handling this conversation`; })()}
               >
                 <Robot className="h-3 w-3" />
-                <span className="text-[10px] font-medium truncate">{locale === 'pt-BR' ? `Com ${agentName}` : `With ${agentName}`}</span>
+                <span className="text-[10px] font-medium truncate">{(() => { const n = agentName ?? (value as Partial<CommercialChatThread>).ai_agent_name; return locale === 'pt-BR' ? `Com ${n}` : `With ${n}`; })()}</span>
               </span>
             </>
           )}
@@ -413,7 +419,38 @@ const ChatListItem = ({ value, locale, className, rail = false, aiEnabled = fals
               </span>
             </>
           )}
+          {!value.assigned_user_name && !(agentName ?? (value as Partial<CommercialChatThread>).ai_agent_name)
+            && !(aiEnabled && value.needs_human_attention) && value.status !== 'resolved' && (
+            <>
+              <span className="text-[10px] text-muted-foreground/60 shrink-0">·</span>
+              <span className="text-[10px] text-amber-600 dark:text-amber-400 truncate" title={locale === 'pt-BR' ? 'Ninguém está atendendo esta conversa' : 'Nobody is handling this conversation'}>
+                {locale === 'pt-BR' ? 'Sem responsável' : 'Unassigned'}
+              </span>
+            </>
+          )}
         </div>
+        {(() => {
+          const cv = value as Partial<CommercialChatThread>;
+          const showStage = (cardPrefs?.stage ?? false) && !!cv.open_stage_name;
+          const tags = (cardPrefs?.tags ?? false) ? (cv.open_opportunity_tags ?? []) : [];
+          if (!showStage && tags.length === 0) return null;
+          return (
+            <div className="mt-1 flex items-center gap-1 min-w-0 overflow-hidden">
+              {showStage && (
+                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground truncate max-w-[60%]" title={locale === 'pt-BR' ? 'Etapa da oportunidade aberta' : 'Open opportunity stage'}>
+                  {cv.open_stage_name}
+                </span>
+              )}
+              {tags.slice(0, 2).map((t) => (
+                <span key={t.id} className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground truncate max-w-[40%]">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: t.color || '#94a3b8' }} />
+                  {t.name}
+                </span>
+              ))}
+              {tags.length > 2 && <span className="text-[10px] text-muted-foreground">+{tags.length - 2}</span>}
+            </div>
+          );
+        })()}
 
       </div>
     </ListBoxItem>
@@ -547,21 +584,12 @@ function DesktopMessagesList() {
   
   // New conversation dialog state
   const [showNewConversation, setShowNewConversation] = useState(false);
-  const [endpointFilter, setEndpointFilter] = useState<string>('all');
-  const [endpointFilterOpen, setEndpointFilterOpen] = useState(false);
-  // Filtro por responsável: 'all' | 'unassigned' | userId
-  // Filtro por responsável (multi): ids de usuário + token 'unassigned'. Vazio = todos.
-  const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
-  // "Para responder": só conversas em que o cliente mandou a última mensagem (a vez é da equipe).
-  const [toReplyOnly, setToReplyOnly] = usePersistedFilters<boolean>('messages.toReplyOnly', false);
-  // "Encerradas": conversas encerradas (pela equipe ou pelo agente). Exclusivo com "Para responder".
-  const [resolvedOnly, setResolvedOnly] = usePersistedFilters<boolean>('messages.resolvedOnly', false);
-  const showList = (view: 'all' | 'to_reply' | 'resolved') => {
-    setToReplyOnly(view === 'to_reply');
-    setResolvedOnly(view === 'resolved');
-  };
-  const effectiveFilter = (resolvedOnly ? 'resolved' : 'all_open') as ThreadFilter;
-  const [assigneeFilterOpen, setAssigneeFilterOpen] = useState(false);
+  // Filtros do Comercial (v2): um objeto só, salvo por usuário, aplicado no servidor (lista + contador).
+  const [commercialFilters, setCommercialFilters] = usePersistedFilters<CommercialThreadFilters>('messages.filters.v2', EMPTY_FILTERS, parseFilters);
+  const [cardPrefs, setCardPrefs] = usePersistedFilters('messages.cardPrefs', DEFAULT_CARD_PREFS, parseCardPrefs);
+  // Container da conversa aberta (para a data flutuante no topo).
+  const chatScrollWrapRef = useRef<HTMLDivElement>(null);
+  const filtersForServer = useMemo(() => ({ ...commercialFilters, search: debouncedSearch }), [commercialFilters, debouncedSearch]);
 
   const [selectedEndpointDetails, setSelectedEndpointDetails] = useState<{ threadId: string; endpoint: any | null } | null>(null);
 
@@ -746,7 +774,10 @@ function DesktopMessagesList() {
   // Pede confirmação para evitar o clique por engano que deixava o cliente sem resposta.
   const [agentTakeOver, setAgentTakeOver] = useState<{ threadId: string; agentName: string; run: () => void } | null>(null);
   const guardAgentThread = (threadId: string, run: () => void) => {
-    const agentName = agentThreads?.[threadId];
+    // Mesma fonte do card (linha da lista) e, de reserva, a consulta à parte.
+    const fromRow = (threads?.find((t) => t.id === threadId) as CommercialChatThread | undefined)?.ai_agent_name
+      ?? (pinnedThread?.id === threadId ? pinnedThread.ai_agent_name : null);
+    const agentName = fromRow ?? agentThreads?.[threadId];
     if (agentName) setAgentTakeOver({ threadId, agentName, run });
     else run();
   };
@@ -865,46 +896,43 @@ function DesktopMessagesList() {
   // inativas/Evolution), agrupadas por número. Chave = dígitos do número.
   const endpointFilterOptions = useSalesEndpointFilterOptions(organization?.id);
   const hasSalesEndpointFilter = endpointFilterOptions.length >= 1;
-  const activeEndpointFilterIds = useMemo(() => {
-    if (endpointFilter === 'all') return null;
-    const opt = endpointFilterOptions.find((o) => o.key === endpointFilter);
-    return opt ? new Set(opt.endpointIds) : null;
-  }, [endpointFilter, endpointFilterOptions]);
-  const activeEndpointFilterIdList = useMemo(
-    () => activeEndpointFilterIds ? Array.from(activeEndpointFilterIds).sort() : undefined,
-    [activeEndpointFilterIds],
-  );
-  useEffect(() => {
-    if (endpointFilter === 'all') return;
-    if (endpointFilterOptions.length === 0) return;
-    if (!endpointFilterOptions.some((o) => o.key === endpointFilter)) {
-      setEndpointFilter('all');
-    }
-  }, [endpointFilter, endpointFilterOptions]);
-
-  // Filtro por responsável: usuários ativos da organização. A RPC aplica o
-  // responsável antes do LIMIT/cursor, igual ao filtro por número.
   const assigneeFilterUsers = useOrgUserFilterOptions(organization?.id);
-  useEffect(() => {
-    if (assigneeFilterUsers.length === 0) return;
-    const valid = assigneeFilter.filter((v) => v === 'unassigned' || assigneeFilterUsers.some((u) => u.id === v));
-    if (valid.length !== assigneeFilter.length) setAssigneeFilter(valid);
-  }, [assigneeFilter, assigneeFilterUsers]);
+  // Sem permissão de ver todas, o filtro de responsável só oferece a própria pessoa.
+  const panelUsers = permissions.viewAllThreads ? assigneeFilterUsers : assigneeFilterUsers.filter((u) => u.id === userProfile?.id);
+  const filterOptions = useCommercialFilterOptions(organization?.id);
 
-  // A RPC aplica o número antes do LIMIT/cursor. Assim, a primeira página do
-  // 7020 não depende de carregar páginas gerais até encontrar uma ocorrência.
-  const { threads, loading: threadsLoading, error: threadsError, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({
-    channels: ['whatsapp'],
-    search: debouncedSearch,
-    endpointIds: activeEndpointFilterIdList,
-    assignedUserIds: assigneeFilter.filter((v) => v !== 'unassigned'),
-    unassignedOnly: assigneeFilter.includes('unassigned'),
-    toReplyOnly: toReplyOnly && !resolvedOnly,
-    resolvedOnly,
-  });
+  // Lista (50 por vez) e contador total usam os MESMOS filtros no servidor.
+  const { threads, pinnedThread, total: threadsTotal, loading: threadsLoading, error: threadsError, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useCommercialThreads(filtersForServer, { pinnedId: selectedThreadId });
+
+  // Filtros salvos que apontam para número/responsável/etapa/etiqueta que não existem mais: tira,
+  // senão o servidor continuaria filtrando sem nada visível na tela.
+  useEffect(() => {
+    const f = commercialFilters;
+    const patch: Partial<CommercialThreadFilters> = {};
+    if (endpointFilterOptions.length && f.endpointIds.length) {
+      const valid = new Set(endpointFilterOptions.flatMap((o) => o.endpointIds));
+      const kept = f.endpointIds.filter((id) => valid.has(id));
+      if (kept.length !== f.endpointIds.length) patch.endpointIds = kept;
+    }
+    if (assigneeFilterUsers.length && f.assignedUserIds.length) {
+      const kept = f.assignedUserIds.filter((id) => assigneeFilterUsers.some((u) => u.id === id));
+      if (kept.length !== f.assignedUserIds.length) patch.assignedUserIds = kept;
+    }
+    if (filterOptions.stages.length && f.stageIds.length) {
+      const kept = f.stageIds.filter((id) => filterOptions.stages.some((st) => st.id === id));
+      if (kept.length !== f.stageIds.length) patch.stageIds = kept;
+    }
+    if (filterOptions.tags.length && f.oppTagIds.length) {
+      const kept = f.oppTagIds.filter((id) => filterOptions.tags.some((t) => t.id === id));
+      if (kept.length !== f.oppTagIds.length) patch.oppTagIds = kept;
+    }
+    if (Object.keys(patch).length) setCommercialFilters({ ...f, ...patch });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endpointFilterOptions, assigneeFilterUsers, filterOptions.stages, filterOptions.tags]);
 
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId)
+    ?? (pinnedThread?.id === selectedThreadId ? pinnedThread : undefined)
     ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
   const threadIdsForEndpointMap = (threads ?? []).map((t) => t.id);
   const threadEndpointMap = useThreadEndpointMap(threadIdsForEndpointMap, hasMultipleEndpoints);
@@ -1971,28 +1999,8 @@ function DesktopMessagesList() {
     setReplyingTo(message);
   };
 
-  const filteredThreads = threads?.filter((thread) => {
-    // Search is applied server-side via rpc_list_message_threads (p_search).
-    if (toReplyOnly && !resolvedOnly && displayThreadStatus(thread.status, thread.last_message_direction) !== 'reply') return false;
-    // Status filter
-
-    // Treat resolved threads with no client reply yet as still "pending" — they
-    // were likely auto-resolved or marked too early and the client never replied.
-    const isPendingFirstReply = thread.status === 'resolved' && !thread.last_inbound_at && !thread.whatsapp_last_inbound_at;
-    const isOpenLike = ['open', 'awaiting_client', 'in_progress'].includes(thread.status) || isPendingFirstReply;
-    switch (effectiveFilter) {
-      case 'mine':
-        return thread.assigned_user_id === userProfile?.id && isOpenLike;
-      case 'unassigned':
-        return !thread.assigned_user_id && (thread.status === 'open' || isPendingFirstReply);
-      case 'all_open':
-        return isOpenLike;
-      case 'resolved':
-        return thread.status === 'resolved';
-      default:
-        return true;
-    }
-  });
+  // Todos os filtros (situação, responsável, IA, oportunidade, datas, origem...) já vêm aplicados do servidor.
+  const filteredThreads = threads;
 
   // Hidden threads (per-user, with 5s undo)
   const { hideThread, unhideThread, isHidden } = useHiddenThreads(userProfile?.id);
@@ -2028,12 +2036,10 @@ function DesktopMessagesList() {
   // Fase Final — vazio contextual da lista: distingue "sem conversas" de
   // "busca/filtro sem resultado". Não altera nenhuma query.
   const hasActiveListFilters =
-    searchQuery.trim().length > 0 || endpointFilter !== 'all' || assigneeFilter.length > 0 || toReplyOnly || resolvedOnly;
+    searchQuery.trim().length > 0 || countActivePanelFilters(commercialFilters) > 0 || commercialFilters.view !== 'open';
   const clearListFilters = () => {
-    showList('all');
     setSearchQuery('');
-    setEndpointFilter('all');
-    setAssigneeFilter([]);
+    setCommercialFilters({ ...EMPTY_FILTERS });
   };
 
 
@@ -2139,8 +2145,14 @@ function DesktopMessagesList() {
             {/* Header */}
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
-                <h1 className="text-xl font-semibold text-foreground">
+                <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
                   {t('nav.messages')}
+                  <span aria-live="polite" title={threadsTotal === null ? undefined : conversationCountLabel(threadsTotal, locale)}>
+                    <span className="sr-only">{threadsTotal === null ? '' : conversationCountLabel(threadsTotal, locale)}</span>
+                    <Badge color="gray" size="md" aria-hidden="true">
+                      {threadsTotal === null ? '…' : threadsTotal.toLocaleString(locale === 'en-US' ? 'en-US' : 'pt-BR')}
+                    </Badge>
+                  </span>
                 </h1>
                 <div className="flex items-center gap-2">
                   {isOrgSystemAdmin && <Button
@@ -2162,40 +2174,23 @@ function DesktopMessagesList() {
                   >
                     <Plus className="w-4 h-4" weight="light" />
                   </Button>
-                  {hasSalesEndpointFilter && (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8 relative"
-                      onClick={() => setEndpointFilterOpen(true)}
-                      title={locale === 'pt-BR' ? 'Filtrar por número' : 'Filter by number'}
-                    >
-                      <FunnelSimple className="w-4 h-4" />
-                      {endpointFilter !== 'all' && (
-                        <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500" />
-                      )}
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 relative"
-                    onClick={() => setAssigneeFilterOpen(true)}
-                    title={locale === 'pt-BR' ? 'Filtrar por responsável' : 'Filter by assignee'}
-                  >
-                    <UserCircle className="w-4 h-4" />
-                    {assigneeFilter.length > 0 && (
-                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500" />
-                    )}
-                  </Button>
-
-                  <Badge color="gray" size="md">
-                    {visibleThreadsWithSelected?.length || 0}
-                  </Badge>
+                  <CommercialFiltersPanel
+                    locale={locale}
+                    value={commercialFilters}
+                    onChange={setCommercialFilters}
+                    endpoints={endpointFilterOptions}
+                    users={panelUsers}
+                    stages={filterOptions.stages}
+                    tags={filterOptions.tags}
+                    ads={filterOptions.ads}
+                    aiEnabled={!!hasAIAgent}
+                    cardPrefs={cardPrefs}
+                    onCardPrefsChange={setCardPrefs}
+                  />
 
                 </div>
               </div>
-              <div className="relative mb-3">
+              <div className="relative mb-2">
                 <SearchLg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder={locale === 'pt-BR' ? 'Buscar conversas...' : 'Search conversations...'}
@@ -2204,25 +2199,21 @@ function DesktopMessagesList() {
                   className="pl-9"
                 />
               </div>
-              <div className="mb-3 flex gap-1.5" role="group" aria-label={locale === 'pt-BR' ? 'Mostrar' : 'Show'}>
-                {([
-                  { key: 'all', label: locale === 'pt-BR' ? 'Todas' : 'All', title: undefined },
-                  { key: 'to_reply', label: locale === 'pt-BR' ? 'Para responder' : 'To reply', title: locale === 'pt-BR' ? 'Conversas em que o cliente mandou a última mensagem' : 'Conversations where the customer sent the last message' },
-                  { key: 'resolved', label: locale === 'pt-BR' ? 'Encerradas' : 'Closed', title: locale === 'pt-BR' ? 'Conversas encerradas pela equipe ou pela IA' : 'Conversations closed by the team or the agent' },
-                ] as const).map((opt) => {
-                  const active = resolvedOnly ? opt.key === 'resolved' : toReplyOnly ? opt.key === 'to_reply' : opt.key === 'all';
-                  return (
-                    <Button key={opt.key} type="button" size="sm" variant={active ? 'default' : 'outline'} className="h-7 rounded-full px-3 text-xs" aria-pressed={active} title={opt.title} onClick={() => showList(opt.key)}>
-                      {opt.label}
-                    </Button>
-                  );
-                })}
-              </div>
+              <ActiveFilterChips
+                locale={locale}
+                value={commercialFilters}
+                onChange={setCommercialFilters}
+                users={panelUsers}
+                stages={filterOptions.stages}
+                tags={filterOptions.tags}
+                ads={filterOptions.ads}
+                endpoints={endpointFilterOptions}
+              />
             </div>
             </>)}
 
             {/* Chat List */}
-            <ScrollArea className="flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
+            <div className="no-scrollbar flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
               {threadsLoading ? (
                 <div className="p-4 space-y-4">
                   {[1, 2, 3, 4].map((i) => (
@@ -2280,7 +2271,8 @@ function DesktopMessagesList() {
                         value={thread}
                         rail={listRail}
                         aiEnabled={!!hasAIAgent}
-                        agentName={agentThreads?.[thread.id] ?? null}
+                        agentName={(thread as CommercialChatThread).ai_agent_name ?? null}
+                        cardPrefs={cardPrefs}
                         locale={locale as 'pt-BR' | 'en-US'}
                         onHide={handleHideThread}
                         /* Badge visual: última mensagem -> primary_endpoint_id.
@@ -2314,7 +2306,7 @@ function DesktopMessagesList() {
                   )}
                 </>
               )}
-            </ScrollArea>
+            </div>
         </div>
 
         {/* Right Panel - Chat */}
@@ -2522,6 +2514,8 @@ function DesktopMessagesList() {
                 ) : (
                   <>
                     {/* Área da conversa estilo WhatsApp: fundo ocupa tudo, sem cartão/margem branca. */}
+                    <div ref={chatScrollWrapRef} className="relative flex min-h-0 flex-1 flex-col">
+                    <StickyDayIndicator containerRef={chatScrollWrapRef} deps={[selectedThreadId, messages.length, messagesLoading]} />
                     <ScrollArea className="flex-1 bg-muted/85">
                       {messagesLoading ? (
                         <div className="p-6 space-y-4">
@@ -2671,11 +2665,9 @@ function DesktopMessagesList() {
 
 
                               const separator = showSeparator ? (
-                                <TimelineEventMarker
-                                  key={`sep-${dateKey}`}
-                                  label={formatDateSeparator(itemDate)}
-                                  className="my-3"
-                                />
+                                <div key={`sep-${dateKey}`} data-day-separator={formatDateSeparator(itemDate)}>
+                                  <TimelineEventMarker label={formatDateSeparator(itemDate)} className="my-3" />
+                                </div>
                               ) : null;
 
 
@@ -3131,6 +3123,7 @@ function DesktopMessagesList() {
                         </div>
                       )}
                     </ScrollArea>
+                    </div>
 
                     {/* Input Area */}
                     <div className="border-t border-border p-4 bg-card">
@@ -3563,8 +3556,8 @@ function DesktopMessagesList() {
         intent="sales"
         onSelectContact={async (_contactId, threadId, endpointId) => {
           setSearchQuery('');
-          if (activeEndpointFilterIds && (!endpointId || !activeEndpointFilterIds.has(endpointId))) {
-            setEndpointFilter('all');
+          if (commercialFilters.endpointIds.length && (!endpointId || !commercialFilters.endpointIds.includes(endpointId))) {
+            setCommercialFilters({ ...commercialFilters, endpointIds: [] });
           }
 
           const loadedThread = await loadThreadForSelection(threadId, endpointId);
@@ -3575,23 +3568,7 @@ function DesktopMessagesList() {
         }}
       />
 
-      <EndpointFilterDialog
-        open={endpointFilterOpen}
-        onOpenChange={setEndpointFilterOpen}
-        options={endpointFilterOptions}
-        value={endpointFilter}
-        onChange={setEndpointFilter}
-      />
 
-      <AssigneeFilterDialog
-        open={assigneeFilterOpen}
-        onOpenChange={setAssigneeFilterOpen}
-        users={assigneeFilterUsers}
-        value={assigneeFilter}
-        onChange={setAssigneeFilter}
-        currentUserId={userProfile?.id}
-        canSelectOthers={permissions.viewAllThreads}
-      />
 
 
       {/* Confirm Mark Won/Lost */}

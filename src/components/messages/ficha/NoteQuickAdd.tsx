@@ -26,7 +26,7 @@ export function NoteQuickAdd({ onAddNote }: { onAddNote: (text: string) => Promi
 
   return (
     <section className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{uiText('Nota rápida')}</h3>
+      <h3 data-ficha-title className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{uiText('Nota rápida')}</h3>
       <Textarea
         value={text}
         rows={3}

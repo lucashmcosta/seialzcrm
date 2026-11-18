@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
+import { MoneyInput } from '@/components/common/MoneyInput';
 import { CustomFieldsCard } from '@/components/custom-fields/CustomFieldsCard';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { ContractSignatureEntry } from '@/components/signature/ContractSignatureEntry';
@@ -28,6 +29,7 @@ export type FichaOpp = {
   amount?: number | null;
   currency?: string | null;
   owner_user_id?: string | null;
+  close_date?: string | null;
 };
 
 export function OpportunitySection({
@@ -70,7 +72,7 @@ export function OpportunitySection({
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{uiText('Oportunidades')}</h3>
+        <h3 data-ficha-title className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{uiText('Oportunidades')}</h3>
         {canEdit && openStages.length > 0 && (
           <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5 mr-1" />{uiText('Nova')}
@@ -137,9 +139,10 @@ function OpportunityCard({
   onUpdated: (patch: Partial<FichaOpp>) => void;
 }) {
   const { organization, userProfile } = useOrganization();
-  const [amount, setAmount] = useState(opp.amount == null ? '' : String(opp.amount));
+  const uiLocale = useUiLocale();
+  const [closeDate, setCloseDate] = useState((opp.close_date || '').slice(0, 10));
   const [saving, setSaving] = useState(false);
-  useEffect(() => { setAmount(opp.amount == null ? '' : String(opp.amount)); }, [opp.amount]);
+  useEffect(() => { setCloseDate((opp.close_date || '').slice(0, 10)); }, [opp.close_date]);
 
   const save = async (patch: Partial<FichaOpp>) => {
     setSaving(true);
@@ -150,23 +153,27 @@ function OpportunityCard({
     setSaving(false);
     if (error) {
       toast.error(error.message || uiText('Não foi possível salvar a oportunidade.'));
-      setAmount(opp.amount == null ? '' : String(opp.amount));
+      setCloseDate((opp.close_date || '').slice(0, 10));
       return;
     }
     onUpdated(patch);
     toast.success(uiText('Oportunidade atualizada'));
   };
 
-  const commitAmount = () => {
-    const raw = amount.trim().replace(',', '.');
-    const value = raw === '' ? 0 : Number(raw);
-    if (!Number.isFinite(value) || value < 0) {
+  const commitAmount = (value: number | null) => {
+    const next = value ?? 0;
+    if (!Number.isFinite(next) || next < 0) {
       toast.error(uiText('Valor inválido.'));
-      setAmount(opp.amount == null ? '' : String(opp.amount));
       return;
     }
-    if (value === Number(opp.amount ?? 0)) return;
-    void save({ amount: value });
+    if (next === Number(opp.amount ?? 0)) return;
+    void save({ amount: next });
+  };
+
+  const commitCloseDate = () => {
+    const next = closeDate || null;
+    if ((next || '') === (opp.close_date || '').slice(0, 10)) return;
+    void save({ close_date: next });
   };
 
   const currency = opp.currency || organization?.default_currency || 'BRL';
@@ -182,17 +189,29 @@ function OpportunityCard({
 
       <div className="space-y-1.5">
         <Label htmlFor={`ficha-amount-${opp.id}`} className="text-xs text-muted-foreground">
-          {uiText('Valor')} ({currency})
+          {uiText('Valor')}
+        </Label>
+        <MoneyInput
+          id={`ficha-amount-${opp.id}`}
+          value={opp.amount ?? null}
+          currency={currency}
+          locale={uiLocale === 'en-US' ? 'en-US' : 'pt-BR'}
+          disabled={!canEdit || saving}
+          onCommit={commitAmount}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor={`ficha-close-${opp.id}`} className="text-xs text-muted-foreground">
+          {uiText('Data de fechamento')}
         </Label>
         <Input
-          id={`ficha-amount-${opp.id}`}
-          type="number"
-          min={0}
-          step="0.01"
-          value={amount}
+          id={`ficha-close-${opp.id}`}
+          type="date"
+          value={closeDate}
           disabled={!canEdit || saving}
-          onChange={(e) => setAmount(e.target.value)}
-          onBlur={commitAmount}
+          onChange={(e) => setCloseDate(e.target.value)}
+          onBlur={commitCloseDate}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
         />
       </div>

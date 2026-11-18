@@ -13,6 +13,8 @@ import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { canonicalContactName, digits, formatCpf, type OperatingCountryCode } from '@/lib/regional';
 import { classifyContactDbError, cpfInputError } from '@/lib/contactRules';
 import { findEmailDuplicates } from '@/lib/contactUpdate';
+import { useRegistryLookup } from '@/hooks/useRegistryLookup';
+import { CheckCircle, SpinnerGap, Warning } from '@phosphor-icons/react';
 
 type ContactRow = {
   id: string;
@@ -50,6 +52,20 @@ export function ContactQuickEdit({
   const isBrazil = country === 'BR';
   const splitName = country === 'US';
 
+  const { lookup } = useRegistryLookup();
+  // Situação da verificação do CPF (a mesma que o cadastro completo grava).
+  const identityKey = ['ficha-contact-identity', contactId];
+  const identity = useQuery({
+    queryKey: identityKey,
+    enabled: !!contactId && isBrazil,
+    queryFn: async () => {
+      const { data } = await supabase.from('contact_identity_profiles')
+        .select('cpf_verification_status').eq('contact_id', contactId).maybeSingle();
+      return (data?.cpf_verification_status as string | undefined) ?? null;
+    },
+  });
+  const [cpfChecking, setCpfChecking] = useState(false);
+
   const contact = useQuery({
     queryKey,
     enabled: !!contactId,
@@ -86,8 +102,8 @@ export function ContactQuickEdit({
     setDraft((d) => ({ ...d, [key]: original }));
   };
 
-  const persist = async (key: FieldKey, patch: Record<string, unknown>) => {
-    if (!organization || !userProfile) return;
+  const persist = async (key: FieldKey, patch: Record<string, unknown>): Promise<boolean> => {
+    if (!organization || !userProfile) return false;
     setSaving(key);
     const { error } = await supabase
       .from('contacts')
@@ -106,11 +122,51 @@ export function ContactQuickEdit({
         toast.error((c.kind === 'other' && c.message) || uiText('Não foi possível salvar o contato.'));
       }
       revert(key);
-      return;
+      return false;
     }
     toast.success(uiText('Contato atualizado'));
     await qc.invalidateQueries({ queryKey });
     onSaved?.();
+    return true;
+  };
+
+  // Mesma consulta do cadastro completo (cpf-brasil e, se preciso, SERPRO): confirma o CPF,
+  // grava a verificação no contato e preenche o nome como na tela de edição.
+  const verifyCpf = async (cpf: string) => {
+    if (!isBrazil || !cpf) return;
+    setCpfChecking(true);
+    try {
+      const result = await lookup<{ full_name?: string }>('cpf', cpf, { contactId });
+      const name = result.data?.full_name?.trim();
+      const current = contact.data;
+      if (name && current && name !== (current.full_name || '')) {
+        const n = canonicalContactName(country, { fullName: name, firstName: '', lastName: '' });
+        await supabase.from('contacts').update({ full_name: n.fullName, first_name: n.firstName, last_name: n.lastName, updated_by: userProfile?.id })
+          .eq('id', contactId);
+        await qc.invalidateQueries({ queryKey });
+        onSaved?.();
+      }
+      toast.success(result.provider === 'serpro'
+        ? uiText('CPF confirmado na Receita Federal (SERPRO) e dados preenchidos.')
+        : uiText('CPF verificado e dados cadastrais preenchidos.'));
+    } catch (error: unknown) {
+      const code = error instanceof Error ? error.message : 'registry_lookup_failed';
+      const needDate = Boolean((error as { payload?: { fallback_available?: boolean } }).payload?.fallback_available);
+      if (needDate) {
+        toast.warning(uiText('Para confirmar este CPF, informe a data de nascimento no cadastro completo.'), {
+          ...(onEditFull ? { action: { label: uiText('Abrir cadastro completo'), onClick: onEditFull } } : {}),
+        });
+      } else if (code.includes('invalid_cpf')) {
+        toast.error(uiText('CPF inválido. Confira os dígitos informados.'));
+      } else if (code.includes('not_found')) {
+        toast.warning(uiText('CPF não encontrado. O contato fica salvo como não verificado.'));
+      } else {
+        toast.error(uiText('Não foi possível verificar agora. O contato fica salvo como não verificado.'));
+      }
+    } finally {
+      setCpfChecking(false);
+      await qc.invalidateQueries({ queryKey: identityKey });
+    }
   };
 
   const commit = async (key: FieldKey) => {
@@ -171,8 +227,11 @@ export function ContactQuickEdit({
         revert(key);
         return;
       }
-      // A verificação cadastral é reiniciada no banco (trg_contacts_reset_cpf_verification).
-      await persist(key, { cpf: newDigits || null });
+      // A verificação cadastral é reiniciada no banco (trg_contacts_reset_cpf_verification);
+      // em seguida consulta de novo, como no cadastro completo.
+      const ok = await persist(key, { cpf: newDigits || null });
+      if (ok && newDigits) await verifyCpf(newDigits);
+      else if (ok) await qc.invalidateQueries({ queryKey: identityKey });
     }
   };
 
@@ -183,9 +242,23 @@ export function ContactQuickEdit({
     return <p className="text-xs text-muted-foreground">{uiText('Contato não encontrado.')}</p>;
   }
 
+  const cpfStatusIcon = () => {
+    if (!isBrazil || !draft.cpf) return null;
+    if (cpfChecking) return <SpinnerGap className="h-4 w-4 animate-spin text-muted-foreground" aria-label={uiText('Verificando CPF')} />;
+    if (identity.data === 'verified') return <CheckCircle className="h-4 w-4 text-emerald-600" weight="fill" aria-label={uiText('CPF verificado')} />;
+    if (identity.data) return (
+      <button type="button" title={uiText('CPF não verificado. Clique para consultar de novo.')} aria-label={uiText('Consultar CPF de novo')}
+        onClick={() => { const d = digits(draft.cpf); if (d.length === 11) void verifyCpf(d); }}>
+        <Warning className="h-4 w-4 text-amber-500" weight="fill" />
+      </button>
+    );
+    return null;
+  };
+
   const field = (key: FieldKey, label: string, extra?: { placeholder?: string; inputMode?: 'email' | 'numeric' }) => (
     <div className="space-y-1.5">
       <Label htmlFor={`ficha-${key}`} className="text-xs text-muted-foreground">{label}</Label>
+      <div className="relative">
       <Input
         id={`ficha-${key}`}
         value={draft[key]}
@@ -201,13 +274,16 @@ export function ContactQuickEdit({
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
           if (e.key === 'Escape') { revert(key); (e.target as HTMLInputElement).blur(); }
         }}
+        className={key === 'cpf' ? 'pr-9' : undefined}
       />
+      {key === 'cpf' && <span className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center">{cpfStatusIcon()}</span>}
+      </div>
     </div>
   );
 
   return (
     <section className="space-y-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{uiText('Contato')}</h3>
+      <h3 data-ficha-title className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{uiText('Contato')}</h3>
       {splitName ? (
         <>
           {field('first_name', uiText('Nome'))}
