@@ -142,13 +142,40 @@ Entregue:
 Regras: baseie-se só nos dados recebidos, cite exemplos pelo código da conversa (8 primeiros caracteres), diga quando a base for pequena para concluir, e não invente números.`;
 }
 
+const cut = (v: unknown, n: number) => (typeof v === "string" ? v.slice(0, n) : "");
+
+/**
+ * Só o que o relatório usa, com textos curtos: 500 análises inteiras passam do limite do modelo.
+ * Momentos-chave e exemplos longos ficam de fora.
+ */
+export function compactServiceAnalysis(a: any): unknown {
+  if (!a || typeof a !== "object") return null;
+  return {
+    resumo: cut(a.summary, 300),
+    pedidos: (Array.isArray(a.contacts) ? a.contacts : []).slice(0, 12).map((c: any) => ({
+      motivo: c?.reason, pediu: cut(c?.client_asked, 120), resolveu: c?.resolved, espera: cut(c?.wait_until_first_answer, 30),
+    })),
+    gargalo: { tipo: a.main_bottleneck?.category, detalhe: cut(a.main_bottleneck?.detail, 200) },
+    reclamou: a.complaint?.complained ? { sobre: cut(a.complaint?.about, 150), citacao: cut(a.complaint?.quote, 150) } : false,
+    esperando_no_fim: a.waiting_at_end?.client_waiting ? cut(a.waiting_at_end?.for_what, 150) : false,
+    humor_no_fim: a.client_mood_at_end,
+    equipe: (Array.isArray(a.team_behaviors) ? a.team_behaviors : []).slice(0, 3).map((b: any) => `${b?.effect}: ${cut(b?.behavior, 100)}`),
+    agente: {
+      daria_conta: a.ai_agent_fit?.could_handle,
+      responderia: (a.ai_agent_fit?.could_answer ?? []).slice(0, 4).map((x: unknown) => cut(x, 80)),
+      precisa_saber: (a.ai_agent_fit?.information_needed ?? []).slice(0, 4).map((x: unknown) => cut(x, 80)),
+      fica_com_pessoa: (a.ai_agent_fit?.must_stay_with_people ?? []).slice(0, 3).map((x: unknown) => cut(x, 80)),
+    },
+  };
+}
+
 export function buildServiceReportUserPrompt(rows: ServiceReportRow[]): string {
   const lines = rows.map((r) => JSON.stringify({
     codigo: r.thread_id.slice(0, 8),
     responsavel: r.assigned_name ?? "sem responsável",
     mensagens: r.message_count,
     ultima_mensagem_do_cliente: r.last_inbound_at,
-    analise: r.analysis,
+    analise: compactServiceAnalysis(r.analysis),
   }));
   return `${rows.length} conversas do atendimento analisadas. Uma por linha:\n${lines.join("\n")}`;
 }

@@ -40,3 +40,17 @@ Deno.test("conversa e relatório do atendimento", () => {
   assertEquals(r.includes('"codigo":"12345678"'), true);
   assertEquals(r.startsWith("1 conversas"), true);
 });
+
+Deno.test("relatório do atendimento leva a análise enxuta", () => {
+  const long = "x".repeat(1000);
+  const r = buildServiceReportUserPrompt([{ thread_id: "abcdefgh1234", assigned_name: null, message_count: 1, last_inbound_at: null, analysis: {
+    summary: long, contacts: [{ reason: "case_status", client_asked: long, team_answer: long, resolved: "no", wait_until_first_answer: "2 dias" }],
+    main_bottleneck: { category: "no_case_information", detail: long }, complaint: { complained: false, about: "", quote: "" },
+    waiting_at_end: { client_waiting: true, for_what: "andamento" }, client_mood_at_end: "anxious", team_behaviors: [],
+    ai_agent_fit: { could_handle: "part", could_answer: ["andamento"], information_needed: ["andamento"], must_stay_with_people: [] },
+    key_moments: [{ when: "x", what: long }], confidence: "high",
+  } }]);
+  assertEquals(r.length < 1500, true);
+  assertEquals(r.includes('"tipo":"no_case_information"'), true);
+  assertEquals(r.includes("key_moments"), false);
+});
