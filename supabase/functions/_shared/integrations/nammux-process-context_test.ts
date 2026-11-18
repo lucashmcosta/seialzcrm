@@ -4,6 +4,8 @@ import {
   brl,
   day,
   NAMMUX_AGENT_FINANCE_FLAG,
+  NAMMUX_AGENT_MOVEMENTS_FLAG,
+  nammuxMovementsBlock,
   nammuxFinanceBlock,
   type NammuxFinanceRow,
   NAMMUX_AGENT_AGENDA_FLAG,
@@ -225,4 +227,50 @@ Deno.test("financeiro só entra com a flag dele; sem acordo, valor continua no '
     fakeSupabase({ ...tabelas, nammux_process_finance: [] }), "org", "c", (f) => Promise.resolve(f === NAMMUX_AGENT_FINANCE_FLAG));
   assertEquals(semAcordo.includes("ACORDO E PAGAMENTOS"), false);
   assertStringIncludes(semAcordo, "(data de audiência, link, valor, pagamento, movimentação do tribunal), não invente");
+});
+
+Deno.test("bloco das movimentações usa o texto do catálogo e a data em Brasília", () => {
+  const bloco = nammuxMovementsBlock([
+    { opportunity_id: "opp-1", occurred_at: "2026-11-18T15:00:00Z", text: "Começou a fase de cálculo: agora a Justiça define os valores devidos." },
+    { opportunity_id: "opp-1", occurred_at: "2026-11-10T01:00:00Z", text: "A empresa apresentou a defesa dela no processo. É uma etapa normal." },
+  ]);
+  assertStringIncludes(bloco, "## ÚLTIMAS MOVIMENTAÇÕES DO PROCESSO");
+  assertStringIncludes(bloco, "- 18/11/2026: Começou a fase de cálculo: agora a Justiça define os valores devidos.");
+  // 01:00 UTC do dia 10 ainda é dia 9 em Brasília
+  assertStringIncludes(bloco, "- 09/11/2026: A empresa apresentou a defesa dela no processo. É uma etapa normal.");
+  assertEquals(nammuxMovementsBlock([]), "");
+});
+
+Deno.test("movimentações só entram com a flag delas; sem nenhuma, o agente diz que não há novidade", async () => {
+  const tabelas = {
+    opportunities: [{ id: "opp-1" }],
+    nammux_process_snapshots: [{ ...PROCESSO, opportunity_id: "opp-1" }],
+    nammux_process_movements: [{ opportunity_id: "opp-1", occurred_at: "2026-11-18T15:00:00Z", text: "O perito entregou o laudo da perícia no processo." }],
+  };
+  const consultadas: string[] = [];
+  const sem = await nammuxSupportContext(fakeSupabase(tabelas, consultadas), "org", "c", () => Promise.resolve(false));
+  assertEquals(sem.includes("ÚLTIMAS MOVIMENTAÇÕES"), false);
+  assertEquals(consultadas.includes("nammux_process_movements"), false);
+
+  const com = await nammuxSupportContext(fakeSupabase(tabelas), "org", "c", (f) => Promise.resolve(f === NAMMUX_AGENT_MOVEMENTS_FLAG));
+  assertStringIncludes(com, "- 18/11/2026: O perito entregou o laudo da perícia no processo.");
+  assertStringIncludes(com, "(data de audiência, link, valor, pagamento), não invente");
+
+  const vazio = await nammuxSupportContext(
+    fakeSupabase({ ...tabelas, nammux_process_movements: [] }), "org", "c", (f) => Promise.resolve(f === NAMMUX_AGENT_MOVEMENTS_FLAG));
+  assertStringIncludes(vazio, "Não há movimentação relevante registrada até agora");
+});
+
+Deno.test("com as três flags ligadas, os três blocos entram e o aviso fica sem lista", async () => {
+  const texto = await nammuxSupportContext(fakeSupabase({
+    opportunities: [{ id: "opp-1" }],
+    nammux_process_snapshots: [{ ...PROCESSO, opportunity_id: "opp-1" }],
+    nammux_process_events: [],
+    nammux_process_finance: FINANCEIRO,
+    nammux_process_movements: [],
+  }), "org", "c", () => Promise.resolve(true));
+  for (const titulo of ["## PROCESSOS DO CLIENTE", "## PRÓXIMAS DATAS DO PROCESSO", "## ACORDO E PAGAMENTOS", "## ÚLTIMAS MOVIMENTAÇÕES DO PROCESSO"]) {
+    assertStringIncludes(texto, titulo);
+  }
+  assertStringIncludes(texto, "algo que não está aqui, não invente");
 });
