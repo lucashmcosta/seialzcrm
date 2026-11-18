@@ -264,9 +264,10 @@ async function execute(admin: Admin, orgId: string, agentId: string, runId: stri
 }
 
 function countSupport(results: any[]) {
-  const c = { respondeu: 0, passou_para_pessoa: 0, erro: 0 };
+  const c = { respondeu: 0, passou_para_pessoa: 0, ficou_calado: 0, erro: 0 };
   for (const r of results) {
     if (r.outcome === "passou_para_pessoa") c.passou_para_pessoa++;
+    else if (r.outcome === "ficou_calado") c.ficou_calado++;
     else if (r.outcome === "respondeu") c.respondeu++;
     else c.erro++;
   }
@@ -305,7 +306,7 @@ async function testSupport(admin: Admin, orgId: string, agentId: string, agentTo
     client_message: replay.message.slice(0, 400),
     agent_reply: bubbles.join("\n\n").slice(0, 800),
     tools,
-    outcome: tools.includes("transfer_to_human") ? "passou_para_pessoa" : "respondeu",
+    outcome: tools.includes("transfer_to_human") ? "passou_para_pessoa" : bubbles.length ? "respondeu" : "ficou_calado",
   };
 }
 
