@@ -290,3 +290,8 @@ verify_jwt = false
 # com a chave interna; a função confere por igualdade exata (internal-auth.ts).
 [functions.nammux-notice-dispatch]
 verify_jwt = false
+
+# Tela de revisão dos avisos ao cliente (integração Nammux).
+# JWT validado em código (getUser) e permissão conferida no banco.
+[functions.nammux-notices-review]
+verify_jwt = false

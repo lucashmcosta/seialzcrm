@@ -118,6 +118,14 @@ expira o aviso. Também passam por aqui os avisos em `needs_review` e
 `dead_letter`. Um caso não é reenviável: "a empresa pagou" que já saiu e teve o
 pagamento estornado — a pessoa só dá baixa.
 
+## Tela
+
+`/inbox/avisos` (menu Atendimento → "Avisos ao cliente", com contador). Lista o
+que espera uma pessoa e o que não saiu nos últimos 7 dias, com a mensagem que o
+cliente receberia — montada pelo mesmo código que o worker usa para enviar. A
+tela fala só com a edge function `nammux-notices-review`, que confere a
+permissão no banco com a identidade de quem chamou.
+
 ## Para ligar numa organização
 
 1. Cadastrar e aprovar os modelos na Meta e mapeá-los em `nammux_notice_templates`.

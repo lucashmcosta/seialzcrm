@@ -30,6 +30,7 @@ Layout / MobileLayout
 ├── /widgets         (catálogo global de widgets)
 ├── /messages        (legacy)
 ├── /inbox           (Inbox v2 — feature-flag)
+├── /inbox/avisos    (avisos automáticos ao cliente — flag nammux_notices)
 ├── /marketing[/ads|/ads/:id|/funnel|/timeline]
 ├── /whatsapp/templates[/new|/:id|/:id/edit]
 ├── /profile

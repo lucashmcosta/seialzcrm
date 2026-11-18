@@ -20,10 +20,12 @@ import {
   Headset,
   ChatsCircle,
   DeviceMobile,
+  BellRinging,
   CaretDoubleLeft,
   CaretDoubleRight,
 } from '@phosphor-icons/react';
 import { useClientPortalChatFlag } from '@/hooks/useClientPortalChatFlag';
+import { useNammuxNoticesFlag, useNammuxNoticesPendingCount } from '@/hooks/useNammuxNotices';
 import { useClientPortalUnreadCount } from '@/hooks/useClientPortalUnreadCount';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -60,6 +62,9 @@ export function Layout({ children }: LayoutProps) {
   const { enabled: socialEnabled } = useMetaSocialPublishingFlag(organization?.id);
   const portalChatEnabled = useClientPortalChatFlag(organization?.id);
   const portalUnread = useClientPortalUnreadCount(organization?.id, !!portalChatEnabled);
+  // Avisos automáticos ao cliente (integração Nammux): só com a flag da organização.
+  const noticesEnabled = useNammuxNoticesFlag(organization?.id);
+  const noticesPending = useNammuxNoticesPendingCount(organization?.id, noticesEnabled);
   const { themePreset } = useTheme();
   // Menu lateral recolhido (só ícones) — preferência por navegador.
   const { data: orgLogoIcon, isPending: orgLogoIconPending } = useOrgLogoIcon(organization?.id);
@@ -118,6 +123,7 @@ export function Layout({ children }: LayoutProps) {
       items: [
         { label: uiText("Atendimento"), href: '/inbox', icon: Headset },
         ...(portalChatEnabled ? [{ label: 'Chat do App', href: '/inbox/portal', icon: DeviceMobile, badge: portalUnread || undefined }] : []),
+        ...(noticesEnabled ? [{ label: 'Avisos ao cliente', href: '/inbox/avisos', icon: BellRinging, badge: noticesPending || undefined }] : []),
       ],
     });
 
@@ -203,6 +209,9 @@ export function Layout({ children }: LayoutProps) {
   });
   if (portalChatEnabled) {
     navItems.push({ label: 'Chat do App', href: '/inbox/portal', icon: DeviceMobile, badge: portalUnread || undefined });
+  }
+  if (noticesEnabled) {
+    navItems.push({ label: 'Avisos ao cliente', href: '/inbox/avisos', icon: BellRinging, badge: noticesPending || undefined });
   }
 
   navItems.splice(0, navItems.length, ...navItems.filter((i) => areaAllowed(permissions, i.href)));
