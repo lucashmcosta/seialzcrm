@@ -340,6 +340,20 @@ export function UsersSettings() {
   // Desativar pergunta para quem vai a carteira (contatos, conversas e oportunidades abertas).
   const [transferFor, setTransferFor] = useState<{ membership: UserMembership; intent: 'deactivate' | 'transfer' } | null>(null);
   const memberName = (m: UserMembership) => m.users?.full_name || m.users?.email || 'Usuário';
+  // Quanto cada inativo ainda tem: o botão "Transferir carteira" só aparece para quem não está zerado.
+  const inactivePortfolio = useQuery({
+    queryKey: ['inactive-members-portfolio', organization?.id],
+    enabled: !!organization?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rpc_inactive_members_portfolio_v1' as never, { p_organization_id: organization!.id } as never);
+      if (error) return {} as Record<string, number>;
+      const map: Record<string, number> = {};
+      for (const r of (data ?? []) as Array<{ user_id: string; contacts: number; threads: number; opportunities: number }>) {
+        map[r.user_id] = Number(r.contacts) + Number(r.threads) + Number(r.opportunities);
+      }
+      return map;
+    },
+  });
 
   const toggleStatus = async (membershipId: string, currentStatus: boolean, rethrow = false) => {
     if (!organization?.id) return;
@@ -623,7 +637,7 @@ export function UsersSettings() {
                           </TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex justify-end gap-2">
-                              {!membership.is_active && (
+                              {!membership.is_active && (inactivePortfolio.data?.[membership.user_id] ?? 0) > 0 && (
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -835,6 +849,7 @@ export function UsersSettings() {
             setTransferFor(null);
             toast({ description: message });
             fetchMemberships();
+            void inactivePortfolio.refetch();
           }}
         />
       )}
