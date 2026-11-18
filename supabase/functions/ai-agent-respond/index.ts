@@ -2596,9 +2596,10 @@ serve(async (req) => {
       
       console.warn(`Using fallback response - reason: ${fallbackReason}, provider: ${integrationSlug}, model: ${modelUsed}`);
       console.warn(`Empty AI response detail - ${emptyDetail}`);
-      // O modelo terminou normalmente sem escrever nada e sem usar ferramenta: escolheu não
-      // responder (ex.: "ok" depois da despedida). Não é falha: não envia nada e não passa a conversa.
-      const choseSilence = toolsExecuted.length === 0 && /end_turn|: stop$/.test(emptyDetail);
+      // Só no agente de atendimento: o modelo terminou normalmente sem escrever nada e sem usar
+      // ferramenta, isto é, escolheu não responder (ex.: "ok" depois da despedida). Não é falha:
+      // não envia nada e não passa a conversa. O agente de vendas continua como estava.
+      const choseSilence = agent.agent_type === 'support' && toolsExecuted.length === 0 && /end_turn|: stop$/.test(emptyDetail);
       if (choseSilence) {
         await logByokUsage();
         return new Response(JSON.stringify({ success: true, status: 'agent_chose_silence', ...(isTestMode ? { bubbles: [], toolsExecuted } : {}) }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
