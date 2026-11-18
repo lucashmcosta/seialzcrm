@@ -5,7 +5,7 @@ import {
   camposAlterados,
   ErroCalculo,
 } from "../_shared/classificacao/certificar.ts";
-import { INBOUND_LOG_CONFLICT, notaCertificacao } from "./logic.ts";
+import { INBOUND_LOG_CONFLICT, notaCertificacao, retratoDesatualizado } from "./logic.ts";
 import { isSupportedEvent, responseForApply, rpcForEvent } from "./handlers.ts";
 
 const corsHeaders = {
@@ -380,14 +380,11 @@ Deno.serve(async (req) => {
   const sourceUpdatedAt = process.updated_at ? String(process.updated_at) : null;
   const { data: current } = await admin
     .from("nammux_process_snapshots")
-    .select("source_updated_at")
+    .select("source_updated_at, external_process_id")
     .eq("organization_id", organizationId)
     .eq("opportunity_id", opportunityId)
     .maybeSingle();
-  const stale =
-    !!current?.source_updated_at &&
-    !!sourceUpdatedAt &&
-    new Date(sourceUpdatedAt).getTime() < new Date(current.source_updated_at).getTime();
+  const stale = retratoDesatualizado(current, { sourceUpdatedAt, externalProcessId });
 
   if (!stale) {
     const { error: snapshotError } = await admin
