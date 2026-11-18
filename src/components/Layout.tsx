@@ -268,17 +268,27 @@ export function Layout({ children }: LayoutProps) {
       )}
     </Link>
   );
+  // Dicas rápidas no menu recolhido (a dica nativa do navegador demora ~1s).
+  const quickTip = (label: string, node: JSX.Element) => (
+    <Tooltip>
+      <TooltipTrigger asChild>{node}</TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8}>{label}</TooltipContent>
+    </Tooltip>
+  );
   const collapsedUserSection = (
     <div className="flex flex-col items-center gap-2">
-      <Link to="/profile" title={userProfile?.full_name || user?.email || uiText("Usuário")} className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center hover:ring-2 hover:ring-primary/30">
-        <span className="text-sm font-semibold text-primary">{userInitial}</span>
-      </Link>
-      <Button variant="ghost" size="icon" onClick={signOut} title={t('auth.signOut')} aria-label={t('auth.signOut')} className="h-8 w-8">
-        <SignOut size={16} weight="light" />
-      </Button>
-      <Button variant="ghost" size="icon" onClick={() => setNavCollapsed(false)} title={uiText('Expandir menu')} aria-label={uiText('Expandir menu')} aria-expanded={false} className="h-8 w-8">
-        <CaretDoubleRight size={16} />
-      </Button>
+      {quickTip(userProfile?.full_name || user?.email || uiText("Usuário"),
+        <Link to="/profile" aria-label={userProfile?.full_name || user?.email || uiText("Usuário")} className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center hover:ring-2 hover:ring-primary/30">
+          <span className="text-sm font-semibold text-primary">{userInitial}</span>
+        </Link>)}
+      {quickTip(t('auth.signOut'),
+        <Button variant="ghost" size="icon" onClick={signOut} aria-label={t('auth.signOut')} className="h-8 w-8">
+          <SignOut size={16} weight="light" />
+        </Button>)}
+      {quickTip(uiText('Expandir menu'),
+        <Button variant="ghost" size="icon" onClick={() => setNavCollapsed(false)} aria-label={uiText('Expandir menu')} aria-expanded={false} className="h-8 w-8">
+          <CaretDoubleRight size={16} />
+        </Button>)}
     </div>
   );
 

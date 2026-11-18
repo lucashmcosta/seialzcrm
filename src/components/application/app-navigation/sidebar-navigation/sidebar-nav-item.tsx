@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { NavItemType } from "../config";
 
 interface SidebarNavItemProps {
@@ -36,10 +37,9 @@ export const SidebarNavItem = ({ item, isSubItem = false, collapsed = false }: S
     return <span className="ml-auto">{item.badge}</span>;
   };
 
-  return (
+  const link = (
     <Link
       to={item.href}
-      title={collapsed ? item.label : undefined}
       aria-label={collapsed ? item.label : undefined}
       className={cn(
         "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
@@ -73,5 +73,14 @@ export const SidebarNavItem = ({ item, isSubItem = false, collapsed = false }: S
 
       {renderBadge()}
     </Link>
+  );
+
+  // Recolhido: nome do item numa dica rápida (a dica nativa do navegador demora ~1s).
+  if (!collapsed) return link;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{link}</TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8}>{item.label}</TooltipContent>
+    </Tooltip>
   );
 };
