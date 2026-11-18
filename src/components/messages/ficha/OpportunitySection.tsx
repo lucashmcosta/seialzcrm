@@ -272,7 +272,7 @@ function OpportunityCard({
 }
 
 // Sem permissão de editar: mostra o nome do responsável sem o seletor.
-function OwnerSelectorReadOnly({ value }: { value: string | null }) {
+export function OwnerSelectorReadOnly({ value }: { value: string | null }) {
   const [name, setName] = useState<string | null>(null);
   useEffect(() => {
     if (!value) { setName(null); return; }
