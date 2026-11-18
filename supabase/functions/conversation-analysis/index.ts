@@ -334,13 +334,15 @@ async function poll(admin: Admin, orgId: string, runId: string): Promise<Respons
   }
 
   const cost = batchCostUsd(unitPrice, promptTokens, completionTokens);
+  const firstFailure = outcomes.find((o) => !o.ok);
+  const firstError = firstFailure && !firstFailure.ok ? firstFailure.error : "";
   const allFailed = outcomes.length > 0 && failed === outcomes.length;
   await admin.from("conversation_analysis_runs").update({
     status: allFailed ? "failed" : "done",
     cost_usd: cost, prompt_tokens: promptTokens, completion_tokens: completionTokens,
     counts: { ...(run.counts ?? {}), done: outcomes.length - failed, failed },
     result: isReportKind(run.kind) ? reportResult : null,
-    error: allFailed ? "all_requests_failed" : null,
+    error: allFailed ? `all_requests_failed:${firstError}` : null,
     finished_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   }).eq("id", run.id);
 
