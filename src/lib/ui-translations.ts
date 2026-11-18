@@ -1370,6 +1370,7 @@ Object.assign(uiEnglish, {
   "Devolver à IA": "Return to AI",
   "Encerrar conversa": "Close conversation",
   "Ganhas e perdidas": "Won and lost",
+  "Data de fechamento": "Close date",
   "Nenhuma aberta": "None open",
   "1 aberta": "1 open",
   "abertas": "open",

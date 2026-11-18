@@ -28,6 +28,7 @@ export type FichaOpp = {
   amount?: number | null;
   currency?: string | null;
   owner_user_id?: string | null;
+  close_date?: string | null;
 };
 
 export function OpportunitySection({
@@ -138,8 +139,10 @@ function OpportunityCard({
 }) {
   const { organization, userProfile } = useOrganization();
   const [amount, setAmount] = useState(opp.amount == null ? '' : String(opp.amount));
+  const [closeDate, setCloseDate] = useState((opp.close_date || '').slice(0, 10));
   const [saving, setSaving] = useState(false);
   useEffect(() => { setAmount(opp.amount == null ? '' : String(opp.amount)); }, [opp.amount]);
+  useEffect(() => { setCloseDate((opp.close_date || '').slice(0, 10)); }, [opp.close_date]);
 
   const save = async (patch: Partial<FichaOpp>) => {
     setSaving(true);
@@ -151,6 +154,7 @@ function OpportunityCard({
     if (error) {
       toast.error(error.message || uiText('Não foi possível salvar a oportunidade.'));
       setAmount(opp.amount == null ? '' : String(opp.amount));
+      setCloseDate((opp.close_date || '').slice(0, 10));
       return;
     }
     onUpdated(patch);
@@ -167,6 +171,12 @@ function OpportunityCard({
     }
     if (value === Number(opp.amount ?? 0)) return;
     void save({ amount: value });
+  };
+
+  const commitCloseDate = () => {
+    const next = closeDate || null;
+    if ((next || '') === (opp.close_date || '').slice(0, 10)) return;
+    void save({ close_date: next });
   };
 
   const currency = opp.currency || organization?.default_currency || 'BRL';
@@ -193,6 +203,21 @@ function OpportunityCard({
           disabled={!canEdit || saving}
           onChange={(e) => setAmount(e.target.value)}
           onBlur={commitAmount}
+          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor={`ficha-close-${opp.id}`} className="text-xs text-muted-foreground">
+          {uiText('Data de fechamento')}
+        </Label>
+        <Input
+          id={`ficha-close-${opp.id}`}
+          type="date"
+          value={closeDate}
+          disabled={!canEdit || saving}
+          onChange={(e) => setCloseDate(e.target.value)}
+          onBlur={commitCloseDate}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
         />
       </div>
