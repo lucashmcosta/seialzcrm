@@ -7,6 +7,8 @@
 //            Recusa se o custo estimado passar de budget_usd.
 //  - poll:   confere o lote; quando termina, grava cada análise e o custo real.
 //  - report: com as análises prontas, pede o relatório ganhas x perdidas (também em lote).
+//  - service_start / service_report: o mesmo para o atendimento (tela de atendimento,
+//    business_context = 'customer_service'), em lotes de conversas que não se repetem.
 //  - cancel: cancela um lote ainda em andamento.
 //  - status: devolve o estado da rodada.
 import { corsHeaders, json } from "../_shared/intelligence/byok-shared.ts";
@@ -34,6 +36,17 @@ import {
   REPORT_SCHEMA,
   type ReportInputRow,
 } from "../_shared/intelligence/conversation-analysis.ts";
+import {
+  buildServiceReportSystemPrompt,
+  buildServiceReportUserPrompt,
+  buildServiceSystemPrompt,
+  buildServiceUserPrompt,
+  SERVICE_ANALYSIS_VERSION,
+  SERVICE_REPORT_SCHEMA,
+  SERVICE_REPORT_VERSION,
+  SERVICE_SCHEMA,
+  type ServiceReportRow,
+} from "../_shared/intelligence/service-analysis.ts";
 
 const ANTHROPIC = "https://api.anthropic.com/v1/messages/batches";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -66,6 +79,8 @@ Deno.serve(async (req) => {
       case "start": return await start(admin, orgId, auth.userId, body);
       case "poll": return await poll(admin, orgId, String(body.run_id ?? ""));
       case "report": return await report(admin, orgId, auth.userId, body);
+      case "service_start": return await serviceStart(admin, orgId, auth.userId, body);
+      case "service_report": return await serviceReport(admin, orgId, auth.userId, body);
       case "cancel": return await cancel(admin, orgId, String(body.run_id ?? ""));
       case "status": return await status(admin, orgId, String(body.run_id ?? ""));
       default: return json({ error: "unknown_action" }, 400);
@@ -302,11 +317,12 @@ async function poll(admin: Admin, orgId: string, runId: string): Promise<Respons
     promptTokens += o.promptTokens;
     completionTokens += o.completionTokens;
     if (!o.ok) failed++;
-    if (run.kind === "report") {
+    if (isReportKind(run.kind)) {
       reportResult = o.ok ? o.data : null;
       continue;
     }
-    await admin.from("conversation_analyses").update({
+    const service = run.kind === "service_conversations";
+    await admin.from(service ? "service_conversation_analyses" : "conversation_analyses").update({
       status: o.ok ? "done" : "failed",
       analysis: o.ok ? o.data : null,
       error: o.ok ? null : o.error,
@@ -314,7 +330,7 @@ async function poll(admin: Admin, orgId: string, runId: string): Promise<Respons
       completion_tokens: o.completionTokens,
       cost_usd: batchCostUsd(unitPrice, o.promptTokens, o.completionTokens),
       updated_at: new Date().toISOString(),
-    }).eq("run_id", run.id).eq("opportunity_id", o.customId);
+    }).eq("run_id", run.id).eq(service ? "thread_id" : "opportunity_id", o.customId);
   }
 
   const cost = batchCostUsd(unitPrice, promptTokens, completionTokens);
@@ -323,7 +339,7 @@ async function poll(admin: Admin, orgId: string, runId: string): Promise<Respons
     status: allFailed ? "failed" : "done",
     cost_usd: cost, prompt_tokens: promptTokens, completion_tokens: completionTokens,
     counts: { ...(run.counts ?? {}), done: outcomes.length - failed, failed },
-    result: run.kind === "report" ? reportResult : null,
+    result: isReportKind(run.kind) ? reportResult : null,
     error: allFailed ? "all_requests_failed" : null,
     finished_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   }).eq("id", run.id);
@@ -334,7 +350,11 @@ async function poll(admin: Admin, orgId: string, runId: string): Promise<Respons
     provider: "anthropic",
     model: run.model,
     source: "customer_key",
-    action: run.kind === "report" ? "conversation_analysis_report" : "conversation_analysis",
+    action: {
+      report: "conversation_analysis_report",
+      service_conversations: "service_analysis",
+      service_report: "service_analysis_report",
+    }[run.kind as string] ?? "conversation_analysis",
     integration_slug: key.credential.slug,
     prompt_tokens: promptTokens,
     completion_tokens: completionTokens,
@@ -395,6 +415,156 @@ async function report(admin: Admin, orgId: string, userId: string, body: any): P
 
   const request = buildBatchItem({
     customId: "report", model, system, user, schema: REPORT_SCHEMA, effort: "high", maxTokens: REPORT_MAX_TOKENS,
+  });
+  return await submit(admin, orgId, key, run.id, [request], summary);
+}
+
+// ---------- atendimento ----------
+
+const MAX_SERVICE_PER_RUN = 500;
+
+function isReportKind(kind: string): boolean {
+  return kind === "report" || kind === "service_report";
+}
+
+async function serviceStart(admin: Admin, orgId: string, userId: string, body: any): Promise<Response> {
+  const days = Math.min(365, Math.max(7, Number(body?.days ?? 30)));
+  const limit = Math.min(MAX_SERVICE_PER_RUN, Math.max(1, Number(body?.limit ?? 100)));
+  const model = String(body?.model ?? DEFAULT_MODEL);
+  const effort = body?.effort === "high" || body?.effort === "low" ? body.effort : "medium";
+  const dryRun = body?.dry_run === true;
+  const budget = budgetOf(body);
+
+  const key = await claudeKey(admin, orgId);
+  const unitPrice = await price(admin, model);
+
+  const { data: candidates, error: candErr } = await admin.rpc("service_analysis_candidates", {
+    p_org: orgId, p_days: days, p_limit: limit,
+  });
+  if (candErr) throw new Error(`service candidates: ${candErr.message}`);
+  const picked = (candidates ?? []) as Array<{ thread_id: string; contact_id: string | null; assigned_user_id: string | null; last_inbound_at: string }>;
+  if (!picked.length) throw new HttpError(404, "no_conversations", "Nenhuma conversa de atendimento nova no período.");
+
+  const byThread = await loadServiceMessages(admin, orgId, picked.map((c) => c.thread_id));
+  const names = await userNames(admin, [
+    ...picked.map((c) => c.assigned_user_id ?? ""),
+    ...[...byThread.values()].flat().map((m) => m.sender_user_id ?? ""),
+  ]);
+  const system = buildServiceSystemPrompt(await profile(admin, orgId));
+
+  const items = picked.map((c) => {
+    const msgs = byThread.get(c.thread_id) ?? [];
+    const { text, stats } = formatTranscript(msgs, names);
+    const first = msgs[0]?.sent_at ?? null;
+    const last = msgs[msgs.length - 1]?.sent_at ?? null;
+    const user = buildServiceUserPrompt({
+      assigned_name: c.assigned_user_id ? names[c.assigned_user_id] ?? null : null,
+      first_message_at: first, last_message_at: last,
+    }, text);
+    return { c, stats, user, first, last };
+  });
+
+  const promptTokens = items.reduce((s, i) => s + estimateTokens(i.user.length) + SYSTEM_PROMPT_TOKENS, 0);
+  const estimated = batchCostUsd(unitPrice, promptTokens, items.length * EXPECTED_OUTPUT_TOKENS);
+  const summary = {
+    conversations: items.length,
+    messages: items.reduce((s, i) => s + i.stats.message_count, 0),
+    audios: items.reduce((s, i) => s + i.stats.audio_count, 0),
+    estimated_prompt_tokens: promptTokens,
+    estimated_cost_usd: Number(estimated.toFixed(2)),
+    budget_usd: budget,
+    model,
+  };
+  if (dryRun) return json({ ok: true, dry_run: true, ...summary });
+  if (estimated > budget) {
+    throw new HttpError(402, "over_budget", `Custo estimado US$ ${estimated.toFixed(2)} passa do teto de US$ ${budget}.`);
+  }
+
+  const { data: run, error: runErr } = await admin.from("conversation_analysis_runs").insert({
+    organization_id: orgId, kind: "service_conversations", model, analysis_version: SERVICE_ANALYSIS_VERSION,
+    params: { days, limit, effort }, budget_usd: budget, estimated_cost_usd: estimated,
+    counts: summary, created_by: userId,
+  }).select("id").single();
+  if (runErr) throw new Error(`run: ${runErr.message}`);
+
+  const rows = items.map((i) => ({
+    organization_id: orgId, run_id: run.id, thread_id: i.c.thread_id, contact_id: i.c.contact_id,
+    assigned_user_id: i.c.assigned_user_id, first_message_at: i.first, last_message_at: i.last,
+    last_inbound_at: i.c.last_inbound_at, ...i.stats,
+    analysis_version: SERVICE_ANALYSIS_VERSION, model,
+  }));
+  for (let i = 0; i < rows.length; i += 200) {
+    const { error } = await admin.from("service_conversation_analyses").insert(rows.slice(i, i + 200));
+    if (error) throw new Error(`service analyses: ${error.message}`);
+  }
+
+  const requests = items.map((i) => buildBatchItem({
+    customId: i.c.thread_id, model, system, user: i.user, schema: SERVICE_SCHEMA, effort,
+    maxTokens: CONVERSATION_MAX_TOKENS,
+  }));
+  return await submit(admin, orgId, key, run.id, requests, summary);
+}
+
+async function loadServiceMessages(admin: Admin, orgId: string, ids: string[]): Promise<Map<string, ConversationMessage[]>> {
+  const out = new Map<string, ConversationMessage[]>();
+  for (let i = 0; i < ids.length; i += 20) {
+    const chunk = ids.slice(i, i + 20);
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await admin.rpc("service_analysis_messages", { p_org: orgId, p_thread_ids: chunk })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(`service messages: ${error.message}`);
+      for (const m of data ?? []) {
+        const list = out.get(m.thread_id) ?? [];
+        list.push(m);
+        out.set(m.thread_id, list);
+      }
+      if (!data || data.length < PAGE) break;
+    }
+  }
+  return out;
+}
+
+/** Relatório do atendimento: junta todas as análises prontas da org (de todos os lotes). */
+async function serviceReport(admin: Admin, orgId: string, userId: string, body: any): Promise<Response> {
+  const budget = budgetOf(body);
+  const model = String(body?.model ?? DEFAULT_MODEL);
+  const dryRun = body?.dry_run === true;
+
+  const rows: any[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await admin.from("service_conversation_analyses")
+      .select("thread_id, assigned_user_id, message_count, last_inbound_at, analysis")
+      .eq("organization_id", orgId).eq("status", "done").order("thread_id").range(from, from + PAGE - 1);
+    if (error) throw new Error(`service report rows: ${error.message}`);
+    rows.push(...(data ?? []));
+    if (!data || data.length < PAGE) break;
+  }
+  if (rows.length < 10) throw new HttpError(409, "too_few_analyses", "Poucas análises do atendimento prontas.");
+
+  const names = await userNames(admin, rows.map((r) => r.assigned_user_id ?? ""));
+  const input: ServiceReportRow[] = rows.map((r) => ({
+    thread_id: r.thread_id, assigned_name: r.assigned_user_id ? names[r.assigned_user_id] ?? null : null,
+    message_count: r.message_count, last_inbound_at: r.last_inbound_at, analysis: r.analysis,
+  }));
+  const system = buildServiceReportSystemPrompt(await profile(admin, orgId));
+  const user = buildServiceReportUserPrompt(input);
+
+  const key = await claudeKey(admin, orgId);
+  const unitPrice = await price(admin, model);
+  const promptTokens = estimateTokens(user.length) + SYSTEM_PROMPT_TOKENS;
+  const estimated = batchCostUsd(unitPrice, promptTokens, EXPECTED_REPORT_OUTPUT_TOKENS);
+  const summary = { analyses: rows.length, estimated_prompt_tokens: promptTokens, estimated_cost_usd: Number(estimated.toFixed(2)), budget_usd: budget, model };
+  if (dryRun) return json({ ok: true, dry_run: true, ...summary });
+  if (estimated > budget) throw new HttpError(402, "over_budget", `Custo estimado US$ ${estimated.toFixed(2)} passa do teto de US$ ${budget}.`);
+
+  const { data: run, error } = await admin.from("conversation_analysis_runs").insert({
+    organization_id: orgId, kind: "service_report", model, analysis_version: SERVICE_REPORT_VERSION,
+    params: { effort: "high" }, budget_usd: budget, estimated_cost_usd: estimated, counts: summary, created_by: userId,
+  }).select("id").single();
+  if (error) throw new Error(`service report run: ${error.message}`);
+
+  const request = buildBatchItem({
+    customId: "report", model, system, user, schema: SERVICE_REPORT_SCHEMA, effort: "high", maxTokens: REPORT_MAX_TOKENS,
   });
   return await submit(admin, orgId, key, run.id, [request], summary);
 }
