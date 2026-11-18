@@ -12,6 +12,7 @@ import { buildChoicesInteractive, withoutQuestionEcho } from "../_shared/intelli
 import { interactiveFallbackText, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
 import { nammuxContextForAgent, nammuxSupportContext } from "../_shared/integrations/nammux-process-context.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
+import { buildNammuxInterviewTools, nammuxToolDeps, nammuxToolsForAgent } from "../_shared/integrations/nammux-agent-tools.ts";
 import { decideSupportGate, agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES } from "../_shared/widgets/agent-tools.ts";
@@ -1832,6 +1833,13 @@ serve(async (req) => {
     // Ferramentas de widget (ex.: calculadora trabalhista): só com o widget ligado na org.
     const widgetTools = await activeWidgetTools(supabase, organizationId, toolsWithName);
     const enabledTools = toolsWithName.filter((t) => !WIDGET_TOOL_NAMES.has(t) || widgetTools.some((w) => w.name === t));
+    // Ferramentas da integração com o Nammux (agendar entrevista): só o agente de atendimento,
+    // e só com a flag da org ligada. Para o comercial a lista volta vazia, sem consulta nenhuma.
+    widgetTools.push(...await nammuxToolsForAgent(
+      agent.agent_type,
+      (flag) => featureFlagEnabled(supabase, flag, organizationId),
+      () => buildNammuxInterviewTools(nammuxToolDeps(supabase, { organizationId, contactId, threadId: threadId ?? null, isTestMode: !!isTestMode })),
+    ));
 
     // 2. Check working hours
     const workingHours = agent.working_hours as WorkingHours;

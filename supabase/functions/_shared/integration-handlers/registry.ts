@@ -5,7 +5,7 @@
 import type { Handler } from "./types.ts";
 import { webhookDispatchHandler } from "./webhook.ts";
 import { kommoUpsertHandler } from "./kommo.ts";
-import { nammuxSendOpportunityWonHandler } from "./nammux.ts";
+import { nammuxSendEventHandler, nammuxSendOpportunityWonHandler } from "./nammux.ts";
 
 const registry = new Map<string, Handler>();
 
@@ -22,3 +22,5 @@ register("webhook", "dispatch", webhookDispatchHandler);
 register("kommo", "upsert", kommoUpsertHandler);
 register("nammux", "send_opportunity_won", nammuxSendOpportunityWonHandler);
 register("nammux", "send_contact_updated", nammuxSendOpportunityWonHandler);
+// Horário de entrevista escolhido pelo cliente com o agente de atendimento.
+register("nammux", "send_interview_scheduled", nammuxSendEventHandler);

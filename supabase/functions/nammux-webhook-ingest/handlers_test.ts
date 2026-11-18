@@ -46,3 +46,8 @@ Deno.test("movimentação é aplicada pela RPC própria", () => {
   assertEquals(rpcForEvent("process.movement.added"), "nammux_apply_process_movement");
   assertEquals(isSupportedEvent("process.movement.added"), true);
 });
+
+Deno.test("recusa de horário de entrevista é aplicada pela RPC própria", () => {
+  assertEquals(rpcForEvent("interview.booking.rejected"), "nammux_apply_interview_rejection");
+  assertEquals(isSupportedEvent("interview.booking.rejected"), true);
+});
