@@ -56,7 +56,7 @@ export async function plamev(
   return dados;
 }
 
-export interface EnderecoCep { uf: string; cidade: string; ponto: { lat: number; lng: number } | null }
+export interface EnderecoCep { uf: string; cidade: string; bairro: string; logradouro: string; ponto: { lat: number; lng: number } | null }
 
 /** UF, cidade e coordenadas do CEP (BrasilAPI; só o CEP sai daqui). Guarda por 1h na instância. */
 export async function enderecoDoCep(cep: string): Promise<EnderecoCep> {
@@ -75,6 +75,8 @@ export async function enderecoDoCep(cep: string): Promise<EnderecoCep> {
   const endereco: EnderecoCep = {
     uf: typeof raw?.state === "string" ? raw.state.trim().toUpperCase() : "",
     cidade: typeof raw?.city === "string" ? raw.city.trim() : "",
+    bairro: typeof raw?.neighborhood === "string" ? raw.neighborhood.trim() : "",
+    logradouro: typeof raw?.street === "string" ? raw.street.trim() : "",
     ponto: L.coordenadasCep(raw),
   };
   cache.set(chave, { ate: Date.now() + UMA_HORA, valor: endereco });

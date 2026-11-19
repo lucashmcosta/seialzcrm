@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import * as R from "../supabase/functions/_shared/widgets/plamev-quote/regras.ts";
 import {
-  type PlamevApi, rodarEnviarMaterial, rodarLerMateriais, rodarRede, rodarSimulacao, SIMULACAO_HEADER,
+  camposDoCadastro, type PlamevApi, respostaDoCadastro, rodarEnviarMaterial, rodarLerMateriais, rodarRede, rodarSimulacao, SIMULACAO_HEADER,
 } from "../supabase/functions/_shared/widgets/plamev-quote/agent-tools.ts";
 import { WIDGET_AGENT_TOOLS } from "../supabase/functions/_shared/widgets/agent-tools.ts";
 
@@ -187,5 +187,33 @@ Deno.test("enviar material: manda o arquivo com o título de legenda, uma vez s�
 
 Deno.test("as ferramentas da Plamev entram no registro, presas ao widget", () => {
   const plamev = WIDGET_AGENT_TOOLS.filter((t) => t.widgetKey === "plamev_quote").map((t) => t.name);
-  assertEquals(plamev, ["plamev_consultar_rede", "plamev_simular_plano", "plamev_ler_materiais", "plamev_enviar_material"]);
+  assertEquals(plamev, ["plamev_consultar_rede", "plamev_simular_plano", "plamev_ler_materiais", "plamev_enviar_material", "plamev_salvar_cadastro"]);
+});
+
+Deno.test("cadastro: grava só o que é válido e preenche o endereço pelo CEP", () => {
+  const { campos, problemas } = camposDoCadastro(
+    { cpf: "529.982.247-25", email: " Fulana@Gmail.com ", cep: "40231-305", numero: 81, complemento: "ap 2" },
+    { uf: "BA", cidade: "Salvador", bairro: "Federação", logradouro: "Avenida Anita Garibaldi" },
+  );
+  assertEquals(problemas, []);
+  assertEquals(campos, {
+    cpf: "52998224725", email: "fulana@gmail.com", address_zip: "40231305", address_street: "Avenida Anita Garibaldi",
+    address_neighborhood: "Federação", address_city: "Salvador", address_state: "BA", address_number: "81", address_complement: "ap 2",
+  });
+});
+
+Deno.test("cadastro: CPF e e-mail errados não são gravados e voltam como problema", () => {
+  const { campos, problemas } = camposDoCadastro({ cpf: "111.111.111-11", email: "fulana.gmail.com", cep: "4023" }, null);
+  assertEquals(campos, {});
+  assertEquals(problemas.length, 3);
+});
+
+Deno.test("cadastro: diz o que falta, e manda passar quando está completo", () => {
+  const falta = respostaDoCadastro({ cpf: "52998224725" }, [], { cpf: "52998224725", email: null, address_zip: null, address_number: "" }, true);
+  assertStringIncludes(falta, "Ainda falta: e-mail, CEP, número da casa ou apartamento");
+  assertStringIncludes(falta, "não insista");
+  const completo = respostaDoCadastro({ email: "a@b.com" }, [], { cpf: "52998224725", email: "a@b.com", address_zip: "40231305", address_number: "81" }, true);
+  assertStringIncludes(completo, "O cadastro está completo");
+  assertStringIncludes(completo, "Não repita o CPF");
+  assertStringIncludes(respostaDoCadastro({ email: "a@b.com" }, [], { cpf: null, email: "a@b.com", address_zip: null, address_number: null }, false), "Modo de teste");
 });

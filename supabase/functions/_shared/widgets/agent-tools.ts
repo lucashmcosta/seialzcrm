@@ -17,6 +17,8 @@ export interface WidgetToolContext {
   isTestMode: boolean;
   /** A conversa que o agente está lendo (no modo de teste, a do teste). */
   history: Array<{ role: string; content: string }>;
+  /** O contato da conversa. Ausente no modo de teste sem contato: a ferramenta não grava nada. */
+  contactId?: string | null;
   /** Configuração desta ferramenta no agente (`ai_agents.tool_settings[nome da ferramenta]`), se houver. */
   settings?: unknown;
 }

@@ -85,6 +85,12 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
         description: 'Envia ao cliente a imagem de resumo do plano, o comparativo dos planos ou o PDF da cobertura. Só funciona com o widget ligado',
         trigger: 'Ao apresentar um plano ou quando o cliente pedir os detalhes',
       },
+      {
+        id: 'plamev_salvar_cadastro',
+        name: 'Dados para a cotação Plamev',
+        description: 'Grava no contato o CPF, e-mail, CEP e número que o cliente mandou, para a equipe abrir o widget já preenchido. Só funciona com o widget ligado',
+        trigger: 'Depois que o cliente aceitar a cotação e mandar os dados',
+      },
     ],
   },
 ];
