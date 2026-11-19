@@ -6,6 +6,7 @@
 // No navegador, a mesma ferramenta aparece no assistente do agente por `agentTools` em
 // src/widgets/registry.ts.
 
+import type { InteractivePayload } from "../whatsapp-interactive.ts";
 import { laborCenterAgentTool } from "./labor-center/agent-tool.ts";
 import { plamevAgentTools } from "./plamev-quote/agent-tools.ts";
 
@@ -39,6 +40,8 @@ export interface WidgetToolOutcome {
   clientMedia?: WidgetClientMedia[] | null;
   /** Nota interna para a equipe, gravada depois que a mensagem do cliente sai. */
   teamNote?: string | null;
+  /** Pergunta com botões que vai ao cliente depois do texto do agente (no lugar de send_choices). */
+  clientInteractive?: InteractivePayload | null;
 }
 
 export interface WidgetAttachment {

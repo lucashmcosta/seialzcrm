@@ -9,11 +9,13 @@ import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
 import { buildChoicesInteractive, withoutQuestionEcho } from "../_shared/intelligence/agent-choices.ts";
-import { interactiveFallbackText, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
+import { interactiveFallbackText, normalizeInteractive, validateInteractive, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
 import { nammuxContextForAgent, nammuxSupportContext } from "../_shared/integrations/nammux-process-context.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
-import { buildNammuxInterviewTools, nammuxToolDeps, nammuxToolsForAgent } from "../_shared/integrations/nammux-agent-tools.ts";
+import { buildNammuxInterviewTools, NAMMUX_INTERVIEW_FLAG, nammuxToolDeps, nammuxToolsForAgent } from "../_shared/integrations/nammux-agent-tools.ts";
 import { captureRating, ratingDeps, ratingForAgent } from "../_shared/integrations/support-rating.ts";
+import { captureInterviewConfirmation, interviewConfirmDeps } from "../_shared/integrations/nammux-interview-confirm.ts";
+import { capturePresence, presenceDeps } from "../_shared/integrations/nammux-interview-presence.ts";
 import { decideSupportGate, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
 import { emptyResponseShape, providerForIntegration, toolArgKeys } from "../_shared/intelligence/agent-log.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
@@ -1848,6 +1850,32 @@ serve(async (req) => {
           return skip(`support_rating_${rated.answer}`);
         }
       }
+
+      // Confirmação da entrevista: o toque em "Confirmar" / "Outro horário" é lido sem o modelo.
+      // Só o agente de atendimento, com a flag do agendamento; o comercial nem consulta.
+      if (!followUp && threadId && agent.agent_type === 'support'
+        && await featureFlagEnabled(supabase, NAMMUX_INTERVIEW_FLAG, organizationId)) {
+        const nammux = nammuxToolDeps(supabase, { organizationId, contactId, threadId, isTestMode: false });
+        const confirmed = await captureInterviewConfirmation(message, interviewConfirmDeps(supabase, { organizationId, threadId }, nammux));
+        if (confirmed?.kind === 'reply') {
+          if (confirmed.handOff) await releaseToHuman(supabase, threadId, confirmed.outcome);
+          await dispatchWhatsAppSend({ organizationId, contactId, threadId, message: confirmed.text, isAgentMessage: true, agentId: agent.id, senderName: agent.name });
+          return skip(confirmed.outcome);
+        }
+        if (confirmed?.kind === 'continue' && confirmed.note) message = `${message}\n\n${confirmed.note}`;
+      }
+
+      // Resposta ao lembrete de véspera da entrevista ("Vou participar" / "Preciso remarcar").
+      // Só o agente de atendimento, com os avisos da org ligados.
+      if (!followUp && threadId && contactId && agent.agent_type === 'support'
+        && await featureFlagEnabled(supabase, 'nammux_notices', organizationId)) {
+        const presence = await capturePresence(message, presenceDeps(supabase, { organizationId, contactId }));
+        if (presence?.kind === 'reply') {
+          await dispatchWhatsAppSend({ organizationId, contactId, threadId, message: presence.text, isAgentMessage: true, agentId: agent.id, senderName: agent.name });
+          return skip(presence.outcome);
+        }
+        if (presence?.kind === 'continue') message = `${message}\n\n${presence.note}`;
+      }
     }
 
     // Include mark_name_asked automatically when update_contact is enabled
@@ -2247,6 +2275,11 @@ serve(async (req) => {
         const settings = (agent.tool_settings as Record<string, unknown> | null)?.[tool.name];
         const out = await tool.run(args ?? {}, { supabase, organizationId, isTestMode: !!isTestMode, history: conversationMessages, settings, contactId: contactId ?? null });
         if (out.clientText || out.teamNote) pendingWidget.push({ widgetKey: tool.widgetKey, clientText: out.clientText ?? null, teamNote: out.teamNote ?? null });
+        // Pergunta com botões da ferramenta: ocupa o lugar do send_choices desta resposta.
+        if (out.clientInteractive) {
+          const payload = normalizeInteractive(out.clientInteractive);
+          if (!validateInteractive(payload).length) pendingInteractive = payload;
+        }
         for (const m of out.clientMedia ?? []) if (m?.url && !pendingMedia.some((x) => x.url === m.url)) pendingMedia.push(m);
         return { success: true, message: out.modelMessage };
       } catch (e) {

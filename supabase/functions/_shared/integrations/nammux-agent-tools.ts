@@ -1,5 +1,7 @@
 // Ferramentas que a integração com o Nammux dá ao agente de ATENDIMENTO:
-// consultar os horários livres da entrevista e pedir o agendamento.
+// consultar os horários livres da entrevista e propor o horário escolhido. O
+// pedido só vai para o Nammux quando o cliente toca em "Confirmar"
+// (nammux-interview-confirm.ts).
 //
 // Seguem o mesmo contrato das ferramentas de widget (WidgetAgentTool), então o
 // ai-agent-respond as executa sem conhecer o Nammux. Só entram para
@@ -8,6 +10,7 @@
 import type { WidgetAgentTool } from "../widgets/agent-tools.ts";
 import { agendaWhen } from "./nammux-process-context.ts";
 import { nammuxSignedPost } from "./nammux-client.ts";
+import { interviewConfirmQuestion } from "./nammux-interview-confirm.ts";
 
 export const NAMMUX_INTERVIEW_FLAG = "nammux_interview_scheduling";
 export const NAMMUX_TOOL_KEY = "nammux_integration";
@@ -35,6 +38,8 @@ export interface NammuxToolDeps {
   fetchSlots(opportunityId: string): Promise<NammuxSlots | null>;
   /** Grava o pedido e enfileira o evento. Devolve o status de nammux_request_interview. */
   requestInterview(opportunityId: string, startAt: string, endAt: string | null): Promise<string | null>;
+  /** Deixa o horário proposto, à espera do "Confirmar" do cliente. Devolve o id, ou null se falhou. */
+  proposeInterview(opportunityId: string, startAt: string, endAt: string | null): Promise<string | null>;
 }
 
 const TEAM = "Passe para a equipe com transfer_to_human, se disponível.";
@@ -90,6 +95,10 @@ ${lines.join("\n")}
 Ofereça até 3 destes ao cliente (com send_choices, se disponível), escrevendo o dia e a hora como aparecem acima. Quando ele escolher, chame ${INTERVIEW_SCHEDULE_TOOL} com o start_at EXATO da linha escolhida. Não ofereça horário que não esteja nesta lista.`;
 }
 
+export function proposalMessage(when: string): string {
+  return `O horário ${when} ficou separado, mas ainda NÃO está marcado. Depois do seu texto vai, sozinha, a pergunta com os botões "Confirmar" e "Outro horário". Escreva só uma frase curta com o dia e a hora e peça para ele tocar em Confirmar. Não repita a pergunta, não chame send_choices e não diga que está marcado.`;
+}
+
 export function scheduleMessage(status: string | null, when: string | null): string {
   switch (status) {
     case "requested":
@@ -105,7 +114,7 @@ export function scheduleMessage(status: string | null, when: string | null): str
 
 export const NAMMUX_INTERVIEW_PROMPT = `
 ## AGENDAMENTO DE ENTREVISTA
-Quando o cliente quiser marcar ou remarcar a entrevista com o escritório, chame ${INTERVIEW_SLOTS_TOOL} para ver os horários livres e ofereça alguns. Depois que ele escolher, chame ${INTERVIEW_SCHEDULE_TOOL}. Nunca invente horário e nunca diga que a entrevista está marcada ou confirmada: você só PEDE o horário, e a confirmação chega depois, em outra mensagem.
+Quando o cliente quiser marcar ou remarcar a entrevista com o escritório, chame ${INTERVIEW_SLOTS_TOOL} para ver os horários livres e ofereça alguns. Depois que ele escolher, chame ${INTERVIEW_SCHEDULE_TOOL}: o sistema manda os botões "Confirmar" e "Outro horário", e o pedido só vai para a agenda quando o cliente toca em Confirmar. Nunca invente horário e nunca diga que a entrevista está marcada ou confirmada. A entrevista é com a equipe do escritório, não com o advogado.
 `;
 
 export function buildNammuxInterviewTools(deps: NammuxToolDeps): WidgetAgentTool[] {
@@ -130,7 +139,7 @@ export function buildNammuxInterviewTools(deps: NammuxToolDeps): WidgetAgentTool
     {
       widgetKey: NAMMUX_TOOL_KEY,
       name: INTERVIEW_SCHEDULE_TOOL,
-      description: `Pede ao escritório a entrevista no horário que o cliente escolheu. Use só com um start_at devolvido por ${INTERVIEW_SLOTS_TOOL}.`,
+      description: `Separa o horário que o cliente escolheu e manda para ele os botões Confirmar / Outro horário. O pedido só vai ao escritório quando ele confirma. Use só com um start_at devolvido por ${INTERVIEW_SLOTS_TOOL}.`,
       parameters: {
         type: "object",
         properties: {
@@ -158,10 +167,13 @@ export function buildNammuxInterviewTools(deps: NammuxToolDeps): WidgetAgentTool
           return { modelMessage: `Esse horário não está mais livre. Avise o cliente e ofereça outros:\n${slotsMessage(fresh)}` };
         }
         const when = agendaWhen(slot.start_at, false, fresh.timezone);
+        if (!when) return { modelMessage: scheduleMessage(null, null) };
         if (deps.isTestMode) {
-          return { modelMessage: `(modo de teste: nada foi enviado ao escritório) ${scheduleMessage("requested", when)}` };
+          return { modelMessage: `(modo de teste: nada foi gravado) ${proposalMessage(when)}`, clientInteractive: interviewConfirmQuestion(when) };
         }
-        return { modelMessage: scheduleMessage(await deps.requestInterview(picked.ref.opportunity_id, slot.start_at, slot.end_at), when) };
+        const proposalId = await deps.proposeInterview(picked.ref.opportunity_id, slot.start_at, slot.end_at);
+        if (!proposalId) return { modelMessage: scheduleMessage(null, when) };
+        return { modelMessage: proposalMessage(when), clientInteractive: interviewConfirmQuestion(when) };
       },
     },
   ];
@@ -212,6 +224,31 @@ export function nammuxToolDeps(
         return null;
       }
       return parseSlots(res.data);
+    },
+    async proposeInterview(opportunityId, startAt, endAt) {
+      if (!ctx.threadId) return null;
+      const { data: snap } = await supabase.from("nammux_process_snapshots").select("external_process_id")
+        .eq("organization_id", ctx.organizationId).eq("opportunity_id", opportunityId).maybeSingle();
+      if (!snap?.external_process_id) return null;
+      // Uma proposta aberta por conversa: a anterior deixa de valer.
+      await supabase.from("nammux_interview_requests").update({ status: "expired", updated_at: new Date().toISOString() })
+        .eq("organization_id", ctx.organizationId).eq("thread_id", ctx.threadId).eq("status", "proposed");
+      const { data, error } = await supabase.from("nammux_interview_requests").insert({
+        organization_id: ctx.organizationId,
+        opportunity_id: opportunityId,
+        contact_id: ctx.contactId,
+        thread_id: ctx.threadId,
+        external_process_id: snap.external_process_id,
+        requested_start_at: startAt,
+        requested_end_at: endAt,
+        status: "proposed",
+        request_key: `proposal:${crypto.randomUUID()}`,
+      }).select("id").single();
+      if (error) {
+        console.warn("[nammux-agent-tools] proposta de entrevista falhou", error.code ?? "sem_codigo");
+        return null;
+      }
+      return data?.id ?? null;
     },
     async requestInterview(opportunityId, startAt, endAt) {
       const { data, error } = await supabase.rpc("nammux_request_interview", {

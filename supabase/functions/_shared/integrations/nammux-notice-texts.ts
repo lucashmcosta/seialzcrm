@@ -51,6 +51,10 @@ export interface Rendered {
   variables: string[];
   /** Título curto para a notificação do aplicativo. */
   title: string;
+  /** Modelo de WhatsApp a usar, quando não é o do próprio tipo (nammux_notice_templates.kind). */
+  templateKey?: string;
+  /** Botões de resposta rápida. Com a janela aberta saem como botões; no modelo já estão cadastrados. */
+  buttons?: string[];
 }
 export type RenderResult = { ok: true; rendered: Rendered } | { ok: false; reason: string };
 
@@ -105,20 +109,30 @@ function build(title: string, template: string, values: string[]): RenderResult 
 /** Modelo (frase com {{n}}) de cada tipo. É o texto a cadastrar na Meta. */
 export const NOTICE_TEMPLATES: Record<NoticeKind, string> = {
   event_scheduled: "Olá! Sua {{1}} foi marcada para {{2}}, às {{3}}. {{4}} Se tiver dúvida, é só responder esta mensagem.",
-  event_rescheduled: "Atenção: sua {{1}} mudou de data. A nova data é {{2}}, às {{3}}. {{4}}",
+  event_rescheduled: "Atenção: sua {{1}} mudou de data. A nova data é {{2}}, às {{3}}. {{4}} Se tiver dúvida, é só responder esta mensagem.",
   event_cancelled: "Sua {{1}} do dia {{2}} foi cancelada. Assim que houver nova data, avisamos você por aqui.",
-  event_reminder_7d: "Lembrete: sua {{1}} é {{2}}, às {{3}}. {{4}}",
-  event_reminder_1d: "Lembrete: sua {{1}} é amanhã, {{2}}, às {{3}}. {{4}}",
-  event_reminder_1h: "Sua {{1}} começa em 1 hora, às {{2}}. {{3}}",
-  event_starting: "Sua {{1}} está iniciando agora. {{2}}",
+  event_reminder_7d: "Lembrete: sua {{1}} é {{2}}, às {{3}}. {{4}} Se tiver dúvida, é só responder esta mensagem.",
+  event_reminder_1d: "Lembrete: sua {{1}} é amanhã, {{2}}, às {{3}}. {{4}} Se tiver dúvida, é só responder esta mensagem.",
+  event_reminder_1h: "Sua {{1}} começa em 1 hora, às {{2}}. {{3}} Se tiver algum problema, responda esta mensagem.",
+  event_starting: "Sua {{1}} está começando agora. Entre o quanto antes para não perder o horário. {{2}} Se tiver algum problema para entrar, responda esta mensagem.",
   interview_slot_unavailable: "O horário que você escolheu para a entrevista ({{1}}) acabou de ser ocupado. Me diga outro horário que funcione para você e eu vejo o que está livre.",
   agreement_homologated: "Boa notícia: o juiz homologou o acordo do seu processo em {{1}}. Quando houver pagamento, avisamos você por aqui.",
   installment_paid: "A empresa pagou a parcela {{1}} do acordo. O escritório vai fazer o repasse da sua parte e avisa você.",
-  installment_overdue: "A empresa não pagou a parcela {{1}} do acordo, que venceu em {{2}}. Vamos nos manifestar no processo em até 5 dias úteis, até {{3}}.",
-  payout_done: "O repasse de {{1}} referente ao seu processo foi feito em {{2}}.",
-  movement_update: "Novidade no seu processo: {{1}}",
-  movement_unfavorable: "Novidade no seu processo: {{1}}",
+  installment_overdue: "A empresa não pagou a parcela {{1}} do acordo, que venceu em {{2}}. Vamos nos manifestar no processo em até 5 dias úteis, até {{3}}. Qualquer novidade, avisamos você por aqui.",
+  payout_done: "O repasse de {{1}} referente ao seu processo foi feito em {{2}}. Se tiver dúvida, é só responder esta mensagem.",
+  movement_update: "Novidade no seu processo: {{1}} Se tiver dúvida, é só responder esta mensagem.",
+  movement_unfavorable: "Novidade no seu processo: {{1}} Se tiver dúvida, é só responder esta mensagem.",
 };
+
+/**
+ * Véspera da ENTREVISTA: modelo próprio, com os botões de presença. Audiência e
+ * perícia seguem no event_reminder_1d (não dá para remarcar audiência).
+ */
+export const INTERVIEW_REMINDER_KEY = "interview_reminder_1d";
+export const PRESENCE_YES = "Vou participar";
+export const PRESENCE_RESCHEDULE = "Preciso remarcar";
+export const INTERVIEW_REMINDER_1D_TEMPLATE =
+  "Lembrete: sua entrevista com a equipe do escritório é amanhã, {{1}}, às {{2}}. {{3}} Você vai conseguir participar?";
 
 const HORA_A_CONFIRMAR = "horário a confirmar";
 
@@ -145,8 +159,14 @@ export function renderEventNotice(kind: NoticeKind, e: EventState, expectedStart
       return build(`Sua ${name} mudou de data`, NOTICE_TEMPLATES.event_rescheduled, [name, date, time, join]);
     case "event_reminder_7d":
       return build(`Lembrete da sua ${name}`, NOTICE_TEMPLATES.event_reminder_7d, [name, date, time, join]);
-    case "event_reminder_1d":
+    case "event_reminder_1d": {
+      if (e.event_type === "entrevista") {
+        const r = build("Sua entrevista é amanhã", INTERVIEW_REMINDER_1D_TEMPLATE, [date, time, join]);
+        if (!r.ok) return r;
+        return { ok: true, rendered: { ...r.rendered, templateKey: INTERVIEW_REMINDER_KEY, buttons: [PRESENCE_YES, PRESENCE_RESCHEDULE] } };
+      }
       return build(`Sua ${name} é amanhã`, NOTICE_TEMPLATES.event_reminder_1d, [name, date, time, join]);
+    }
     case "event_reminder_1h":
       if (e.all_day) return { ok: false, reason: "subject_changed" };
       return build(`Sua ${name} começa em 1 hora`, NOTICE_TEMPLATES.event_reminder_1h, [name, time, join]);

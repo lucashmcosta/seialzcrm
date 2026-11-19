@@ -13,6 +13,8 @@ import {
 import {
   type EventState,
   type FinanceState,
+  INTERVIEW_REMINDER_1D_TEMPLATE,
+  INTERVIEW_REMINDER_KEY,
   NOTICE_TEMPLATES,
   renderEventNotice,
   renderFinanceNotice,
@@ -44,8 +46,8 @@ Deno.test("os sete avisos de agenda, com perícia presencial e entrevista sem lo
   assertStringIncludes(text(renderEventNotice("event_rescheduled", pericia, pericia.start_at)), "sua perícia mudou de data. A nova data é quinta-feira, 10/12/2026, às 10:00 (horário de Brasília). É presencial, neste local: Rua Exemplo, 100, sala 3");
   assertStringIncludes(text(renderEventNotice("event_reminder_7d", AUD, AUD.start_at)), "Lembrete: sua audiência é quinta-feira, 10/12/2026, às 10:00");
   assertStringIncludes(text(renderEventNotice("event_reminder_1d", AUD, AUD.start_at)), "sua audiência é amanhã, quinta-feira, 10/12/2026");
-  assertEquals(text(renderEventNotice("event_reminder_1h", AUD, AUD.start_at)), "Sua audiência começa em 1 hora, às 10:00 (horário de Brasília). É por vídeo, neste link: https://exemplo.invalid/sala");
-  assertEquals(text(renderEventNotice("event_starting", AUD, AUD.start_at)), "Sua audiência está iniciando agora. É por vídeo, neste link: https://exemplo.invalid/sala");
+  assertEquals(text(renderEventNotice("event_reminder_1h", AUD, AUD.start_at)), "Sua audiência começa em 1 hora, às 10:00 (horário de Brasília). É por vídeo, neste link: https://exemplo.invalid/sala Se tiver algum problema, responda esta mensagem.");
+  assertEquals(text(renderEventNotice("event_starting", AUD, AUD.start_at)), "Sua audiência está começando agora. Entre o quanto antes para não perder o horário. É por vídeo, neste link: https://exemplo.invalid/sala Se tiver algum problema para entrar, responda esta mensagem.");
   assertStringIncludes(text(renderEventNotice("event_scheduled", entrevista, entrevista.start_at)), "Sua entrevista foi marcada para quinta-feira, 10/12/2026, às 10:00 (horário de Brasília). O escritório vai informar como participar.");
   assertEquals(text(renderEventNotice("event_cancelled", { ...AUD, status: "cancelado" }, AUD.start_at)), "Sua audiência do dia quinta-feira, 10/12/2026 foi cancelada. Assim que houver nova data, avisamos você por aqui.");
 });
@@ -72,7 +74,7 @@ Deno.test("financeiro: pagou, não pagou (com o prazo), homologado, repasse", ()
   assertEquals(text(renderFinanceNotice("installment_paid", PARCELA)), "A empresa pagou a parcela 2 de 6 do acordo. O escritório vai fazer o repasse da sua parte e avisa você.");
   assertEquals(
     text(renderFinanceNotice("installment_overdue", { ...PARCELA, status: "overdue", manifestation_due_date: "2026-12-14" })),
-    "A empresa não pagou a parcela 2 de 6 do acordo, que venceu em 07/12/2026. Vamos nos manifestar no processo em até 5 dias úteis, até 14/12/2026.",
+    "A empresa não pagou a parcela 2 de 6 do acordo, que venceu em 07/12/2026. Vamos nos manifestar no processo em até 5 dias úteis, até 14/12/2026. Qualquer novidade, avisamos você por aqui.",
   );
   assertEquals(
     text(renderFinanceNotice("agreement_homologated", { ...PARCELA, kind: "agreement", homologated_on: "2026-10-08" })),
@@ -80,7 +82,7 @@ Deno.test("financeiro: pagou, não pagou (com o prazo), homologado, repasse", ()
   );
   assertEquals(
     text(renderFinanceNotice("payout_done", { ...PARCELA, kind: "payout", amount: "700.00", paid_on: "2026-12-12", reversed: false })),
-    "O repasse de R$ 700,00 referente ao seu processo foi feito em 12/12/2026.",
+    "O repasse de R$ 700,00 referente ao seu processo foi feito em 12/12/2026. Se tiver dúvida, é só responder esta mensagem.",
   );
 });
 
@@ -95,13 +97,32 @@ Deno.test("financeiro: o que mudou depois de planejado não é avisado", () => {
 });
 
 Deno.test("movimentação usa o texto do catálogo; entrevista recusada cita o horário pedido", () => {
-  assertEquals(text(renderMovementNotice("movement_update", { text: "Começou a fase de cálculo." })), "Novidade no seu processo: Começou a fase de cálculo.");
+  assertEquals(text(renderMovementNotice("movement_update", { text: "Começou a fase de cálculo." })), "Novidade no seu processo: Começou a fase de cálculo. Se tiver dúvida, é só responder esta mensagem.");
   assertEquals(text(renderMovementNotice("movement_update", { text: "  " })), "RECUSADO:missing_data");
   assertStringIncludes(
     text(renderInterviewNotice("interview_slot_unavailable", { status: "rejected", requested_start_at: "2026-12-01T17:00:00Z" })),
     "(terça-feira, 01/12/2026 às 14:00) acabou de ser ocupado",
   );
   assertEquals(text(renderInterviewNotice("interview_slot_unavailable", { status: "confirmed", requested_start_at: "2026-12-01T17:00:00Z" })), "RECUSADO:subject_changed");
+});
+
+Deno.test("véspera da entrevista: modelo próprio, com os botões de presença", () => {
+  const entrevista: EventState = { ...AUD, event_type: "entrevista", virtual_link: null, location: null };
+  const r = renderEventNotice("event_reminder_1d", entrevista, entrevista.start_at);
+  assertEquals(r.ok && r.rendered.templateKey, INTERVIEW_REMINDER_KEY);
+  assertEquals(r.ok && r.rendered.buttons, ["Vou participar", "Preciso remarcar"]);
+  assertStringIncludes(text(r), "sua entrevista com a equipe do escritório é amanhã, quinta-feira, 10/12/2026, às 10:00");
+  assertEquals(text(r).includes("advogad"), false);
+  // audiência continua no modelo comum, sem botão
+  const a = renderEventNotice("event_reminder_1d", AUD, AUD.start_at);
+  assertEquals(a.ok && (a.rendered.templateKey ?? null), null);
+  assertEquals(a.ok && (a.rendered.buttons ?? null), null);
+});
+
+Deno.test("modelo da Meta não começa nem termina com variável", () => {
+  for (const [kind, tpl] of [...Object.entries(NOTICE_TEMPLATES), [INTERVIEW_REMINDER_KEY, INTERVIEW_REMINDER_1D_TEMPLATE]]) {
+    if (/^\s*\{\{\d+\}\}/.test(tpl) || /\{\{\d+\}\}[\s.!?]*$/.test(tpl)) throw new Error(`modelo de ${kind} começa ou termina com variável`);
+  }
 });
 
 Deno.test("variável de modelo sai sem quebra de linha; todo tipo tem modelo", () => {

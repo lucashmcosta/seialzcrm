@@ -92,14 +92,25 @@ O Nammux é a fonte única da agenda: o Seialz não guarda horário.
    edge function `seialz-interview-slots` do Nammux, com chamada assinada
    (`_shared/integrations/nammux-client.ts`).
 2. O cliente escolhe. `nammux_schedule_interview` consulta a agenda de novo e
-   chama `nammux_request_interview`, que grava o pedido em
-   `nammux_interview_requests` e o evento `entrevista.agendada` em
-   `integration_events` na mesma transação. O `integration-worker` entrega pelo
-   handler `nammux:send_interview_scheduled`.
-3. O Nammux confere o horário outra vez e cria ou remarca a entrevista.
-4. A volta: `process.agenda.changed` com a entrevista confirma o pedido;
-   `interview.booking.rejected` o recusa. O agente só **pede** o horário; a
-   confirmação ao cliente é outra mensagem.
+   grava o horário como **proposto** (`nammux_interview_requests.status =
+   'proposed'`, sem evento de saída). Depois do texto do agente vão os botões
+   "Confirmar" e "Outro horário" (`clientInteractive` da ferramenta).
+3. O toque do cliente é lido sem o modelo
+   (`_shared/integrations/nammux-interview-confirm.ts`, chamado no
+   `ai-agent-respond` antes do modelo). "Confirmar" fecha a proposta como
+   `accepted`, consulta a agenda outra vez e só então chama
+   `nammux_request_interview`, que grava o pedido `requested` e o evento
+   `entrevista.agendada` em `integration_events` na mesma transação. O
+   `integration-worker` entrega pelo handler `nammux:send_interview_scheduled`.
+   "Outro horário" fecha como `declined` e o agente oferece outros. Proposta
+   sem toque em 2 horas deixa de valer; uma proposta nova na mesma conversa
+   fecha a anterior como `expired`. Propostas não ocupam horário no Nammux.
+4. O Nammux confere o horário outra vez e cria ou remarca a entrevista.
+5. A volta: `process.agenda.changed` com a entrevista confirma o pedido;
+   `interview.booking.rejected` o recusa. A mensagem de entrevista marcada ao
+   cliente é o aviso `event_scheduled` (flag `nammux_notices`).
+
+A entrevista é com a equipe do escritório, não com o advogado.
 
 As ferramentas seguem o contrato das ferramentas de widget, e só entram para
 `agent_type = 'support'` com a flag `nammux_interview_scheduling` ligada na
