@@ -1,0 +1,114 @@
+{
+  "processes": [
+    {
+      "seialz_opportunity_id": "f6000000-0000-4000-8000-0000000000d1",
+      "external_process_id": "f3000000-0000-4000-8000-0000000000a1",
+      "summary": {
+        "title": "Cliente Exemplo x Empresa Exemplo LTDA",
+        "cnj": "0001234-56.2026.5.02.0001",
+        "phase": "JUDICIAL",
+        "stage_name": "Instrução",
+        "status_name": "Aguardando audiência",
+        "status_changed_at": "2026-11-01T12:00:00+00:00",
+        "responsible_name": "Advogada Exemplo",
+        "distributed_at": "2026-03-02"
+      },
+      "agenda": [
+        {
+          "id": "f4000000-0000-4000-8000-000000000001",
+          "type": "audiencia",
+          "subtype": "Instrução",
+          "status": "pendente",
+          "start_at": "2030-12-10T13:00:00+00:00",
+          "end_at": null,
+          "all_day": false,
+          "timezone": "America/Sao_Paulo",
+          "modality": "virtual",
+          "location": null,
+          "virtual_link": "https://exemplo.invalid/sala",
+          "rescheduled_from_event_id": null,
+          "root_event_id": "f4000000-0000-4000-8000-000000000001",
+          "reschedule_seq": 0,
+          "previous_start_at": null,
+          "cancel_reason": null,
+          "updated_at": "2026-11-18T12:00:00+00:00"
+        }
+      ],
+      "timeline": [
+        {
+          "at": "2026-11-18T13:00:00.000Z",
+          "source": "agenda",
+          "rule_id": "agenda.audiencia.realizada",
+          "title": "Audiência de instrução realizada",
+          "description": "A audiência aconteceu.",
+          "attention": false,
+          "group": "audiencia"
+        },
+        {
+          "at": "2026-11-17T15:00:00.000Z",
+          "source": "publicacao",
+          "rule_id": "pub.informacao",
+          "title": "O juiz pediu uma informação ou providência",
+          "description": "A Central está cuidando disso. Se precisar de algo seu, ela entra em contato.",
+          "attention": false,
+          "group": null
+        },
+        {
+          "at": "2026-11-16T19:00:00.000Z",
+          "source": "documento",
+          "rule_id": "doc.equipe",
+          "title": "A Central anexou 2 documentos ao seu processo",
+          "description": null,
+          "attention": false,
+          "group": "equipe"
+        },
+        {
+          "at": "2026-11-15T13:00:00.000Z",
+          "source": "documento",
+          "rule_id": "doc.certidao",
+          "title": "Documento juntado: Certidão (com 2 anexos)",
+          "description": "O registro oficial de que algo aconteceu.",
+          "attention": false,
+          "group": null
+        },
+        {
+          "at": "2026-11-13T18:00:00.000Z",
+          "source": "movimento",
+          "rule_id": "mov.despacho",
+          "title": "O juiz deu um despacho de andamento",
+          "description": "É uma ordem simples para organizar o processo. Não decide o seu pedido.",
+          "attention": false,
+          "group": null
+        },
+        {
+          "at": "2026-11-12T12:00:00.000Z",
+          "source": "movimento",
+          "rule_id": "mov.outros",
+          "title": "Atualização registrada no tribunal",
+          "description": "O tribunal registrou uma movimentação no processo. A Central está acompanhando.",
+          "attention": false,
+          "group": null
+        },
+        {
+          "at": "2026-11-11T12:00:00.000Z",
+          "source": "movimento",
+          "rule_id": "mov.disponibilizado",
+          "title": "Intimação saiu no Diário da Justiça",
+          "description": "Em 10/11/2026, o Diário oficial divulgou: intimação. É assim que as partes ficam sabendo oficialmente.",
+          "attention": false,
+          "group": "comunicacao"
+        },
+        {
+          "at": "2026-11-05T14:00:00.000Z",
+          "source": "movimento",
+          "rule_id": "mov.sentenca.parcial",
+          "title": "Sentença: você ganhou parte dos pedidos",
+          "description": "O juiz reconheceu parte dos seus direitos. A Central vai explicar os valores e se cabe recurso.",
+          "attention": true,
+          "group": null
+        }
+      ]
+    }
+  ],
+  "generated_at": "2026-11-19T15:00:00.000Z"
+}

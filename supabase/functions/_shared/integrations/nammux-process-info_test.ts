@@ -31,3 +31,13 @@ Deno.test("item fora do contrato é ignorado; resposta sem lista é recusada", (
   assertEquals(parseProcessInfo(null), null);
   assertEquals(parseProcessInfo({ processes: "x" }), null);
 });
+
+Deno.test("contrato: a resposta de exemplo do Nammux é lida inteira", async () => {
+  const fixture = JSON.parse(await Deno.readTextFile(new URL("./fixtures-nammux-process-info.response.json", import.meta.url)));
+  const r = parseProcessInfo(fixture)!;
+  const total = (k: "agenda" | "timeline") =>
+    (fixture.processes as Array<Record<string, unknown[]>>).reduce((n, p) => n + (p[k]?.length ?? 0), 0);
+  assertEquals(r.agenda.length, Math.min(total("agenda"), 10));
+  assertEquals(r.timeline.length, Math.min(total("timeline"), 10));
+  for (const t of r.timeline) assertEquals(typeof t.title, "string");
+});
