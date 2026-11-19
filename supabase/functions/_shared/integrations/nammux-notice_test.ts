@@ -258,3 +258,10 @@ Deno.test("leitura do cabeçalho e comparação", () => {
   assertEquals(sameSecret("abc", "abcd"), false);
   assertEquals(sameSecret("", ""), false);
 });
+
+Deno.test("aviso de tribunal em outro fuso diz a hora local e a de Brasília", () => {
+  const r = renderEventNotice("event_scheduled", { ...AUD, timezone: "America/Campo_Grande" }, AUD.start_at);
+  assertEquals(r.ok && r.rendered.variables[2], "09:00 (horário de Campo Grande; 10:00 no horário de Brasília)");
+  const lembrete = renderEventNotice("event_reminder_1h", { ...AUD, timezone: "America/Manaus" }, AUD.start_at);
+  assertStringIncludes(text(lembrete), "às 09:00 (horário de Manaus; 10:00 no horário de Brasília)");
+});

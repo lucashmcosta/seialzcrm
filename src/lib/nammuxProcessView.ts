@@ -112,6 +112,35 @@ export function quandoCompromisso(row: Pick<CompromissoRow, "start_at" | "all_da
   return `${dia} às ${hora}`;
 }
 
+const ROTULOS_FUSO: Record<string, string> = {
+  "America/Sao_Paulo": "horário de Brasília",
+  "America/Manaus": "horário de Manaus",
+  "America/Cuiaba": "horário de Cuiabá",
+  "America/Campo_Grande": "horário de Campo Grande",
+  "America/Porto_Velho": "horário de Porto Velho",
+  "America/Rio_Branco": "horário de Rio Branco",
+};
+
+/**
+ * Tribunal fora do horário de Brasília: a hora mostrada é a LOCAL (a que vale
+ * para o cliente). Devolve o rótulo do fuso e a mesma hora no relógio de
+ * Brasília; null quando as duas são iguais ou o compromisso é de dia inteiro.
+ */
+export function horaEmOutroFuso(
+  row: Pick<CompromissoRow, "start_at" | "all_day" | "timezone">,
+): { rotulo: string; brasilia: string } | null {
+  if (row.all_day) return null;
+  const tz = fusoValido(row.timezone);
+  if (tz === FUSO_PADRAO) return null;
+  const d = new Date(row.start_at);
+  if (Number.isNaN(d.getTime())) return null;
+  const hm = (fuso: string) =>
+    new Intl.DateTimeFormat("pt-BR", { timeZone: fuso, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+  const brasilia = hm(FUSO_PADRAO);
+  if (hm(tz) === brasilia) return null;
+  return { rotulo: ROTULOS_FUSO[tz] ?? "horário local", brasilia };
+}
+
 /** "hoje", "amanhã", "em 12 dias" — contado em dias de calendário no fuso do compromisso. */
 export function faltam(row: Pick<CompromissoRow, "start_at" | "all_day" | "timezone">, agora: Date): string {
   const tz = fusoValido(row.timezone);

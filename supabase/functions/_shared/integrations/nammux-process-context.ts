@@ -2,6 +2,7 @@
 // Lê só o que a integração já grava (nammux_process_snapshots, via nammux-webhook-ingest).
 // Fica na integração: o núcleo do Seialz não conhece o Nammux.
 import { meetingLinkText } from "./meeting-link.ts";
+import { safeZone, zoneNote } from "./nammux-timezone.ts";
 
 export interface NammuxProcessRow {
   cnj: string | null;
@@ -88,18 +89,21 @@ const EVENT_LABEL: Record<string, string> = {
   entrevista: "Entrevista",
 };
 
-/** "quinta-feira, 10/12/2026 às 10:00 (horário de Brasília)"; dia inteiro sai sem hora. */
+/**
+ * "quinta-feira, 10/12/2026 às 10:00 (horário de Brasília)"; dia inteiro sai sem hora.
+ * Tribunal em outro fuso: a hora é a LOCAL, com a de Brasília ao lado —
+ * "às 09:00 (horário de Cuiabá; 10:00 no horário de Brasília)".
+ */
 export function agendaWhen(iso: string, allDay: boolean, timezone: string | null): string | null {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return null;
-  const tz = timezone || "America/Sao_Paulo";
+  const tz = safeZone(timezone);
   const date = new Intl.DateTimeFormat("pt-BR", {
     timeZone: tz, weekday: "long", day: "2-digit", month: "2-digit", year: "numeric",
   }).format(d);
   if (allDay) return `${date} (horário ainda não definido)`;
   const time = new Intl.DateTimeFormat("pt-BR", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
-  const zone = tz === "America/Sao_Paulo" ? "horário de Brasília" : `fuso ${tz}`;
-  return `${date} às ${time} (${zone})`;
+  return `${date} às ${time} (${zoneNote(iso, tz)})`;
 }
 
 /**

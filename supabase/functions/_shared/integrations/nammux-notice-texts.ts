@@ -8,6 +8,7 @@
 //
 // Não há nome, telefone nem e-mail do cliente em nenhum texto.
 import { meetingLinkText } from "./meeting-link.ts";
+import { safeZone, zoneNote } from "./nammux-timezone.ts";
 
 export type NoticeKind =
   | "event_scheduled" | "event_rescheduled" | "event_cancelled"
@@ -59,7 +60,7 @@ const TZ = "America/Sao_Paulo";
 function fmt(iso: string, tz: string | null, opts: Intl.DateTimeFormatOptions): string | null {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return null;
-  return new Intl.DateTimeFormat("pt-BR", { timeZone: tz || TZ, ...opts }).format(d);
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: safeZone(tz), ...opts }).format(d);
 }
 /** "quinta-feira, 10/12/2026" */
 export function longDate(iso: string, tz: string | null): string | null {
@@ -125,7 +126,8 @@ export function renderEventNotice(kind: NoticeKind, e: EventState, expectedStart
   const name = EVENT_NAME[e.event_type] ?? "compromisso";
   const date = longDate(e.start_at, e.timezone);
   if (!date) return { ok: false, reason: "missing_data" };
-  const time = e.all_day ? HORA_A_CONFIRMAR : `${clock(e.start_at, e.timezone)} (horário de Brasília)`;
+  // Hora LOCAL do compromisso; tribunal em outro fuso leva a hora de Brasília junto.
+  const time = e.all_day ? HORA_A_CONFIRMAR : `${clock(e.start_at, e.timezone)} (${zoneNote(e.start_at, e.timezone)})`;
 
   if (kind === "event_cancelled") {
     return build("Compromisso cancelado", NOTICE_TEMPLATES.event_cancelled, [name, date]);

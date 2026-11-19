@@ -4,6 +4,7 @@ import {
   dataSimples,
   faltam,
   faseLabel,
+  horaEmOutroFuso,
   linkSeguro,
   modalidadeLabel,
   ondeEsta,
@@ -79,6 +80,23 @@ describe("data do compromisso", () => {
     expect(faltam(base, new Date("2026-12-09T15:00:00Z"))).toBe("amanhã");
     expect(faltam(base, new Date("2026-11-28T15:00:00Z"))).toBe("em 12 dias");
     expect(faltam(base, new Date("2026-12-11T15:00:00Z"))).toBe("");
+  });
+});
+
+describe("tribunal em outro fuso", () => {
+  it("devolve o rótulo e a hora de Brasília", () => {
+    // 13:00 UTC = 09:00 em Cuiabá = 10:00 em Brasília
+    expect(horaEmOutroFuso({ ...base, timezone: "America/Cuiaba" })).toEqual({ rotulo: "horário de Cuiabá", brasilia: "10:00" });
+    expect(horaEmOutroFuso({ ...base, timezone: "America/Rio_Branco" })?.rotulo).toBe("horário de Rio Branco");
+    expect(horaEmOutroFuso({ ...base, timezone: "America/Boa_Vista" })).toEqual({ rotulo: "horário local", brasilia: "10:00" });
+  });
+
+  it("não aparece em Brasília, em fuso de mesma hora, dia inteiro, sem fuso ou fuso inválido", () => {
+    expect(horaEmOutroFuso(base)).toBeNull();
+    expect(horaEmOutroFuso({ ...base, timezone: "America/Bahia" })).toBeNull();
+    expect(horaEmOutroFuso({ ...base, timezone: "America/Cuiaba", all_day: true })).toBeNull();
+    expect(horaEmOutroFuso({ ...base, timezone: null })).toBeNull();
+    expect(horaEmOutroFuso({ ...base, timezone: "Nao/Existe" })).toBeNull();
   });
 });
 

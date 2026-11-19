@@ -274,3 +274,20 @@ Deno.test("com as três flags ligadas, os três blocos entram e o aviso fica sem
   }
   assertStringIncludes(texto, "algo que não está aqui, não invente");
 });
+
+Deno.test("tribunal em outro fuso: hora local com a de Brasília ao lado", () => {
+  // 13:00 UTC = 09:00 em Cuiabá = 10:00 em Brasília
+  assertEquals(
+    agendaWhen("2026-12-10T13:00:00Z", false, "America/Cuiaba"),
+    "quinta-feira, 10/12/2026 às 09:00 (horário de Cuiabá; 10:00 no horário de Brasília)",
+  );
+  assertEquals(
+    agendaWhen("2026-12-10T13:00:00Z", false, "America/Rio_Branco"),
+    "quinta-feira, 10/12/2026 às 08:00 (horário de Rio Branco; 10:00 no horário de Brasília)",
+  );
+  // fuso desconhecido não quebra: cai em Brasília
+  assertEquals(
+    agendaWhen("2026-12-10T13:00:00Z", false, "Nao/Existe"),
+    "quinta-feira, 10/12/2026 às 10:00 (horário de Brasília)",
+  );
+});
