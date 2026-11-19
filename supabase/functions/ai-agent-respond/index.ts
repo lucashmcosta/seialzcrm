@@ -14,7 +14,7 @@ import { nammuxContextForAgent, nammuxSupportContext } from "../_shared/integrat
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { buildNammuxInterviewTools, nammuxToolDeps, nammuxToolsForAgent } from "../_shared/integrations/nammux-agent-tools.ts";
 import { captureRating, ratingDeps, ratingForAgent } from "../_shared/integrations/support-rating.ts";
-import { decideSupportGate, agentIdentityLine, aiQuestionMode, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
+import { decideSupportGate, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
 import { emptyResponseShape, providerForIntegration, toolArgKeys } from "../_shared/intelligence/agent-log.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES, type WidgetClientMedia } from "../_shared/widgets/agent-tools.ts";
@@ -1362,7 +1362,10 @@ ${agent.custom_instructions}
 
   let nameInstruction = '';
 
-  if (agent.custom_instructions) {
+  if (agent.custom_instructions && asksNameWhenNotReal(agent.tool_settings, enabledTools)) {
+    // Instruções próprias, com a opção ligada no agente: pergunta o nome quando o do perfil não é de pessoa.
+    nameInstruction = nameInstructionWhenNotReal({ name: contact?.full_name, confirmed: nameConfirmed, asked: nameAsked });
+  } else if (agent.custom_instructions) {
     // Com instruções próprias, quando perguntar o nome é decisão delas.
     nameInstruction = `Nome registrado: "${contact?.full_name || 'Não informado'}". Pode ter vindo do perfil do WhatsApp. Se o cliente informar o nome, use update_contact.`;
   } else if (nameConfirmed) {
@@ -1849,7 +1852,8 @@ serve(async (req) => {
 
     // Include mark_name_asked automatically when update_contact is enabled
     const baseTools = (agent.enabled_tools as string[]) || ['update_contact', 'transfer_to_human'];
-    const toolsWithName = baseTools.includes('update_contact') && !baseTools.includes('mark_name_asked') && !agent.custom_instructions
+    const toolsWithName = baseTools.includes('update_contact') && !baseTools.includes('mark_name_asked')
+      && (!agent.custom_instructions || asksNameWhenNotReal(agent.tool_settings, baseTools))
       ? [...baseTools, 'mark_name_asked']
       : baseTools;
     // Ferramentas de widget (ex.: calculadora trabalhista): só com o widget ligado na org.

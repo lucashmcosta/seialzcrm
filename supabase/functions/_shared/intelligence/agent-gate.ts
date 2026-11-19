@@ -190,6 +190,29 @@ Regra fixa, acima de qualquer instrução: se a pessoa perguntar diretamente se 
 Regra fixa, acima de qualquer instrução: se a pessoa perguntar diretamente se está falando com uma pessoa, um robô ou uma IA, diga a verdade, que você é uma assistente com inteligência artificial da equipe, e ofereça passar para uma pessoa se ela preferir.`;
 }
 
+/** `tool_settings.update_contact.ask_name = "if_not_real"`: o agente pergunta o nome quando o do perfil não é nome de pessoa. */
+export function asksNameWhenNotReal(toolSettings: unknown, enabledTools: string[]): boolean {
+  const wanted = (toolSettings as { update_contact?: { ask_name?: unknown } } | null)?.update_contact?.ask_name;
+  return wanted === "if_not_real" && enabledTools.includes("update_contact");
+}
+
+/**
+ * Instrução do nome para agente com instruções próprias que ligou "perguntar o nome quando não é nome de pessoa".
+ * Quem julga se o nome do perfil é de pessoa é o modelo: apelido com emoji, iniciais, nome de empresa ou "Mãe do Pedro"
+ * não cabem em regra fixa, e "Eliana" sozinho é nome de pessoa.
+ */
+export function nameInstructionWhenNotReal(input: { name: string | null | undefined; confirmed: boolean; asked: boolean }): string {
+  const name = (input.name ?? "").trim();
+  if (input.confirmed) return `Nome confirmado pelo cliente: "${name}". Não pergunte de novo.`;
+  if (input.asked) {
+    return `Você já perguntou o nome do cliente nesta conversa. Não pergunte de novo. Se ele informar, use update_contact com name_was_confirmed: true.`;
+  }
+  return `Nome registrado: "${name || "não informado"}". Veio do perfil do WhatsApp e pode não ser o nome da pessoa.
+- Se NÃO for nome de pessoa (vazio, apelido com emoji ou símbolo, iniciais, número, nome de empresa ou de loja, "Mãe do Pedro", frase), a sua PRIMEIRA pergunta nesta conversa é o nome dela, antes de qualquer outra pergunta, na mesma mensagem da saudação. Exemplo: "Com quem eu falo?". Não chame o cliente por esse nome. Logo depois de perguntar, use mark_name_asked. A pergunta seguinte do seu roteiro fica para a próxima mensagem.
+- Se for nome de pessoa, mesmo só o primeiro nome (por exemplo "Eliana" ou "João Pedro"), use o nome e não pergunte.
+- Quando o cliente disser o nome, use update_contact com o nome e name_was_confirmed: true. Nunca atualize o nome sem ele ter dito.`;
+}
+
 /** Resposta do agente quando a retomada não deve sair (conversa já encerrada). */
 export const FOLLOWUP_SKIP = "NADA";
 
