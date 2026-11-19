@@ -40,6 +40,7 @@ assinatura, organização e mapeamento e trata cada tipo:
 | `process.finance.changed` | estado de um acordo, de uma parcela ou de um repasse | `nammux_process_finance` |
 | `process.movement.added` | movimentação relevante do tribunal, já com texto em linguagem simples | `nammux_process_movements` |
 | `interview.booking.rejected` | o horário de entrevista pedido já não estava livre | `nammux_interview_requests` |
+| `client.notice.requested` | o Nammux pede para avisar o cliente sobre um compromisso (ele planeja; o Seialz só entrega) | `nammux_notices` (`source_event`) |
 
 Tipo novo entra em `nammux-webhook-ingest/handlers.ts` (uma linha no mapa) com
 uma RPC `nammux_apply_*`. A RPC registra o recibo do evento

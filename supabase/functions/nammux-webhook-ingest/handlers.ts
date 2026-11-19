@@ -8,6 +8,7 @@ export const NAMMUX_EVENT_RPC: Readonly<Record<string, string>> = {
   "process.finance.changed": "nammux_apply_process_finance",
   "process.movement.added": "nammux_apply_process_movement",
   "interview.booking.rejected": "nammux_apply_interview_rejection",
+  "client.notice.requested": "nammux_apply_client_notice",
 };
 
 export const LEGACY_EVENT_TYPES: readonly string[] = [

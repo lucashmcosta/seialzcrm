@@ -3,6 +3,7 @@
 // aprova vê exatamente o que o cliente vai receber.
 import type { NoticeRow } from "./nammux-notice-core.ts";
 import {
+  type EventState,
   type NoticeKind,
   renderEventNotice,
   renderFinanceNotice,
@@ -11,12 +12,40 @@ import {
   type RenderResult,
 } from "./nammux-notice-texts.ts";
 
-type Subject = Pick<NoticeRow, "organization_id" | "kind" | "subject_type" | "subject_id" | "subject_start_at">;
+type Subject = Pick<NoticeRow, "organization_id" | "kind" | "subject_type" | "subject_id" | "subject_start_at" | "payload">;
+
+/**
+ * Compromisso que veio no pedido do Nammux (`client.notice.requested`). O Nammux
+ * monta o estado na hora de pedir o envio, então não há o que conferir aqui
+ * contra outra data: o texto sai do que veio.
+ */
+export function eventStateFromSource(payload: unknown): EventState | null {
+  const p = (payload && typeof payload === "object" ? payload : {}) as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v : null);
+  const type = str(p.type), status = str(p.status), start = str(p.start_at);
+  if (!type || !status || !start || isNaN(new Date(start).getTime())) return null;
+  return {
+    event_type: type,
+    status,
+    start_at: start,
+    all_day: p.all_day === true,
+    timezone: str(p.timezone),
+    modality: str(p.modality),
+    location: str(p.location),
+    virtual_link: str(p.virtual_link),
+    removed_at: null,
+  };
+}
 
 // deno-lint-ignore no-explicit-any
 export async function renderNoticeFromDb(supabase: any, notice: Subject): Promise<RenderResult> {
   const kind = notice.kind as NoticeKind;
   const org = notice.organization_id;
+
+  if (notice.subject_type === "source_event") {
+    const state = eventStateFromSource(notice.payload);
+    return state ? renderEventNotice(kind, state, null) : { ok: false, reason: "missing_data" };
+  }
 
   if (notice.subject_type === "event") {
     const { data } = await supabase.from("nammux_process_events")
