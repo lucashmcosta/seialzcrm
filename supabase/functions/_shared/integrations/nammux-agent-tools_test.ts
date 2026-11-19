@@ -28,6 +28,7 @@ function deps(over: Partial<NammuxToolDeps> = {}, log: string[] = []): NammuxToo
     listProcesses: () => Promise.resolve([{ opportunity_id: "opp-1" }]),
     fetchSlots: (opp) => { log.push(`slots:${opp}`); return Promise.resolve(slots); },
     requestInterview: (opp, start, end) => { log.push(`request:${opp}:${start}:${end}`); return Promise.resolve("requested"); },
+    proposeInterview: (opp, start, end) => { log.push(`propose:${opp}:${start}:${end}`); return Promise.resolve("prop-1"); },
     ...over,
   };
 }
@@ -100,20 +101,30 @@ Deno.test("consultar horários chama o Nammux para o processo do cliente", async
   assertEquals(out.clientText ?? null, null);
 });
 
-Deno.test("agendar: confere o horário de novo e grava o pedido uma vez", async () => {
+Deno.test("agendar: confere o horário de novo, só propõe e manda os botões de confirmar", async () => {
   const log: string[] = [];
   const out = await tool(deps({}, log), INTERVIEW_SCHEDULE_TOOL).run({ start_at: "2026-12-01T17:00:00Z" }, CTX);
-  assertEquals(log, ["slots:opp-1", `request:opp-1:${S1}:2026-12-01T18:00:00.000Z`]);
-  assertStringIncludes(out.modelMessage, "Pedido de entrevista enviado para terça-feira, 01/12/2026 às 14:00");
-  assertStringIncludes(out.modelMessage, "Não diga que já está confirmado");
+  assertEquals(log, ["slots:opp-1", `propose:opp-1:${S1}:2026-12-01T18:00:00.000Z`]);
+  assertStringIncludes(out.modelMessage, "ainda NÃO está marcado");
+  assertStringIncludes(out.modelMessage, "terça-feira, 01/12/2026 às 14:00");
+  const q = out.clientInteractive!;
+  assertEquals(q.kind, "buttons");
+  assertStringIncludes(q.body, "terça-feira, 01/12/2026 às 14:00");
+  assertEquals(q.kind === "buttons" ? q.buttons.map((b) => b.title) : [], ["Confirmar", "Outro horário"]);
+});
+
+Deno.test("agendar: proposta que não grava não manda botão", async () => {
+  const out = await tool(deps({ proposeInterview: () => Promise.resolve(null) }), INTERVIEW_SCHEDULE_TOOL).run({ start_at: S1 }, CTX);
+  assertEquals(out.clientInteractive ?? null, null);
+  assertStringIncludes(out.modelMessage, "Não diga que foi marcado");
 });
 
 Deno.test("agendar: horário que não está na agenda não gera pedido", async () => {
   for (const startAt of ["2026-12-01T17:30:00Z", "2026-12-25T17:00:00Z", "amanhã às 14h", "", undefined]) {
     const log: string[] = [];
     const out = await tool(deps({}, log), INTERVIEW_SCHEDULE_TOOL).run({ start_at: startAt }, CTX);
-    assertEquals(log.some((l) => l.startsWith("request:")), false, `pedido gravado para ${String(startAt)}`);
-    assertEquals(out.modelMessage.includes("Pedido de entrevista enviado"), false);
+    assertEquals(log.some((l) => l.startsWith("request:") || l.startsWith("propose:")), false, `pedido gravado para ${String(startAt)}`);
+    assertEquals(out.clientInteractive ?? null, null);
   }
 });
 
@@ -125,14 +136,15 @@ Deno.test("agendar: agenda fechada, Nammux fora do ar e cliente com vários proc
   assertStringIncludes(fora.modelMessage, "Não consegui consultar a agenda");
   const varios = await tool(deps({ listProcesses: () => Promise.resolve([{ opportunity_id: "a" }, { opportunity_id: "b" }]) }, log), INTERVIEW_SCHEDULE_TOOL).run({ start_at: S1 }, CTX);
   assertStringIncludes(varios.modelMessage, "process_number");
-  assertEquals(log.some((l) => l.startsWith("request:")), false);
+  assertEquals(log.some((l) => l.startsWith("request:") || l.startsWith("propose:")), false);
 });
 
 Deno.test("agendar no modo de teste não envia nada ao escritório", async () => {
   const log: string[] = [];
   const out = await tool(deps({ isTestMode: true }, log), INTERVIEW_SCHEDULE_TOOL).run({ start_at: S1 }, CTX);
-  assertEquals(log.some((l) => l.startsWith("request:")), false);
+  assertEquals(log.some((l) => l.startsWith("request:") || l.startsWith("propose:")), false);
   assertStringIncludes(out.modelMessage, "modo de teste");
+  assertEquals(out.clientInteractive?.kind, "buttons");
 });
 
 Deno.test("resultado do pedido: nunca diz que está marcado quando não foi", () => {
