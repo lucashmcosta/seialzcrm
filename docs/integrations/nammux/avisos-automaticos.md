@@ -143,3 +143,24 @@ mensagem com os mesmos botões. A resposta é lida sem o modelo
 agente de atendimento): "Vou participar" recebe uma resposta fixa; "Preciso
 remarcar" segue para o agente com a instrução de oferecer outros horários.
 Nenhum modelo começa ou termina com variável (regra da Meta; há teste).
+
+## Avisos de agenda pedidos pelo Nammux
+
+Decisão: o Nammux é o único dono de **quando** o cliente é avisado sobre
+audiência, perícia e entrevista. Ele planeja os avisos e, na hora de enviar,
+manda o evento `client.notice.requested` com o estado do compromisso naquele
+momento (`data.kind`, `data.notice_key`, `data.expires_at`,
+`data.seialz_opportunity_id` e `data.event`, no mesmo formato do `event` de
+`process.agenda.changed`).
+
+O Seialz só entrega. `nammux_apply_client_notice` grava o aviso na fila
+(`nammux_notices.subject_type = 'source_event'`, com o estado em `payload` e
+chave `src:<notice_key>`), e o worker monta o texto a partir desse estado
+(`eventStateFromSource`), sem ler o espelho. Valem as mesmas regras de
+entrega: aplicativo antes, janela de 24 h, modelo aprovado, quem não quer
+contato e aprovação por tipo.
+
+Com a flag `nammux_notices_planned_by_source` ligada na organização, o Seialz
+deixa de planejar avisos de agenda a partir de `nammux_process_events`. A
+confirmação de pedidos de entrevista continua.
+

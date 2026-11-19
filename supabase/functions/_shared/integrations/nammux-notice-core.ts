@@ -16,6 +16,8 @@ export interface NoticeRow {
   subject_id: string;
   subject_start_at: string | null;
   expires_at: string | null;
+  /** subject_type 'source_event': o estado do compromisso como o Nammux mandou na hora do pedido. */
+  payload?: unknown;
 }
 
 export interface ContactInfo {

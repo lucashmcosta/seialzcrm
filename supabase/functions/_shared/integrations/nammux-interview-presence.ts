@@ -49,17 +49,20 @@ export function presenceDeps(
     async recentInterviewReminder() {
       const now = Date.now();
       const { data } = await supabase.from("nammux_notices")
-        .select("id, subject_id, subject_start_at")
+        .select("id, subject_type, subject_id, subject_start_at, payload")
         .eq("organization_id", ctx.organizationId).eq("contact_id", ctx.contactId)
-        .eq("kind", "event_reminder_1d").eq("status", "sent").eq("subject_type", "event")
+        .eq("kind", "event_reminder_1d").eq("status", "sent").in("subject_type", ["event", "source_event"])
         .gte("sent_at", new Date(now - PRESENCE_WINDOW_HOURS * 3_600_000).toISOString())
         .gt("subject_start_at", new Date(now).toISOString())
         .order("sent_at", { ascending: false }).limit(5);
-      const rows = (data ?? []) as Array<{ id: string; subject_id: string }>;
+      const rows = (data ?? []) as Array<{ id: string; subject_type: string; subject_id: string; payload: { type?: string } | null }>;
       if (!rows.length) return null;
+      // Pedido do Nammux: o tipo do compromisso veio junto.
+      const fromSource = rows.find((r) => r.subject_type === "source_event" && r.payload?.type === "entrevista");
+      if (fromSource) return { noticeId: fromSource.id };
       const { data: events } = await supabase.from("nammux_process_events").select("id")
         .eq("organization_id", ctx.organizationId).eq("event_type", "entrevista")
-        .in("id", rows.map((r) => r.subject_id));
+        .in("id", rows.filter((r) => r.subject_type === "event").map((r) => r.subject_id));
       const ids = new Set(((events ?? []) as Array<{ id: string }>).map((e) => e.id));
       const hit = rows.find((r) => ids.has(r.subject_id));
       return hit ? { noticeId: hit.id } : null;

@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
   });
 
   const since = new Date(Date.now() - SKIPPED_VISIBLE_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const fields = "id, organization_id, contact_id, opportunity_id, kind, subject_type, subject_id, subject_start_at, status, status_reason, send_at, expires_at, last_error, attempts, channel, created_at, updated_at";
+  const fields = "id, organization_id, contact_id, opportunity_id, kind, subject_type, subject_id, subject_start_at, payload, status, status_reason, send_at, expires_at, last_error, attempts, channel, created_at, updated_at";
   const [{ data: open, error: openError }, { data: skipped, error: skippedError }] = await Promise.all([
     admin.from("nammux_notices").select(fields)
       .eq("organization_id", parsed.organizationId).in("status", [...REVIEW_STATUSES])

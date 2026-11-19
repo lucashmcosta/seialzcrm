@@ -51,3 +51,8 @@ Deno.test("recusa de horário de entrevista é aplicada pela RPC própria", () =
   assertEquals(rpcForEvent("interview.booking.rejected"), "nammux_apply_interview_rejection");
   assertEquals(isSupportedEvent("interview.booking.rejected"), true);
 });
+
+Deno.test("pedido de aviso do Nammux é aplicado pela RPC própria", () => {
+  assertEquals(rpcForEvent("client.notice.requested"), "nammux_apply_client_notice");
+  assertEquals(isSupportedEvent("client.notice.requested"), true);
+});
