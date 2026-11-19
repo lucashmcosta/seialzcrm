@@ -47,7 +47,7 @@ Deno.test("os sete avisos de agenda, com perícia presencial e entrevista sem lo
   assertStringIncludes(text(renderEventNotice("event_reminder_7d", AUD, AUD.start_at)), "Lembrete: sua audiência é quinta-feira, 10/12/2026, às 10:00");
   assertStringIncludes(text(renderEventNotice("event_reminder_1d", AUD, AUD.start_at)), "sua audiência é amanhã, quinta-feira, 10/12/2026");
   assertEquals(text(renderEventNotice("event_reminder_1h", AUD, AUD.start_at)), "Sua audiência começa em 1 hora, às 10:00 (horário de Brasília). É por vídeo, neste link: https://exemplo.invalid/sala Se tiver algum problema, responda esta mensagem.");
-  assertEquals(text(renderEventNotice("event_starting", AUD, AUD.start_at)), "Sua audiência está iniciando agora. É por vídeo, neste link: https://exemplo.invalid/sala Se tiver algum problema para entrar, responda esta mensagem.");
+  assertEquals(text(renderEventNotice("event_starting", AUD, AUD.start_at)), "Sua audiência está começando agora. Entre o quanto antes para não perder o horário. É por vídeo, neste link: https://exemplo.invalid/sala Se tiver algum problema para entrar, responda esta mensagem.");
   assertStringIncludes(text(renderEventNotice("event_scheduled", entrevista, entrevista.start_at)), "Sua entrevista foi marcada para quinta-feira, 10/12/2026, às 10:00 (horário de Brasília). O escritório vai informar como participar.");
   assertEquals(text(renderEventNotice("event_cancelled", { ...AUD, status: "cancelado" }, AUD.start_at)), "Sua audiência do dia quinta-feira, 10/12/2026 foi cancelada. Assim que houver nova data, avisamos você por aqui.");
 });

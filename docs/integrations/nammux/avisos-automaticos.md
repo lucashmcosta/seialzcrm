@@ -46,7 +46,7 @@ muda o modelo. **Os textos são proposta e precisam de revisão antes de ir à M
 | `event_reminder_1d` | Lembrete: sua {{1}} é amanhã, {{2}}, às {{3}}. {{4}} Se tiver dúvida, é só responder esta mensagem. | idem (audiência e perícia) |
 | `interview_reminder_1d` (modelo da véspera da **entrevista**, botões "Vou participar" / "Preciso remarcar") | Lembrete: sua entrevista com a equipe do escritório é amanhã, {{1}}, às {{2}}. {{3}} Você vai conseguir participar? | 1 data · 2 hora · 3 como participar |
 | `event_reminder_1h` | Sua {{1}} começa em 1 hora, às {{2}}. {{3}} Se tiver algum problema, responda esta mensagem. | 1 tipo · 2 hora · 3 como participar |
-| `event_starting` | Sua {{1}} está iniciando agora. {{2}} Se tiver algum problema para entrar, responda esta mensagem. | 1 tipo · 2 como participar |
+| `event_starting` | Sua {{1}} está começando agora. Entre o quanto antes para não perder o horário. {{2}} Se tiver algum problema para entrar, responda esta mensagem. | 1 tipo · 2 como participar |
 | `interview_slot_unavailable` | O horário que você escolheu para a entrevista ({{1}}) acabou de ser ocupado. Me diga outro horário que funcione para você e eu vejo o que está livre. | 1 dia e hora pedidos |
 | `agreement_homologated` | Boa notícia: o juiz homologou o acordo do seu processo em {{1}}. Quando houver pagamento, avisamos você por aqui. | 1 data |
 | `installment_paid` | A empresa pagou a parcela {{1}} do acordo. O escritório vai fazer o repasse da sua parte e avisa você. | 1 "2 de 6" |
