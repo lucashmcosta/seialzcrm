@@ -118,6 +118,11 @@ describe("link e data simples", () => {
     expect(linkSeguro(null)).toBeNull();
   });
 
+  it("conserta link digitado com espaço e separa ID/senha", () => {
+    expect(linkSeguro("https://trt15-jus-br.zoom.us/j/123? pwd=abc")).toBe("https://trt15-jus-br.zoom.us/j/123?pwd=abc");
+    expect(linkSeguro("https://x.zoom.us/j/1?pwd=a.1 ID da reunião: 835 Senha: 4vt")).toBe("https://x.zoom.us/j/1?pwd=a.1");
+  });
+
   it("data sem hora não volta um dia", () => {
     expect(dataSimples("2026-05-21")).toBe("21/05/2026");
     expect(dataSimples(null)).toBeNull();

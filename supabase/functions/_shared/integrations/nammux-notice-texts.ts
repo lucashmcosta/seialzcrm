@@ -7,6 +7,7 @@
 // Mudou a ordem aqui? O modelo aprovado na Meta tem de mudar junto.
 //
 // Não há nome, telefone nem e-mail do cliente em nenhum texto.
+import { meetingLinkText } from "./meeting-link.ts";
 
 export type NoticeKind =
   | "event_scheduled" | "event_rescheduled" | "event_cancelled"
@@ -82,7 +83,8 @@ export function money(value: number | string | null): string | null {
 
 /** Como participar: link, local, ou a promessa de que o escritório informa. */
 export function howToJoin(e: EventState): string {
-  if (e.virtual_link) return `É por vídeo, neste link: ${e.virtual_link}`;
+  const link = meetingLinkText(e.virtual_link);
+  if (link) return `É por vídeo, neste link: ${link}`;
   if (e.location) return `É presencial, neste local: ${e.location}`;
   return "O escritório vai informar como participar.";
 }
