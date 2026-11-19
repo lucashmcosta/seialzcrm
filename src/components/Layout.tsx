@@ -21,11 +21,13 @@ import {
   ChatsCircle,
   DeviceMobile,
   BellRinging,
+  CalendarCheck,
   CaretDoubleLeft,
   CaretDoubleRight,
 } from '@phosphor-icons/react';
 import { useClientPortalChatFlag } from '@/hooks/useClientPortalChatFlag';
 import { useNammuxNoticesFlag, useNammuxNoticesPendingCount } from '@/hooks/useNammuxNotices';
+import { useNammuxHearingCheckFlag, useNammuxHearingCheckUrgentCount } from '@/hooks/useNammuxHearingCheck';
 import { useClientPortalUnreadCount } from '@/hooks/useClientPortalUnreadCount';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -65,6 +67,9 @@ export function Layout({ children }: LayoutProps) {
   // Avisos automáticos ao cliente (integração Nammux): só com a flag da organização.
   const noticesEnabled = useNammuxNoticesFlag(organization?.id);
   const noticesPending = useNammuxNoticesPendingCount(organization?.id, noticesEnabled);
+  // Conferência "o que o cliente ouviu x a agenda" (integração Nammux): só com a flag da organização.
+  const hearingCheckEnabled = useNammuxHearingCheckFlag(organization?.id);
+  const hearingCheckUrgent = useNammuxHearingCheckUrgentCount(organization?.id, hearingCheckEnabled);
   const { themePreset } = useTheme();
   // Menu lateral recolhido (só ícones) — preferência por navegador.
   const { data: orgLogoIcon, isPending: orgLogoIconPending } = useOrgLogoIcon(organization?.id);
@@ -124,6 +129,7 @@ export function Layout({ children }: LayoutProps) {
         { label: uiText("Atendimento"), href: '/inbox', icon: Headset },
         ...(portalChatEnabled ? [{ label: 'Chat do App', href: '/inbox/portal', icon: DeviceMobile, badge: portalUnread || undefined }] : []),
         ...(noticesEnabled ? [{ label: 'Avisos ao cliente', href: '/inbox/avisos', icon: BellRinging, badge: noticesPending || undefined }] : []),
+        ...(hearingCheckEnabled ? [{ label: 'Audiências x avisos', href: '/inbox/audiencias', icon: CalendarCheck, badge: hearingCheckUrgent || undefined }] : []),
       ],
     });
 
@@ -212,6 +218,9 @@ export function Layout({ children }: LayoutProps) {
   }
   if (noticesEnabled) {
     navItems.push({ label: 'Avisos ao cliente', href: '/inbox/avisos', icon: BellRinging, badge: noticesPending || undefined });
+  }
+  if (hearingCheckEnabled) {
+    navItems.push({ label: 'Audiências x avisos', href: '/inbox/audiencias', icon: CalendarCheck, badge: hearingCheckUrgent || undefined });
   }
 
   navItems.splice(0, navItems.length, ...navItems.filter((i) => areaAllowed(permissions, i.href)));
