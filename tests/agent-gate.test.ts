@@ -1,7 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { typingIndicatorBody } from "../supabase/functions/_shared/meta-whatsapp/typing.ts";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, aiQuestionMode, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -83,6 +83,22 @@ Deno.test("apresentação: padrão é assistente virtual; pelo nome mantém a ve
   const own = agentIdentityLine("Gabi", false);
   assertEquals(own.startsWith("Você é Gabi, da equipe de atendimento."), true);
   assertEquals(own.includes("diga a verdade"), true);
+});
+
+Deno.test("perguntaram se é IA: no modo de passagem, não responde, não se diz pessoa e passa para a equipe", () => {
+  const line = agentIdentityLine("Bruna", false, "handoff");
+  assertEquals(line.includes("transfer_to_human"), true);
+  assertEquals(line.includes("Não afirme que é uma pessoa"), true);
+  assertEquals(line.includes("diga a verdade"), false);
+  // Quem se apresenta como assistente virtual não muda.
+  assertEquals(agentIdentityLine("Gabi", true, "handoff"), "Você é Gabi, um assistente virtual.");
+});
+
+Deno.test("modo de passagem só vale com a configuração e com a ferramenta de passar a conversa", () => {
+  assertEquals(aiQuestionMode({ ai_question: "handoff" }, ["transfer_to_human"]), "handoff");
+  assertEquals(aiQuestionMode({ ai_question: "handoff" }, ["update_contact"]), "tell");
+  assertEquals(aiQuestionMode({}, ["transfer_to_human"]), "tell");
+  assertEquals(aiQuestionMode(null, ["transfer_to_human"]), "tell");
 });
 
 Deno.test("parágrafo repetido na mesma resposta sai uma vez só", () => {
