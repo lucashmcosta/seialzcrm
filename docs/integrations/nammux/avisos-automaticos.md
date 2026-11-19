@@ -40,18 +40,19 @@ muda o modelo. **Os textos são proposta e precisam de revisão antes de ir à M
 | Tipo | Texto | Variáveis |
 |---|---|---|
 | `event_scheduled` | Olá! Sua {{1}} foi marcada para {{2}}, às {{3}}. {{4}} Se tiver dúvida, é só responder esta mensagem. | 1 tipo · 2 data · 3 hora · 4 como participar |
-| `event_rescheduled` | Atenção: sua {{1}} mudou de data. A nova data é {{2}}, às {{3}}. {{4}} | idem |
+| `event_rescheduled` | Atenção: sua {{1}} mudou de data. A nova data é {{2}}, às {{3}}. {{4}} Se tiver dúvida, é só responder esta mensagem. | idem |
 | `event_cancelled` | Sua {{1}} do dia {{2}} foi cancelada. Assim que houver nova data, avisamos você por aqui. | 1 tipo · 2 data |
-| `event_reminder_7d` | Lembrete: sua {{1}} é {{2}}, às {{3}}. {{4}} | 1 tipo · 2 data · 3 hora · 4 como participar |
-| `event_reminder_1d` | Lembrete: sua {{1}} é amanhã, {{2}}, às {{3}}. {{4}} | idem |
-| `event_reminder_1h` | Sua {{1}} começa em 1 hora, às {{2}}. {{3}} | 1 tipo · 2 hora · 3 como participar |
-| `event_starting` | Sua {{1}} está iniciando agora. {{2}} | 1 tipo · 2 como participar |
+| `event_reminder_7d` | Lembrete: sua {{1}} é {{2}}, às {{3}}. {{4}} Se tiver dúvida, é só responder esta mensagem. | 1 tipo · 2 data · 3 hora · 4 como participar |
+| `event_reminder_1d` | Lembrete: sua {{1}} é amanhã, {{2}}, às {{3}}. {{4}} Se tiver dúvida, é só responder esta mensagem. | idem (audiência e perícia) |
+| `interview_reminder_1d` (modelo da véspera da **entrevista**, botões "Vou participar" / "Preciso remarcar") | Lembrete: sua entrevista com a equipe do escritório é amanhã, {{1}}, às {{2}}. {{3}} Você vai conseguir participar? | 1 data · 2 hora · 3 como participar |
+| `event_reminder_1h` | Sua {{1}} começa em 1 hora, às {{2}}. {{3}} Se tiver algum problema, responda esta mensagem. | 1 tipo · 2 hora · 3 como participar |
+| `event_starting` | Sua {{1}} está iniciando agora. {{2}} Se tiver algum problema para entrar, responda esta mensagem. | 1 tipo · 2 como participar |
 | `interview_slot_unavailable` | O horário que você escolheu para a entrevista ({{1}}) acabou de ser ocupado. Me diga outro horário que funcione para você e eu vejo o que está livre. | 1 dia e hora pedidos |
 | `agreement_homologated` | Boa notícia: o juiz homologou o acordo do seu processo em {{1}}. Quando houver pagamento, avisamos você por aqui. | 1 data |
 | `installment_paid` | A empresa pagou a parcela {{1}} do acordo. O escritório vai fazer o repasse da sua parte e avisa você. | 1 "2 de 6" |
-| `installment_overdue` | A empresa não pagou a parcela {{1}} do acordo, que venceu em {{2}}. Vamos nos manifestar no processo em até 5 dias úteis, até {{3}}. | 1 "2 de 6" · 2 vencimento · 3 prazo |
-| `payout_done` | O repasse de {{1}} referente ao seu processo foi feito em {{2}}. | 1 valor · 2 data |
-| `movement_update` / `movement_unfavorable` | Novidade no seu processo: {{1}} | 1 texto do catálogo do Nammux |
+| `installment_overdue` | A empresa não pagou a parcela {{1}} do acordo, que venceu em {{2}}. Vamos nos manifestar no processo em até 5 dias úteis, até {{3}}. Qualquer novidade, avisamos você por aqui. | 1 "2 de 6" · 2 vencimento · 3 prazo |
+| `payout_done` | O repasse de {{1}} referente ao seu processo foi feito em {{2}}. Se tiver dúvida, é só responder esta mensagem. | 1 valor · 2 data |
+| `movement_update` / `movement_unfavorable` | Novidade no seu processo: {{1}} Se tiver dúvida, é só responder esta mensagem. | 1 texto do catálogo do Nammux |
 
 "Tipo" é audiência, perícia ou entrevista. "Como participar" é o link, o local,
 ou "O escritório vai informar como participar." Não há nome, telefone nem e-mail
@@ -131,3 +132,14 @@ permissão no banco com a identidade de quem chamou.
 1. Cadastrar e aprovar os modelos na Meta e mapeá-los em `nammux_notice_templates`.
 2. Ajustar `nammux_notice_rules` se o padrão não servir.
 3. Ligar a flag `nammux_notices`.
+
+## Véspera da entrevista: presença
+
+A véspera da entrevista usa o modelo `interview_reminder_1d` (mapeado em
+`nammux_notice_templates` com esse `kind`), com os botões de resposta rápida
+"Vou participar" e "Preciso remarcar". Com a janela de 24 h aberta, sai como
+mensagem com os mesmos botões. A resposta é lida sem o modelo
+(`_shared/integrations/nammux-interview-presence.ts`, no `ai-agent-respond` do
+agente de atendimento): "Vou participar" recebe uma resposta fixa; "Preciso
+remarcar" segue para o agente com a instrução de oferecer outros horários.
+Nenhum modelo começa ou termina com variável (regra da Meta; há teste).

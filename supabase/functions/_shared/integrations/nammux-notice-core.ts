@@ -49,7 +49,8 @@ export interface NoticeDeps {
   /** Carrega o estado atual do assunto e monta o texto. */
   render(notice: NoticeRow): Promise<RenderResult>;
   sendPush(notice: NoticeRow, rendered: Rendered): Promise<PushOutcome>;
-  whatsappRoute(notice: NoticeRow): Promise<WhatsAppRoute | null>;
+  /** O modelo é o de `rendered.templateKey`, quando houver; senão, o do tipo do aviso. */
+  whatsappRoute(notice: NoticeRow, rendered: Rendered): Promise<WhatsAppRoute | null>;
   sendWhatsApp(notice: NoticeRow, route: WhatsAppRoute, mode: "template" | "text", rendered: Rendered): Promise<SendOutcome>;
   finish(notice: NoticeRow, outcome: FinishOutcome, reason?: string | null, channel?: string | null, messageId?: string | null): Promise<void>;
 }
@@ -125,7 +126,7 @@ export async function processNotice(notice: NoticeRow, deps: NoticeDeps): Promis
 
   // 5. WhatsApp.
   if (!contact.hasPhone) return await done("skipped", "no_phone");
-  const route = await deps.whatsappRoute(notice);
+  const route = await deps.whatsappRoute(notice, rendered.rendered);
   if (!route) return await done("skipped", "no_channel");
   let mode = whatsappMode(route);
   if (!mode) return await done("skipped", "no_template");

@@ -87,7 +87,7 @@ function buildDeps(supabase: any, sendStarted: { value: boolean }): NoticeDeps {
       }
     },
 
-    async whatsappRoute(notice): Promise<WhatsAppRoute | null> {
+    async whatsappRoute(notice, rendered): Promise<WhatsAppRoute | null> {
       const org = notice.organization_id;
       // O número da linha de Atendimento da organização.
       const { data: line } = await supabase.from("messaging_lines")
@@ -100,7 +100,7 @@ function buildDeps(supabase: any, sendStarted: { value: boolean }): NoticeDeps {
 
       const { data: mapped } = await supabase.from("nammux_notice_templates")
         .select("whatsapp_template_id, whatsapp_templates!inner(id, status, is_active)")
-        .eq("organization_id", org).eq("kind", notice.kind).maybeSingle();
+        .eq("organization_id", org).eq("kind", rendered.templateKey ?? notice.kind).maybeSingle();
       const tpl = mapped?.whatsapp_templates as { status?: string; is_active?: boolean } | undefined;
       const templateId = tpl?.status === "approved" && tpl?.is_active !== false ? mapped.whatsapp_template_id as string : null;
 
@@ -129,7 +129,10 @@ function buildDeps(supabase: any, sendStarted: { value: boolean }): NoticeDeps {
         senderName: "Aviso automático",
         ...(mode === "template"
           ? { templateId: route.templateId!, templateVariables: variables }
-          : { message: rendered.text }),
+          : rendered.buttons?.length
+            // Janela aberta: os mesmos botões do modelo, como mensagem interativa.
+            ? { interactive: { kind: "buttons" as const, body: rendered.text, buttons: rendered.buttons.map((title) => ({ id: "", title })) } }
+            : { message: rendered.text }),
       }, { supabase });
       return classifySend(result);
     },

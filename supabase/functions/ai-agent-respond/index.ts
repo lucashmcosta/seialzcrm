@@ -15,6 +15,7 @@ import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { buildNammuxInterviewTools, NAMMUX_INTERVIEW_FLAG, nammuxToolDeps, nammuxToolsForAgent } from "../_shared/integrations/nammux-agent-tools.ts";
 import { captureRating, ratingDeps, ratingForAgent } from "../_shared/integrations/support-rating.ts";
 import { captureInterviewConfirmation, interviewConfirmDeps } from "../_shared/integrations/nammux-interview-confirm.ts";
+import { capturePresence, presenceDeps } from "../_shared/integrations/nammux-interview-presence.ts";
 import { decideSupportGate, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
 import { emptyResponseShape, providerForIntegration, toolArgKeys } from "../_shared/intelligence/agent-log.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
@@ -1862,6 +1863,18 @@ serve(async (req) => {
           return skip(confirmed.outcome);
         }
         if (confirmed?.kind === 'continue' && confirmed.note) message = `${message}\n\n${confirmed.note}`;
+      }
+
+      // Resposta ao lembrete de véspera da entrevista ("Vou participar" / "Preciso remarcar").
+      // Só o agente de atendimento, com os avisos da org ligados.
+      if (!followUp && threadId && contactId && agent.agent_type === 'support'
+        && await featureFlagEnabled(supabase, 'nammux_notices', organizationId)) {
+        const presence = await capturePresence(message, presenceDeps(supabase, { organizationId, contactId }));
+        if (presence?.kind === 'reply') {
+          await dispatchWhatsAppSend({ organizationId, contactId, threadId, message: presence.text, isAgentMessage: true, agentId: agent.id, senderName: agent.name });
+          return skip(presence.outcome);
+        }
+        if (presence?.kind === 'continue') message = `${message}\n\n${presence.note}`;
       }
     }
 
