@@ -23,6 +23,7 @@ import {
   type MovimentacaoRow,
   dataSimples,
   faltam,
+  horaEmOutroFuso,
   linkSeguro,
   modalidadeLabel,
   ondeEsta,
@@ -309,6 +310,7 @@ export function NammuxOpportunityTab({
                     const linkExtra = splitMeetingLink(c.virtual_link).extra;
                     const modalidade = modalidadeLabel(c.modality);
                     const prazo = faltam(c, new Date());
+                    const outroFuso = horaEmOutroFuso(c);
                     return (
                       <div key={c.external_event_id} className="flex flex-wrap items-start justify-between gap-3 py-3">
                         <div className="min-w-0">
@@ -318,8 +320,18 @@ export function NammuxOpportunityTab({
                           </div>
                           <p className="mt-1 text-sm">
                             {quandoCompromisso(c)}
+                            {outroFuso && (
+                              <Badge variant="outline" className="ml-2 align-middle font-normal">
+                                {outroFuso.rotulo}
+                              </Badge>
+                            )}
                             {prazo && <span className="text-muted-foreground"> · {prazo}</span>}
                           </p>
+                          {outroFuso && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              Hora local do tribunal. No horário de Brasília: {outroFuso.brasilia}.
+                            </p>
+                          )}
                           {c.location && (
                             <p className="mt-1 flex items-start gap-1 text-xs text-muted-foreground">
                               <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
