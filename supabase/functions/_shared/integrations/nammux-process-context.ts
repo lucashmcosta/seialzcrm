@@ -2,6 +2,7 @@
 // Lê só o que a integração já grava (nammux_process_snapshots, via nammux-webhook-ingest).
 // Fica na integração: o núcleo do Seialz não conhece o Nammux.
 import { meetingLinkText } from "./meeting-link.ts";
+import { fetchNammuxProcessInfo, type NammuxProcessInfo, type NammuxTimelineItem } from "./nammux-process-info.ts";
 import { safeZone, zoneNote } from "./nammux-timezone.ts";
 
 export interface NammuxProcessRow {
@@ -140,29 +141,6 @@ São as datas marcadas hoje no sistema do escritório. Informe a data, a hora e 
 `;
 }
 
-// deno-lint-ignore no-explicit-any
-export async function loadNammuxAgenda(supabase: any, organizationId: string, opportunityIds: string[], now = new Date()): Promise<NammuxAgendaRow[]> {
-  if (!opportunityIds.length) return [];
-  // Duas horas de folga para trás: uma audiência que acabou de começar ainda é assunto.
-  const since = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase.from("nammux_process_events")
-    .select("opportunity_id, event_type, subtype, start_at, all_day, timezone, modality, location, virtual_link")
-    .eq("organization_id", organizationId)
-    .in("opportunity_id", opportunityIds)
-    .eq("status", "pendente")
-    .is("removed_at", null)
-    .gte("start_at", since)
-    .order("start_at", { ascending: true })
-    .limit(10);
-  if (error) {
-    console.warn("[nammux-process-context] não leu a agenda", error.code ?? "sem_codigo");
-    return [];
-  }
-  return (data ?? []) as NammuxAgendaRow[];
-}
-
-// ---------- Financeiro (process.finance.changed) ----------
-
 export interface NammuxFinanceRow {
   opportunity_id: string;
   kind: "agreement" | "installment" | "payout";
@@ -267,46 +245,32 @@ export async function loadNammuxFinance(supabase: any, organizationId: string, o
 
 // ---------- Movimentações (process.movement.added) ----------
 
-export interface NammuxMovementRow {
-  opportunity_id: string;
-  occurred_at: string;
-  text: string;
-}
+export const NAMMUX_UNAVAILABLE_NOTE = `
+## DATAS E ANDAMENTO DO PROCESSO
+Não foi possível consultar o sistema do escritório agora. Não diga datas nem novidades do processo: se o cliente perguntar, diga que vai confirmar com a equipe e passe para a equipe.
+`;
 
-/** Bloco com as últimas movimentações relevantes. Vazio quando não há nenhuma. */
-export function nammuxMovementsBlock(rows: NammuxMovementRow[], processIndex: Record<string, number> = {}): string {
+/**
+ * Linha do tempo do Nammux (mesmo catálogo do app). Linha sensível (sentença,
+ * arquivamento, extinção…): só o título, e quem explica é o escritório.
+ */
+export function nammuxTimelineBlock(items: NammuxTimelineItem[], processIndex: Record<string, number> = {}): string {
   const multi = new Set(Object.values(processIndex)).size > 1;
-  const lines = rows.map((r) => {
-    const when = day(r.occurred_at);
-    if (!when || !r.text) return null;
-    const suffix = multi && processIndex[r.opportunity_id] ? ` (processo ${processIndex[r.opportunity_id]})` : "";
-    return `- ${when}: ${r.text}${suffix}`;
+  const lines = items.map((t) => {
+    const when = day(t.at);
+    if (!when) return null;
+    const suffix = multi && processIndex[t.opportunity_id] ? ` (processo ${processIndex[t.opportunity_id]})` : "";
+    if (t.attention) return `- ${when}: ${t.title} [SENSÍVEL]${suffix}`;
+    return `- ${when}: ${t.title}${t.description ? ` — ${t.description}` : ""}${suffix}`;
   }).filter(Boolean);
   if (!lines.length) return "";
   return `
-## ÚLTIMAS MOVIMENTAÇÕES DO PROCESSO (o que aconteceu no tribunal)
+## ANDAMENTO DO PROCESSO (o que aconteceu no tribunal, mais recente primeiro)
 ${lines.join("\n")}
-Explique com estas palavras, que já estão em linguagem simples. Não interprete além do que está escrito e não preveja resultado nem prazo. Se o cliente perguntar por algo que não está na lista, diga que não há novidade registrada.
+Explique com estas palavras, que já estão em linguagem simples. Não interprete além do que está escrito e não preveja resultado nem prazo.
+Linha marcada [SENSÍVEL]: diga só o que aconteceu, que o escritório vai explicar o que isso significa no caso dele, e passe para a equipe. Não explique a decisão, não diga se é bom ou ruim.
 `;
 }
-
-// deno-lint-ignore no-explicit-any
-export async function loadNammuxMovements(supabase: any, organizationId: string, opportunityIds: string[]): Promise<NammuxMovementRow[]> {
-  if (!opportunityIds.length) return [];
-  const { data, error } = await supabase.from("nammux_process_movements")
-    .select("opportunity_id, occurred_at, text")
-    .eq("organization_id", organizationId)
-    .in("opportunity_id", opportunityIds)
-    .order("occurred_at", { ascending: false })
-    .limit(5);
-  if (error) {
-    console.warn("[nammux-process-context] não leu as movimentações", error.code ?? "sem_codigo");
-    return [];
-  }
-  return (data ?? []) as NammuxMovementRow[];
-}
-
-// ---------- Contexto completo do agente de atendimento ----------
 
 export const NAMMUX_AGENT_AGENDA_FLAG = "nammux_agent_agenda";
 export const NAMMUX_AGENT_FINANCE_FLAG = "nammux_agent_finance";
@@ -331,7 +295,10 @@ export async function nammuxSupportContext(
   organizationId: string,
   contactId: string,
   isEnabled: (flag: string) => Promise<boolean>,
-  now = new Date(),
+  _now = new Date(),
+  // Injetável nos testes. Padrão: a consulta assinada ao Nammux.
+  fetchLive: (ids: string[], include: Array<"agenda" | "timeline">) => Promise<NammuxProcessInfo | null> =
+    (ids, include) => fetchNammuxProcessInfo(supabase, organizationId, ids, include),
 ): Promise<string> {
   const { data: opps } = await supabase.from("opportunities").select("id")
     .eq("organization_id", organizationId).eq("contact_id", contactId).is("deleted_at", null).limit(20);
@@ -357,9 +324,20 @@ export async function nammuxSupportContext(
 
   const covered: NammuxCovered = {};
   let extra = "";
-  if (await isEnabled(NAMMUX_AGENT_AGENDA_FLAG)) {
+  const wantAgenda = await isEnabled(NAMMUX_AGENT_AGENDA_FLAG);
+  const wantTimeline = await isEnabled(NAMMUX_AGENT_MOVEMENTS_FLAG);
+  // Datas e andamento: consulta na hora ao Nammux (sem cópia no Seialz).
+  const live = wantAgenda || wantTimeline
+    ? await fetchLive(shownOpportunityIds,
+        [...(wantAgenda ? ["agenda" as const] : []), ...(wantTimeline ? ["timeline" as const] : [])])
+    : null;
+  if ((wantAgenda || wantTimeline) && !live) {
+    // Sem resposta do Nammux, datas e andamento ficam de fora: o agente não inventa e passa para a equipe.
+    extra += NAMMUX_UNAVAILABLE_NOTE;
+  }
+  if (wantAgenda && live) {
     covered.agenda = true;
-    extra += nammuxAgendaBlock(await loadNammuxAgenda(supabase, organizationId, shownOpportunityIds, now), processIndex);
+    extra += nammuxAgendaBlock(live.agenda, processIndex);
   }
   if (await isEnabled(NAMMUX_AGENT_FINANCE_FLAG)) {
     const finance = nammuxFinanceBlock(await loadNammuxFinance(supabase, organizationId, shownOpportunityIds), processIndex);
@@ -369,14 +347,13 @@ export async function nammuxSupportContext(
       extra += finance;
     }
   }
-  if (await isEnabled(NAMMUX_AGENT_MOVEMENTS_FLAG)) {
+  if (wantTimeline && live) {
     // Sem movimentação registrada o bloco fica vazio, mas o assunto está coberto:
     // o agente não deve mandar o cliente à equipe por falta de novidade.
     covered.movements = true;
-    const movements = nammuxMovementsBlock(await loadNammuxMovements(supabase, organizationId, shownOpportunityIds), processIndex);
-    extra += movements || `
-## ÚLTIMAS MOVIMENTAÇÕES DO PROCESSO (o que aconteceu no tribunal)
-Não há movimentação relevante registrada até agora. Se o cliente perguntar por novidade, diga que não há novidade registrada e que ele será avisado quando houver.
+    extra += nammuxTimelineBlock(live.timeline, processIndex) || `
+## ANDAMENTO DO PROCESSO (o que aconteceu no tribunal)
+Não há movimentação registrada nos últimos 90 dias. Se o cliente perguntar por novidade, diga que não há novidade registrada e que ele será avisado quando houver.
 `;
   }
   return nammuxProcessBlock(processes, covered) + extra;

@@ -295,3 +295,6 @@ verify_jwt = false
 # JWT validado em código (getUser) e permissão conferida no banco.
 [functions.nammux-notices-review]
 verify_jwt = false
+
+[functions.nammux-process-view]
+verify_jwt = false

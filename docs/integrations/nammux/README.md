@@ -140,3 +140,21 @@ Documentos comuns vinculados somente ao contato ainda exigem uma política
 explícita de roteamento quando o contato possui vários processos. A exceção
 deliberada são contratos SuvSign, conforme ADR-0010. Ver também
 `docs/audit/07-divida-tecnica.md`.
+
+## Datas e andamento: consulta na hora
+
+O Seialz não guarda cópia da agenda nem das movimentações para mostrar ou
+responder. Quem precisa consulta o Nammux na hora, pela edge function
+`seialz-process-info` do Nammux (chamada assinada, mesmo segredo da
+integração), que devolve as próximas datas e a linha do tempo do processo já
+em linguagem simples (mesmo catálogo do app do cliente):
+
+- agente de atendimento: `_shared/integrations/nammux-process-info.ts`, usado
+  por `nammuxSupportContext` (blocos "PRÓXIMAS DATAS" e "ANDAMENTO DO
+  PROCESSO"; linha sensível vai só com o título e passa para a equipe). Sem
+  resposta do Nammux, o agente não fala de datas nem de andamento;
+- aba do processo na oportunidade: edge function `nammux-process-view` (JWT do
+  usuário; só responde se ele enxerga a oportunidade).
+
+O financeiro do agente continua lendo `nammux_process_finance`.
+
