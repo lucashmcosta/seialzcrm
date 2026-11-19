@@ -15,6 +15,7 @@ export const PLAMEV_REDE_TOOL = "plamev_consultar_rede";
 export const PLAMEV_SIMULAR_TOOL = "plamev_simular_plano";
 export const PLAMEV_LER_MATERIAL_TOOL = "plamev_ler_materiais";
 export const PLAMEV_ENVIAR_MATERIAL_TOOL = "plamev_enviar_material";
+export const PLAMEV_CADASTRO_TOOL = "plamev_salvar_cadastro";
 
 /** Começo da mensagem de valores, para saber se a mesma simulação já foi mandada nesta conversa. */
 export const SIMULACAO_HEADER = "*Simulação Plamev*";
@@ -30,7 +31,7 @@ export interface PlamevApi {
   // deno-lint-ignore no-explicit-any
   plamev(path: string, init?: { body?: unknown; cache?: boolean }): Promise<any>;
   rede(cep: string, raioKm: number): Promise<R.Credenciado[]>;
-  enderecoDoCep(cep: string): Promise<{ uf: string; cidade: string }>;
+  enderecoDoCep(cep: string): Promise<{ uf: string; cidade: string; bairro?: string; logradouro?: string }>;
 }
 
 const q = (params: Record<string, string>) => new URLSearchParams(params).toString();
@@ -252,6 +253,68 @@ export function rodarEnviarMaterial(
   };
 }
 
+// ───────────────────────────── Dados do cadastro ─────────────────────────────
+
+export interface CadastroArgs { cpf?: unknown; email?: unknown; cep?: unknown; numero?: unknown; complemento?: unknown }
+
+/** O que já está no contato, para dizer o que ainda falta. */
+export interface CadastroAtual { cpf: string | null; email: string | null; address_zip: string | null; address_number: string | null }
+
+const texto = (v: unknown, max: number) => (typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, max) : "");
+
+/**
+ * Dados que o cliente mandou para a cotação → campos do contato (os mesmos que o widget da equipe lê para preencher
+ * o formulário). Só entra o que é válido; o resto volta como problema para o agente pedir de novo.
+ */
+export function camposDoCadastro(args: CadastroArgs, endereco: { uf: string; cidade: string; bairro?: string; logradouro?: string } | null) {
+  const campos: Record<string, string> = {};
+  const problemas: string[] = [];
+  const cpf = soDigitos(args?.cpf);
+  if (cpf) {
+    if (L.cpfValido(cpf)) campos.cpf = cpf;
+    else problemas.push("o CPF não confere (peça para o cliente conferir os 11 números)");
+  }
+  const email = texto(args?.email, 120).replace(/\s+/g, "");
+  if (email) {
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) campos.email = email.toLowerCase();
+    else problemas.push("o e-mail está incompleto (falta o @ ou o final)");
+  }
+  const cep = soDigitos(args?.cep);
+  if (cep) {
+    if (cep.length === 8) {
+      campos.address_zip = cep;
+      if (endereco?.logradouro) campos.address_street = endereco.logradouro;
+      if (endereco?.bairro) campos.address_neighborhood = endereco.bairro;
+      if (endereco?.cidade) campos.address_city = endereco.cidade;
+      if (endereco?.uf) campos.address_state = endereco.uf;
+    } else problemas.push("o CEP precisa ter 8 números");
+  }
+  const numero = texto(args?.numero, 20);
+  if (numero) campos.address_number = numero;
+  const complemento = texto(args?.complemento, 80);
+  if (complemento) campos.address_complement = complemento;
+  return { campos, problemas };
+}
+
+const ROTULO_CADASTRO: Array<[keyof CadastroAtual, string]> = [
+  ["cpf", "CPF"], ["email", "e-mail"], ["address_zip", "CEP"], ["address_number", "número da casa ou apartamento"],
+];
+
+/** O que volta para o agente depois de gravar: o que entrou, o que tem problema e o que ainda falta. */
+export function respostaDoCadastro(campos: Record<string, string>, problemas: string[], depois: CadastroAtual, gravou: boolean): string {
+  const falta = ROTULO_CADASTRO.filter(([k]) => !String(depois[k] ?? "").trim()).map(([, rotulo]) => rotulo);
+  return [
+    Object.keys(campos).length
+      ? (gravou ? "Dados gravados no cadastro do cliente." : "Modo de teste: os dados seriam gravados no cadastro do cliente.")
+      : "Nenhum dado novo para gravar.",
+    problemas.length ? `Problema: ${problemas.join("; ")}. Peça só isso de novo, uma vez.` : "",
+    falta.length
+      ? `Ainda falta: ${falta.join(", ")}. Se o cliente já recusou ou não respondeu a esse pedido, não insista: faça a passagem interna com o que tem.`
+      : "O cadastro está completo. Confirme que você tem a data de nascimento de cada pet e faça a passagem interna agora.",
+    "Não repita o CPF nem o e-mail na conversa. No resumo da passagem, diga só que os dados estão no cadastro.",
+  ].filter(Boolean).join("\n");
+}
+
 // ───────────────────────────── Ligação com o servidor ─────────────────────────────
 
 async function apiDaOrg(ctx: WidgetToolContext): Promise<PlamevApi | null> {
@@ -382,4 +445,56 @@ export const plamevEnviarMaterialTool: WidgetAgentTool = {
   },
 };
 
-export const plamevAgentTools: WidgetAgentTool[] = [plamevRedeTool, plamevSimularTool, plamevLerMateriaisTool, plamevEnviarMaterialTool];
+export const plamevCadastroTool: WidgetAgentTool = {
+  widgetKey: PLAMEV_WIDGET_KEY,
+  name: PLAMEV_CADASTRO_TOOL,
+  description: "Grava no cadastro do cliente os dados que ele mandou para a cotação: CPF, e-mail, CEP, número da casa e complemento. A equipe abre o widget da Plamev já com esses dados preenchidos. Passe só o que o cliente escreveu; não invente nem complete nada.",
+  parameters: {
+    type: "object",
+    properties: {
+      cpf: { type: "string", description: "CPF do cliente, como ele escreveu." },
+      email: { type: "string", description: "E-mail do cliente." },
+      cep: { type: "string", description: "CEP do endereço do cliente, 8 números." },
+      numero: { type: "string", description: "Número da casa ou do prédio." },
+      complemento: { type: "string", description: "Apartamento, bloco, casa dos fundos." },
+    },
+  },
+  prompt: `
+## PLAMEV: DADOS PARA A COTAÇÃO
+- Só peça os dados do cadastro DEPOIS que o cliente aceitar a cotação. Peça tudo em uma mensagem só: data de nascimento de cada pet, CEP com o número da casa, e-mail e CPF.
+- Quando ele mandar, use **${PLAMEV_CADASTRO_TOOL}** com o que ele escreveu e faça a passagem interna. A data de nascimento dos pets vai no resumo da passagem.
+- Se a ferramenta apontar um problema, peça só aquele dado de novo, uma vez. Se ele não quiser mandar algum dado, não insista: faça a passagem com o que tem.
+- Nunca repita o CPF na conversa.
+`,
+  async run(args, ctx) {
+    const a = (args ?? {}) as CadastroArgs;
+    const cep = soDigitos(a.cep);
+    let endereco: Awaited<ReturnType<PlamevApi["enderecoDoCep"]>> | null = null;
+    if (cep.length === 8) {
+      // Sem o endereço do CEP o cadastro segue só com o CEP: a equipe completa no widget.
+      try { endereco = await (await import("../../../plamev-quote/client.ts")).enderecoDoCep(cep); } catch { endereco = null; }
+    }
+    const { campos, problemas } = camposDoCadastro(a, endereco);
+    const vazio: CadastroAtual = { cpf: null, email: null, address_zip: null, address_number: null };
+    if (!ctx.contactId) return { modelMessage: respostaDoCadastro(campos, problemas, { ...vazio, ...campos }, false) };
+
+    const ler = async (): Promise<CadastroAtual> => {
+      const { data } = await ctx.supabase.from("contacts").select("cpf, email, address_zip, address_number")
+        .eq("id", ctx.contactId).eq("organization_id", ctx.organizationId).maybeSingle();
+      return { ...vazio, ...(data ?? {}) };
+    };
+    if (ctx.isTestMode || !Object.keys(campos).length) {
+      return { modelMessage: respostaDoCadastro(campos, problemas, { ...(await ler()), ...campos }, false) };
+    }
+    const { error } = await ctx.supabase.from("contacts").update(campos).eq("id", ctx.contactId).eq("organization_id", ctx.organizationId);
+    if (error) {
+      console.warn(`[plamev-agente] cadastro não gravou: ${error.code ?? "erro"}`);
+      // CPF que já está em outro contato da org (cliente antigo, familiar): quem resolve é a equipe.
+      return { modelMessage: "Não foi possível gravar os dados no cadastro (o CPF pode já estar em outro cadastro). Não peça outro CPF. Faça a passagem interna agora e diga no resumo que os dados estão na conversa." };
+    }
+    console.log(`[plamev-agente] cadastro gravado campos=${Object.keys(campos).length}`);
+    return { modelMessage: respostaDoCadastro(campos, problemas, await ler(), true) };
+  },
+};
+
+export const plamevAgentTools: WidgetAgentTool[] = [plamevRedeTool, plamevSimularTool, plamevLerMateriaisTool, plamevEnviarMaterialTool, plamevCadastroTool];

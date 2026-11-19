@@ -2245,7 +2245,7 @@ serve(async (req) => {
       try {
         // No modo de teste vale a conversa do teste, e não a do banco.
         const settings = (agent.tool_settings as Record<string, unknown> | null)?.[tool.name];
-        const out = await tool.run(args ?? {}, { supabase, organizationId, isTestMode: !!isTestMode, history: conversationMessages, settings });
+        const out = await tool.run(args ?? {}, { supabase, organizationId, isTestMode: !!isTestMode, history: conversationMessages, settings, contactId: contactId ?? null });
         if (out.clientText || out.teamNote) pendingWidget.push({ widgetKey: tool.widgetKey, clientText: out.clientText ?? null, teamNote: out.teamNote ?? null });
         for (const m of out.clientMedia ?? []) if (m?.url && !pendingMedia.some((x) => x.url === m.url)) pendingMedia.push(m);
         return { success: true, message: out.modelMessage };
