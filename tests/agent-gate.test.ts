@@ -1,7 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { typingIndicatorBody } from "../supabase/functions/_shared/meta-whatsapp/typing.ts";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, aiQuestionMode, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -99,6 +99,25 @@ Deno.test("modo de passagem só vale com a configuração e com a ferramenta de 
   assertEquals(aiQuestionMode({ ai_question: "handoff" }, ["update_contact"]), "tell");
   assertEquals(aiQuestionMode({}, ["transfer_to_human"]), "tell");
   assertEquals(aiQuestionMode(null, ["transfer_to_human"]), "tell");
+});
+
+Deno.test("perguntar o nome: só com a opção ligada no agente e com update_contact", () => {
+  const on = { update_contact: { ask_name: "if_not_real" } };
+  assertEquals(asksNameWhenNotReal(on, ["update_contact"]), true);
+  assertEquals(asksNameWhenNotReal(on, ["transfer_to_human"]), false);
+  assertEquals(asksNameWhenNotReal({}, ["update_contact"]), false);
+  assertEquals(asksNameWhenNotReal(null, ["update_contact"]), false);
+});
+
+Deno.test("perguntar o nome: primeira pergunta quando não é nome de pessoa; uma vez só", () => {
+  const first = nameInstructionWhenNotReal({ name: "🦋Nanda🦋", confirmed: false, asked: false });
+  assertEquals(first.includes('Nome registrado: "🦋Nanda🦋"'), true);
+  assertEquals(first.includes("PRIMEIRA pergunta"), true);
+  assertEquals(first.includes("mark_name_asked"), true);
+  assertEquals(first.includes("mesmo só o primeiro nome"), true);
+  assertEquals(nameInstructionWhenNotReal({ name: null, confirmed: false, asked: false }).includes('"não informado"'), true);
+  assertEquals(nameInstructionWhenNotReal({ name: "x", confirmed: false, asked: true }).includes("Não pergunte de novo"), true);
+  assertEquals(nameInstructionWhenNotReal({ name: "Ana Souza", confirmed: true, asked: true }), 'Nome confirmado pelo cliente: "Ana Souza". Não pergunte de novo.');
 });
 
 Deno.test("parágrafo repetido na mesma resposta sai uma vez só", () => {
