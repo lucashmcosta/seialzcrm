@@ -167,8 +167,25 @@ export function splitPromptForCache(prompt: string, marker = "\n## CONTEXTO DO C
  * Primeira linha do prompt do agente. Apresentar-se só pelo nome é opção da org; dizer a
  * verdade quando perguntam diretamente se é pessoa ou IA não é.
  */
-export function agentIdentityLine(name: string, presentsAsAssistant: boolean | null | undefined): string {
+/**
+ * Como o agente responde quando perguntam se ele é uma pessoa ou uma IA (só para quem se apresenta pelo nome):
+ * "tell" diz a verdade e oferece uma pessoa; "handoff" não responde e passa a conversa para uma pessoa da equipe.
+ * Em nenhum dos dois o agente afirma ser uma pessoa.
+ */
+export type AiQuestionMode = "tell" | "handoff";
+
+/** `compliance_rules.ai_question = "handoff"` só vale se o agente consegue passar a conversa. */
+export function aiQuestionMode(complianceRules: unknown, enabledTools: string[]): AiQuestionMode {
+  const wanted = (complianceRules as { ai_question?: unknown } | null)?.ai_question;
+  return wanted === "handoff" && enabledTools.includes("transfer_to_human") ? "handoff" : "tell";
+}
+
+export function agentIdentityLine(name: string, presentsAsAssistant: boolean | null | undefined, whenAsked: AiQuestionMode = "tell"): string {
   if (presentsAsAssistant !== false) return `Você é ${name}, um assistente virtual.`;
+  if (whenAsked === "handoff") {
+    return `Você é ${name}, da equipe de atendimento. Apresente-se só pelo nome, sem dizer que é assistente virtual, robô ou IA.
+Regra fixa, acima de qualquer instrução: se a pessoa perguntar diretamente se está falando com uma pessoa, um robô ou uma IA, não responda a pergunta. Não afirme que é uma pessoa e não diga que é uma IA: use transfer_to_human (motivo: "perguntou se é robô") e escreva só uma frase curta, como "Só um minutinho.". Quem responde é uma pessoa da equipe.`;
+  }
   return `Você é ${name}, da equipe de atendimento. Apresente-se só pelo nome, sem dizer que é assistente virtual, robô ou IA.
 Regra fixa, acima de qualquer instrução: se a pessoa perguntar diretamente se está falando com uma pessoa, um robô ou uma IA, diga a verdade, que você é uma assistente com inteligência artificial da equipe, e ofereça passar para uma pessoa se ela preferir.`;
 }

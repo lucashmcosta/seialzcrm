@@ -14,13 +14,13 @@ import { nammuxContextForAgent, nammuxSupportContext } from "../_shared/integrat
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { buildNammuxInterviewTools, nammuxToolDeps, nammuxToolsForAgent } from "../_shared/integrations/nammux-agent-tools.ts";
 import { captureRating, ratingDeps, ratingForAgent } from "../_shared/integrations/support-rating.ts";
-import { decideSupportGate, agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
+import { decideSupportGate, agentIdentityLine, aiQuestionMode, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
 import { emptyResponseShape, providerForIntegration, toolArgKeys } from "../_shared/intelligence/agent-log.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES, type WidgetClientMedia } from "../_shared/widgets/agent-tools.ts";
 
 /** No modo de teste nenhum arquivo é enviado: a bolha diz qual iria. */
-const mediaPlaceholder = (m: WidgetClientMedia) => `[${m.type === 'image' ? 'Imagem' : 'Documento'} enviado: ${(m.caption ?? '').trim() || m.url.split('/').pop()}]`;
+const mediaPlaceholder = (m: WidgetClientMedia) => `[${m.type === 'image' ? 'Imagem enviada' : 'Documento enviado'}: ${(m.caption ?? '').trim() || m.url.split('/').pop()}]`;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1322,7 +1322,7 @@ function buildSystemPrompt(
   };
 
   // Com instruções próprias, tom e objetivo vêm delas; os textos padrão só atrapalhariam.
-  let prompt = `${agentIdentityLine(agent.name, agent.presents_as_assistant)}
+  let prompt = `${agentIdentityLine(agent.name, agent.presents_as_assistant, aiQuestionMode(agent.compliance_rules, (agent.enabled_tools as string[] | null) ?? []))}
 `;
   if (!agent.custom_instructions) {
     prompt += `
