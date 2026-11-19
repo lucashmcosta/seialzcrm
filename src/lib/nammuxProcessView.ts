@@ -1,6 +1,7 @@
 // Como a aba Nammux da oportunidade apresenta o processo: rótulos em português
 // de quem atende o cliente, datas no fuso do compromisso e a escolha do que é
 // "próximo". Lógica pura, sem acesso a dados — testada em nammuxProcessView.test.ts.
+import { splitMeetingLink } from "./meetingLink";
 
 export type CompromissoRow = {
   external_event_id: string;
@@ -141,13 +142,7 @@ export function proximosCompromissos<T extends CompromissoRow>(rows: T[], agora:
 
 /** Só devolve o link se for http(s): o campo vem de outro sistema. */
 export function linkSeguro(url: string | null | undefined): string | null {
-  if (!url) return null;
-  try {
-    const u = new URL(url.trim());
-    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
-  } catch {
-    return null;
-  }
+  return splitMeetingLink(url).url;
 }
 
 /** Data simples (dd/mm/aaaa) de um campo que é só data, sem voltar um dia pelo fuso. */

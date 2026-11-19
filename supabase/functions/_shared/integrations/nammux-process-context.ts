@@ -1,6 +1,7 @@
 // Processos do cliente vindos do Nammux, para o agente de atendimento responder com dado real.
 // Lê só o que a integração já grava (nammux_process_snapshots, via nammux-webhook-ingest).
 // Fica na integração: o núcleo do Seialz não conhece o Nammux.
+import { meetingLinkText } from "./meeting-link.ts";
 
 export interface NammuxProcessRow {
   cnj: string | null;
@@ -116,7 +117,7 @@ export function nammuxAgendaBlock(rows: NammuxAgendaRow[], processIndex: Record<
       when,
       r.modality ? `modalidade: ${r.modality}` : null,
       r.location ? `local: ${r.location}` : null,
-      r.virtual_link ? `link: ${r.virtual_link}` : null,
+      meetingLinkText(r.virtual_link) ? `link: ${meetingLinkText(r.virtual_link)}` : null,
       multi && processIndex[r.opportunity_id] ? `processo ${processIndex[r.opportunity_id]}` : null,
     ].filter(Boolean);
     return `- ${parts.join(" · ")}`;

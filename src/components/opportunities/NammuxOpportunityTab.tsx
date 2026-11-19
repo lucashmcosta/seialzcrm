@@ -30,6 +30,7 @@ import {
   quandoCompromisso,
   tipoCompromisso,
 } from "@/lib/nammuxProcessView";
+import { splitMeetingLink } from "@/lib/meetingLink";
 
 type Snapshot = {
   external_process_id: string;
@@ -305,6 +306,7 @@ export function NammuxOpportunityTab({
                 <div className="divide-y">
                   {proximos.map((c) => {
                     const link = linkSeguro(c.virtual_link);
+                    const linkExtra = splitMeetingLink(c.virtual_link).extra;
                     const modalidade = modalidadeLabel(c.modality);
                     const prazo = faltam(c, new Date());
                     return (
@@ -323,6 +325,9 @@ export function NammuxOpportunityTab({
                               <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                               <span className="break-words">{c.location}</span>
                             </p>
+                          )}
+                          {link && linkExtra && (
+                            <p className="mt-1 break-words text-xs text-muted-foreground">{linkExtra}</p>
                           )}
                         </div>
                         {link && (
