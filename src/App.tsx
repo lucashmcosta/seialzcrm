@@ -211,6 +211,7 @@ const MessagesList = lazyWithRetry("MessagesList", () => import("./pages/message
 const InboxPage = lazyWithRetry("InboxPage", () => import("./pages/inbox/InboxPage"));
 const ClientPortalChatPage = lazyWithRetry("ClientPortalChatPage", () => import("./pages/inbox/ClientPortalChatPage"));
 const NammuxNoticesPage = lazyWithRetry("NammuxNoticesPage", () => import("./pages/inbox/NammuxNoticesPage"));
+const NammuxHearingCheckPage = lazyWithRetry("NammuxHearingCheckPage", () => import("./pages/inbox/NammuxHearingCheckPage"));
 const MarketingOverview = lazyWithRetry("MarketingOverview", () => import("./pages/marketing/index"));
 const MarketingAds = lazyWithRetry("MarketingAds", () => import("./pages/marketing/ads/index"));
 const MarketingOrganic = lazyWithRetry("MarketingOrganic", () => import("./pages/marketing/organic/index"));
@@ -697,6 +698,14 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <RequirePerm path="dados.atendimentos.ver"><NammuxNoticesPage /></RequirePerm>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/inbox/audiencias"
+            element={
+              <ProtectedRoute>
+                <RequirePerm path="dados.atendimentos.ver"><NammuxHearingCheckPage /></RequirePerm>
               </ProtectedRoute>
             }
           />
