@@ -17,7 +17,10 @@ import { captureRating, ratingDeps, ratingForAgent } from "../_shared/integratio
 import { decideSupportGate, agentIdentityLine, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
 import { emptyResponseShape, providerForIntegration, toolArgKeys } from "../_shared/intelligence/agent-log.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
-import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES } from "../_shared/widgets/agent-tools.ts";
+import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES, type WidgetClientMedia } from "../_shared/widgets/agent-tools.ts";
+
+/** No modo de teste nenhum arquivo é enviado: a bolha diz qual iria. */
+const mediaPlaceholder = (m: WidgetClientMedia) => `[${m.type === 'image' ? 'Imagem' : 'Documento'} enviado: ${(m.caption ?? '').trim() || m.url.split('/').pop()}]`;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -2229,14 +2232,18 @@ serve(async (req) => {
     let pendingInteractive = null as InteractivePayload | null;
     // Ferramenta de widget: a mensagem pronta dela sai depois do texto, e a nota vai para a equipe.
     const pendingWidget: Array<{ widgetKey: string; clientText: string | null; teamNote: string | null }> = [];
+    // Imagem ou documento que a ferramenta de widget manda (ex.: material de apoio): sai depois dos textos.
+    const pendingMedia: WidgetClientMedia[] = [];
     const isWidgetTool = (name: string) => widgetTools.some((w) => w.name === name);
     const takeWidgetTool = async (name: string, args: any): Promise<ToolResult> => {
       const tool = widgetTools.find((w) => w.name === name)!;
       if (followUp) return { success: false, message: 'Esta ferramenta não é usada na retomada.' };
       try {
         // No modo de teste vale a conversa do teste, e não a do banco.
-        const out = await tool.run(args ?? {}, { supabase, organizationId, isTestMode: !!isTestMode, history: conversationMessages });
+        const settings = (agent.tool_settings as Record<string, unknown> | null)?.[tool.name];
+        const out = await tool.run(args ?? {}, { supabase, organizationId, isTestMode: !!isTestMode, history: conversationMessages, settings });
         if (out.clientText || out.teamNote) pendingWidget.push({ widgetKey: tool.widgetKey, clientText: out.clientText ?? null, teamNote: out.teamNote ?? null });
+        for (const m of out.clientMedia ?? []) if (m?.url && !pendingMedia.some((x) => x.url === m.url)) pendingMedia.push(m);
         return { success: true, message: out.modelMessage };
       } catch (e) {
         console.error(`[ai-agent-respond] ferramenta de widget ${name} falhou`, (e as Error).message);
@@ -2619,7 +2626,7 @@ serve(async (req) => {
     let fallbackReason = '';
     
     // Só a pergunta com botões ou o cálculo, sem texto, já é uma resposta completa.
-    if (!aiResponse && !pendingInteractive && !pendingWidget.some((w) => w.clientText)) {
+    if (!aiResponse && !pendingInteractive && !pendingWidget.some((w) => w.clientText) && !pendingMedia.length) {
       fallbackUsed = true;
       fallbackReason = toolsExecuted.length > 0 
         ? `empty_response_after_tools:${toolsExecuted.join(',')}` 
@@ -2667,6 +2674,7 @@ serve(async (req) => {
     const interactiveText = interactive ? interactiveFallbackText(interactive) : '';
     // Depois de encerrar, a mensagem da ferramenta de widget não vai. Na passagem para a equipe, vai: ajuda quem assume.
     const widgetTexts = toolsExecuted.includes('end_conversation') ? [] : pendingWidget.map((w) => w.clientText).filter((t): t is string => !!t);
+    const widgetMedia = toolsExecuted.includes('end_conversation') ? [] : pendingMedia;
 
     // 7. Check if this is test mode - don't send to WhatsApp, just return response
     if (isTestMode) {
@@ -2678,7 +2686,8 @@ serve(async (req) => {
           success: true,
           response: cleanResponse,
           // O simulador não tem botões: mostra a pergunta como texto numerado.
-          bubbles: [...bubbles, ...widgetTexts, ...(interactive ? [interactiveText] : [])],
+          // O simulador não envia arquivo: mostra qual iria.
+          bubbles: [...bubbles, ...widgetTexts, ...widgetMedia.map(mediaPlaceholder), ...(interactive ? [interactiveText] : [])],
           interactive,
           responseTime,
           tokensUsed,
@@ -2691,9 +2700,10 @@ serve(async (req) => {
 
     // 8. Send response via WhatsApp (production mode)
     // A pergunta com botões vai por último, depois do texto, e para junto se o cliente escrever.
-    const outgoing: Array<{ message: string; interactive?: InteractivePayload }> = [
+    const outgoing: Array<{ message: string; interactive?: InteractivePayload; media?: WidgetClientMedia }> = [
       ...bubbles.map((b) => ({ message: b })),
       ...widgetTexts.map((t) => ({ message: t })),
+      ...widgetMedia.map((m) => ({ message: (m.caption ?? '').trim(), media: m })),
       ...(interactive ? [{ message: '', interactive }] : []),
     ];
     let interactiveSent = false;
@@ -2729,6 +2739,7 @@ serve(async (req) => {
         threadId,
         message: item.message,
         ...(item.interactive ? { interactive: item.interactive } : {}),
+        ...(item.media ? { mediaUrl: item.media.url, mediaType: item.media.type } : {}),
         isAgentMessage: true,
         agentId: agent.id,
         senderName: agent.name,
@@ -2738,7 +2749,7 @@ serve(async (req) => {
         throw new Error('Failed to send WhatsApp message');
       }
       if (item.interactive) interactiveSent = true;
-      if (item.message && widgetTexts.includes(item.message)) widgetSent = true;
+      if (!item.media && item.message && widgetTexts.includes(item.message)) widgetSent = true;
     }
 
     // A nota da ferramenta de widget (ex.: resumo do cálculo) fica para a equipe, depois que a mensagem saiu.

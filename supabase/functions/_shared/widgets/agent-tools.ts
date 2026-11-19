@@ -7,6 +7,7 @@
 // src/widgets/registry.ts.
 
 import { laborCenterAgentTool } from "./labor-center/agent-tool.ts";
+import { plamevAgentTools } from "./plamev-quote/agent-tools.ts";
 
 type SupabaseLike = { from: (table: string) => any; storage: any };
 
@@ -16,6 +17,15 @@ export interface WidgetToolContext {
   isTestMode: boolean;
   /** A conversa que o agente está lendo (no modo de teste, a do teste). */
   history: Array<{ role: string; content: string }>;
+  /** Configuração desta ferramenta no agente (`ai_agents.tool_settings[nome da ferramenta]`), se houver. */
+  settings?: unknown;
+}
+
+/** Imagem ou documento (URL pública) que a ferramenta manda ao cliente. A legenda é o que fica no histórico. */
+export interface WidgetClientMedia {
+  url: string;
+  type: "image" | "document";
+  caption?: string | null;
 }
 
 export interface WidgetToolOutcome {
@@ -23,6 +33,8 @@ export interface WidgetToolOutcome {
   modelMessage: string;
   /** Mensagem pronta que vai ao cliente depois do texto do agente. */
   clientText?: string | null;
+  /** Arquivos prontos que vão ao cliente depois do texto do agente e da mensagem da ferramenta. */
+  clientMedia?: WidgetClientMedia[] | null;
   /** Nota interna para a equipe, gravada depois que a mensagem do cliente sai. */
   teamNote?: string | null;
 }
@@ -46,7 +58,7 @@ export interface WidgetAgentTool {
   readAttachment?(attachment: WidgetAttachment, ctx: { supabase: SupabaseLike }): Promise<string | null>;
 }
 
-export const WIDGET_AGENT_TOOLS: WidgetAgentTool[] = [laborCenterAgentTool];
+export const WIDGET_AGENT_TOOLS: WidgetAgentTool[] = [laborCenterAgentTool, ...plamevAgentTools];
 
 export const WIDGET_TOOL_NAMES = new Set(WIDGET_AGENT_TOOLS.map((t) => t.name));
 

@@ -60,6 +60,32 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     Component: PlamevQuoteWidget,
     Preview: PlamevQuotePreview,
     settings: () => import('./plamev-quote/PlamevQuoteSettings'),
+    agentTools: [
+      {
+        id: 'plamev_consultar_rede',
+        name: 'Rede credenciada Plamev',
+        description: 'Consulta as clínicas credenciadas perto do CEP do cliente e manda a lista das mais próximas. Só funciona com o widget ligado',
+        trigger: 'Quando o cliente informar o CEP ou perguntar onde o plano atende',
+      },
+      {
+        id: 'plamev_simular_plano',
+        name: 'Simulação de preço Plamev',
+        description: 'Simula o valor do plano para os pets do cliente, no cartão e no boleto, sem gravar cotação. Só funciona com o widget ligado',
+        trigger: 'Quando souber o CEP, o plano e a espécie, raça e idade de cada pet',
+      },
+      {
+        id: 'plamev_ler_materiais',
+        name: 'Ler materiais da Plamev',
+        description: 'Lê o texto revisado dos materiais de cobertura e carência para responder dúvidas. Só funciona com o widget ligado',
+        trigger: 'Antes de responder sobre cobertura, carência ou limite de uso',
+      },
+      {
+        id: 'plamev_enviar_material',
+        name: 'Enviar material da Plamev',
+        description: 'Envia ao cliente a imagem de resumo do plano, o comparativo dos planos ou o PDF da cobertura. Só funciona com o widget ligado',
+        trigger: 'Ao apresentar um plano ou quando o cliente pedir os detalhes',
+      },
+    ],
   },
 ];
 

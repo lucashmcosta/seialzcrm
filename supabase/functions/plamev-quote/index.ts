@@ -46,76 +46,12 @@ import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { markByokInvalid } from "../_shared/intelligence/resolve-provider.ts";
 import * as L from "./logic.ts";
+import { buscarRede, type Chamada, CONSULTOR, esquecerCacheDaOrg, plamev } from "./client.ts";
 import * as P from "./perguntar.ts";
 
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
-
-const BASE = (Deno.env.get("PLAMEV_API_BASE") ?? "https://service.plamev.com.br").replace(/\/+$/, "");
-const CONSULTOR = Deno.env.get("PLAMEV_CONSULTOR_ID")?.trim() || null;
-
-// Catálogo muda pouco: guarda por 1h na instância, por org (tokens diferentes podem ver campanhas diferentes).
-const cache = new Map<string, { ate: number; valor: unknown }>();
-const UMA_HORA = 60 * 60 * 1000;
-
-async function plamev(
-  token: string,
-  path: string,
-  // naoEncontrado: 404 da Plamev ("Cotação não localizada", "Nenhum registro encontrado") devolve null em vez de erro.
-  init?: { body?: unknown; cacheOrg?: string; trace?: Chamada[]; naoEncontrado?: boolean },
-  // deno-lint-ignore no-explicit-any
-): Promise<any> {
-  const chave = init?.cacheOrg ? `${init.cacheOrg}:${path}${init.body ? `:${JSON.stringify(init.body)}` : ""}` : null;
-  const hit = chave ? cache.get(chave) : undefined;
-  if (hit && hit.ate > Date.now()) return hit.valor;
-
-  const inicio = Date.now();
-  const res = await fetch(`${BASE}/${path}`, {
-    method: init?.body ? "POST" : "GET",
-    headers: { Authorization: token, ...(init?.body ? { "Content-Type": "application/json" } : {}) },
-    body: init?.body ? JSON.stringify(init.body) : undefined,
-    signal: AbortSignal.timeout(25_000),
-  });
-  const texto = await res.text();
-  let dados: unknown = null;
-  try { dados = texto ? JSON.parse(texto) : null; } catch { /* resposta não-JSON */ }
-  // Sem o token: só o que foi enviado e o que voltou, para o vendedor conferir com a Plamev.
-  init?.trace?.push({
-    metodo: init?.body ? "POST" : "GET", url: `${BASE}/${path}`, status: res.status, ms: Date.now() - inicio,
-    enviado: init?.body ?? null, recebido: dados ?? (texto ? texto.slice(0, 20_000) : null),
-  });
-  if (res.status === 404 && init?.naoEncontrado) return null;
-  if (!res.ok) {
-    console.warn(`[plamev-quote] ${path.split("?")[0]} -> ${res.status}`);
-    if (res.status === 401) throw new L.Recusa(502, "plamev_unauthorized", "Token da Plamev recusado");
-    throw new L.Recusa(res.status === 400 ? 422 : 502, "plamev_error", L.erroPlamev(dados));
-  }
-  if (chave) cache.set(chave, { ate: Date.now() + UMA_HORA, valor: dados });
-  return dados;
-}
-
-/** Coordenadas do CEP (BrasilAPI; só o CEP sai daqui). Guarda por 1h na instância. */
-async function coordenadasDoCep(cep: string): Promise<{ lat: number; lng: number }> {
-  const chave = `cep:${cep}`;
-  const hit = cache.get(chave);
-  if (hit && hit.ate > Date.now()) return hit.valor as { lat: number; lng: number };
-  let res: Response;
-  try {
-    res = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`, { signal: AbortSignal.timeout(10_000) });
-  } catch {
-    throw new L.Recusa(502, "cep_indisponivel");
-  }
-  if (res.status === 404 || res.status === 400) throw new L.Recusa(422, "cep_inexistente");
-  if (!res.ok) throw new L.Recusa(502, "cep_indisponivel");
-  const ponto = L.coordenadasCep(await res.json().catch(() => null));
-  if (!ponto) throw new L.Recusa(422, "cep_sem_localizacao");
-  cache.set(chave, { ate: Date.now() + UMA_HORA, valor: ponto });
-  return ponto;
-}
-
-/** Uma chamada à API da Plamev, devolvida ao widget em simular/solicitar ("Ver payload"). */
-interface Chamada { metodo: string; url: string; status: number; ms: number; enviado: unknown; recebido: unknown }
 
 const q = (params: Record<string, string>) => new URLSearchParams(params).toString();
 
@@ -305,7 +241,7 @@ Deno.serve(async (req) => {
       }
       if (action === "config_delete") {
         await db.from("plamev_credentials").delete().eq("organization_id", org);
-        for (const k of cache.keys()) if (k.startsWith(`${org}:`)) cache.delete(k);
+        esquecerCacheDaOrg(org);
         console.log(`[plamev-quote] token removido org=${org} user=${me.id}`);
         return json(200, { configurado: false });
       }
@@ -324,7 +260,7 @@ Deno.serve(async (req) => {
         updated_by_user_id: me.id,
       });
       if (error) throw new Error(`credential_save_failed: ${error.code}`);
-      for (const k of cache.keys()) if (k.startsWith(`${org}:`)) cache.delete(k);
+      esquecerCacheDaOrg(org);
       console.log(`[plamev-quote] token salvo org=${org} user=${me.id}`);
       return json(200, { configurado: true, final: token.slice(-4) });
     }
@@ -453,17 +389,7 @@ Deno.serve(async (req) => {
       case "rede": {
         const cep = L.cep(body.cep);
         const raio = L.raioKm(body.raio_km);
-        try {
-          const raw = await plamev(token, "Credenciados/BuscarRedeCredenciadaPorLocalidade",
-            { body: { Cep: cep, Raio: String(raio) }, cacheOrg: org, naoEncontrado: true });
-          return json(200, { credenciados: raw ? L.rede(raw).slice(0, 50) : [] });
-        } catch (e) {
-          // "CEP não encontrado." vem até para CEP que existe: busca pelas coordenadas do CEP.
-          if (!(e instanceof L.Recusa && e.codigo === "plamev_error")) throw e;
-        }
-        const ponto = await coordenadasDoCep(cep);
-        const raw = await plamev(token, "Credenciados/BuscaCredenciados", { body: { Lat: ponto.lat, Lng: ponto.lng, Raio: raio * 1000 } });
-        return json(200, { credenciados: L.redePorCoordenadas(raw, raio).slice(0, 50) });
+        return json(200, { credenciados: await buscarRede(token, org, cep, raio) });
       }
 
       case "pagamento": {
