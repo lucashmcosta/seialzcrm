@@ -100,6 +100,16 @@ definida (dia inteiro) tem só os lembretes de 7 dias e de véspera, às 10:00.
 Antes de enviar o worker confere: prazo (`expires_at`), se o contato existe,
 `contacts.do_not_contact`, e se o estado de agora ainda corresponde ao aviso.
 
+Também confere se o contato é a parte do processo: compara o nome do contato com
+o nome do autor no título do processo ligado à oportunidade
+(`nammux_process_snapshots.process_title`, "AUTOR x RÉU"). Se forem pessoas
+diferentes (primeiro nome diferente e menos de dois nomes em comum), o aviso não
+sai e vai para `needs_review: contact_name_mismatch`. Isso pega vínculo
+processo↔oportunidade trocado. Se o contato for parente ou representante, uma
+pessoa aprova na revisão e o aviso sai sem nova conferência. Título sem nome
+(provisório, emoji) não barra. Regra em
+`_shared/integrations/client-name-match.ts`.
+
 ## Falha e reenvio
 
 | O que aconteceu | Desfecho |
