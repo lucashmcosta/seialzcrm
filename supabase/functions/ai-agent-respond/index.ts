@@ -1784,8 +1784,12 @@ serve(async (req) => {
     if (!isTestMode) {
       const skip = (status: string) => new Response(JSON.stringify({ success: true, status }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       const { data: threadState } = await supabase.from('message_threads')
-        .select('ai_agent_id, ai_agent_released_at, needs_human_attention, assigned_user_id')
+        .select('ai_agent_id, ai_agent_released_at, needs_human_attention, assigned_user_id, ai_agent_paused_until')
         .eq('id', threadId).maybeSingle();
+      // A equipe pausou o agente nesta conversa.
+      if (threadState?.ai_agent_paused_until && new Date(threadState.ai_agent_paused_until).getTime() > Date.now()) {
+        return skip('paused_by_team');
+      }
       if (agent.agent_type === 'support') {
         // Agente de atendimento: responde conversas de clientes que já têm responsável.
         if (threadState?.ai_agent_id && threadState.ai_agent_id !== agentId) return skip('other_agent');

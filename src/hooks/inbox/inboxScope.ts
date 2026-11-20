@@ -42,6 +42,9 @@ export interface InboxScopedThread {
   /** O agente passou a conversa para a equipe e ninguém respondeu ainda. */
   needs_human_attention?: boolean;
   ai_agent_released_at?: string | null;
+  ai_agent_id?: string | null;
+  /** A equipe pausou o agente nesta conversa até esta data. */
+  ai_agent_paused_until?: string | null;
   /** Agente de IA da conversa (atendimento ou comercial), se houver. */
   agent?: { id: string; name: string | null } | null;
   contact?: { id: string; name: string | null; phone: string | null; lifecycle_stage: string | null } | null;
