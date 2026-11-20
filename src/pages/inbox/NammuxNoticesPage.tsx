@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useNammuxNotices, useNammuxNoticesFlagState } from '@/hooks/useNammuxNotices';
 import {
-  decideNotice, NAMMUX_NOTICES_QUERY_KEY, noticeKindLabel, noticeSituation, previewProblemText,
+  decideNotice, isNameMismatch, NAMMUX_NOTICES_QUERY_KEY, noticeKindLabel, noticeSituation, previewProblemText,
   type NoticeItem,
 } from '@/lib/nammuxNotices';
 
@@ -66,6 +66,13 @@ function NoticeCard({ item, organizationId }: { item: NoticeItem; organizationId
         <span>{noticeSituation(item)}</span>
       </p>
 
+      {isNameMismatch(item) && item.opportunityId && (
+        <p className="text-sm">
+          <Link to={`/opportunities/${item.opportunityId}`} className="underline">Ver o processo ligado a esta oportunidade</Link>
+          {' '}e compare com o nome do cliente.
+        </p>
+      )}
+
       {item.preview ? (
         <div>
           <div className="text-xs text-muted-foreground mb-1">Mensagem que o cliente recebe</div>
@@ -100,7 +107,9 @@ function NoticeCard({ item, organizationId }: { item: NoticeItem; organizationId
             </Button>
             {!acknowledgeOnly && (
               <Button size="sm" disabled={decide.isPending || !item.canApprove} onClick={() => decide.mutate(true)}>
-                <CheckCircle className="mr-1" /> {item.status === 'pending_approval' ? 'Aprovar e enviar' : 'Enviar de novo'}
+                <CheckCircle className="mr-1" /> {item.status === 'pending_approval' ? 'Aprovar e enviar'
+                  : isNameMismatch(item) ? 'É a pessoa certa (parente ou representante): enviar'
+                  : 'Enviar de novo'}
               </Button>
             )}
           </div>

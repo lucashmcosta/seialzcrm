@@ -39,6 +39,11 @@ export interface InboxScopedThread {
   last_routing_decision?: Record<string, unknown> | null;
   organization_id?: string | null;
   primary_endpoint_id: string | null;
+  /** O agente passou a conversa para a equipe e ninguém respondeu ainda. */
+  needs_human_attention?: boolean;
+  ai_agent_released_at?: string | null;
+  /** Agente de IA da conversa (atendimento ou comercial), se houver. */
+  agent?: { id: string; name: string | null } | null;
   contact?: { id: string; name: string | null; phone: string | null; lifecycle_stage: string | null } | null;
   primary_endpoint?: { id: string; purpose: string | null; external_address?: string | null; provider?: string | null } | null;
 }
