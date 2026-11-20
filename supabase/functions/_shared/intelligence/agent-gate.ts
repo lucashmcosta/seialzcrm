@@ -87,13 +87,24 @@ export function joinAgentText(before: string[], final: string): string {
   const known = new Set<string>(whole.length ? contentWords(whole[0]) : []);
   return whole.map((part, i) => {
     if (i === 0) return part;
-    return part.split(/\n{2,}/).map((paragraph) => paragraph.split(/(?<=[.!?…])\s+/).filter((sentence) => {
+    return part.split(/\n{2,}/).filter((paragraph) => !isNoteAboutReply(paragraph)).map((paragraph) => paragraph.split(/(?<=[.!?…])\s+/).filter((sentence) => {
       const words = contentWords(sentence);
       const repeated = words.length >= 3 && words.filter((w) => known.has(w)).length / words.length >= 0.8;
       words.forEach((w) => known.add(w));
       return !repeated;
     }).join(" ")).filter((p) => p.trim()).join("\n\n");
   }).filter((t) => t.trim()).join("\n\n");
+}
+
+/**
+ * Bilhete do modelo sobre a própria resposta, escrito depois da ferramenta quando "não falta nada"
+ * ("(Sem nada a acrescentar: a saudação já foi enviada.)"). Não é para o cliente.
+ */
+export function isNoteAboutReply(paragraph: string): boolean {
+  const t = paragraph.trim();
+  if (!t) return false;
+  if (/^[(\[][\s\S]*[)\]]$/.test(t)) return true;
+  return /\b(nada (mais )?a acrescentar|n[ãa]o falta nada|j[áa] fo(i|ram) enviad[oa]s?|(texto|mensagem|resposta) j[áa] (foi|est[áa])|o cliente j[áa] vai receber)/i.test(t);
 }
 
 const STOP_WORDS = new Set(("que com para por uma uns umas dos das nos nas não sim seu sua seus suas meu minha " +
@@ -106,7 +117,8 @@ function contentWords(text: string): string[] {
 /** Vai junto com o resultado da ferramenta quando o agente já escreveu algo antes dela. */
 export const AFTER_TOOL_HINT =
   "O cliente já vai receber o texto que você escreveu antes desta ferramenta. Não repita nem reescreva " +
-  "esse texto. Escreva só o que ainda falta dizer; se não falta nada, não escreva nada.";
+  "esse texto. Escreva só o que ainda falta dizer. Tudo o que você escrever agora vai direto para o cliente: " +
+  "se não falta nada, deixe a resposta vazia, sem comentário, explicação ou texto entre parênteses.";
 
 /**
  * Resposta final do agente. Depois de encerrar ou passar para a equipe, o que já foi escrito

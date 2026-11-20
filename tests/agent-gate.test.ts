@@ -238,3 +238,12 @@ Deno.test("decideSupportGate: quieto com a equipe conversando, espera a passagem
   assertEquals(agentTypeForThread("sales"), "sdr");
   assertEquals(agentTypeForThread(null), "sdr");
 });
+
+Deno.test("joinAgentText: bilhete do modelo depois da ferramenta não vai para o cliente", () => {
+  const antes = "Oi! Eu sou a Gabi, da Auxilius. Com quem eu falo?";
+  assertEquals(joinAgentText([antes], "(Sem nada a acrescentar: a saudação e a pergunta do nome já foram enviadas.)"), antes);
+  assertEquals(joinAgentText([antes], "O texto já foi enviado, e não falta nada a dizer por enquanto. Agora é só esperar o nome dela."), antes);
+  assertEquals(joinAgentText([antes], "Pode me mandar a data de nascimento do bebê?"), antes + "\n\nPode me mandar a data de nascimento do bebê?");
+  // Sem ferramenta (um texto só), nada é cortado.
+  assertEquals(joinAgentText([], "(Pode responder quando puder.)"), "(Pode responder quando puder.)");
+});
