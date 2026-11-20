@@ -39,6 +39,8 @@ interface AIAgent {
   ai_provider?: string | null;
   ai_model?: string | null;
   max_messages_per_conversation?: number | null;
+  /** 'sdr' (comercial) ou 'support' (atendimento). Cada tipo tem no máximo um agente ligado. */
+  agent_type?: string | null;
 }
 
 export function AIAgentSettings() {
@@ -84,6 +86,7 @@ export function AIAgentSettings() {
           ai_provider: agent.ai_provider,
           ai_model: agent.ai_model,
           max_messages_per_conversation: agent.max_messages_per_conversation,
+          agent_type: agent.agent_type ?? 'sdr',
         };
       });
       
@@ -97,13 +100,16 @@ export function AIAgentSettings() {
   };
 
   const handleToggle = async (agentId: string, enabled: boolean) => {
+    const agentType = agents.find((a) => a.id === agentId)?.agent_type ?? 'sdr';
     try {
-      // If enabling this agent, disable others first
+      // Ligar um agente desliga só os outros do MESMO tipo: o comercial e o de
+      // atendimento funcionam juntos, cada um no seu número.
       if (enabled) {
         const { error: disableError } = await supabase
           .from('ai_agents')
           .update({ is_enabled: false })
           .eq('organization_id', organization?.id)
+          .eq('agent_type', agentType)
           .neq('id', agentId);
         
         if (disableError) throw disableError;
@@ -118,7 +124,7 @@ export function AIAgentSettings() {
 
       setAgents(prev => prev.map(a => ({
         ...a,
-        is_enabled: a.id === agentId ? enabled : (enabled ? false : a.is_enabled)
+        is_enabled: a.id === agentId ? enabled : (enabled && (a.agent_type ?? 'sdr') === agentType ? false : a.is_enabled)
       })));
       toast.success(enabled ? 'Agente ativado' : 'Agente desativado');
     } catch (error: any) {
@@ -149,6 +155,7 @@ export function AIAgentSettings() {
           ai_provider: agent.ai_provider,
           ai_model: agent.ai_model,
           max_messages_per_conversation: agent.max_messages_per_conversation,
+          agent_type: agent.agent_type ?? 'sdr',
           goal: 'Qualificar leads',
           tone: 'friendly',
         })
