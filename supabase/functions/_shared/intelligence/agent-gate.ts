@@ -374,7 +374,17 @@ export function agentTypeForThread(businessContext: string | null | undefined): 
   return businessContext === "customer_service" ? "support" : "sdr";
 }
 
-export interface PendingMsg { direction: string; sender_type?: string | null; sender_user_id?: string | null; created_at: string }
+export interface PendingMsg { direction: string; sender_type?: string | null; sender_user_id?: string | null; created_at: string; content?: string | null }
+
+/** "ok", "obrigado", "entendi", emoji, reação: não é pergunta que esteja esperando resposta. */
+export function isTrivialClientMessage(content: string | null | undefined): boolean {
+  const t = (content ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\(reacao\)/g, "").replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!t) return true;
+  const words = new Set(["ok", "okay", "blz", "beleza", "obrigado", "obrigada", "obg", "brigado", "brigada", "valeu", "vlw",
+    "entendi", "ta", "bom", "tabom", "certo", "combinado", "tudo", "amem", "show", "perfeito", "sim", "de", "nada", "muito"]);
+  return t.split(" ").every((w) => words.has(w));
+}
 
 /**
  * Atendimento: há quanto tempo a mensagem do cliente está sem resposta de verdade.
@@ -387,7 +397,9 @@ export function pendingReplyNote(history: PendingMsg[], timezone: string | null 
   const sorted = [...history].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   let lastReply = -1;
   sorted.forEach((m, i) => { if (isReply(m)) lastReply = i; });
-  const firstPending = sorted.slice(lastReply + 1).find((m) => m.direction === "inbound");
+  const pendingIn = sorted.slice(lastReply + 1).filter((m) => m.direction === "inbound");
+  // Conta a espera a partir da primeira mensagem que pede resposta, não de um "ok" antigo.
+  const firstPending = pendingIn.find((m) => !isTrivialClientMessage(m.content)) ?? pendingIn[0];
   if (!firstPending) return null;
   const since = new Date(firstPending.created_at);
   const minutes = (now.getTime() - since.getTime()) / 60_000;
