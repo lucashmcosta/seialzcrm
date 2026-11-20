@@ -1,7 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { typingIndicatorBody } from "../supabase/functions/_shared/meta-whatsapp/typing.ts";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, brazilNationalHoliday, pendingReplyNote, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, brazilNationalHoliday, pendingReplyNote, isTrivialClientMessage, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -318,4 +318,20 @@ Deno.test("atendimento sabe há quanto tempo o cliente espera; aviso automático
   assertEquals(pendingReplyNote([{ direction: "inbound", sender_type: "contact", created_at: "2026-11-20T19:30:00Z" }], "America/Sao_Paulo", now), null);
   // vários dias
   assertEquals(pendingReplyNote([{ direction: "inbound", sender_type: "contact", created_at: "2026-11-17T12:00:00Z" }], "America/Sao_Paulo", now)!.includes("há 3 dias"), true);
+});
+
+Deno.test("espera conta da primeira pergunta, não de um obrigado antigo", () => {
+  const now = new Date("2026-11-20T20:00:00Z");
+  const hist = [
+    { direction: "outbound", sender_type: "user", sender_user_id: "u1", created_at: "2026-11-11T15:00:00Z" },
+    { direction: "inbound", sender_type: "contact", content: "Obg", created_at: "2026-11-11T15:05:00Z" },
+    { direction: "inbound", sender_type: "contact", content: "Bom dia, alguma resposta do processo?", created_at: "2026-11-20T11:00:00Z" },
+  ];
+  const note = pendingReplyNote(hist, "America/Sao_Paulo", now)!;
+  assertEquals(note.includes("20/11"), true);
+  assertEquals(note.includes("há 9 horas"), true);
+  assertEquals(isTrivialClientMessage("👍 (reação)"), true);
+  assertEquals(isTrivialClientMessage("Ok, obrigada!"), true);
+  assertEquals(isTrivialClientMessage("Tá bom"), true);
+  assertEquals(isTrivialClientMessage("Mudou o horário?"), false);
 });
