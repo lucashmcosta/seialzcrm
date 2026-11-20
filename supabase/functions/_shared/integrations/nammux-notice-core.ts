@@ -6,11 +6,13 @@
 // fila o envio que o provedor recusou de forma definida. É isso que impede o
 // cliente de receber o mesmo aviso duas vezes.
 import type { Rendered, RenderResult } from "./nammux-notice-texts.ts";
+import { matchClientToProcess } from "./client-name-match.ts";
 
 export interface NoticeRow {
   id: string;
   organization_id: string;
   contact_id: string;
+  opportunity_id?: string | null;
   kind: string;
   subject_type: string;
   subject_id: string;
@@ -18,12 +20,18 @@ export interface NoticeRow {
   expires_at: string | null;
   /** subject_type 'source_event': o estado do compromisso como o Nammux mandou na hora do pedido. */
   payload?: unknown;
+  /** Uma pessoa aprovou este aviso na revisão: a conferência de nome já foi feita por ela. */
+  approved_at?: string | null;
 }
 
 export interface ContactInfo {
   exists: boolean;
   doNotContact: boolean;
   hasPhone: boolean;
+  /** Nome do contato que vai receber o aviso. */
+  name?: string | null;
+  /** Título do processo ligado à oportunidade do aviso ("AUTOR x RÉU"), quando houver. */
+  processTitle?: string | null;
 }
 
 export interface WhatsAppRoute {
@@ -113,6 +121,11 @@ export async function processNotice(notice: NoticeRow, deps: NoticeDeps): Promis
   const contact = await deps.loadContact(notice);
   if (!contact.exists) return await done("skipped", "contact_gone");
   if (contact.doNotContact) return await done("skipped", "do_not_contact");
+  // O processo é de outra pessoa (vínculo processo↔oportunidade errado): não envia.
+  // Vai para revisão; se for parente ou representante, uma pessoa aprova e o aviso sai.
+  if (!notice.approved_at && matchClientToProcess(contact.name, contact.processTitle) === "mismatch") {
+    return await done("needs_review", "contact_name_mismatch");
+  }
 
   // 3. O estado de agora ainda corresponde ao aviso (mesma data, ainda pendente, ainda pago…).
   const rendered = await deps.render(notice);

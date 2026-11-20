@@ -43,12 +43,22 @@ function buildDeps(supabase: any, sendStarted: { value: boolean }): NoticeDeps {
 
     async loadContact(notice): Promise<ContactInfo> {
       const { data } = await supabase.from("contacts")
-        .select("id, do_not_contact, phone, deleted_at")
+        .select("id, do_not_contact, phone, deleted_at, full_name")
         .eq("id", notice.contact_id).eq("organization_id", notice.organization_id).maybeSingle();
+      // Título do processo ligado à oportunidade, para conferir se o contato é a parte.
+      let processTitle: string | null = null;
+      if (notice.opportunity_id) {
+        const { data: snap } = await supabase.from("nammux_process_snapshots")
+          .select("process_title")
+          .eq("organization_id", notice.organization_id).eq("opportunity_id", notice.opportunity_id).maybeSingle();
+        processTitle = typeof snap?.process_title === "string" ? snap.process_title : null;
+      }
       return {
         exists: !!data && !data.deleted_at,
         doNotContact: data?.do_not_contact === true,
         hasPhone: typeof data?.phone === "string" && data.phone.replace(/\D/g, "").length >= 10,
+        name: typeof data?.full_name === "string" ? data.full_name : null,
+        processTitle,
       };
     },
 
