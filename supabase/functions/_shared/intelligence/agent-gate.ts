@@ -103,8 +103,8 @@ export function joinAgentText(before: string[], final: string): string {
 export function isNoteAboutReply(paragraph: string): boolean {
   const t = paragraph.trim();
   if (!t) return false;
-  if (/^[(\[][\s\S]*[)\]]$/.test(t)) return true;
-  return /\b(nada (mais )?a acrescentar|n[ãa]o falta nada|j[áa] fo(i|ram) enviad[oa]s?|(texto|mensagem|resposta) j[áa] (foi|est[áa])|o cliente j[áa] vai receber)/i.test(t);
+  // Só frases que nunca são para o cliente; "o contrato já foi enviado" é resposta normal.
+  return /(nada (mais )?a acrescentar|n[ãa]o falta(va)? nada|o cliente j[áa] (vai )?rece|(texto|resposta) (anterior )?j[áa] fo(i|ram) enviad)/i.test(t);
 }
 
 const STOP_WORDS = new Set(("que com para por uma uns umas dos das nos nas não sim seu sua seus suas meu minha " +
