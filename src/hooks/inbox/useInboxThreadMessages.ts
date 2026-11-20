@@ -78,9 +78,15 @@ export function useInboxThreadMessages(threadId: string | null) {
         schema: 'public',
         table: 'messages',
         filter: `thread_id=eq.${threadId}`,
-      }, (payload) => {
+      }, async (payload) => {
+        const row = payload.new as InboxMessageRow;
+        // A mensagem ao vivo chega sem a mensagem citada (resposta ou reação): busca para mostrar em cima.
+        if (row.reply_to_message_id && !row.reply_to_message) {
+          const { data } = await supabase.from('messages').select('content, direction')
+            .eq('id', row.reply_to_message_id).maybeSingle();
+          if (data) row.reply_to_message = data;
+        }
         setMessages((prev) => {
-          const row = payload.new as InboxMessageRow;
           if (prev.some((m) => m.id === row.id)) return prev;
           return [...prev, row];
         });
@@ -92,7 +98,8 @@ export function useInboxThreadMessages(threadId: string | null) {
         filter: `thread_id=eq.${threadId}`,
       }, (payload) => {
         const row = payload.new as InboxMessageRow;
-        setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+        // A atualização também chega sem a citada: mantém a que já estava.
+        setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row, reply_to_message: m.reply_to_message } : m)));
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
