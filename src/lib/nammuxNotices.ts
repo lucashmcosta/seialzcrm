@@ -21,6 +21,10 @@ export type NoticeItem = {
   canApprove: boolean;
 };
 
+/** Aviso barrado porque o contato não é a parte do processo (vínculo possivelmente errado). */
+export const isNameMismatch = (item: Pick<NoticeItem, 'status' | 'statusReason'>) =>
+  item.status === 'needs_review' && item.statusReason === 'contact_name_mismatch';
+
 export const NAMMUX_NOTICES_FLAG = 'nammux_notices';
 export const NAMMUX_NOTICES_QUERY_KEY = ['nammux-notices'] as const;
 
@@ -47,6 +51,9 @@ export function noticeSituation(item: Pick<NoticeItem, 'status' | 'statusReason'
   if (item.status === 'pending_approval') return 'Aguardando aprovação antes de sair.';
   if (item.status === 'dead_letter') return 'Não saiu depois de 5 tentativas.';
   if (item.status === 'needs_review') {
+    if (item.statusReason === 'contact_name_mismatch') {
+      return 'Não saiu: o nome do cliente não bate com o nome da parte no processo. Pode ser um processo ligado à oportunidade errada. Confira o processo antes de decidir.';
+    }
     if (item.statusReason === 'payment_reversed_after_sent') {
       return 'Este aviso já saiu, e depois o pagamento foi estornado. O cliente foi avisado de algo que deixou de valer.';
     }

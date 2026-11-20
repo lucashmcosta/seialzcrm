@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Robot } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { InboxSlaChip } from './InboxSlaChip';
 import { SearchBar } from '@/components/common/SearchBar';
@@ -54,6 +55,13 @@ const STATUS_MAP: Record<string, { label: string; cls: string; dot: string; puls
   resolved: { label: 'Resolvida',  cls: 'bg-slate-500/15 text-slate-600 dark:text-slate-300',       dot: 'bg-slate-500' },
   closed:   { label: 'Resolvida',    cls: 'bg-slate-500/15 text-slate-600 dark:text-slate-300',       dot: 'bg-slate-500' },
 };
+
+/** Setor e urgência que o agente marcou na passagem (last_routing_decision). */
+export function handoffInfo(t: InboxThreadRow): { area: string | null; urgent: boolean } {
+  const d = (t.last_routing_decision ?? {}) as { action?: unknown; area?: unknown; urgent?: unknown };
+  if (d.action !== 'agent_handoff') return { area: null, urgent: false };
+  return { area: typeof d.area === 'string' && d.area ? d.area : null, urgent: d.urgent === true };
+}
 
 function Pill({ children, cls, dot, pulse }: { children: React.ReactNode; cls: string; dot?: string; pulse?: boolean }) {
   return (
@@ -150,6 +158,25 @@ export function InboxThreadList({ threads, loading, selectedId, onSelect, offici
                     {status && <Pill cls={status.cls} dot={status.dot} pulse={status.pulse}>{status.label}</Pill>}
                     {t.contact?.lifecycle_stage === 'customer' && (
                       <Pill cls="bg-sky-500/15 text-sky-700 dark:text-sky-300" dot="bg-sky-500">Cliente</Pill>
+                    )}
+                    {t.needs_human_attention && (() => {
+                      const h = handoffInfo(t);
+                      return (
+                        <span title="O agente passou esta conversa para a equipe e ninguém respondeu ainda">
+                          <Pill cls="bg-destructive/15 text-destructive" dot="bg-destructive" pulse={h.urgent}>
+                            {h.urgent ? 'Urgente · ' : ''}Precisa de você{h.area ? ` · ${h.area}` : ''}
+                          </Pill>
+                        </span>
+                      );
+                    })()}
+                    {!t.needs_human_attention && t.agent && !t.ai_agent_released_at && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary"
+                        title={`${t.agent.name ?? 'O agente'} está atendendo. Passa para a equipe quando precisar.`}
+                      >
+                        <Robot className="h-3 w-3" />
+                        Com {t.agent.name ?? 'o agente'}
+                      </span>
                     )}
                     {!t.assigned_user_id && (
                       <Pill cls="bg-yellow-500/15 text-yellow-700 dark:text-yellow-400" dot="bg-yellow-500">Sem dono</Pill>
