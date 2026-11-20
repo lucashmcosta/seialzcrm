@@ -11,6 +11,7 @@ import { WhatsAppWindowChip } from './WhatsAppWindowChip';
 import { LowQualityEndpointBanner } from './LowQualityEndpointBanner';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { Button } from '@/components/ui/button';
+import { AgentPauseControl } from './AgentPauseControl';
 import { WidgetsTrigger } from '@/widgets/WidgetsTrigger';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Check, ArrowCounterClockwise, SidebarSimple } from '@phosphor-icons/react';
@@ -269,6 +270,14 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                 Resolver
               </Button>
               </PermissionGate>
+            )}
+            {thread.status !== 'resolved' && thread.status !== 'closed' && (
+              <AgentPauseControl
+                threadId={thread.id}
+                agentId={thread.ai_agent_id}
+                pausedUntil={thread.ai_agent_paused_until}
+                onChanged={refresh}
+              />
             )}
             {organization?.id && (
               <WidgetsTrigger size="xs" screen="inbox" context={{ screen: 'inbox', organizationId: organization.id, threadId: thread.id, contactId: thread.contact_id ?? null }} />
