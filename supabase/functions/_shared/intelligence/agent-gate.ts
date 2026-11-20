@@ -373,3 +373,33 @@ export function decideSupportGate(t: {
 export function agentTypeForThread(businessContext: string | null | undefined): "support" | "sdr" {
   return businessContext === "customer_service" ? "support" : "sdr";
 }
+
+export interface PendingMsg { direction: string; sender_type?: string | null; sender_user_id?: string | null; created_at: string }
+
+/**
+ * Atendimento: há quanto tempo a mensagem do cliente está sem resposta de verdade.
+ * Resposta de verdade = do agente ou de uma pessoa da equipe. Aviso automático
+ * (sender_type 'user' sem sender_user_id) não conta. Devolve null se a mensagem
+ * pendente tem menos de `minMinutes` ou se não há mensagem pendente.
+ */
+export function pendingReplyNote(history: PendingMsg[], timezone: string | null | undefined, now = new Date(), minMinutes = 60): string | null {
+  const isReply = (m: PendingMsg) => m.direction === "outbound" && (m.sender_type === "agent" || m.sender_type === "ai" || !!m.sender_user_id);
+  const sorted = [...history].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  let lastReply = -1;
+  sorted.forEach((m, i) => { if (isReply(m)) lastReply = i; });
+  const firstPending = sorted.slice(lastReply + 1).find((m) => m.direction === "inbound");
+  if (!firstPending) return null;
+  const since = new Date(firstPending.created_at);
+  const minutes = (now.getTime() - since.getTime()) / 60_000;
+  if (!(minutes >= minMinutes)) return null;
+  const tz = timezone || "America/Sao_Paulo";
+  let when: string;
+  try {
+    when = new Intl.DateTimeFormat("pt-BR", { timeZone: tz, weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(since);
+  } catch {
+    when = since.toISOString();
+  }
+  const hours = Math.floor(minutes / 60);
+  const ago = hours >= 48 ? `há ${Math.floor(hours / 24)} dias` : hours >= 1 ? `há ${hours} hora${hours > 1 ? "s" : ""}` : `há ${Math.round(minutes)} minutos`;
+  return `- O cliente está esperando resposta desde ${when} (${ago}). Ninguém respondeu desde então. Comece reconhecendo a demora numa frase curta (ex.: "vi sua mensagem de ontem e ninguém te respondeu, desculpa") e responda tudo o que ficou pendente desde então, não só a última mensagem.`;
+}

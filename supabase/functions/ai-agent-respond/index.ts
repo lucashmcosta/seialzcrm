@@ -16,7 +16,7 @@ import { buildNammuxInterviewTools, NAMMUX_INTERVIEW_FLAG, nammuxToolDeps, nammu
 import { captureRating, ratingDeps, ratingForAgent } from "../_shared/integrations/support-rating.ts";
 import { captureInterviewConfirmation, interviewConfirmDeps } from "../_shared/integrations/nammux-interview-confirm.ts";
 import { capturePresence, presenceDeps } from "../_shared/integrations/nammux-interview-presence.ts";
-import { decideSupportGate, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
+import { decideSupportGate, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText, pendingReplyNote, type PendingMsg } from "../_shared/intelligence/agent-gate.ts";
 import { emptyResponseShape, providerForIntegration, toolArgKeys } from "../_shared/intelligence/agent-log.ts";
 import { lookupCepAddress, registrationFields, registrationReply, SAVE_REGISTRATION_TOOL_DEF } from "../_shared/intelligence/contact-registration.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
@@ -1791,6 +1791,8 @@ serve(async (req) => {
         if (threadState?.ai_agent_id && threadState.ai_agent_id !== agentId) return skip('other_agent');
         const { data: lastHuman } = await supabase.from('messages').select('sent_at')
           .eq('thread_id', threadId).eq('direction', 'outbound').eq('sender_type', 'user').is('deleted_at', null)
+          // Aviso automático não é resposta de uma pessoa: não cala o agente.
+          .not('sender_user_id', 'is', null)
           .order('sent_at', { ascending: false }).limit(1).maybeSingle();
         const ownedRelease = threadState?.ai_agent_id === agentId ? threadState.ai_agent_released_at : null;
         const support = decideSupportGate({ releasedAt: ownedRelease, lastHumanReplyAt: lastHuman?.sent_at ?? null });
@@ -2022,7 +2024,7 @@ serve(async (req) => {
       // Message history - OPTIMIZED LIMIT to avoid rate limits
       supabase
         .from('messages')
-        .select('id, content, direction, media_type, media_urls, created_at, sender_type')
+        .select('id, content, direction, media_type, media_urls, created_at, sender_type, sender_user_id')
         .eq('thread_id', threadId)
         .is('deleted_at', null)
         .neq('direction', 'internal')
@@ -2204,7 +2206,13 @@ serve(async (req) => {
     // Dados do Nammux só para o agente de atendimento; o comercial recebe '' e nem consulta.
     const processBlock = await nammuxContextForAgent(agent.agent_type, () =>
       nammuxSupportContext(supabase, organizationId, contactId, (flag) => featureFlagEnabled(supabase, flag, organizationId)));
-    const basePrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories, retrievedKnowledge) + processBlock;
+    // Atendimento: se a mensagem do cliente está parada há mais de 1 h, o agente sabe disso
+    // (e de quando foi) para reconhecer a demora e responder tudo o que ficou pendente.
+    const pendingNote = agent.agent_type === 'support'
+      ? pendingReplyNote(messageHistory as PendingMsg[], agent.working_hours?.timezone)
+      : null;
+    const basePrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories, retrievedKnowledge) + processBlock
+      + (pendingNote ? `\n## ESPERA DO CLIENTE\n${pendingNote}\n` : '');
     const widgetPrompt = widgetToolsPrompt(widgetTools);
     const systemPrompt = !widgetPrompt ? basePrompt
       : basePrompt.includes('\n## CONTEXTO DO CONTATO') ? basePrompt.replace('\n## CONTEXTO DO CONTATO', `${widgetPrompt}\n## CONTEXTO DO CONTATO`)
