@@ -13,6 +13,7 @@ import { InboxThreadDetail } from '@/components/inbox/InboxThreadDetail';
 import { InboxMetricsBar } from '@/components/inbox/InboxMetricsBar';
 import { useInboxQueueCounts } from '@/hooks/inbox/useInboxQueueCounts';
 import { useInboxThreads } from '@/hooks/inbox/useInboxThreads';
+import { useInboxAgentStats } from '@/hooks/inbox/useInboxAgentStats';
 import type { InboxTab } from '@/hooks/inbox/inboxScope';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 
@@ -47,6 +48,7 @@ export default function InboxPage() {
   const csIncludesServiceEndpoints = organization?.cs_inbox_includes_service_endpoints ?? false;
   const { counts, refreshDebounced: refreshCounts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone, organizationId, csIncludesServiceEndpoints);
   const { threads, loading, refresh: refreshThreads } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone, organizationId, csIncludesServiceEndpoints);
+  const { data: agentStats } = useInboxAgentStats(organizationId, orgTimezone);
 
   // Deep-link: ?thread=<id> abre uma thread específica (usado pela aba
   // Conversas do contato). InboxThreadDetail carrega os detalhes por id
@@ -90,6 +92,7 @@ export default function InboxPage() {
           onlyMine={onlyMine}
           onOnlyMineChange={(v) => { setOnlyMine(v); setSelectedId(null); }}
           onNewConversation={() => setNewConvOpen(true)}
+          agentStats={agentStats ?? null}
         />
         <div className="flex-1 flex min-h-0 overflow-hidden">
           <InboxThreadList
