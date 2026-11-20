@@ -1,7 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { typingIndicatorBody } from "../supabase/functions/_shared/meta-whatsapp/typing.ts";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, brazilNationalHoliday, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -71,6 +71,19 @@ Deno.test("data no fuso certo, e fuso inválido não quebra", () => {
   const t = new Date("2026-11-09T02:30:00Z");
   assertEquals(currentTimeForPrompt("America/Sao_Paulo", t).includes("8 de novembro de 2026"), true);
   assertEquals(currentTimeForPrompt("fuso/errado", t).includes("2026"), true);
+});
+Deno.test("feriado nacional aparece na hora do prompt, inclusive Sexta-feira Santa", () => {
+  // 20/11/2026 15:00 em São Paulo
+  const consciencia = new Date("2026-11-20T18:00:00Z");
+  assertEquals(currentTimeForPrompt("America/Sao_Paulo", consciencia).includes("feriado nacional: Dia Nacional de Zumbi e da Consciência Negra"), true);
+  // 23/11/2026 é dia útil
+  assertEquals(currentTimeForPrompt("America/Sao_Paulo", new Date("2026-11-23T13:00:00Z")).includes("feriado"), false);
+  // 20/11 às 23h em São Paulo já é 21/11 em UTC: vale a data local
+  assertEquals(currentTimeForPrompt("America/Sao_Paulo", new Date("2026-11-21T02:00:00Z")).includes("feriado"), true);
+  assertEquals(brazilNationalHoliday(2027, 3, 26), "Sexta-feira Santa");
+  assertEquals(brazilNationalHoliday(2026, 4, 3), "Sexta-feira Santa");
+  assertEquals(brazilNationalHoliday(2026, 12, 25), "Natal");
+  assertEquals(brazilNationalHoliday(2026, 12, 24), null);
 });
 Deno.test("só a parte fixa vai para o cache", () => {
   assertEquals(splitPromptForCache("fixo\n## CONTEXTO DO CONTATO\nmuda"), ["fixo", "\n## CONTEXTO DO CONTATO\nmuda"]);

@@ -179,12 +179,43 @@ export function billableInputTokens(usage: { input_tokens?: number; cache_creati
   return Math.round((usage?.input_tokens ?? 0) + (usage?.cache_creation_input_tokens ?? 0) * 1.25 + (usage?.cache_read_input_tokens ?? 0) * 0.1);
 }
 
+/** Domingo de Páscoa (algoritmo de Meeus/Jones/Butcher), em UTC. */
+function easterSunday(year: number): Date {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+/** Feriado nacional do Brasil na data local (ano, mês 1-12, dia), ou null. */
+export function brazilNationalHoliday(year: number, month: number, day: number): string | null {
+  const fixed: Record<string, string> = {
+    "1-1": "Confraternização Universal", "4-21": "Tiradentes", "5-1": "Dia do Trabalho",
+    "9-7": "Independência do Brasil", "10-12": "Nossa Senhora Aparecida", "11-2": "Finados",
+    "11-15": "Proclamação da República", "11-20": "Dia Nacional de Zumbi e da Consciência Negra", "12-25": "Natal",
+  };
+  const f = fixed[`${month}-${day}`];
+  if (f) return f;
+  const goodFriday = new Date(easterSunday(year).getTime() - 2 * 86_400_000);
+  if (goodFriday.getUTCMonth() + 1 === month && goodFriday.getUTCDate() === day) return "Sexta-feira Santa";
+  return null;
+}
+
 export function currentTimeForPrompt(timezone: string | null | undefined, now = new Date()): string {
-  const format = (timeZone: string) => new Intl.DateTimeFormat("pt-BR", { timeZone, dateStyle: "full", timeStyle: "short" }).format(now);
+  const build = (timeZone: string) => {
+    const text = new Intl.DateTimeFormat("pt-BR", { timeZone, dateStyle: "full", timeStyle: "short" }).format(now);
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "numeric", day: "numeric" })
+      .formatToParts(now).map((p) => [p.type, p.value]));
+    const holiday = brazilNationalHoliday(Number(parts.year), Number(parts.month), Number(parts.day));
+    // Feriado conta como dia sem expediente: o agente não promete resposta da equipe "ainda hoje".
+    return holiday ? `${text} (hoje é feriado nacional: ${holiday}; não é dia útil)` : text;
+  };
   try {
-    return format(timezone || "America/Sao_Paulo");
+    return build(timezone || "America/Sao_Paulo");
   } catch {
-    return format("America/Sao_Paulo");
+    return build("America/Sao_Paulo");
   }
 }
 
