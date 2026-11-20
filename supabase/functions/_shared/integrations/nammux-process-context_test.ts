@@ -5,7 +5,7 @@ import {
   day,
   NAMMUX_AGENT_FINANCE_FLAG,
   NAMMUX_AGENT_MOVEMENTS_FLAG,
-  nammuxMovementsBlock,
+  nammuxTimelineBlock,
   nammuxFinanceBlock,
   type NammuxFinanceRow,
   NAMMUX_AGENT_AGENDA_FLAG,
@@ -130,33 +130,40 @@ Deno.test("agente comercial não recebe nada e nem consulta o banco", async () =
   assertEquals(await nammuxContextForAgent("support", () => Promise.resolve("DADO")), "DADO");
 });
 
-Deno.test("flag desligada: texto original e a agenda nem é consultada", async () => {
-  const consultadas: string[] = [];
-  const db = fakeSupabase({
-    opportunities: [{ id: "opp-1" }],
-    nammux_process_snapshots: [{ ...PROCESSO, opportunity_id: "opp-1" }],
-    nammux_process_events: [{ opportunity_id: "opp-1", event_type: "audiencia", start_at: "2026-12-10T13:00:00Z" }],
-  }, consultadas);
-  const texto = await nammuxSupportContext(db, "org", "contato", () => Promise.resolve(false));
+const AGENDA_NAMMUX = {
+  agenda: [{
+    opportunity_id: "opp-1", event_type: "audiencia", subtype: null,
+    start_at: "2026-12-10T13:00:00Z", all_day: false, timezone: "America/Sao_Paulo",
+    modality: null, location: null, virtual_link: null,
+  }],
+  timeline: [],
+};
+
+Deno.test("flag desligada: texto original e o Nammux nem é consultado", async () => {
+  let chamadas = 0;
+  const db = fakeSupabase({ opportunities: [{ id: "opp-1" }], nammux_process_snapshots: [{ ...PROCESSO, opportunity_id: "opp-1" }] });
+  const texto = await nammuxSupportContext(db, "org", "contato", () => Promise.resolve(false), new Date(), () => { chamadas++; return Promise.resolve(AGENDA_NAMMUX); });
   assertEquals(texto, BLOCO_ORIGINAL);
-  assertEquals(consultadas.includes("nammux_process_events"), false);
+  assertEquals(chamadas, 0);
 });
 
-Deno.test("flag da agenda ligada: bloco de datas entra e o aviso muda", async () => {
+Deno.test("Nammux fora do ar: sem datas e o agente passa para a equipe", async () => {
+  const db = fakeSupabase({ opportunities: [{ id: "opp-1" }], nammux_process_snapshots: [{ ...PROCESSO, opportunity_id: "opp-1" }] });
+  const texto = await nammuxSupportContext(db, "org", "contato", (f) => Promise.resolve(f === NAMMUX_AGENT_AGENDA_FLAG), new Date(), () => Promise.resolve(null));
+  assertStringIncludes(texto, "Não foi possível consultar o sistema do escritório agora");
+  assertEquals(texto.includes("## PRÓXIMAS DATAS DO PROCESSO"), false);
+  assertStringIncludes(texto, "(data de audiência, link,");
+});
+
+Deno.test("flag da agenda ligada: datas vêm da consulta ao Nammux e o aviso muda", async () => {
   const flags: string[] = [];
-  const db = fakeSupabase({
-    opportunities: [{ id: "opp-1" }],
-    nammux_process_snapshots: [{ ...PROCESSO, opportunity_id: "opp-1" }],
-    nammux_process_events: [{
-      opportunity_id: "opp-1", event_type: "audiencia", subtype: null,
-      start_at: "2026-12-10T13:00:00Z", all_day: false, timezone: "America/Sao_Paulo",
-      modality: null, location: null, virtual_link: null,
-    }],
-  });
+  const pedidos: string[][] = [];
+  const db = fakeSupabase({ opportunities: [{ id: "opp-1" }], nammux_process_snapshots: [{ ...PROCESSO, opportunity_id: "opp-1" }] });
   const texto = await nammuxSupportContext(db, "org", "contato", (flag) => {
     flags.push(flag);
     return Promise.resolve(flag === NAMMUX_AGENT_AGENDA_FLAG);
-  });
+  }, new Date(), (ids, include) => { pedidos.push([...ids, ...include]); return Promise.resolve(AGENDA_NAMMUX); });
+  assertEquals(pedidos, [["opp-1", "agenda"]]);
   assertStringIncludes(texto, "## PROCESSOS DO CLIENTE");
   assertStringIncludes(texto, "## PRÓXIMAS DATAS DO PROCESSO");
   assertStringIncludes(texto, "- Audiência · quinta-feira, 10/12/2026 às 10:00 (horário de Brasília)");
@@ -229,47 +236,39 @@ Deno.test("financeiro só entra com a flag dele; sem acordo, valor continua no '
   assertStringIncludes(semAcordo, "(data de audiência, link, valor, pagamento, movimentação do tribunal), não invente");
 });
 
-Deno.test("bloco das movimentações usa o texto do catálogo e a data em Brasília", () => {
-  const bloco = nammuxMovementsBlock([
-    { opportunity_id: "opp-1", occurred_at: "2026-11-18T15:00:00Z", text: "Começou a fase de cálculo: agora a Justiça define os valores devidos." },
-    { opportunity_id: "opp-1", occurred_at: "2026-11-10T01:00:00Z", text: "A empresa apresentou a defesa dela no processo. É uma etapa normal." },
+Deno.test("andamento: título e explicação do catálogo; linha sensível só com o título", () => {
+  const bloco = nammuxTimelineBlock([
+    { opportunity_id: "opp-1", at: "2026-11-18T15:00:00Z", title: "O processo foi para o juiz decidir", description: "Não é preciso fazer nada agora.", attention: false },
+    { opportunity_id: "opp-1", at: "2026-11-10T01:00:00Z", title: "Sentença: os pedidos foram negados", description: "Ainda pode caber recurso.", attention: true },
   ]);
-  assertStringIncludes(bloco, "## ÚLTIMAS MOVIMENTAÇÕES DO PROCESSO");
-  assertStringIncludes(bloco, "- 18/11/2026: Começou a fase de cálculo: agora a Justiça define os valores devidos.");
-  // 01:00 UTC do dia 10 ainda é dia 9 em Brasília
-  assertStringIncludes(bloco, "- 09/11/2026: A empresa apresentou a defesa dela no processo. É uma etapa normal.");
-  assertEquals(nammuxMovementsBlock([]), "");
+  assertStringIncludes(bloco, "## ANDAMENTO DO PROCESSO");
+  assertStringIncludes(bloco, "- 18/11/2026: O processo foi para o juiz decidir — Não é preciso fazer nada agora.");
+  // 01:00 UTC do dia 10 ainda é dia 9 em Brasília; sensível sai sem a explicação
+  assertStringIncludes(bloco, "- 09/11/2026: Sentença: os pedidos foram negados [SENSÍVEL]");
+  assertEquals(bloco.includes("Ainda pode caber recurso"), false);
+  assertEquals(nammuxTimelineBlock([]), "");
 });
 
-Deno.test("movimentações só entram com a flag delas; sem nenhuma, o agente diz que não há novidade", async () => {
-  const tabelas = {
-    opportunities: [{ id: "opp-1" }],
-    nammux_process_snapshots: [{ ...PROCESSO, opportunity_id: "opp-1" }],
-    nammux_process_movements: [{ opportunity_id: "opp-1", occurred_at: "2026-11-18T15:00:00Z", text: "O perito entregou o laudo da perícia no processo." }],
-  };
-  const consultadas: string[] = [];
-  const sem = await nammuxSupportContext(fakeSupabase(tabelas, consultadas), "org", "c", () => Promise.resolve(false));
-  assertEquals(sem.includes("ÚLTIMAS MOVIMENTAÇÕES"), false);
-  assertEquals(consultadas.includes("nammux_process_movements"), false);
+Deno.test("andamento só com a flag dele; sem nenhum item, o agente diz que não há novidade", async () => {
+  const db = () => fakeSupabase({ opportunities: [{ id: "opp-1" }], nammux_process_snapshots: [{ ...PROCESSO, opportunity_id: "opp-1" }] });
+  const comItem = { agenda: [], timeline: [{ opportunity_id: "opp-1", at: "2026-11-18T15:00:00Z", title: "O laudo da perícia foi publicado", description: null, attention: false }] };
+  const sem = await nammuxSupportContext(db(), "org", "c", () => Promise.resolve(false), new Date(), () => Promise.resolve(comItem));
+  assertEquals(sem.includes("ANDAMENTO DO PROCESSO"), false);
 
-  const com = await nammuxSupportContext(fakeSupabase(tabelas), "org", "c", (f) => Promise.resolve(f === NAMMUX_AGENT_MOVEMENTS_FLAG));
-  assertStringIncludes(com, "- 18/11/2026: O perito entregou o laudo da perícia no processo.");
-  assertStringIncludes(com, "(data de audiência, link, valor, pagamento), não invente");
+  const com = await nammuxSupportContext(db(), "org", "c", (f) => Promise.resolve(f === NAMMUX_AGENT_MOVEMENTS_FLAG), new Date(), () => Promise.resolve(comItem));
+  assertStringIncludes(com, "- 18/11/2026: O laudo da perícia foi publicado");
 
-  const vazio = await nammuxSupportContext(
-    fakeSupabase({ ...tabelas, nammux_process_movements: [] }), "org", "c", (f) => Promise.resolve(f === NAMMUX_AGENT_MOVEMENTS_FLAG));
-  assertStringIncludes(vazio, "Não há movimentação relevante registrada até agora");
+  const vazio = await nammuxSupportContext(db(), "org", "c", (f) => Promise.resolve(f === NAMMUX_AGENT_MOVEMENTS_FLAG), new Date(), () => Promise.resolve({ agenda: [], timeline: [] }));
+  assertStringIncludes(vazio, "Não há movimentação registrada nos últimos 90 dias");
 });
 
 Deno.test("com as três flags ligadas, os três blocos entram e o aviso fica sem lista", async () => {
   const texto = await nammuxSupportContext(fakeSupabase({
     opportunities: [{ id: "opp-1" }],
     nammux_process_snapshots: [{ ...PROCESSO, opportunity_id: "opp-1" }],
-    nammux_process_events: [],
     nammux_process_finance: FINANCEIRO,
-    nammux_process_movements: [],
-  }), "org", "c", () => Promise.resolve(true));
-  for (const titulo of ["## PROCESSOS DO CLIENTE", "## PRÓXIMAS DATAS DO PROCESSO", "## ACORDO E PAGAMENTOS", "## ÚLTIMAS MOVIMENTAÇÕES DO PROCESSO"]) {
+  }), "org", "c", () => Promise.resolve(true), new Date(), () => Promise.resolve({ agenda: [], timeline: [] }));
+  for (const titulo of ["## PROCESSOS DO CLIENTE", "## PRÓXIMAS DATAS DO PROCESSO", "## ACORDO E PAGAMENTOS", "## ANDAMENTO DO PROCESSO"]) {
     assertStringIncludes(texto, titulo);
   }
   assertStringIncludes(texto, "algo que não está aqui, não invente");

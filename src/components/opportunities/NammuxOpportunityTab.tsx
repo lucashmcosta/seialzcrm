@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   ArrowSquareOut,
   ArrowsClockwise,
@@ -20,7 +19,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { toast } from "@/hooks/use-toast";
 import {
   type CompromissoRow,
-  type MovimentacaoRow,
+  type LinhaDoTempoItem,
   dataSimples,
   faltam,
   horaEmOutroFuso,
@@ -67,9 +66,6 @@ type SyncEvent = {
   created_at: string;
 };
 
-// As duas tabelas abaixo ainda não estão no types.ts gerado; a leitura passa
-// pela RLS (só a própria organização).
-const db = supabase as unknown as SupabaseClient;
 
 const EVENTO_LEGIVEL: Record<string, string> = {
   "process.snapshot.updated": "Situação do processo atualizada",
@@ -96,7 +92,8 @@ export function NammuxOpportunityTab({
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [events, setEvents] = useState<SyncEvent[]>([]);
   const [compromissos, setCompromissos] = useState<CompromissoRow[]>([]);
-  const [movimentacoes, setMovimentacoes] = useState<MovimentacaoRow[]>([]);
+  const [movimentacoes, setMovimentacoes] = useState<LinhaDoTempoItem[]>([]);
+  const [nammuxForaDoAr, setNammuxForaDoAr] = useState(false);
   const [appUrl, setAppUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -104,7 +101,7 @@ export function NammuxOpportunityTab({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [snapshotResult, eventsResult, integrationResult, agendaResult, movResult] = await Promise.all([
+    const [snapshotResult, eventsResult, integrationResult, liveResult] = await Promise.all([
       supabase
         .from("nammux_process_snapshots")
         .select("*")
@@ -124,33 +121,20 @@ export function NammuxOpportunityTab({
         .eq("organization_id", organizationId)
         .eq("admin_integrations.slug", "nammux")
         .maybeSingle(),
-      db
-        .from("nammux_process_events")
-        .select("external_event_id,event_type,subtype,status,start_at,end_at,all_day,timezone,modality,location,virtual_link,removed_at")
-        .eq("organization_id", organizationId)
-        .eq("opportunity_id", opportunityId)
-        .eq("status", "pendente")
-        .is("removed_at", null)
-        .order("start_at", { ascending: true })
-        .limit(50),
-      db
-        .from("nammux_process_movements")
-        .select("external_movement_id,occurred_at,text,tone")
-        .eq("organization_id", organizationId)
-        .eq("opportunity_id", opportunityId)
-        .order("occurred_at", { ascending: false })
-        .limit(8),
+      // Datas e linha do tempo: consulta na hora ao Nammux (o Seialz não guarda cópia).
+      supabase.functions.invoke("nammux-process-view", { body: { organizationId, opportunityId } }),
     ]);
     if (snapshotResult.error) console.error("Nammux snapshot:", snapshotResult.error);
     if (eventsResult.error) console.error("Nammux events:", eventsResult.error);
-    // Agenda e movimentações são complemento: se a leitura falhar, a aba segue.
-    if (agendaResult.error) console.error("Nammux agenda:", agendaResult.error.message);
-    if (movResult.error) console.error("Nammux movimentações:", movResult.error.message);
+    // Agenda e linha do tempo são complemento: se a consulta falhar, a aba segue.
+    if (liveResult.error) console.error("Nammux consulta:", liveResult.error.message);
+    const live = (liveResult.data ?? null) as { available?: boolean; agenda?: CompromissoRow[]; timeline?: LinhaDoTempoItem[] } | null;
     const snap = (snapshotResult.data ?? null) as Snapshot | null;
     setSnapshot(snap);
     setEvents((eventsResult.data ?? []) as SyncEvent[]);
-    setCompromissos((agendaResult.data ?? []) as CompromissoRow[]);
-    setMovimentacoes((movResult.data ?? []) as MovimentacaoRow[]);
+    setNammuxForaDoAr(!live || live.available === false);
+    setCompromissos(live?.agenda ?? []);
+    setMovimentacoes(live?.timeline ?? []);
     const config = (integrationResult.data?.config_values ?? {}) as Record<string, unknown>;
     setAppUrl(typeof config.app_url === "string" ? config.app_url.replace(/\/+$/, "") : "");
     // Havendo erro, os detalhes já abrem: é ali que está o botão de reprocessar.
@@ -362,20 +346,26 @@ export function NammuxOpportunityTab({
             <CardContent className="pt-6">
               <div className="mb-3 flex items-center gap-2">
                 <ListBullets className="h-5 w-5 text-muted-foreground" />
-                <h3 className="font-semibold">Últimas movimentações</h3>
+                <h3 className="font-semibold">Andamento do processo</h3>
               </div>
-              {movimentacoes.length === 0 ? (
+              {nammuxForaDoAr ? (
                 <p className="text-sm text-muted-foreground">
-                  Nenhuma movimentação relevante registrada até agora.
+                  Não foi possível consultar o Nammux agora. Tente atualizar em alguns minutos.
+                </p>
+              ) : movimentacoes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma movimentação nos últimos 90 dias.
                 </p>
               ) : (
                 <div className="divide-y">
-                  {movimentacoes.map((m) => (
-                    <div key={m.external_movement_id} className="py-3">
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(m.occurred_at).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                  {movimentacoes.map((m, i) => (
+                    <div key={`${m.at}-${i}`} className="py-3">
+                      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {new Date(m.at).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                        {m.attention && <Badge variant="outline">Decisão importante</Badge>}
                       </p>
-                      <p className="mt-1 text-sm">{m.text}</p>
+                      <p className="mt-1 text-sm font-medium">{m.title}</p>
+                      {m.description && <p className="text-sm text-muted-foreground">{m.description}</p>}
                     </div>
                   ))}
                 </div>

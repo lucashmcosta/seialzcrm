@@ -18,11 +18,13 @@ export type CompromissoRow = {
   removed_at: string | null;
 };
 
-export type MovimentacaoRow = {
-  external_movement_id: string;
-  occurred_at: string;
-  text: string;
-  tone: string | null;
+/** Item da linha do tempo do Nammux, já em linguagem simples (mesmo catálogo do app). */
+export type LinhaDoTempoItem = {
+  at: string;
+  title: string;
+  description: string | null;
+  /** Decisão sensível: o escritório explica ao cliente. */
+  attention: boolean;
 };
 
 const FUSO_PADRAO = "America/Sao_Paulo";
