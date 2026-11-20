@@ -5,6 +5,7 @@ import { InboxSlaChip } from './InboxSlaChip';
 import { SearchBar } from '@/components/common/SearchBar';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import type { InboxThreadRow } from '@/hooks/inbox/useInboxThreads';
+import { agentFilterCounts, handoffInfo, matchesAgentFilter, type InboxAgentFilter } from '@/lib/inboxAgentFilters';
 
 interface Props {
   threads: InboxThreadRow[];
@@ -56,13 +57,6 @@ const STATUS_MAP: Record<string, { label: string; cls: string; dot: string; puls
   closed:   { label: 'Resolvida',    cls: 'bg-slate-500/15 text-slate-600 dark:text-slate-300',       dot: 'bg-slate-500' },
 };
 
-/** Setor e urgência que o agente marcou na passagem (last_routing_decision). */
-export function handoffInfo(t: InboxThreadRow): { area: string | null; urgent: boolean } {
-  const d = (t.last_routing_decision ?? {}) as { action?: unknown; area?: unknown; urgent?: unknown };
-  if (d.action !== 'agent_handoff') return { area: null, urgent: false };
-  return { area: typeof d.area === 'string' && d.area ? d.area : null, urgent: d.urgent === true };
-}
-
 function Pill({ children, cls, dot, pulse }: { children: React.ReactNode; cls: string; dot?: string; pulse?: boolean }) {
   return (
     <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors', cls)}>
@@ -74,11 +68,15 @@ function Pill({ children, cls, dot, pulse }: { children: React.ReactNode; cls: s
 
 export function InboxThreadList({ threads, loading, selectedId, onSelect, officialNumbers }: Props) {
   const [search, setSearch] = useState('');
+  const [agentFilter, setAgentFilter] = useState<InboxAgentFilter>('all');
+  const counts = useMemo(() => agentFilterCounts(threads), [threads]);
+  const hasAgent = counts.agent > 0 || counts.needsHuman > 0;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return threads;
-    return threads.filter((t) => {
+    const byAgent = threads.filter((t) => matchesAgentFilter(t, agentFilter));
+    if (!q) return byAgent;
+    return byAgent.filter((t) => {
       const name = (t.contact?.name || '').toLowerCase();
       const phone = (t.contact?.phone || '').toLowerCase();
       const last = (t.last_message_content || '').toLowerCase();
@@ -96,6 +94,32 @@ export function InboxThreadList({ threads, loading, selectedId, onSelect, offici
       </div>
       <div className="px-3 py-2 border-b border-border">
         <SearchBar value={search} onChange={setSearch} placeholder="Buscar conversa..." />
+        {hasAgent && (
+          <div className="flex flex-wrap gap-1 mt-2" role="group" aria-label="Filtrar pelo agente">
+            {([
+              ['all', 'Todas', counts.all],
+              ['agent', 'Com o agente', counts.agent],
+              ['needs_human', 'Precisa de você', counts.needsHuman],
+              ...(counts.urgent ? [['urgent', 'Urgente', counts.urgent] as const] : []),
+              ...counts.areas.map(([area, n]) => [`area:${area}`, area, n] as const),
+            ] as ReadonlyArray<readonly [InboxAgentFilter, string, number]>).map(([id, label, n]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setAgentFilter(id)}
+                aria-pressed={agentFilter === id}
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[11px] border transition-colors',
+                  agentFilter === id
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-border text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {label} <span className="font-data">{n}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto">
         {loading && (
