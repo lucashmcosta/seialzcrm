@@ -1,7 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { typingIndicatorBody } from "../supabase/functions/_shared/meta-whatsapp/typing.ts";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, brazilNationalHoliday, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, brazilNationalHoliday, pendingReplyNote, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -299,4 +299,23 @@ Deno.test("joinAgentText: bilhete escrito de outros jeitos também não vai", ()
     "Fico no aguardo!",
     "Aguardando sua confirmação para agendar.",
   ]) assertEquals(joinAgentText([antes], ok), antes + "\n\n" + ok, ok);
+});
+
+Deno.test("atendimento sabe há quanto tempo o cliente espera; aviso automático não conta como resposta", () => {
+  const now = new Date("2026-11-20T20:00:00Z"); // sexta 17:00 em SP
+  const hist = [
+    { direction: "outbound", sender_type: "user", sender_user_id: "u1", created_at: "2026-11-19T15:00:00Z" }, // pessoa
+    { direction: "inbound", sender_type: "contact", created_at: "2026-11-19T17:30:00Z" }, // cliente, quinta 14:30
+    { direction: "outbound", sender_type: "user", sender_user_id: null, created_at: "2026-11-19T19:00:00Z" }, // aviso automático
+    { direction: "inbound", sender_type: "contact", created_at: "2026-11-20T12:00:00Z" },
+  ];
+  const note = pendingReplyNote(hist, "America/Sao_Paulo", now)!;
+  assertEquals(note.includes("quinta-feira, 19/11"), true);
+  assertEquals(note.includes("há 26 horas"), true);
+  // depois de uma resposta do agente, nada pendente
+  assertEquals(pendingReplyNote([...hist, { direction: "outbound", sender_type: "agent", created_at: "2026-11-20T12:01:00Z" }], "America/Sao_Paulo", now), null);
+  // mensagem recente (menos de 1 h) não gera aviso
+  assertEquals(pendingReplyNote([{ direction: "inbound", sender_type: "contact", created_at: "2026-11-20T19:30:00Z" }], "America/Sao_Paulo", now), null);
+  // vários dias
+  assertEquals(pendingReplyNote([{ direction: "inbound", sender_type: "contact", created_at: "2026-11-17T12:00:00Z" }], "America/Sao_Paulo", now)!.includes("há 3 dias"), true);
 });
