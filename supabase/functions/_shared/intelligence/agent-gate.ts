@@ -110,6 +110,13 @@ export function isNoteAboutReply(sentence: string): boolean {
   if (/^n[ãa]o falta(va)? nada[.!]?$/i.test(t)) return true;
   if (/^(o |a )?(texto|resposta|mensagem) anterior j[áa](\s|$)|^o texto j[áa] foi enviado\b/i.test(t)) return true;
   if (/^(nothing (more |else )?to add|nada (más )?que añadir)\b/i.test(t)) return true;
+  if (/^(nenhuma (resposta|mensagem) adicional|nenhum texto adicional|sem (resposta|mensagem) adicional)/i.test(t)) return true;
+  if (/^(o|a) cliente( j[áa])?(\s|$)/i.test(t)) return true;
+  // Esperando a cliente falando dela em 3ª pessoa ("Fico esperando o nome dela", "Aguardando a resposta da Ana").
+  // "Fico no aguardo da sua resposta" fala com a cliente e continua.
+  if (/^(fico (esperando|aguardando|no aguardo)|agora [ée] s[óo] (esperar|aguardar)|aguardando|esperando)(\s|$)/i.test(t)
+    && /(\b(dela|dele|ela|ele)\b|\b(da|do|a|o) cliente\b|\bresposta d[ao] \p{Lu}|\bnome d[ao] \p{Lu})/u.test(t)
+    && !/\b(voc[êe]|vc|sua|seu|te)\b/i.test(t)) return true;
   return false;
 }
 

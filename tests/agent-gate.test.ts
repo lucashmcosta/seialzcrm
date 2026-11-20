@@ -265,3 +265,25 @@ Deno.test("joinAgentText: bilhete do modelo depois da ferramenta não vai para o
   // Sem ferramenta (um texto só), nada é cortado.
   assertEquals(joinAgentText([], "(Pode responder quando puder.)"), "(Pode responder quando puder.)");
 });
+
+Deno.test("joinAgentText: bilhete escrito de outros jeitos também não vai", () => {
+  const antes = "Oi! Eu sou a Gabi, da Auxilius. Com quem eu falo?";
+  for (const nota of [
+    "(Aguardando o nome da cliente.)",
+    "Fico esperando o nome dela.",
+    "Fico esperando ela me dizer o nome para seguir com a conferência.",
+    "Agora é só aguardar a resposta da Hemmylli.",
+    "Nada a adicionar.",
+    "(Nenhuma resposta adicional necessária.)",
+    "A mensagem anterior já cobre tudo.",
+    "Nothing to add.",
+    "Nada que añadir.",
+    "O cliente já recebeu a saudação.",
+  ]) assertEquals(joinAgentText([antes], nota), antes, nota);
+  for (const ok of [
+    "Fico no aguardo da sua resposta.",
+    "Fico aguardando você me mandar o documento.",
+    "Fico no aguardo!",
+    "Aguardando sua confirmação para agendar.",
+  ]) assertEquals(joinAgentText([antes], ok), antes + "\n\n" + ok, ok);
+});
