@@ -250,6 +250,18 @@ Deno.test("joinAgentText: bilhete do modelo depois da ferramenta não vai para o
   // Frase normal entre parênteses ou "já foi enviado" de outra coisa continua.
   assertEquals(joinAgentText([antes], "(If you prefer English, just let me know.)"), antes + "\n\n(If you prefer English, just let me know.)");
   assertEquals(joinAgentText([antes], "O contrato já foi enviado para o seu e-mail."), antes + "\n\nO contrato já foi enviado para o seu e-mail.");
+  assertEquals(joinAgentText([antes], "É isso, não falta nada a dizer. Já mandei a mensagem de encerramento e salvei o caso."), antes);
+  assertEquals(joinAgentText([antes], "Nada a acrescentar."), antes);
+  assertEquals(joinAgentText([antes], "Nothing to add."), antes);
+  assertEquals(joinAgentText([antes], "A mensagem anterior já cobre tudo."), antes);
+  // Bilhete depois de uma pergunta de verdade: a pergunta fica.
+  assertEquals(joinAgentText([antes], "Pode me mandar a data? (Nada a acrescentar.)"), antes + "\n\nPode me mandar a data?");
+  // Frases normais com as mesmas palavras continuam.
+  for (const ok of [
+    "Agendei para terça às 10h. Não falta nada, você só precisa levar o RG.",
+    "Perfeito! Não falta nada para concluir, só a sua assinatura no link.",
+    "Se não tiver mais nada a acrescentar, já encaminho para a advogada.",
+  ]) assertEquals(joinAgentText([antes], ok), antes + "\n\n" + ok);
   // Sem ferramenta (um texto só), nada é cortado.
   assertEquals(joinAgentText([], "(Pode responder quando puder.)"), "(Pode responder quando puder.)");
 });

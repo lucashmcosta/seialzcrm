@@ -87,7 +87,7 @@ export function joinAgentText(before: string[], final: string): string {
   const known = new Set<string>(whole.length ? contentWords(whole[0]) : []);
   return whole.map((part, i) => {
     if (i === 0) return part;
-    return part.split(/\n{2,}/).filter((paragraph) => !isNoteAboutReply(paragraph)).map((paragraph) => paragraph.split(/(?<=[.!?…])\s+/).filter((sentence) => {
+    return part.split(/\n{2,}/).map((paragraph) => withoutNoteAboutReply(paragraph.split(/(?<=[.!?…])\s+/)).filter((sentence) => {
       const words = contentWords(sentence);
       const repeated = words.length >= 3 && words.filter((w) => known.has(w)).length / words.length >= 0.8;
       words.forEach((w) => known.add(w));
@@ -99,12 +99,24 @@ export function joinAgentText(before: string[], final: string): string {
 /**
  * Bilhete do modelo sobre a própria resposta, escrito depois da ferramenta quando "não falta nada"
  * ("(Sem nada a acrescentar: a saudação já foi enviada.)"). Não é para o cliente.
+ * Só conta quando a frase COMEÇA com a fórmula do bilhete: "Agendei. Não falta nada, só levar o RG"
+ * e "Se não tiver mais nada a acrescentar, encaminho" são resposta normal.
  */
-export function isNoteAboutReply(paragraph: string): boolean {
-  const t = paragraph.trim();
+export function isNoteAboutReply(sentence: string): boolean {
+  const t = sentence.trim().replace(/^[(\[]\s*/, "").replace(/[)\]]\s*$/, "").trim();
   if (!t) return false;
-  // Só frases que nunca são para o cliente; "o contrato já foi enviado" é resposta normal.
-  return /(nada (mais )?a acrescentar|n[ãa]o falta(va)? nada|o cliente j[áa] (vai )?rece|(texto|resposta) (anterior )?j[áa] fo(i|ram) enviad)/i.test(t);
+  if (/^(é isso,?\s*)?(sem (mais )?)?nada (mais )?a (acrescentar|adicionar)\b/i.test(t)) return true;
+  if (/^(é isso,?\s*)?n[ãa]o falta(va)? nada (mais )?a (dizer|acrescentar)\b/i.test(t)) return true;
+  if (/^n[ãa]o falta(va)? nada[.!]?$/i.test(t)) return true;
+  if (/^(o |a )?(texto|resposta|mensagem) anterior j[áa](\s|$)|^o texto j[áa] foi enviado\b/i.test(t)) return true;
+  if (/^(nothing (more |else )?to add|nada (más )?que añadir)\b/i.test(t)) return true;
+  return false;
+}
+
+/** Corta do bilhete em diante: o que vem depois dele no mesmo parágrafo é comentário ("Fico esperando o nome dela"). */
+function withoutNoteAboutReply(sentences: string[]): string[] {
+  const at = sentences.findIndex(isNoteAboutReply);
+  return at < 0 ? sentences : sentences.slice(0, at);
 }
 
 const STOP_WORDS = new Set(("que com para por uma uns umas dos das nos nas não sim seu sua seus suas meu minha " +
