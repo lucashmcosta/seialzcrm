@@ -18,6 +18,7 @@ import { captureInterviewConfirmation, interviewConfirmDeps } from "../_shared/i
 import { capturePresence, presenceDeps } from "../_shared/integrations/nammux-interview-presence.ts";
 import { decideSupportGate, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../_shared/intelligence/agent-gate.ts";
 import { emptyResponseShape, providerForIntegration, toolArgKeys } from "../_shared/intelligence/agent-log.ts";
+import { lookupCepAddress, registrationFields, registrationReply, SAVE_REGISTRATION_TOOL_DEF } from "../_shared/intelligence/contact-registration.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES, type WidgetClientMedia } from "../_shared/widgets/agent-tools.ts";
 
@@ -67,6 +68,7 @@ const HISTORY_LIMIT = 80;
 const CLOSING_TOOLS = new Set(['end_conversation', 'transfer_to_human']);
 
 const AVAILABLE_TOOLS = [
+  SAVE_REGISTRATION_TOOL_DEF,
   {
     type: "function",
     function: {
@@ -911,6 +913,35 @@ async function executeTool(
         };
       }
 
+      case 'save_registration_data': {
+        const zip = String(args?.cep ?? '').replace(/\D/g, '');
+        const cep = zip.length === 8 ? await lookupCepAddress(zip) : null;
+        const { fields, problems } = registrationFields(args ?? {}, cep);
+        if (Object.keys(fields).length) {
+          const write = (f: Record<string, string>) => supabase.from('contacts').update(f)
+            .eq('id', context.contactId).eq('organization_id', context.organizationId);
+          let { error } = await write(fields);
+          // CPF já usado por outro contato da org (o banco recusa tudo): grava o resto e avisa.
+          if (error && String(error.message ?? '').includes('duplicate_cpf') && fields.cpf) {
+            delete fields.cpf;
+            problems.push('esse CPF já está em outro cadastro aqui; não peça de novo, a equipe confere na passagem');
+            ({ error } = Object.keys(fields).length ? await write(fields) : { error: null });
+          }
+          if (error) {
+            console.error('[save_registration_data] update failed', { code: error.code });
+            return { success: false, message: 'Não foi possível gravar os dados agora. Não peça de novo; siga e avise na passagem que os dados estão na conversa.' };
+          }
+        }
+        const { data: after } = await supabase.from('contacts')
+          .select('cpf, email, address_zip, address_number, address_street')
+          .eq('id', context.contactId).maybeSingle();
+        console.log('[save_registration_data]', { saved: Object.keys(fields), problems: problems.length });
+        return {
+          success: true,
+          message: registrationReply(fields, problems, after ?? { cpf: null, email: null, address_zip: null, address_number: null, address_street: null }, true),
+        };
+      }
+
       case 'update_qualification': {
         // Buscar ou criar memória do contato
         let { data: memory } = await supabase
@@ -1502,6 +1533,11 @@ Você tem acesso a ferramentas que DEVE usar quando apropriado:
   
 - **mark_name_asked**: Use IMEDIATAMENTE após perguntar o nome do cliente.
   Isso evita que você pergunte o nome mais de uma vez na mesma conversa.
+`;
+    }
+    if (enabledTools.includes('save_registration_data')) {
+      prompt += `
+- **save_registration_data**: Grave CPF, e-mail, CEP, número e complemento assim que o cliente mandar (pode ser em partes). Peça de novo só o que a ferramenta apontar como problema ou faltando, uma vez.
 `;
     }
     if (enabledTools.includes('create_opportunity')) {

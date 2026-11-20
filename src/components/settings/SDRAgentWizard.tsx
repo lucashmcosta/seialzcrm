@@ -45,6 +45,7 @@ interface ToolsTriggers {
   schedule_follow_up: string;
   send_payment_link: string;
   update_qualification: string;
+  save_registration_data?: string;
   end_conversation?: string;
   send_choices?: string;
   /** Ferramentas que vêm dos widgets (ex.: calculate_labor_case). */
@@ -164,6 +165,7 @@ const CORE_TOOLS = [
   { id: 'schedule_follow_up', name: 'Agendar Follow-up', description: 'Agenda mensagem automática para data futura' },
   { id: 'send_payment_link', name: 'Enviar Link de Pagamento', description: 'Gera e envia link de pagamento' },
   { id: 'update_qualification', name: 'Atualizar Qualificação', description: 'Registra dados de qualificação do lead' },
+  { id: 'save_registration_data', name: 'Dados para o contrato', description: 'Grava CPF, e-mail e endereço (completado pelo CEP) no cadastro do contato' },
   { id: 'end_conversation', name: 'Encerrar conversa', description: 'Encerra quando o caso não se encaixa; reabre se o cliente voltar a escrever' },
   { id: 'send_choices', name: 'Perguntas com botões', description: 'Faz perguntas de opções fixas com botões ou lista no WhatsApp (texto numerado onde não há botões)' },
 ];
@@ -277,6 +279,7 @@ const DEFAULT_TOOLS_TRIGGERS: ToolsTriggers = {
   schedule_follow_up: 'Quando cliente pedir para ser contactado em data futura específica',
   send_payment_link: 'Quando cliente confirmar que deseja pagar ou pedir link',
   update_qualification: 'Quando coletar informações de qualificação (BANT, MEDDIC, etc.)',
+  save_registration_data: 'Quando o cliente mandar CPF, e-mail, CEP ou número da casa para o contrato',
   end_conversation: 'Quando o caso não se encaixa e você já se despediu',
   send_choices: 'Quando a pergunta tiver poucas opções fixas (plano, horário, sim/não)',
   ...Object.fromEntries(WIDGET_TOOLS.map((t) => [t.id, t.trigger])),
