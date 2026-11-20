@@ -2791,7 +2791,8 @@ serve(async (req) => {
       if (!toolsExecuted.includes('transfer_to_human')) {
         const { data: owner } = await supabase.from('message_threads')
           .select('ai_agent_released_at, assigned_user_id').eq('id', threadId).maybeSingle();
-        if (owner?.ai_agent_released_at || owner?.assigned_user_id) {
+        // Atendimento responde conversas que já têm responsável: só a passagem para a equipe o faz parar.
+        if (owner?.ai_agent_released_at || (agent.agent_type !== 'support' && owner?.assigned_user_id)) {
           console.log(`[ai-agent-respond] conversa já foi para a equipe; parou em ${index}/${outgoing.length}`);
           break;
         }
