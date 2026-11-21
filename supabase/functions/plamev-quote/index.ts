@@ -100,6 +100,18 @@ async function marcarComoGanha(db: Db, org: string, oppId: string, pagoEm: strin
   return true;
 }
 
+/**
+ * Valor da oportunidade = adesão da cotação (é o valor da venda, inclusive no Purchase da Meta). Perdida fica como está;
+ * mudar o valor não reenvia nada à Meta (o gatilho é a mudança de status).
+ */
+async function valorDaAdesao(db: Db, org: string, oppId: string, adesao: number | string | null) {
+  const valor = Number(adesao);
+  if (!Number.isFinite(valor) || valor <= 0) return;
+  const { error } = await db.from("opportunities").update({ amount: valor })
+    .eq("id", oppId).eq("organization_id", org).in("status", ["open", "won"]);
+  if (error) console.warn(`[plamev-quote] valor da adesão não gravado opp=${oppId} code=${error.code}`);
+}
+
 /** Consulta a Plamev e grava o status. Adesão paga: nota na linha do tempo (uma vez) e, se ligado, oportunidade ganha. */
 async function verificarPagamento(db: Db, token: string, c: CotacaoLinha, marcarGanha: boolean) {
   const agora = new Date().toISOString();
@@ -120,6 +132,8 @@ async function verificarPagamento(db: Db, token: string, c: CotacaoLinha, marcar
     .eq("id", c.id).is("pagamento_registrado_em", null).select("id").maybeSingle();
   if (!trava) return;
 
+  // Valor da venda = adesão paga (vai junto no Purchase da Meta quando a oportunidade é ganha).
+  await valorDaAdesao(db, c.organization_id, c.opportunity_id, c.valor_adesao);
   const ganha = marcarGanha ? await marcarComoGanha(db, c.organization_id, c.opportunity_id, v.pagoEm) : false;
   const { data: opp } = await db.from("opportunities").select("contact_id").eq("id", c.opportunity_id).maybeSingle();
   const nota = L.notaPagamento(c.numero_cotacao, v, ganha);
@@ -511,6 +525,7 @@ Deno.serve(async (req) => {
           });
           if (e1 || e2) console.error(`[plamev-quote] salvar na oportunidade falhou opp=${opp.id} quotes=${e1?.code ?? "ok"} activity=${e2?.code ?? "ok"}`);
           salvaNaOportunidade = !e1;
+          if (!e1) await valorDaAdesao(db, org, opp.id, r.adesao);
         }
         return json(200, { resultado: r, salvaNaOportunidade, payload: trace });
       }
