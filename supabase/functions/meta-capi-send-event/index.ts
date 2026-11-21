@@ -445,7 +445,9 @@ serve(async (req) => {
       attempts = claim.attemptCount;
     }
 
-    const url = `https://graph.facebook.com/${META_API_VERSION}/${pixelId}/events`;
+    // Formato de mensagens vai para o pixel ligado ao WhatsApp, quando a org tiver um (meta-capi-messaging-dataset).
+    const targetDatasetId = messagingFormat && ca.messaging_dataset_id ? String(ca.messaging_dataset_id) : pixelId;
+    const url = `https://graph.facebook.com/${META_API_VERSION}/${targetDatasetId}/events`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
