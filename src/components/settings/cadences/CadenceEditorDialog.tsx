@@ -379,7 +379,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">{uiText('Passo')} {i + 1}</span>
                     <Select value={s.timing} onValueChange={(v) => update(s.key, { timing: v as StepDraft['timing'] })}>
-                      <SelectTrigger className="h-8 w-[150px]"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-8 w-[190px]"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="after_enrollment">{uiText('Após a entrada')}</SelectItem>
                         <SelectItem value="field_date" disabled={dateFields.length === 0}>{uiText('Por uma data')}</SelectItem>
