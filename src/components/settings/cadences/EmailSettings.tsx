@@ -23,7 +23,7 @@ interface Settings {
   domain_status: string | null; from_name: string | null; from_email: string | null; reply_to: string | null;
   brand_color: string | null; logo_url: string | null; footer_text: string | null; last_error: string | null;
 }
-interface Domain { id: string; name: string; status: string; records?: Array<{ record: string; name: string; type: string; value: string; status?: string; priority?: number }> }
+interface Domain { id: string; name: string; status: string; open_tracking?: boolean | null; click_tracking?: boolean | null; tracking_subdomain?: string | null; records?: Array<{ record: string; name: string; type: string; value: string; status?: string; priority?: number }> }
 interface EmailTemplate { id: string; name: string; subject: string; body: string; is_marketing: boolean }
 
 const ERRORS: Record<string, string> = {
@@ -35,6 +35,7 @@ const ERRORS: Record<string, string> = {
   domain_not_verified: 'O domínio ainda não foi verificado. Configure o DNS e clique em Verificar.',
   invalid_sender: 'Preencha o nome e o endereço do remetente.',
   invalid_reply_to: 'O e-mail de resposta é inválido.',
+  invalid_tracking_subdomain: 'Use só letras, números e hífen no subdomínio de rastreio (ex.: links).',
   sender_not_set: 'Escolha o remetente antes de testar.',
   send_failed: 'A Resend não aceitou o envio.',
   encryption_unavailable: 'Não foi possível proteger a chave agora. Tente de novo.',
@@ -112,6 +113,14 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
   const [sender, setSender] = useState({ domain_id: '', from_local: 'contato', from_name: '', reply_to: '' });
   const [brand, setBrand] = useState({ brand_color: '', logo_url: '', footer_text: '' });
   const [testTo, setTestTo] = useState('');
+  const [tracking, setTracking] = useState({ open: true, click: true, sub: 'links' });
+  useEffect(() => {
+    if (!openDomain) return;
+    setTracking({
+      open: openDomain.open_tracking ?? true, click: openDomain.click_tracking ?? true,
+      sub: openDomain.tracking_subdomain ?? 'links',
+    });
+  }, [openDomain?.id, openDomain?.tracking_subdomain]); // eslint-disable-line react-hooks/exhaustive-deps
   const [editingTpl, setEditingTpl] = useState<EmailTemplate | 'new' | null>(null);
 
   const { data: settings } = useQuery({
@@ -346,6 +355,28 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
           <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
             <DialogHeader><DialogTitle>{uiText('DNS de')} {openDomain.name}</DialogTitle></DialogHeader>
             <p className="text-sm text-muted-foreground">{uiText('Crie estes registros no provedor do seu domínio (Registro.br, Cloudflare, GoDaddy...). Pode levar algumas horas para valer.')}</p>
+            <div className="space-y-2 rounded-lg border p-3">
+              <p className="text-sm font-medium">{uiText('Rastrear aberturas e cliques')}</p>
+              <p className="text-xs text-muted-foreground">
+                {openDomain.tracking_subdomain
+                  ? `${uiText('Subdomínio de rastreio')}: ${openDomain.tracking_subdomain}.${openDomain.name} · ${uiText('aberturas')} ${openDomain.open_tracking ? uiText('ligado') : uiText('desligado')} · ${uiText('cliques')} ${openDomain.click_tracking ? uiText('ligado') : uiText('desligado')}`
+                  : uiText('Mostra no Seialz quem abriu e clicou. A Resend usa um subdomínio próprio para isso: depois de salvar, aparece um registro CNAME a mais aqui embaixo para criar no DNS e verificar.')}
+              </p>
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <label className="flex items-center gap-2"><Checkbox checked={tracking.open} onCheckedChange={(v) => setTracking({ ...tracking, open: v === true })} />{uiText('Aberturas')}</label>
+                <label className="flex items-center gap-2"><Checkbox checked={tracking.click} onCheckedChange={(v) => setTracking({ ...tracking, click: v === true })} />{uiText('Cliques')}</label>
+                <div className="flex items-center gap-1">
+                  <Input className="h-8 w-24" value={tracking.sub} disabled={!!openDomain.tracking_subdomain} onChange={(e) => setTracking({ ...tracking, sub: e.target.value })} />
+                  <span className="text-xs text-muted-foreground">.{openDomain.name}</span>
+                </div>
+                <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('tracking', async () => {
+                  const r = await call(orgId, 'domain_tracking', { domain_id: openDomain.id, open_tracking: tracking.open, click_tracking: tracking.click, tracking_subdomain: openDomain.tracking_subdomain ?? tracking.sub });
+                  setOpenDomain(r.domain);
+                  toast.success(uiText('Rastreio salvo. Crie o registro CNAME do subdomínio e clique em Verificar.'));
+                })}>{uiText('Salvar rastreio')}</Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">{uiText('O subdomínio não pode ser removido depois de definido (só trocado).')}</p>
+            </div>
             <div className="space-y-2">
               {(openDomain.records ?? []).map((r, i) => (
                 <div key={i} className="space-y-1 rounded-lg border p-2 text-xs">
