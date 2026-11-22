@@ -66,6 +66,18 @@ serve(async (req) => {
       result.scheduled_skipped++;
       continue;
     }
+    // Contato numa régua ativa: quem conduz é a régua, o agente não manda o agendado.
+    const { count: inCadence, error: cadenceError } = await supabase.from("cadence_enrollments")
+      .select("id", { count: "exact", head: true })
+      .eq("contact_id", msg.contact_id).eq("status", "active");
+    if (cadenceError) { result.scheduled_skipped++; continue; } // na dúvida, tenta na próxima execução
+    if ((inCadence ?? 0) > 0) {
+      await supabase.from("scheduled_messages")
+        .update({ status: "cancelled", error_message: "contato numa régua ativa" })
+        .eq("id", msg.id);
+      result.scheduled_skipped++;
+      continue;
+    }
     const { data: thread } = await supabase.from("message_threads")
       .select("ai_agent_id, ai_agent_released_at, assigned_user_id, ai_agents:ai_agent_id(name, is_enabled)")
       .eq("id", msg.thread_id).maybeSingle();
