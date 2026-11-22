@@ -47,7 +47,7 @@ export function CadenceReport({ organizationId }: { organizationId: string }) {
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <div>
           <CardTitle className="text-base">{uiText('Resultados')}</CardTitle>
-          <CardDescription>{uiText('Inscrições no período. "Ganhou" conta oportunidades ganhas depois de entrar na régua.')}</CardDescription>
+          <CardDescription>{uiText('Quem entrou nas réguas no período. "Ganhou" = ganhou depois de entrar.')}</CardDescription>
         </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -77,7 +77,7 @@ export function CadenceReport({ organizationId }: { organizationId: string }) {
                   <th className="py-2 pr-2 font-medium">{uiText('Responderam')}</th>
                   <th className="py-2 pr-2 font-medium">{uiText('Ganhou')}</th>
                   <th className="py-2 pr-2 font-medium">{uiText('Enviados')}</th>
-                  <th className="py-2 font-medium">{uiText('Pulados / falhas')}</th>
+                  <th className="py-2 font-medium">{uiText('Não enviados')}</th>
                 </tr>
               </thead>
               <tbody>

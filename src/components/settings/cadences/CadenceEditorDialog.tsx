@@ -17,6 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { uiText } from '@/lib/ui-locale';
 import { CadencePreview } from './CadencePreview';
+import { useTokenOptions } from './useTokenOptions';
 
 export interface CadenceRow {
   id: string;
@@ -126,6 +127,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
   const [steps, setSteps] = useState<StepDraft[]>([]);
   const [loadedSteps, setLoadedSteps] = useState(!cadence);
   const [saving, setSaving] = useState(false);
+  const tokenOptions = useTokenOptions(organizationId);
 
   const { data: fields } = useQuery({
     queryKey: ['cadence-fields', organizationId],
@@ -343,7 +345,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                   <FieldValueInput field={triggerFieldId ? fieldById.get(triggerFieldId) : undefined} value={triggerFieldValue}
                     onChange={setTriggerFieldValue} placeholder={uiText('Qualquer valor')} />
                 </div>
-                <p className="text-xs text-muted-foreground">{uiText('Vazio = entra quando o campo for preenchido com qualquer valor.')}</p>
+                <p className="text-xs text-muted-foreground">{uiText('Em branco: qualquer valor.')}</p>
               </div>
             )}
             <div className="space-y-1">
@@ -363,7 +365,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            {uiText('Ganhar, perder ou marcar "não contatar" sempre encerra. Uma régua por vez: entrar numa nova encerra a anterior.')}
+            {uiText('Ganhar, perder ou "não contatar" sempre encerra. Entrar numa régua nova encerra a anterior.')}
           </p>
 
           <div className="space-y-3">
@@ -443,7 +445,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                         </SelectContent>
                       </Select>
                       {(templates ?? []).length === 0 && (
-                        <p className="text-xs text-muted-foreground">{uiText('Nenhum template aprovado que um WhatsApp comercial ativo da organização consiga enviar.')}</p>
+                        <p className="text-xs text-muted-foreground">{uiText('Nenhum template aprovado para o seu número de WhatsApp.')}</p>
                       )}
                       {tpl?.body && <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-2 text-xs">{tpl.body}</p>}
                       {varKeys.map((k) => (
@@ -455,23 +457,23 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                           <Select value="" onValueChange={(tok) => update(s.key, { template_variables: { ...s.template_variables, [k]: `${s.template_variables[k] ?? ''}${tok}` } })}>
                             <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder={uiText('Inserir campo')} /></SelectTrigger>
                             <SelectContent>
-                              {TOKENS.map((t) => <SelectItem key={t.token} value={t.token}>{uiText(t.label)}</SelectItem>)}
+                              {tokenOptions.map((t) => <SelectItem key={t.token} value={t.token}>{uiText(t.label)}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
                       ))}
                       {varKeys.length > 0 && (
-                        <p className="text-xs text-muted-foreground">{uiText('Campo personalizado: escreva {{custom.nome_interno}}. Se o valor estiver vazio na hora, o passo é pulado.')}</p>
+                        <p className="text-xs text-muted-foreground">{uiText('Se o campo estiver vazio na hora, o passo não sai.')}</p>
                       )}
                       <label className="flex items-center gap-2 text-sm">
                         <Checkbox checked={s.is_marketing} onCheckedChange={(v) => update(s.key, { is_marketing: v === true })} />
-                        {uiText('É marketing (só sai com aceite e conta no limite semanal)')}
+                        {uiText('É marketing (só para quem aceitou receber)')}
                       </label>
                     </div>
                   ) : s.kind === 'email' ? (
                     <div className="space-y-2">
                       {!emailTemplates?.ready && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400">{uiText('O e-mail da organização ainda não está conectado (Configurações → Integrações → E-mail). Os passos de e-mail vão falhar até conectar.')}</p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400">{uiText('O e-mail ainda não está conectado (Integrações → E-mail). Sem isso, este passo não sai.')}</p>
                       )}
                       <Select value={s.email_template_id ?? undefined} onValueChange={(v) => update(s.key, { email_template_id: v })}>
                         <SelectTrigger className="h-9"><SelectValue placeholder={uiText('Escolha um modelo de e-mail')} /></SelectTrigger>
@@ -480,7 +482,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                         </SelectContent>
                       </Select>
                       {(emailTemplates?.list ?? []).length === 0 && <p className="text-xs text-muted-foreground">{uiText('Nenhum modelo de e-mail. Crie em Configurações → Modelos de e-mail.')}</p>}
-                      <p className="text-xs text-muted-foreground">{uiText('Modelo de marketing só vai para quem aceitou e leva o link de descadastro.')}</p>
+                      <p className="text-xs text-muted-foreground">{uiText('Modelo de marketing só vai para quem aceitou receber.')}</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -529,17 +531,17 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                       </>
                     )}
                   </div>
-                  {s.cond_field_id && <p className="text-[11px] text-muted-foreground">{uiText('A condição é lida na hora do envio. Vários passos no mesmo dia, cada um com uma condição, formam os ramos.')}</p>}
+                  {s.cond_field_id && <p className="text-[11px] text-muted-foreground">{uiText('Use para mandar mensagens diferentes conforme o campo. Vale o valor do campo no momento do envio.')}</p>}
                   <label className="flex items-center gap-2 text-sm">
                     <Checkbox checked={s.ignore_send_window} onCheckedChange={(v) => update(s.key, { ignore_send_window: v === true })} />
-                    {uiText('Sai na hora exata, fora da janela de envio')}
+                    {uiText('Pode sair fora do horário de envio')}
                   </label>
                 </div>
               );
             })}
             <Button variant="outline" size="sm" onClick={() => setSteps((p) => [...p, blankStep()])}><Plus className="mr-1 h-4 w-4" />{uiText('Adicionar passo')}</Button>
             {cadence?.is_active && (
-              <p className="text-xs text-muted-foreground">{uiText('A régua está ligada: tempos e passos novos valem para quem entrar depois. Template e variáveis valem já no próximo envio.')}</p>
+              <p className="text-xs text-muted-foreground">{uiText('A régua está ligada: mudanças nos tempos e passos valem para quem entrar depois.')}</p>
             )}
           </div>
 

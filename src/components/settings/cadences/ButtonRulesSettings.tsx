@@ -16,7 +16,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { uiText } from '@/lib/ui-locale';
-import { TOKENS, templateVariableKeys } from './CadenceEditorDialog';
+import { templateVariableKeys } from './CadenceEditorDialog';
+import { useTokenOptions } from './useTokenOptions';
 
 type ActionType = 'move_stage' | 'set_field' | 'create_task' | 'enroll_cadence' | 'cancel_cadence' | 'set_consent' | 'send_template';
 type Action = { type: ActionType; [k: string]: unknown };
@@ -74,6 +75,7 @@ function RuleEditor({ orgId, rule, onClose, onSaved }: { orgId: string; rule: Ru
   const [countsAsReply, setCountsAsReply] = useState(rule?.counts_as_reply ?? true);
   const [actions, setActions] = useState<Action[]>(rule?.actions ?? []);
   const [saving, setSaving] = useState(false);
+  const tokenOptions = useTokenOptions(orgId);
   const tplById = useMemo(() => new Map((cat?.templates ?? []).map((t) => [t.id, t])), [cat]);
   const withButtons = (cat?.templates ?? []).filter((t) => t.buttons.length > 0);
   const tpl = templateId !== ANY ? tplById.get(templateId) : undefined;
@@ -136,14 +138,14 @@ function RuleEditor({ orgId, rule, onClose, onSaved }: { orgId: string; rule: Ru
           <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
             <div>
               <p className="text-sm">{uiText('Conta como resposta do lead')}</p>
-              <p className="text-xs text-muted-foreground">{uiText('Desligado: a régua em andamento segue normalmente (ex.: "Agora não").')}</p>
+              <p className="text-xs text-muted-foreground">{uiText('Desligado: a régua continua (ex.: "Agora não").')}</p>
             </div>
             <Switch checked={countsAsReply} onCheckedChange={setCountsAsReply} />
           </div>
 
           <div className="space-y-2">
             <Label>{uiText('Ações, nesta ordem')}</Label>
-            {actions.length === 0 && <p className="text-xs text-muted-foreground">{uiText('Sem ação: o toque só aparece na conversa, como hoje.')}</p>}
+            {actions.length === 0 && <p className="text-xs text-muted-foreground">{uiText('Sem ação: o toque só aparece na conversa.')}</p>}
             {actions.map((a, i) => {
               const field = a.type === 'set_field' ? cat?.fields.find((f) => f.id === a.field_definition_id) : undefined;
               const sendTpl = a.type === 'send_template' ? tplById.get(String(a.template_id ?? '')) : undefined;
@@ -235,7 +237,7 @@ function RuleEditor({ orgId, rule, onClose, onSaved }: { orgId: string; rule: Ru
                           <InlineInput className="h-8 min-w-[160px] flex-1 text-sm" value={vars[k] ?? ''} onChange={(e) => setAction(i, { variables: { ...vars, [k]: e.target.value } })} />
                           <Select value="" onValueChange={(tok) => setAction(i, { variables: { ...vars, [k]: `${vars[k] ?? ''}${tok}` } })}>
                             <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue placeholder={uiText('Inserir campo')} /></SelectTrigger>
-                            <SelectContent>{TOKENS.map((t) => <SelectItem key={t.token} value={t.token}>{uiText(t.label)}</SelectItem>)}</SelectContent>
+                            <SelectContent>{tokenOptions.map((t) => <SelectItem key={t.token} value={t.token}>{uiText(t.label)}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
                       ))}
@@ -248,7 +250,7 @@ function RuleEditor({ orgId, rule, onClose, onSaved }: { orgId: string; rule: Ru
               <SelectTrigger className="h-9 w-[240px]"><SelectValue placeholder={uiText('+ Adicionar ação')} /></SelectTrigger>
               <SelectContent>{(Object.keys(ACTION_LABEL) as ActionType[]).map((t) => <SelectItem key={t} value={t}>{uiText(ACTION_LABEL[t])}</SelectItem>)}</SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">{uiText('Nenhum botão marca a oportunidade como perdida: para isso, crie uma tarefa para alguém confirmar.')}</p>
+            <p className="text-xs text-muted-foreground">{uiText('Para marcar como perdida, crie uma tarefa para alguém confirmar.')}</p>
           </div>
         </div>
         <DialogFooter>
@@ -305,7 +307,7 @@ export function ButtonRulesSettings() {
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
           <div>
             <CardTitle>{uiText('Botões do WhatsApp')}</CardTitle>
-            <CardDescription>{uiText('Quando o lead toca num botão de resposta rápida, o CRM faz as ações configuradas. Botão sem regra aparece só na conversa.')}</CardDescription>
+            <CardDescription>{uiText('Quando o lead toca num botão da mensagem, o CRM faz as ações que você escolher.')}</CardDescription>
           </div>
           <Button size="sm" onClick={() => setEditing('new')}><Plus className="mr-1 h-4 w-4" />{uiText('Novo botão')}</Button>
         </CardHeader>
