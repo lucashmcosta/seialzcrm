@@ -32,6 +32,7 @@ import { LossDialog } from '@/components/opportunities/loss/LossDialog';
 import { OpportunityLossHistory } from '@/components/opportunities/loss/OpportunityLossHistory';
 import { OpportunityCloseDialog } from '@/components/opportunities/OpportunityCloseDialog';
 import { OpportunityReadinessCard } from '@/components/opportunities/OpportunityReadinessCard';
+import { OpportunityCadences } from '@/components/opportunities/OpportunityCadences';
 import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
 import { mensagemErroStatus } from '@/lib/opportunityClose';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
@@ -372,6 +373,10 @@ export default function OpportunityDetail() {
               <ProcessClassificationSlot opportunityId={opportunity.id} />
               <CommercialAttributionPanel key={opportunity.id} entityType="opportunity" entityId={opportunity.id} contactId={opportunity.contact_id} />
               <CustomFieldsCard module="opportunities" recordId={opportunity.id} />
+              {organization && (
+                <OpportunityCadences organizationId={organization.id} opportunityId={opportunity.id}
+                  isOpen={opportunity.status === 'open'} reloadKey={`${opportunity.status}:${opportunity.pipeline_stage_id}`} />
+              )}
               <OpportunityLossHistory opportunityId={opportunity.id} isLost={opportunity.status === 'lost'}
                 canCorrect={!!permissions.v2?.ferramentas?.corrigir_motivo_perda}
                 reloadKey={`${opportunity.status}:${opportunity.pipeline_stage_id}`} onChanged={fetchOpportunity} />
@@ -662,6 +667,10 @@ export default function OpportunityDetail() {
               <ProcessClassificationSlot opportunityId={opportunity.id} />
               <CommercialAttributionPanel key={opportunity.id} entityType="opportunity" entityId={opportunity.id} contactId={opportunity.contact_id} />
               <CustomFieldsCard module="opportunities" recordId={opportunity.id} />
+              {organization && (
+                <OpportunityCadences organizationId={organization.id} opportunityId={opportunity.id}
+                  isOpen={opportunity.status === 'open'} reloadKey={`${opportunity.status}:${opportunity.pipeline_stage_id}`} />
+              )}
               <OpportunityLossHistory opportunityId={opportunity.id} isLost={opportunity.status === 'lost'}
                 canCorrect={!!permissions.v2?.ferramentas?.corrigir_motivo_perda}
                 reloadKey={`${opportunity.status}:${opportunity.pipeline_stage_id}`} onChanged={fetchOpportunity} />
