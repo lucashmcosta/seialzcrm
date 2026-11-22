@@ -103,11 +103,20 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
   const { data: templates } = useQuery({
     queryKey: ['cadence-templates', organizationId],
     queryFn: async () => {
-      const { data } = await supabase.from('whatsapp_templates')
-        .select('id, friendly_name, meta_template_name, body, category')
-        .eq('organization_id', organizationId).eq('status', 'approved').neq('is_active', false)
-        .order('friendly_name');
-      return (data ?? []) as TemplateRow[];
+      // Só templates que algum WhatsApp comercial ativo da org consegue mandar (mesmo provedor e integração).
+      const [{ data }, { data: endpoints }] = await Promise.all([
+        supabase.from('whatsapp_templates')
+          .select('id, friendly_name, meta_template_name, body, category, provider, organization_integration_id')
+          .eq('organization_id', organizationId).eq('status', 'approved').neq('is_active', false)
+          .order('friendly_name'),
+        supabase.from('communication_endpoints')
+          .select('provider, organization_integration_id')
+          .eq('organization_id', organizationId).eq('is_active', true).eq('channel', 'whatsapp').eq('purpose', 'commercial'),
+      ]);
+      const eps = (endpoints ?? []) as Array<{ provider: string | null; organization_integration_id: string | null }>;
+      return ((data ?? []) as Array<TemplateRow & { provider: string | null; organization_integration_id: string | null }>)
+        .filter((t) => eps.some((e) => e.provider === t.provider
+          && (!t.organization_integration_id || e.organization_integration_id === t.organization_integration_id)));
     },
   });
   const templateById = useMemo(() => new Map((templates ?? []).map((t) => [t.id, t])), [templates]);
@@ -312,7 +321,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                         </SelectContent>
                       </Select>
                       {(templates ?? []).length === 0 && (
-                        <p className="text-xs text-muted-foreground">{uiText('Nenhum template aprovado nesta organização.')}</p>
+                        <p className="text-xs text-muted-foreground">{uiText('Nenhum template aprovado que um WhatsApp comercial ativo da organização consiga enviar.')}</p>
                       )}
                       {tpl?.body && <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-2 text-xs">{tpl.body}</p>}
                       {varKeys.map((k) => (
