@@ -29,6 +29,7 @@ import {
   resolveVerifyTokenForOi,
   resolveMetaCredentials,
 } from "../_shared/meta-whatsapp/credentials.ts";
+import { accountEventWabaIds, describeAccountEvent } from "../_shared/meta-whatsapp/account-events.ts";
 
 type MediaKind = "image" | "audio" | "video" | "document" | "sticker";
 const MEDIA_KINDS: MediaKind[] = ["image", "audio", "video", "document", "sticker"];
@@ -233,13 +234,32 @@ serve(async (req) => {
     }
   }
 
-  if (!appSecret) {
+  // Eventos de conta (account_update, qualidade, template) não trazem
+  // phone_number_id: o segredo vem das integrações da WABA (entry.id) ou do app
+  // da plataforma. Com phone_number_id o caminho acima segue idêntico.
+  const candidateSecrets: string[] = appSecret ? [appSecret] : [];
+  let via = "per_integration";
+  if (peekedPhoneIds.length === 0) {
+    const wabaIds = accountEventWabaIds(peek);
+    if (wabaIds.length > 0) {
+      via = "account_event";
+      candidateSecrets.push(...(await secretsForWabas(supabase, wabaIds)));
+    }
+  }
+
+  if (candidateSecrets.length === 0) {
     console.warn("[meta-wa-webhook] no_app_secret_available", { peekedPhoneIds });
     return new Response("invalid_signature", { status: 401, headers: corsHeaders });
   }
 
-  const expected = "sha256=" + (await hmacSha256Hex(appSecret, rawBody));
-  const signatureMatch = timingSafeEqual(signature, expected);
+  let signatureMatch = false;
+  for (const secret of candidateSecrets) {
+    const expected = "sha256=" + (await hmacSha256Hex(secret, rawBody));
+    if (timingSafeEqual(signature, expected)) {
+      signatureMatch = true;
+      break;
+    }
+  }
 
   console.log("[meta-wa-webhook] POST", JSON.stringify({
     has_x_hub_signature_256: !!signature,
@@ -247,7 +267,7 @@ serve(async (req) => {
     signature_match: signatureMatch,
     phone_number_ids: peekedPhoneIds,
     matched_integration_id: matchedIntegrationId,
-    via: "per_integration",
+    via,
   }));
 
   if (!signatureMatch) {
@@ -269,7 +289,10 @@ serve(async (req) => {
       for (const change of entry?.changes ?? []) {
         const value = change?.value ?? {};
         const phoneNumberId = value?.metadata?.phone_number_id;
-        if (!phoneNumberId) continue;
+        if (!phoneNumberId) {
+          await handleAccountEvent(supabase, entry, change, signatureMatch, auditHeaders);
+          continue;
+        }
 
         const { data: endpoint } = await supabase
           .from("communication_endpoints")
@@ -1205,4 +1228,137 @@ async function updateInboundEventStatus(
   } catch (e) {
     console.error("[meta-wa-webhook] audit_update_exception", e);
   }
+}
+
+// ============================================================
+// Eventos de conta (sem phone_number_id): account_update, qualidade do número,
+// qualidade/status de template. Antes eram recusados com 401 e se perdiam.
+// ============================================================
+
+function wabaOfIntegration(row: any): string | null {
+  const id = row?.meta_waba_id ?? row?.connected_account?.waba_id ?? row?.config_values?.waba_id ?? null;
+  return id != null ? String(id) : null;
+}
+
+/** Integrações (ligadas ou não) cuja WABA está na lista. wabaIds já validados como só dígitos. */
+async function integrationsForWabas(supabase: any, wabaIds: string[]): Promise<any[]> {
+  if (wabaIds.length === 0) return [];
+  const list = wabaIds.join(",");
+  const { data, error } = await supabase
+    .from("organization_integrations")
+    .select("id, organization_id, meta_waba_id, connected_account, config_values")
+    .or(`meta_waba_id.in.(${list}),connected_account->>waba_id.in.(${list}),config_values->>waba_id.in.(${list})`);
+  if (error) {
+    console.error("[meta-wa-webhook] account_event_integrations_lookup_failed", error.message);
+    return [];
+  }
+  return (data ?? []).filter((row: any) => wabaIds.includes(wabaOfIntegration(row) ?? ""));
+}
+
+/** Segredos candidatos para validar a assinatura de um evento de conta. */
+async function secretsForWabas(supabase: any, wabaIds: string[]): Promise<string[]> {
+  const secrets = new Set<string>();
+  for (const row of await integrationsForWabas(supabase, wabaIds)) {
+    try {
+      const resolved = await resolveMetaCredentials(supabase, row.id);
+      if (resolved.appSecret) secrets.add(resolved.appSecret);
+    } catch (e) {
+      console.warn("[meta-wa-webhook] account_event_credentials_failed", { oi: row.id, err: (e as Error).message });
+    }
+  }
+  // App da plataforma (Embedded Signup): cobre WABA ainda sem integração gravada.
+  const platform = Deno.env.get("FACEBOOK_APP_SECRET")?.trim();
+  if (platform) secrets.add(platform);
+  return [...secrets];
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function handleAccountEvent(
+  supabase: any,
+  entry: any,
+  change: any,
+  signatureValid: boolean,
+  rawHeaders: Record<string, string>,
+): Promise<void> {
+  const wabaId = entry?.id != null ? String(entry.id) : "";
+  const field = String(change?.field ?? "unknown");
+  const value = change?.value ?? {};
+  const summary = describeAccountEvent(field, value);
+
+  const orgIds = /^\d+$/.test(wabaId)
+    ? [...new Set((await integrationsForWabas(supabase, [wabaId])).map((r: any) => r.organization_id as string))]
+    : [];
+
+  console.log("[meta-wa-webhook] account_event", JSON.stringify({
+    waba_id: wabaId,
+    field,
+    event: value?.event ?? value?.new_quality_score ?? null,
+    critical: summary.critical,
+    orgs: orgIds.length,
+  }));
+
+  // A Meta reenvia o mesmo corpo quando não recebe 200: o hash do corpo deduplica,
+  // e o aviso só sai quando a gravação é nova.
+  const bodyHash = await sha256Hex(JSON.stringify(change ?? {}));
+  for (const orgId of orgIds.length > 0 ? orgIds : [null]) {
+    try {
+      const { error } = await supabase.from("integration_inbound_events").insert({
+        organization_id: orgId,
+        integration_slug: "meta-whatsapp-cloud",
+        source_event: `account:${field}`,
+        external_id: wabaId || null,
+        idempotency_key: `meta:account:${wabaId}:${field}:${bodyHash}:${orgId ?? "no-org"}`,
+        raw_payload: { waba_id: wabaId, time: entry?.time ?? null, field, value },
+        raw_headers: { waba_id: wabaId, ...rawHeaders },
+        http_method: "POST",
+        request_path: "/meta-whatsapp-webhook",
+        received_at: new Date().toISOString(),
+        process_status: orgId ? "processed" : "skipped",
+        process_error: orgId ? null : "no_integration_for_waba",
+        signature_valid: signatureValid,
+        signature_algo: "sha256",
+        aggregate_type: "whatsapp_account",
+        handler_key: "meta-whatsapp-webhook",
+        parser_function: "meta-whatsapp-webhook",
+        parser_version: 1,
+      });
+      if (isDuplicateAuditError(error)) continue;
+      if (error) console.error("[meta-wa-webhook] account_event_insert_error", { error, wabaId, field });
+      if (orgId && summary.critical) await notifyOrgAdmins(supabase, orgId, summary);
+    } catch (e) {
+      console.error("[meta-wa-webhook] account_event_exception", { wabaId, field, err: (e as Error).message });
+    }
+  }
+}
+
+/** Avisa os administradores da org (perfil de sistema, nunca pelo nome). */
+async function notifyOrgAdmins(
+  supabase: any,
+  organizationId: string,
+  summary: { title: string; body: string },
+): Promise<void> {
+  const { data: admins, error } = await supabase
+    .from("user_organizations")
+    .select("user_id, permission_profiles!inner(is_system)")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true)
+    .eq("permission_profiles.is_system", true);
+  if (error) {
+    console.error("[meta-wa-webhook] account_event_admins_lookup_failed", error.message);
+    return;
+  }
+  const rows = (admins ?? []).map((a: any) => ({
+    organization_id: organizationId,
+    user_id: a.user_id,
+    type: "whatsapp_account_alert",
+    title: summary.title,
+    body: summary.body,
+  }));
+  if (rows.length === 0) return;
+  const { error: insErr } = await supabase.from("notifications").insert(rows);
+  if (insErr) console.error("[meta-wa-webhook] account_event_notify_failed", insErr.message);
 }
