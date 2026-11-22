@@ -46,12 +46,15 @@ serve(async (req) => {
       const alert = healthAlert(prev, next, phone?.display_phone_number ?? cv.display_phone_number ?? "");
 
       const now = new Date().toISOString();
+      // Relê antes de gravar: o webhook pode ter marcado ou liberado o bloqueio de envio agora há pouco.
+      const { data: fresh } = await admin.from("organization_integrations").select("config_values").eq("id", oi.id).maybeSingle();
+      const base = (fresh?.config_values ?? cv) as Record<string, any>;
       const { error: upErr } = await admin.from("organization_integrations").update({
         config_values: {
-          ...cv,
+          ...base,
           ...next,
-          display_phone_number: phone?.display_phone_number ?? cv.display_phone_number,
-          verified_name: phone?.verified_name ?? cv.verified_name,
+          display_phone_number: phone?.display_phone_number ?? base.display_phone_number,
+          verified_name: phone?.verified_name ?? base.verified_name,
           health_checked_at: now,
           health_check_error: null,
           last_validated_at: now,
