@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { uiText } from '@/lib/ui-locale';
 
-interface SendRow { id: string; kind: string; status: string; scheduled_at: string; sent_at: string | null; result_reason: string | null; step_id: string | null; cadence_steps: { position: number; task_title: string | null; whatsapp_templates: { friendly_name: string | null; meta_template_name: string | null } | null } | null }
+interface SendRow { id: string; kind: string; status: string; scheduled_at: string; sent_at: string | null; result_reason: string | null; step_id: string | null; cadence_steps: { position: number; task_title: string | null; whatsapp_templates: { friendly_name: string | null; meta_template_name: string | null } | null; email_templates?: { name: string } | null } | null }
 interface EnrollmentRow { id: string; status: string; enrolled_at: string; ended_at: string | null; end_reason: string | null; cadences: { name: string } | null; cadence_sends: SendRow[] }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -42,7 +42,7 @@ export function OpportunityCadences({ organizationId, opportunityId, isOpen, rel
     queryKey: ['opportunity-cadences', opportunityId, reloadKey],
     queryFn: async () => {
       const { data, error } = await supabase.from('cadence_enrollments' as never)
-        .select('id, status, enrolled_at, ended_at, end_reason, cadences:cadence_id(name), cadence_sends(id, kind, status, scheduled_at, sent_at, result_reason, step_id, cadence_steps:step_id(position, task_title, whatsapp_templates:template_id(friendly_name, meta_template_name)))')
+        .select('id, status, enrolled_at, ended_at, end_reason, cadences:cadence_id(name), cadence_sends(id, kind, status, scheduled_at, sent_at, result_reason, step_id, cadence_steps:step_id(position, task_title, whatsapp_templates:template_id(friendly_name, meta_template_name), email_templates:email_template_id(name)))')
         .eq('opportunity_id', opportunityId).order('enrolled_at', { ascending: false }).limit(5);
       if (error) throw error;
       return (data ?? []) as unknown as EnrollmentRow[];
@@ -98,6 +98,8 @@ export function OpportunityCadences({ organizationId, opportunityId, isOpen, rel
                 {sends.map((s) => {
                   const label = s.kind === 'task'
                     ? `${uiText('Tarefa')}: ${s.cadence_steps?.task_title ?? ''}`
+                    : s.kind === 'email'
+                    ? `${uiText('E-mail')}: ${s.cadence_steps?.email_templates?.name ?? uiText('modelo')}`
                     : `WhatsApp: ${s.cadence_steps?.whatsapp_templates?.friendly_name ?? s.cadence_steps?.whatsapp_templates?.meta_template_name ?? uiText('template')}`;
                   return (
                     <li key={s.id} className="flex flex-wrap items-center gap-2 text-xs">

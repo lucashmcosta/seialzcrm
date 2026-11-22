@@ -92,6 +92,7 @@ const settingsGroups: SettingsGroup[] = [
       { icon: ChatCircleText, label: 'WhatsApp Templates', description: 'Gerencie modelos de mensagem do WhatsApp', to: 'whatsapp-templates', permission: 'canManageIntegrations', flag: 'hasWhatsApp' },
       { icon: ChatCircleText, label: 'Réguas', description: 'Sequências automáticas por etapa do funil: templates e tarefas', to: 'cadences', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },
       { icon: ChatCircleText, label: 'Botões do WhatsApp', description: 'O que o CRM faz quando o lead toca num botão de um template', to: 'whatsapp-buttons', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },
+      { icon: ChatCircleText, label: 'Modelos de e-mail', description: 'Modelos usados nos passos de e-mail das réguas', to: 'email-templates', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },
       { icon: ChatCircleText, label: 'Respostas Rápidas', description: 'Snippets internos para respostas na janela aberta do WhatsApp', to: 'whatsapp-snippets', permission: 'canManageSettings', flag: 'hasWhatsApp' },
       { icon: Robot, label: 'Agente IA', description: 'Configure assistente virtual inteligente', to: 'ai-agent', badge: 'Beta', badgeVariant: 'warning', permission: 'canManageIntegrations', flag: 'showAIFeatures' },
       { icon: Sparkle, label: 'Seialz Intelligence', description: 'Configure captura, transcrição e detecções comportamentais', to: 'intelligence', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },

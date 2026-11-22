@@ -136,6 +136,17 @@ export function IntegrationsSettings() {
     enabled: !!organization,
   });
 
+  // Status do e-mail da org (conta Resend da própria org), para o card "E-mail".
+  const { data: emailConn } = useQuery({
+    queryKey: ['email-settings-status', organization?.id],
+    enabled: !!organization?.id,
+    queryFn: async () => {
+      const { data } = await supabase.from('organization_email_settings' as never)
+        .select('status, from_email').eq('organization_id', organization!.id).maybeSingle();
+      return (data as unknown as { status: string; from_email: string | null } | null) ?? null;
+    },
+  });
+
   // Status da conexão Meta canônica (para o card único "Meta")
   const { data: metaConn } = useQuery({
     queryKey: ['meta-conn-status', organization?.id],
@@ -483,6 +494,29 @@ export function IntegrationsSettings() {
           </div>
         ) : filteredIntegrations && filteredIntegrations.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {(selectedCategory === 'all' || selectedCategory === 'email') && (
+              <Card key="email-resend" className="p-4">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="p-2 rounded-lg bg-muted shrink-0"><EnvelopeSimple className="h-6 w-6 text-muted-foreground" /></div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-medium text-foreground">{uiText("E-mail")}</h3>
+                      {emailConn?.status === 'connected'
+                        ? <Badge className="text-[10px] bg-green-600 text-white">{uiText("Conectado")}</Badge>
+                        : <Badge variant="secondary" className="text-[10px]">{uiText("Não conectado")}</Badge>}
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {emailConn?.from_email ? emailConn.from_email : uiText("Envie os e-mails das réguas com o seu domínio, pela sua conta Resend.")}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <Button variant="outline" size="sm" onClick={() => navigate('/settings/integrations/email')}>
+                    {emailConn?.status === 'connected' ? uiText("Ver integração") : uiText("Conectar")}
+                  </Button>
+                </div>
+              </Card>
+            )}
             {/* Card único "Meta" — consolida Lead Generation, Conversions API e WhatsApp Cloud.
                 A superfície completa (Conexão, Ativos, Performance, Orgânico e módulos) abre em /settings/integrations/meta. */}
             {filteredIntegrations.some((i) => META_CAPABILITY_SLUGS.includes(i.slug)) && (
