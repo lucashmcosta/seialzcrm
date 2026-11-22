@@ -23,6 +23,7 @@ interface AgentRow {
   presents_as_assistant: boolean;
   followup_enabled: boolean;
   followup_delays_minutes: number[] | null;
+  followup_optout_attempt: number | null;
 }
 
 interface Stats {
@@ -52,13 +53,15 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
   const [followup, setFollowup] = useState(false);
   const [delay1, setDelay1] = useState('2');
   const [delay2, setDelay2] = useState('20');
+  // Em qual retomada vai o botão "Não tenho interesse": 'off', '1' ou '2'.
+  const [optout, setOptout] = useState<'off' | '1' | '2'>('off');
   const [saving, setSaving] = useState(false);
 
   const agentQuery = useQuery({
     queryKey: ['agent-distribution', organizationId],
     queryFn: async (): Promise<AgentRow | null> => {
       const { data, error } = await supabase.from('ai_agents')
-        .select('id, name, is_enabled, distribution_mode, distribution_value, handoff_ack_message, presents_as_assistant, followup_enabled, followup_delays_minutes' as never)
+        .select('id, name, is_enabled, distribution_mode, distribution_value, handoff_ack_message, presents_as_assistant, followup_enabled, followup_delays_minutes, followup_optout_attempt' as never)
         .eq('organization_id', organizationId).eq('agent_type', 'sdr')
         .order('is_enabled', { ascending: false }).order('created_at', { ascending: false })
         .limit(1).maybeSingle();
@@ -88,6 +91,7 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
     const d = agent.followup_delays_minutes ?? [120, 1200];
     setDelay1(String((d[0] ?? 120) / 60));
     setDelay2(String((d[1] ?? 1200) / 60));
+    setOptout(agent.followup_optout_attempt === 1 ? '1' : agent.followup_optout_attempt === 2 ? '2' : 'off');
   }, [agent]);
 
   // Sem agente na org, a tela de rodízio fica como sempre foi.
@@ -99,18 +103,20 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
   const delaysMinutes = hours.filter((h, i) => i === 0 || (delay2.trim() !== '' && h > 0)).map((h) => Math.round(h * 60));
   const delaysValid = !followup || (delaysMinutes.length > 0 && delaysMinutes.every((m, i) => m >= 30 && m <= 1380 && (i === 0 || m > delaysMinutes[i - 1])));
   const valid = isValidDistribution(mode, parsed) && delaysValid;
+  const optoutValue = optout === 'off' ? null : Number(optout);
   const dirty = mode !== agent.distribution_mode
     || (mode !== 'all' && parsed !== agent.distribution_value)
     || ack !== (agent.handoff_ack_message ?? DEFAULT_HANDOFF_ACK)
     || asAssistant !== (agent.presents_as_assistant !== false)
     || followup !== (agent.followup_enabled === true)
-    || delaysMinutes.join(',') !== (agent.followup_delays_minutes ?? [120, 1200]).join(',');
+    || delaysMinutes.join(',') !== (agent.followup_delays_minutes ?? [120, 1200]).join(',')
+    || optoutValue !== (agent.followup_optout_attempt ?? null);
 
   const save = async () => {
     if (!valid) return;
     setSaving(true);
     const { error } = await supabase.from('ai_agents')
-      .update({ distribution_mode: mode, distribution_value: mode === 'all' ? null : parsed, handoff_ack_message: ack.trim(), presents_as_assistant: asAssistant, followup_enabled: followup, followup_delays_minutes: delaysMinutes } as never)
+      .update({ distribution_mode: mode, distribution_value: mode === 'all' ? null : parsed, handoff_ack_message: ack.trim(), presents_as_assistant: asAssistant, followup_enabled: followup, followup_delays_minutes: delaysMinutes, followup_optout_attempt: optoutValue } as never)
       .eq('id', agent.id);
     setSaving(false);
     if (error) {
@@ -199,6 +205,22 @@ export function AgentDistributionCard({ organizationId, roundRobinEnabled }: { o
                 <Label htmlFor="agent-followup-2">2ª retomada (horas, opcional)</Label>
                 <Input id="agent-followup-2" type="number" step="0.5" min={0.5} max={23} className="w-28" value={delay2} onChange={(e) => setDelay2(e.target.value)} />
               </div>
+            </div>
+          )}
+          {followup && (
+            <div className="space-y-1.5">
+              <Label htmlFor="agent-followup-optout">Botão "Não tenho interesse"</Label>
+              <Select value={optout} onValueChange={(v) => setOptout(v as 'off' | '1' | '2')}>
+                <SelectTrigger id="agent-followup-optout" className="w-56"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="off">Sem botão</SelectItem>
+                  <SelectItem value="1">Na 1ª retomada</SelectItem>
+                  <SelectItem value="2">Na 2ª retomada</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Quem não quer mais conversar toca no botão em vez de bloquear ou denunciar o número, o que protege a qualidade da conta no WhatsApp. O toque encerra a conversa com {agent.name}, sem novas retomadas, e registra que o contato não quer receber marketing pelo WhatsApp. Só em números da API oficial da Meta.
+              </p>
             </div>
           )}
           {followup && !delaysValid && (
