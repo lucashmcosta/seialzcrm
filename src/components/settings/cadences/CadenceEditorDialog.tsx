@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InlineInput } from '@/components/ui/inline-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -98,7 +99,7 @@ function FieldValueInput({ field, value, onChange, placeholder }: { field: Field
       </Select>
     );
   }
-  return <Input className="h-8 w-44" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />;
+  return <InlineInput className="h-8 w-44" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />;
 }
 
 /** Variáveis do template, na ordem em que aparecem no texto ({{1}}, {{2}} ou nomes). */
@@ -384,7 +385,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                     </Select>
                     {s.timing === 'after_enrollment' ? (
                       <>
-                        <Input type="number" min={0} className="h-8 w-20" value={s.delay_value}
+                        <InlineInput type="number" min={0} className="h-8 w-20" value={s.delay_value}
                           onChange={(e) => update(s.key, { delay_value: Math.max(0, Number(e.target.value) || 0) })} />
                         <Select value={s.delay_unit} onValueChange={(v) => update(s.key, { delay_unit: v as StepDraft['delay_unit'] })}>
                           <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
@@ -398,7 +399,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                     ) : (
                       <>
                         {s.timing_direction !== 'same' && (
-                          <Input type="number" min={1} className="h-8 w-16" value={s.timing_days}
+                          <InlineInput type="number" min={1} className="h-8 w-16" value={s.timing_days}
                             onChange={(e) => update(s.key, { timing_days: Math.max(1, Number(e.target.value) || 1) })} />
                         )}
                         <Select value={s.timing_direction} onValueChange={(v) => update(s.key, { timing_direction: v as StepDraft['timing_direction'] })}>
@@ -414,7 +415,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                           <SelectContent>{dateFields.map((f) => <SelectItem key={f.id} value={f.id}>{fieldLabel(f)}</SelectItem>)}</SelectContent>
                         </Select>
                         <span className="text-xs text-muted-foreground">{uiText('às')}</span>
-                        <Input type="time" className="h-8 w-24" value={s.timing_time} onChange={(e) => update(s.key, { timing_time: e.target.value })} />
+                        <InlineInput type="time" className="h-8 w-24" value={s.timing_time} onChange={(e) => update(s.key, { timing_time: e.target.value })} />
                       </>
                     )}
                     <div className="ml-auto flex gap-1">
@@ -448,7 +449,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                       {varKeys.map((k) => (
                         <div key={k} className="flex flex-wrap items-center gap-2">
                           <span className="w-14 font-mono text-xs">{`{{${k}}}`}</span>
-                          <Input className="h-8 min-w-[180px] flex-1 text-sm" value={s.template_variables[k] ?? ''}
+                          <InlineInput className="h-8 min-w-[180px] flex-1 text-sm" value={s.template_variables[k] ?? ''}
                             placeholder={uiText('Texto ou campo')}
                             onChange={(e) => update(s.key, { template_variables: { ...s.template_variables, [k]: e.target.value } })} />
                           <Select value="" onValueChange={(tok) => update(s.key, { template_variables: { ...s.template_variables, [k]: `${s.template_variables[k] ?? ''}${tok}` } })}>
@@ -487,7 +488,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                       <Textarea rows={2} value={s.task_description} placeholder={uiText('Descrição (opcional)')} onChange={(e) => update(s.key, { task_description: e.target.value })} />
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <span className="text-xs text-muted-foreground">{uiText('Prazo')}</span>
-                        <Input type="number" min={0} className="h-8 w-20" value={s.task_due_hours}
+                        <InlineInput type="number" min={0} className="h-8 w-20" value={s.task_due_hours}
                           onChange={(e) => update(s.key, { task_due_hours: Math.max(0, Number(e.target.value) || 0) })} />
                         <span className="text-xs text-muted-foreground">{uiText('horas')}</span>
                         <Select value={s.task_priority} onValueChange={(v) => update(s.key, { task_priority: v as StepDraft['task_priority'] })}>

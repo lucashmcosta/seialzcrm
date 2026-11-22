@@ -9,6 +9,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InlineInput } from '@/components/ui/inline-input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
@@ -81,22 +82,24 @@ function SendRulesCard({ organizationId }: { organizationId: string }) {
 
         <div className="space-y-2">
           <Label>{uiText('Janela de envio')}</Label>
-          {DAYS.map((d) => {
-            const w = form.send_windows[d.iso];
-            return (
-              <div key={d.iso} className="flex flex-wrap items-center gap-2">
-                <Switch checked={!!w} onCheckedChange={(v) => setDay(d.iso, v ? ['09:00', '18:00'] : null)} />
-                <span className="w-20 text-sm">{uiText(d.label)}</span>
-                {w ? (
-                  <>
-                    <Input type="time" className="h-8 w-28" value={w[0]} onChange={(e) => setDay(d.iso, [e.target.value, w[1]])} />
-                    <span className="text-xs text-muted-foreground">{uiText('até')}</span>
-                    <Input type="time" className="h-8 w-28" value={w[1]} onChange={(e) => setDay(d.iso, [w[0], e.target.value])} />
-                  </>
-                ) : <span className="text-xs text-muted-foreground">{uiText('não envia')}</span>}
-              </div>
-            );
-          })}
+          <div className="divide-y rounded-lg border">
+            {DAYS.map((d) => {
+              const w = form.send_windows[d.iso];
+              return (
+                <div key={d.iso} className="flex min-h-11 items-center gap-3 px-3 py-1.5">
+                  <Switch checked={!!w} onCheckedChange={(v) => setDay(d.iso, v ? ['09:00', '18:00'] : null)} />
+                  <span className={`w-20 text-sm ${w ? '' : 'text-muted-foreground'}`}>{uiText(d.label)}</span>
+                  {w ? (
+                    <div className="flex items-center gap-2">
+                      <InlineInput type="time" className="w-28" value={w[0]} onChange={(e) => setDay(d.iso, [e.target.value, w[1]])} />
+                      <span className="text-xs text-muted-foreground">{uiText('até')}</span>
+                      <InlineInput type="time" className="w-28" value={w[1]} onChange={(e) => setDay(d.iso, [w[0], e.target.value])} />
+                    </div>
+                  ) : <span className="text-xs text-muted-foreground">{uiText('não envia')}</span>}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
