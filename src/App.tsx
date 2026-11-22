@@ -240,6 +240,7 @@ const PipelineSettings = lazyWithRetry("PipelineSettings", () => import("./compo
 const OpportunityCloseSettings = lazyWithRetry("OpportunityCloseSettings", () => import("./components/settings/OpportunityCloseSettings"), "OpportunityCloseSettings");
 const LossReasonsSettings = lazyWithRetry("LossReasonsSettings", () => import("./components/settings/loss-reasons/LossReasonsSettings"), "LossReasonsSettings");
 const CadencesSettings = lazyWithRetry("CadencesSettings", () => import("./components/settings/cadences/CadencesSettings"), "CadencesSettings");
+const ButtonRulesSettings = lazyWithRetry("ButtonRulesSettings", () => import("./components/settings/cadences/ButtonRulesSettings"), "ButtonRulesSettings");
 const DuplicatePreventionSettings = lazyWithRetry("DuplicatePreventionSettings", () => import("./components/settings/DuplicatePreventionSettings"), "DuplicatePreventionSettings");
 const CustomFieldsSettings = lazyWithRetry("CustomFieldsSettings", () => import("./components/settings/CustomFieldsSettings"), "CustomFieldsSettings");
 const TagsSettings = lazyWithRetry("TagsSettings", () => import("./components/settings/TagsSettings"), "TagsSettings");
@@ -760,6 +761,7 @@ const App = () => (
             <Route path="opportunity-close" element={<OpportunityCloseSettings />} />
             <Route path="loss-reasons" element={<LossReasonsSettings />} />
             <Route path="cadences" element={<CadencesSettings />} />
+            <Route path="whatsapp-buttons" element={<ButtonRulesSettings />} />
             <Route path="duplicates" element={<DuplicatePreventionSettings />} />
             <Route path="custom-fields" element={<CustomFieldsSettings />} />
             <Route path="tags" element={<TagsSettings />} />

@@ -46,7 +46,7 @@ interface StepDraft {
 interface TemplateRow { id: string; friendly_name: string | null; meta_template_name: string | null; body: string | null; category: string | null }
 
 // Mesma lista de _shared/cadence-variables.ts (CADENCE_VARIABLE_TOKENS).
-const TOKENS = [
+export const TOKENS = [
   { token: '{{contact.first_name}}', label: 'Primeiro nome do contato' },
   { token: '{{contact.full_name}}', label: 'Nome completo do contato' },
   { token: '{{contact.email}}', label: 'E-mail do contato' },

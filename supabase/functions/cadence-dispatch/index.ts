@@ -38,7 +38,9 @@ interface Prepared {
 async function loadContext(supabase: any, p: Prepared): Promise<CadenceVariableContext> {
   const [contact, opportunity, owner, org, custom] = await Promise.all([
     supabase.from("contacts").select("full_name, first_name, email, phone").eq("id", p.contact_id).maybeSingle(),
-    supabase.from("opportunities").select("title, amount, currency").eq("id", p.opportunity_id).maybeSingle(),
+    p.opportunity_id
+      ? supabase.from("opportunities").select("title, amount, currency").eq("id", p.opportunity_id).maybeSingle()
+      : Promise.resolve({ data: null }),
     p.owner_user_id
       ? supabase.from("users").select("full_name, first_name").eq("id", p.owner_user_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -46,7 +48,7 @@ async function loadContext(supabase: any, p: Prepared): Promise<CadenceVariableC
     supabase.from("custom_field_values")
       .select("record_id, value, custom_field_definitions:field_definition_id(name)")
       .eq("organization_id", p.organization_id)
-      .in("record_id", [p.contact_id, p.opportunity_id]),
+      .in("record_id", [p.contact_id, p.opportunity_id].filter(Boolean) as string[]),
   ]);
   const customValues: Record<string, unknown> = {};
   // Contato primeiro, oportunidade por cima (o dado da venda vale mais).
@@ -140,6 +142,43 @@ serve(async (req) => {
     }
   }
 
-  if (result.claimed) console.log("[cadence-dispatch]", result);
-  return json({ ok: true, ...result });
+  // Templates pedidos por botões do WhatsApp (ação "enviar template" das regras de botão).
+  const buttons = { events: 0, sent: 0, failed: 0 };
+  const { data: btnEvents, error: btnError } = await supabase.rpc("fn_button_claim_sends", { p_limit: 20 });
+  if (btnError) console.error("[cadence-dispatch] button claim", btnError.message);
+  for (const ev of (btnEvents ?? []) as Array<{ event_id: string; organization_id: string; contact_id: string; thread_id: string | null; opportunity_id: string | null; pending_sends: Array<{ template_id: string; variables: Record<string, unknown> }> }>) {
+    buttons.events++;
+    const out: Array<Record<string, unknown>> = [];
+    let ok = true;
+    try {
+      const { data: contact } = await supabase.from("contacts").select("do_not_contact, deleted_at").eq("id", ev.contact_id).maybeSingle();
+      if (!contact || contact.deleted_at || contact.do_not_contact) throw new Error("não contatar");
+      const { data: opp } = ev.opportunity_id
+        ? await supabase.from("opportunities").select("owner_user_id").eq("id", ev.opportunity_id).maybeSingle()
+        : { data: null };
+      const ctx = await loadContext(supabase, {
+        action: "send", organization_id: ev.organization_id, contact_id: ev.contact_id,
+        opportunity_id: ev.opportunity_id ?? undefined, owner_user_id: opp?.owner_user_id ?? null,
+      });
+      for (const s of ev.pending_sends ?? []) {
+        const vars = resolveCadenceVariables(s.variables, ctx);
+        if (!vars.ok) { ok = false; out.push({ template_id: s.template_id, error: `variável sem valor: ${vars.missing.join(", ")}` }); continue; }
+        const { data: sendData, error: sendError } = await dispatchWhatsAppSend({
+          organizationId: ev.organization_id, contactId: ev.contact_id, threadId: ev.thread_id ?? undefined,
+          templateId: s.template_id, templateVariables: vars.values, senderContext: "button_rule",
+        });
+        const err = sendError?.message ?? ((sendData as { error?: unknown } | null)?.error ? String((sendData as { error?: unknown }).error) : null);
+        if (err) { ok = false; out.push({ template_id: s.template_id, error: err.slice(0, 200) }); }
+        else out.push({ template_id: s.template_id, ok: true, message_id: (sendData as { messageId?: string } | null)?.messageId ?? null });
+      }
+    } catch (e) {
+      ok = false;
+      out.push({ error: (e as Error).message.slice(0, 200) });
+    }
+    await supabase.rpc("fn_button_finish_sends", { p_event_id: ev.event_id, p_ok: ok, p_result: { sends: out } });
+    if (ok) buttons.sent++; else buttons.failed++;
+  }
+
+  if (result.claimed || buttons.events) console.log("[cadence-dispatch]", result, { buttons });
+  return json({ ok: true, ...result, buttons });
 });

@@ -981,6 +981,11 @@ serve(async (req) => {
         }
       }
 
+      // Toque num botão de resposta rápida (template): guarda o botão, como na Meta, para as ações do botão.
+      const interactiveReply = (params.ButtonText || params.ButtonPayload)
+        ? { kind: 'template_button', id: params.ButtonPayload || null, title: params.ButtonText || body || null }
+        : null
+
       // Build twilio metadata snapshot (raw payload preservation)
       const twilioMetadata: Record<string, any> = {
         To: params.To ?? null,
@@ -1013,7 +1018,7 @@ serve(async (req) => {
           sent_at: new Date().toISOString(),
           reply_to_message_id: replyToMessageId,
           endpoint_id: endpointId,
-          metadata: { twilio: { ...twilioMetadata, commercial_referral: { ctwa_clid: referralCtwaClid, source_type: referralSourceType, source_id: referralSourceId } }, commercial_entry: { first_contact_entry: commercialFirstContact, opportunity_id: commercialOpportunityId } },
+          metadata: { twilio: { ...twilioMetadata, commercial_referral: { ctwa_clid: referralCtwaClid, source_type: referralSourceType, source_id: referralSourceId } }, commercial_entry: { first_contact_entry: commercialFirstContact, opportunity_id: commercialOpportunityId }, ...(interactiveReply ? { interactive_reply: interactiveReply } : {}) },
         })
 
       if (messageError) {
