@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { uiText } from '@/lib/ui-locale';
+import { useTokenOptions } from '@/components/settings/cadences/useTokenOptions';
 
 const FREE = '__free__';
 
@@ -21,6 +22,7 @@ export function EmailComposeDialog({ organizationId, opportunityId, onClose, onS
   const [body, setBody] = useState('');
   const [preview, setPreview] = useState<{ to: string | null; subject: string; body: string; warnings: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
+  const tokenOptions = useTokenOptions(organizationId);
 
   const { data: templates } = useQuery({
     queryKey: ['email-templates-compose', organizationId],
@@ -77,8 +79,15 @@ export function EmailComposeDialog({ organizationId, opportunityId, onClose, onS
           {templateId === FREE && (
             <>
               <div className="space-y-1"><Label>{uiText('Assunto')}</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></div>
-              <div className="space-y-1"><Label>{uiText('Texto')}</Label>
-                <Textarea rows={7} value={body} onChange={(e) => setBody(e.target.value)} placeholder={uiText('Oi, {{contact.first_name}}!')} />
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <Label>{uiText('Texto')}</Label>
+                  <Select value="" onValueChange={(tok) => setBody((b) => `${b}${tok}`)}>
+                    <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder={uiText('Inserir campo')} /></SelectTrigger>
+                    <SelectContent>{tokenOptions.map((t) => <SelectItem key={t.token} value={t.token}>{uiText(t.label)}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <Textarea rows={7} value={body} onChange={(e) => setBody(e.target.value)} placeholder={uiText('Escreva o e-mail')} />
               </div>
             </>
           )}

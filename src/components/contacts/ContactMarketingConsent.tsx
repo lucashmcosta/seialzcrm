@@ -65,7 +65,7 @@ export function ContactMarketingConsent({ contactId }: { contactId: string }) {
       <div>
         <p className="text-sm font-medium">{uiText('Aceite de marketing')}</p>
         <p className="text-xs text-muted-foreground">
-          {uiText('Conteúdos e ofertas automáticos só saem com aceite. Mensagens do atendimento não dependem disto.')}
+          {uiText('Ofertas e conteúdos só vão para quem aceitou. Atendimento não depende disto.')}
         </p>
       </div>
       {CHANNELS.map((c) => {

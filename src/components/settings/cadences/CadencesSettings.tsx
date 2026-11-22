@@ -68,13 +68,13 @@ function SendRulesCard({ organizationId }: { organizationId: string }) {
     <Card>
       <CardHeader>
         <CardTitle>{uiText('Regras de envio')}</CardTitle>
-        <CardDescription>{uiText('Valem para todas as réguas da organização (cada régua pode ter a sua janela). Horário no fuso da organização.')}</CardDescription>
+        <CardDescription>{uiText('Valem para todas as réguas, no horário da sua empresa.')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
           <div>
             <p className="text-sm font-medium">{uiText('Pausar todas as réguas')}</p>
-            <p className="text-xs text-muted-foreground">{uiText('Nada sai enquanto estiver ligado. Os envios ficam guardados e voltam quando desligar.')}</p>
+            <p className="text-xs text-muted-foreground">{uiText('Nada sai enquanto estiver ligado. Os envios voltam quando desligar.')}</p>
           </div>
           <Switch checked={form.paused} disabled={saving}
             onCheckedChange={async (v) => { const next = { ...form, paused: v }; if (await save(next)) setForm(next); }} />
@@ -107,13 +107,13 @@ function SendRulesCard({ organizationId }: { organizationId: string }) {
             <Label>{uiText('Marketing por contato, por semana')}</Label>
             <Input type="number" min={0} max={50} value={form.weekly_marketing_limit}
               onChange={(e) => setForm({ ...form, weekly_marketing_limit: Math.max(0, Math.min(50, Number(e.target.value) || 0)) })} />
-            <p className="text-xs text-muted-foreground">{uiText('Passos operacionais (documentos, reunião, contrato) não contam.')}</p>
+            <p className="text-xs text-muted-foreground">{uiText('Mensagens de atendimento não contam.')}</p>
           </div>
           <div className="space-y-1">
             <Label>{uiText('Limite de envios por dia (organização)')}</Label>
             <Input type="number" min={0} max={100000} value={form.daily_send_limit}
               onChange={(e) => setForm({ ...form, daily_send_limit: Math.max(0, Math.min(100000, Number(e.target.value) || 0)) })} />
-            <p className="text-xs text-muted-foreground">{uiText('Proteção contra disparo em massa por engano.')}</p>
+            <p className="text-xs text-muted-foreground">{uiText('Proteção contra envio em massa por engano.')}</p>
           </div>
         </div>
         <Button disabled={saving} onClick={() => save(form)}>{uiText('Salvar regras')}</Button>
@@ -179,7 +179,7 @@ export function CadencesSettings() {
           <div>
             <CardTitle>{uiText('Réguas')}</CardTitle>
             <CardDescription>
-              {uiText('Sequências automáticas de mensagens e tarefas que começam quando a oportunidade entra numa etapa e param quando ela avança, o lead responde ou pede para não ser contatado.')}
+              {uiText('Mensagens e tarefas automáticas. Começam quando a oportunidade entra numa etapa e param quando ela avança ou o lead responde.')}
             </CardDescription>
           </div>
           <Button size="sm" onClick={() => setEditing('new')}><Plus className="mr-1 h-4 w-4" />{uiText('Nova régua')}</Button>

@@ -17,7 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { uiText } from '@/lib/ui-locale';
-import { TOKENS } from './CadenceEditorDialog';
+import { useTokenOptions } from './useTokenOptions';
 
 interface Settings {
   status: string; auth_method: string | null; key_last4: string | null; webhook_id: string | null; domain_id: string | null; domain_name: string | null;
@@ -62,6 +62,7 @@ function TemplateDialog({ orgId, tpl, onClose, onSaved }: { orgId: string; tpl: 
   const [body, setBody] = useState(tpl?.body ?? '');
   const [marketing, setMarketing] = useState(tpl?.is_marketing ?? false);
   const [saving, setSaving] = useState(false);
+  const tokenOptions = useTokenOptions(orgId);
   const save = async () => {
     if (!name.trim() || !subject.trim() || !body.trim()) { toast.error(uiText('Preencha nome, assunto e texto.')); return; }
     setSaving(true);
@@ -85,15 +86,15 @@ function TemplateDialog({ orgId, tpl, onClose, onSaved }: { orgId: string; tpl: 
               <Label>{uiText('Texto')}</Label>
               <Select value="" onValueChange={(tok) => setBody((b) => `${b}${tok}`)}>
                 <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue placeholder={uiText('Inserir campo')} /></SelectTrigger>
-                <SelectContent>{TOKENS.map((t) => <SelectItem key={t.token} value={t.token}>{uiText(t.label)}</SelectItem>)}</SelectContent>
+                <SelectContent>{tokenOptions.map((t) => <SelectItem key={t.token} value={t.token}>{uiText(t.label)}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <Textarea rows={10} value={body} onChange={(e) => setBody(e.target.value)} placeholder={uiText('Oi, {{contact.first_name}}!\n\nLinha em branco separa os parágrafos. Links viram clicáveis.')} />
-            <p className="text-xs text-muted-foreground">{uiText('Campo personalizado: {{custom.nome_interno}}. Se algum campo estiver vazio na hora, o e-mail não sai e o motivo fica registrado.')}</p>
+            <Textarea rows={10} value={body} onChange={(e) => setBody(e.target.value)} placeholder={uiText('Escreva o e-mail. Uma linha em branco separa os parágrafos.')} />
+            <p className="text-xs text-muted-foreground">{uiText('Se algum campo estiver vazio na hora, o e-mail não sai.')}</p>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={marketing} onCheckedChange={(v) => setMarketing(v === true)} />
-            {uiText('É marketing: só vai para quem aceitou, conta no limite semanal e leva o link de descadastro')}
+            {uiText('É marketing (só para quem aceitou; vai com link para sair da lista)')}
           </label>
         </div>
         <DialogFooter>
@@ -191,7 +192,7 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
     <div className="space-y-6">
       {section === 'templates' && !connected && settings !== undefined && (
         <p className="rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
-          {uiText('O e-mail da organização ainda não está conectado. Conecte em Configurações → Integrações → E-mail para os modelos poderem ser enviados.')}
+          {uiText('O e-mail ainda não está conectado. Conecte em Integrações → E-mail.')}
         </p>
       )}
       {section === 'connection' && <>
@@ -204,7 +205,7 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
               : settings?.status === 'error' ? <Badge variant="destructive">{uiText('Reconectar')}</Badge> : <Badge variant="outline">{uiText('Não conectado')}</Badge>}
           </CardTitle>
           <CardDescription>
-            {uiText('Os e-mails das réguas saem pela conta Resend da sua organização, com o seu domínio.')}
+            {uiText('Os e-mails saem pela conta Resend da sua empresa, com o seu domínio.')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -220,21 +221,21 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
               })}>{uiText('Desconectar')}</Button>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">{uiText('Você entra na sua conta Resend (ou cria uma grátis), aprova o acesso e volta para cá já conectado. Dá para revogar quando quiser no painel da Resend.')}</p>
+          <p className="text-xs text-muted-foreground">{uiText('Você entra na Resend (ou cria uma conta grátis), aprova e volta conectado.')}</p>
           <details className="text-sm">
-            <summary className="cursor-pointer text-xs text-muted-foreground">{uiText('Prefere colar uma chave da API?')}</summary>
+            <summary className="cursor-pointer text-xs text-muted-foreground">{uiText('Conectar com chave (avançado)')}</summary>
           <div className="mt-2 flex flex-wrap gap-2">
             <Input type="password" autoComplete="off" className="max-w-sm" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
               placeholder={connected ? uiText('Trocar a chave (re_...)') : 're_...'} />
             <Button disabled={!apiKey.trim() || !!busy} onClick={() => run('connect', async () => {
               const r = await call(orgId, 'connect', { api_key: apiKey.trim() });
               setApiKey(''); setDomains(r.domains ?? []); refresh();
-              toast.success(r.webhook ? uiText('Resend conectada') : uiText('Resend conectada, sem aviso de retorno'));
+              toast.success(r.webhook ? uiText('Resend conectada') : uiText('Resend conectada (sem acompanhar entregas)'));
             })}>{busy === 'connect' ? uiText('Conectando...') : uiText('Conectar com a chave')}</Button>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">{uiText('Em resend.com → API Keys, gere uma chave com acesso total. Ela é guardada protegida e não aparece de novo.')}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{uiText('Na Resend, em API Keys, crie uma chave com acesso total.')}</p>
           </details>
-          <p className="text-xs text-muted-foreground">{uiText('Use um subdomínio de envio (ex.: mail.suaempresa.com) para proteger o domínio principal e comece com poucos envios por dia nas duas primeiras semanas.')}</p>
+          <p className="text-xs text-muted-foreground">{uiText('Dica: use um endereço só para envio, como mail.suaempresa.com, e mande poucos e-mails por dia nas 2 primeiras semanas.')}</p>
         </CardContent>
       </Card>
 
@@ -242,7 +243,7 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{uiText('Domínio e remetente')}</CardTitle>
-            <CardDescription>{uiText('Sem SPF e DKIM configurados no DNS, os e-mails caem no spam.')}</CardDescription>
+            <CardDescription>{uiText('Para não cair no spam, o domínio precisa estar verificado.')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -303,10 +304,10 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{uiText('Respostas por e-mail')}</CardTitle>
-            <CardDescription>{uiText('Com isto ligado, quando o lead responde um e-mail das réguas a resposta conta como resposta (a régua encerra ou pausa), entra na linha do tempo, avisa o responsável e uma cópia vai para a caixa da equipe ("Respostas vão para").')}</CardDescription>
+            <CardDescription>{uiText('A resposta do lead para a régua, entra na linha do tempo e avisa o responsável. Uma cópia vai para "Respostas vão para".')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-xs text-muted-foreground">{uiText('Na Resend: Emails → Receiving → três pontinhos → "Receiving address". Use qualquer nome nesse endereço, por exemplo respostas@...resend.app, ou um domínio seu configurado para receber.')}</p>
+            <p className="text-xs text-muted-foreground">{uiText('O endereço está na Resend, em Emails → Receiving. Exemplo: respostas@xxxx.resend.app.')}</p>
             <div className="flex flex-wrap items-center gap-2">
               <Input className="max-w-sm" value={inbound.address} onChange={(e) => setInbound({ ...inbound, address: e.target.value })} placeholder="respostas@xxxx.resend.app" />
               <label className="flex items-center gap-2 text-sm">
@@ -383,13 +384,13 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
         <Dialog open onOpenChange={(o) => { if (!o) setOpenDomain(null); }}>
           <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
             <DialogHeader><DialogTitle>{uiText('DNS de')} {openDomain.name}</DialogTitle></DialogHeader>
-            <p className="text-sm text-muted-foreground">{uiText('Crie estes registros no provedor do seu domínio (Registro.br, Cloudflare, GoDaddy...). Pode levar algumas horas para valer.')}</p>
+            <p className="text-sm text-muted-foreground">{uiText('Copie estes registros no site onde o seu domínio é administrado (Registro.br, Cloudflare...). Pode levar algumas horas.')}</p>
             <div className="space-y-2 rounded-lg border p-3">
               <p className="text-sm font-medium">{uiText('Rastrear aberturas e cliques')}</p>
               <p className="text-xs text-muted-foreground">
                 {openDomain.tracking_subdomain
-                  ? `${uiText('Subdomínio de rastreio')}: ${openDomain.tracking_subdomain}.${openDomain.name} · ${uiText('aberturas')} ${openDomain.open_tracking ? uiText('ligado') : uiText('desligado')} · ${uiText('cliques')} ${openDomain.click_tracking ? uiText('ligado') : uiText('desligado')}`
-                  : uiText('Mostra no Seialz quem abriu e clicou. A Resend usa um subdomínio próprio para isso: depois de salvar, aparece um registro CNAME a mais aqui embaixo para criar no DNS e verificar.')}
+                  ? `${uiText('Endereço de rastreio')}: ${openDomain.tracking_subdomain}.${openDomain.name} · ${uiText('aberturas')} ${openDomain.open_tracking ? uiText('ligado') : uiText('desligado')} · ${uiText('cliques')} ${openDomain.click_tracking ? uiText('ligado') : uiText('desligado')}`
+                  : uiText('Mostra quem abriu e clicou. Depois de salvar, aparece mais um registro aqui embaixo para copiar no seu domínio.')}
               </p>
               <div className="flex flex-wrap items-center gap-3 text-sm">
                 <label className="flex items-center gap-2"><Checkbox checked={tracking.open} onCheckedChange={(v) => setTracking({ ...tracking, open: v === true })} />{uiText('Aberturas')}</label>
@@ -401,10 +402,10 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
                 <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('tracking', async () => {
                   const r = await call(orgId, 'domain_tracking', { domain_id: openDomain.id, open_tracking: tracking.open, click_tracking: tracking.click, tracking_subdomain: openDomain.tracking_subdomain ?? tracking.sub });
                   setOpenDomain(r.domain);
-                  toast.success(uiText('Rastreio salvo. Crie o registro CNAME do subdomínio e clique em Verificar.'));
+                  toast.success(uiText('Rastreio salvo. Copie o registro novo no seu domínio e clique em Verificar.'));
                 })}>{uiText('Salvar rastreio')}</Button>
               </div>
-              <p className="text-[11px] text-muted-foreground">{uiText('O subdomínio não pode ser removido depois de definido (só trocado).')}</p>
+              <p className="text-[11px] text-muted-foreground">{uiText('Esse endereço não pode ser apagado depois, só trocado.')}</p>
             </div>
             <div className="space-y-2">
               {(openDomain.records ?? []).map((r, i) => (
@@ -420,7 +421,7 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
               <Button disabled={!!busy} onClick={() => run('verify', async () => {
                 const r = await call(orgId, 'verify_domain', { domain_id: openDomain.id });
                 setOpenDomain(r.domain); await loadDomains();
-                toast[r.domain.status === 'verified' ? 'success' : 'message'](r.domain.status === 'verified' ? uiText('Domínio verificado') : uiText('Ainda não verificado. O DNS pode levar algumas horas.'));
+                toast[r.domain.status === 'verified' ? 'success' : 'message'](r.domain.status === 'verified' ? uiText('Domínio verificado') : uiText('Ainda não verificado. Pode levar algumas horas.'));
               })}>{uiText('Verificar')}</Button>
             </DialogFooter>
           </DialogContent>
