@@ -53,6 +53,16 @@ export function handoffAckText(configured: string | null | undefined): string | 
   return configured.trim() || null;
 }
 
+/** Tem letra, número ou emoji? Bolha só com símbolo solto ("∅"), caractere invisível ou traço não vai ao cliente. */
+export function hasVisibleText(text: string | null | undefined): boolean {
+  return /[\p{L}\p{N}\p{Extended_Pictographic}]/u.test(text ?? "");
+}
+
+/** Tira os parágrafos sem texto visível (o modelo às vezes fecha a resposta com um "∅" ou um caractere invisível). */
+export function dropJunkParagraphs(text: string): string {
+  return text.split(/\n{2,}/).filter((p) => hasVisibleText(p)).join("\n\n").trim();
+}
+
 /** Quebra em até 3 mensagens nos parágrafos, como quem escreve no WhatsApp. O excedente fica na última. */
 export function splitIntoBubbles(text: string, max = 3): string[] {
   // O modelo às vezes repete um parágrafo inteiro na mesma resposta: cada um sai uma vez só.

@@ -17,7 +17,7 @@ import { buildNammuxInterviewTools, NAMMUX_INTERVIEW_FLAG, nammuxToolDeps, nammu
 import { captureRating, ratingDeps, ratingForAgent } from "../_shared/integrations/support-rating.ts";
 import { captureInterviewConfirmation, interviewConfirmDeps } from "../_shared/integrations/nammux-interview-confirm.ts";
 import { capturePresence, presenceDeps } from "../_shared/integrations/nammux-interview-presence.ts";
-import { decideSupportGate, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText, pendingReplyNote, type PendingMsg } from "../_shared/intelligence/agent-gate.ts";
+import { dropJunkParagraphs, hasVisibleText, decideSupportGate, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText, pendingReplyNote, type PendingMsg } from "../_shared/intelligence/agent-gate.ts";
 import { emptyResponseShape, providerForIntegration, toolArgKeys } from "../_shared/intelligence/agent-log.ts";
 import { lookupCepAddress, registrationFields, registrationReply, SAVE_REGISTRATION_TOOL_DEF } from "../_shared/intelligence/contact-registration.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
@@ -2774,7 +2774,8 @@ serve(async (req) => {
     }
     const splitMessages = (agent.formatting_rules as { split_messages?: boolean } | null)?.split_messages === true;
     // Texto que só ecoa o encerramento ("Conversa encerrada.") nunca vai para o cliente.
-    const cleanResponse = aiResponse ? toWhatsAppText(stripCloseEcho(aiResponse)) : aiResponse;
+    // Parágrafo só com símbolo solto ("∅") ou caractere invisível também não vai.
+    const cleanResponse = aiResponse ? dropJunkParagraphs(toWhatsAppText(stripCloseEcho(aiResponse))) : aiResponse;
     // Retomada com o botão "Não tenho interesse" (ai_agents.followup_optout_attempt): o texto
     // inteiro vira uma única mensagem com o botão. Só na Meta Cloud, que tem botões de verdade;
     // nos outros provedores o botão viraria "Responda com 1" e a retomada segue como texto.
@@ -2792,7 +2793,7 @@ serve(async (req) => {
     // A pergunta vai com os botões: uma mensagem de texto igual a ela sairia duplicada.
     const bubbles = followUpOptOut ? [] : withoutQuestionEcho(
       (splitMessages ? splitIntoBubbles(cleanResponse) : (cleanResponse ? [cleanResponse] : []))
-        .map((b) => stripCloseEcho(b)).filter((b) => b.length > 0),
+        .map((b) => stripCloseEcho(b)).filter((b) => hasVisibleText(b)),
       interactive?.body,
     );
     const interactiveText = interactive ? interactiveFallbackText(interactive) : '';
