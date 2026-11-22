@@ -22,6 +22,7 @@ interface Settings {
   status: string; auth_method: string | null; key_last4: string | null; webhook_id: string | null; domain_id: string | null; domain_name: string | null;
   domain_status: string | null; from_name: string | null; from_email: string | null; reply_to: string | null;
   brand_color: string | null; logo_url: string | null; footer_text: string | null; last_error: string | null;
+  inbound_enabled?: boolean; inbound_address?: string | null;
 }
 interface Domain { id: string; name: string; status: string; open_tracking?: boolean | null; click_tracking?: boolean | null; tracking_subdomain?: string | null; records?: Array<{ record: string; name: string; type: string; value: string; status?: string; priority?: number }> }
 interface EmailTemplate { id: string; name: string; subject: string; body: string; is_marketing: boolean }
@@ -35,6 +36,8 @@ const ERRORS: Record<string, string> = {
   domain_not_verified: 'O domínio ainda não foi verificado. Configure o DNS e clique em Verificar.',
   invalid_sender: 'Preencha o nome e o endereço do remetente.',
   invalid_reply_to: 'O e-mail de resposta é inválido.',
+  invalid_inbound_address: 'Endereço de recebimento inválido.',
+  inbound_equals_reply_to: 'O endereço de recebimento não pode ser o mesmo da caixa da equipe.',
   invalid_tracking_subdomain: 'Use só letras, números e hífen no subdomínio de rastreio (ex.: links).',
   sender_not_set: 'Escolha o remetente antes de testar.',
   send_failed: 'A Resend não aceitou o envio.',
@@ -113,6 +116,7 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
   const [sender, setSender] = useState({ domain_id: '', from_local: 'contato', from_name: '', reply_to: '' });
   const [brand, setBrand] = useState({ brand_color: '', logo_url: '', footer_text: '' });
   const [testTo, setTestTo] = useState('');
+  const [inbound, setInbound] = useState({ enabled: false, address: '' });
   const [tracking, setTracking] = useState({ open: true, click: true, sub: 'links' });
   useEffect(() => {
     if (!openDomain) return;
@@ -164,6 +168,7 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
       reply_to: settings.reply_to ?? s.reply_to,
     }));
     setBrand({ brand_color: settings.brand_color ?? '', logo_url: settings.logo_url ?? '', footer_text: settings.footer_text ?? '' });
+    setInbound({ enabled: !!settings.inbound_enabled, address: settings.inbound_address ?? '' });
   }, [settings, organization?.name]);
 
   const loadDomains = async () => {
@@ -289,6 +294,29 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
                 })}>{uiText('Enviar teste')}</Button>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {connected && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{uiText('Respostas por e-mail')}</CardTitle>
+            <CardDescription>{uiText('Com isto ligado, quando o lead responde um e-mail das réguas a resposta conta como resposta (a régua encerra ou pausa), entra na linha do tempo, avisa o responsável e uma cópia vai para a caixa da equipe ("Respostas vão para").')}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">{uiText('Na Resend: Emails → Receiving → três pontinhos → "Receiving address". Use qualquer nome nesse endereço, por exemplo respostas@...resend.app, ou um domínio seu configurado para receber.')}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input className="max-w-sm" value={inbound.address} onChange={(e) => setInbound({ ...inbound, address: e.target.value })} placeholder="respostas@xxxx.resend.app" />
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={inbound.enabled} onCheckedChange={(v) => setInbound({ ...inbound, enabled: v === true })} />{uiText('Ligado')}
+              </label>
+              <Button variant="outline" disabled={!!busy} onClick={() => run('inbound', async () => {
+                await call(orgId, 'set_inbound', { enabled: inbound.enabled, inbound_address: inbound.address.trim() });
+                refresh(); toast.success(inbound.enabled ? uiText('Respostas por e-mail ligadas') : uiText('Respostas por e-mail desligadas'));
+              })}>{uiText('Salvar')}</Button>
+            </div>
+            {inbound.enabled && !settings?.reply_to && <p className="text-xs text-amber-600 dark:text-amber-400">{uiText('Preencha "Respostas vão para" no remetente para a equipe também receber uma cópia das respostas.')}</p>}
           </CardContent>
         </Card>
       )}

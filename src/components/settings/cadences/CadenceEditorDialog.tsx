@@ -15,14 +15,17 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { uiText } from '@/lib/ui-locale';
+import { CadencePreview } from './CadencePreview';
 
 export interface CadenceRow {
   id: string;
   name: string;
   description: string | null;
   is_active: boolean;
-  trigger_type: 'stage_entered' | 'manual';
+  trigger_type: 'stage_entered' | 'manual' | 'field_value';
   trigger_stage_id: string | null;
+  trigger_field_id?: string | null;
+  trigger_field_value?: string | null;
   on_reply: 'cancel' | 'pause' | 'continue';
   exit_on_stage_change: boolean;
 }
@@ -42,7 +45,17 @@ interface StepDraft {
   task_priority: 'low' | 'medium' | 'high';
   is_marketing: boolean;
   ignore_send_window: boolean;
+  timing: 'after_enrollment' | 'field_date';
+  timing_field_id: string | null;
+  timing_days: number;
+  timing_direction: 'before' | 'after' | 'same';
+  timing_time: string;
+  cond_field_id: string | null;
+  cond_operator: 'equals' | 'not_equals' | 'is_empty' | 'is_filled';
+  cond_value: string;
 }
+
+interface FieldDef { id: string; label: string | null; name: string; module: string; field_type: string; options: { options?: Array<{ label?: string; value?: string }> } | null }
 
 interface TemplateRow { id: string; friendly_name: string | null; meta_template_name: string | null; body: string | null; category: string | null }
 
@@ -68,7 +81,25 @@ const newKey = () => Math.random().toString(36).slice(2);
 const blankStep = (): StepDraft => ({
   key: newKey(), delay_value: 0, delay_unit: 'days', kind: 'whatsapp_template', template_id: null, email_template_id: null, template_variables: {},
   task_title: '', task_description: '', task_due_hours: 4, task_priority: 'medium', is_marketing: false, ignore_send_window: false,
+  timing: 'after_enrollment', timing_field_id: null, timing_days: 1, timing_direction: 'before', timing_time: '09:00',
+  cond_field_id: null, cond_operator: 'equals', cond_value: '',
 });
+
+const fieldLabel = (f: FieldDef) => `${f.label || f.name} (${f.module === 'contacts' ? 'contato' : 'oportunidade'})`;
+
+/** Valor de um campo: lista de opções (seleção) ou texto livre. */
+function FieldValueInput({ field, value, onChange, placeholder }: { field: FieldDef | undefined; value: string; onChange: (v: string) => void; placeholder: string }) {
+  const opts = field?.options?.options ?? [];
+  if (field && (field.field_type === 'select' || field.field_type === 'multiselect') && opts.length) {
+    return (
+      <Select value={value || undefined} onValueChange={onChange}>
+        <SelectTrigger className="h-8 w-44"><SelectValue placeholder={placeholder} /></SelectTrigger>
+        <SelectContent>{opts.map((o) => <SelectItem key={o.value ?? o.label} value={(o.value ?? o.label)!}>{o.label ?? o.value}</SelectItem>)}</SelectContent>
+      </Select>
+    );
+  }
+  return <Input className="h-8 w-44" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />;
+}
 
 /** Variáveis do template, na ordem em que aparecem no texto ({{1}}, {{2}} ou nomes). */
 export function templateVariableKeys(body: string | null | undefined): string[] {
@@ -87,11 +118,24 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
   const [description, setDescription] = useState(cadence?.description ?? '');
   const [triggerType, setTriggerType] = useState<CadenceRow['trigger_type']>(cadence?.trigger_type ?? 'stage_entered');
   const [stageId, setStageId] = useState<string | null>(cadence?.trigger_stage_id ?? null);
+  const [triggerFieldId, setTriggerFieldId] = useState<string | null>(cadence?.trigger_field_id ?? null);
+  const [triggerFieldValue, setTriggerFieldValue] = useState<string>(cadence?.trigger_field_value ?? '');
   const [onReply, setOnReply] = useState<CadenceRow['on_reply']>(cadence?.on_reply ?? 'cancel');
   const [exitOnStage, setExitOnStage] = useState(cadence?.exit_on_stage_change ?? true);
   const [steps, setSteps] = useState<StepDraft[]>([]);
   const [loadedSteps, setLoadedSteps] = useState(!cadence);
   const [saving, setSaving] = useState(false);
+
+  const { data: fields } = useQuery({
+    queryKey: ['cadence-fields', organizationId],
+    queryFn: async () => {
+      const { data } = await supabase.from('custom_field_definitions').select('id, label, name, module, field_type, options')
+        .eq('organization_id', organizationId).order('order_index');
+      return (data ?? []) as unknown as FieldDef[];
+    },
+  });
+  const fieldById = useMemo(() => new Map((fields ?? []).map((f) => [f.id, f])), [fields]);
+  const dateFields = (fields ?? []).filter((f) => f.field_type === 'date');
 
   const { data: stages } = useQuery({
     queryKey: ['cadence-stages', organizationId],
@@ -138,7 +182,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
     if (!cadence) { setSteps([blankStep()]); return; }
     (async () => {
       const { data } = await supabase.from('cadence_steps' as never)
-        .select('id, position, delay_minutes, kind, template_id, email_template_id, template_variables, task_title, task_description, task_due_minutes, task_priority, is_marketing, ignore_send_window')
+        .select('id, position, delay_minutes, kind, template_id, email_template_id, template_variables, task_title, task_description, task_due_minutes, task_priority, is_marketing, ignore_send_window, timing, timing_field_id, timing_offset_minutes, timing_local_time, condition')
         .eq('cadence_id', cadence.id).order('position');
       setSteps(((data ?? []) as unknown as Array<Record<string, any>>).map((s) => ({
         id: s.id, key: newKey(), ...toDelay(s.delay_minutes), kind: s.kind, template_id: s.template_id, email_template_id: s.email_template_id ?? null,
@@ -146,6 +190,11 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
         task_title: s.task_title ?? '', task_description: s.task_description ?? '',
         task_due_hours: Math.round((s.task_due_minutes ?? 240) / 60), task_priority: s.task_priority ?? 'medium',
         is_marketing: !!s.is_marketing, ignore_send_window: !!s.ignore_send_window,
+        timing: s.timing === 'field_date' ? 'field_date' : 'after_enrollment', timing_field_id: s.timing_field_id ?? null,
+        timing_days: Math.abs(Math.round((s.timing_offset_minutes ?? 0) / 1440)) || 1,
+        timing_direction: (s.timing_offset_minutes ?? 0) === 0 ? 'same' : (s.timing_offset_minutes < 0 ? 'before' : 'after'),
+        timing_time: String(s.timing_local_time ?? '09:00').slice(0, 5),
+        cond_field_id: s.condition?.field_definition_id ?? null, cond_operator: s.condition?.operator ?? 'equals', cond_value: s.condition?.value ?? '',
       })));
       setLoadedSteps(true);
     })();
@@ -162,8 +211,11 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
   const problems = (): string | null => {
     if (!name.trim()) return 'Dê um nome à régua.';
     if (triggerType === 'stage_entered' && !stageId) return 'Escolha a etapa que dispara a régua.';
+    if (triggerType === 'field_value' && !triggerFieldId) return 'Escolha o campo que dispara a régua.';
     if (steps.length === 0) return 'Adicione pelo menos um passo.';
     for (const [i, s] of steps.entries()) {
+      if (s.timing === 'field_date' && !s.timing_field_id) return `Passo ${i + 1}: escolha o campo de data.`;
+      if (s.cond_field_id && (s.cond_operator === 'equals' || s.cond_operator === 'not_equals') && !s.cond_value.trim()) return `Passo ${i + 1}: escolha o valor da condição.`;
       if (s.kind === 'whatsapp_template') {
         if (!s.template_id) return `Passo ${i + 1}: escolha o template.`;
         const keys = templateVariableKeys(templateById.get(s.template_id)?.body);
@@ -184,6 +236,8 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
       const cadencePayload = {
         organization_id: organizationId, name: name.trim(), description: description.trim() || null,
         trigger_type: triggerType, trigger_stage_id: triggerType === 'stage_entered' ? stageId : null,
+        trigger_field_id: triggerType === 'field_value' ? triggerFieldId : null,
+        trigger_field_value: triggerType === 'field_value' ? (triggerFieldValue.trim() || null) : null,
         on_reply: onReply, exit_on_stage_change: exitOnStage,
       };
       let cadenceId = cadence?.id;
@@ -218,6 +272,11 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
           task_priority: s.task_priority,
           is_marketing: s.kind === 'whatsapp_template' ? s.is_marketing : s.kind === 'email' ? !!emailTemplates?.list.find((t) => t.id === s.email_template_id)?.is_marketing : false,
           ignore_send_window: s.ignore_send_window,
+          timing: s.timing,
+          timing_field_id: s.timing === 'field_date' ? s.timing_field_id : null,
+          timing_offset_minutes: s.timing === 'field_date' ? (s.timing_direction === 'same' ? 0 : (s.timing_direction === 'before' ? -1 : 1) * Math.round(s.timing_days * 1440)) : 0,
+          timing_local_time: /^\d{2}:\d{2}$/.test(s.timing_time) ? s.timing_time : '09:00',
+          condition: s.cond_field_id ? { field_definition_id: s.cond_field_id, operator: s.cond_operator, value: s.cond_value.trim() } : null,
         };
         const { error } = s.id
           ? await supabase.from('cadence_steps' as never).update(row as never).eq('id', s.id)
@@ -256,6 +315,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="stage_entered">{uiText('A oportunidade entra numa etapa')}</SelectItem>
+                  <SelectItem value="field_value">{uiText('Um campo recebe um valor')}</SelectItem>
                   <SelectItem value="manual">{uiText('Alguém inscreve pela oportunidade')}</SelectItem>
                 </SelectContent>
               </Select>
@@ -269,6 +329,20 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                     {(stages ?? []).map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+            {triggerType === 'field_value' && (
+              <div className="space-y-1">
+                <Label>{uiText('Campo e valor')}</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Select value={triggerFieldId ?? undefined} onValueChange={(v) => { setTriggerFieldId(v); setTriggerFieldValue(''); }}>
+                    <SelectTrigger className="h-8 w-48"><SelectValue placeholder={uiText('Campo')} /></SelectTrigger>
+                    <SelectContent>{(fields ?? []).map((f) => <SelectItem key={f.id} value={f.id}>{fieldLabel(f)}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <FieldValueInput field={triggerFieldId ? fieldById.get(triggerFieldId) : undefined} value={triggerFieldValue}
+                    onChange={setTriggerFieldValue} placeholder={uiText('Qualquer valor')} />
+                </div>
+                <p className="text-xs text-muted-foreground">{uiText('Vazio = entra quando o campo for preenchido com qualquer valor.')}</p>
               </div>
             )}
             <div className="space-y-1">
@@ -301,18 +375,48 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                 <div key={s.key} className="space-y-3 rounded-lg border p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">{uiText('Passo')} {i + 1}</span>
-                    <span className="text-xs text-muted-foreground">{uiText('depois de')}</span>
-                    <Input type="number" min={0} className="h-8 w-20" value={s.delay_value}
-                      onChange={(e) => update(s.key, { delay_value: Math.max(0, Number(e.target.value) || 0) })} />
-                    <Select value={s.delay_unit} onValueChange={(v) => update(s.key, { delay_unit: v as StepDraft['delay_unit'] })}>
-                      <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+                    <Select value={s.timing} onValueChange={(v) => update(s.key, { timing: v as StepDraft['timing'] })}>
+                      <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="minutes">{uiText('minutos')}</SelectItem>
-                        <SelectItem value="hours">{uiText('horas')}</SelectItem>
-                        <SelectItem value="days">{uiText('dias')}</SelectItem>
+                        <SelectItem value="after_enrollment">{uiText('Depois da entrada')}</SelectItem>
+                        <SelectItem value="field_date" disabled={dateFields.length === 0}>{uiText('Por uma data')}</SelectItem>
                       </SelectContent>
                     </Select>
-                    <span className="text-xs text-muted-foreground">{uiText('da entrada')}</span>
+                    {s.timing === 'after_enrollment' ? (
+                      <>
+                        <Input type="number" min={0} className="h-8 w-20" value={s.delay_value}
+                          onChange={(e) => update(s.key, { delay_value: Math.max(0, Number(e.target.value) || 0) })} />
+                        <Select value={s.delay_unit} onValueChange={(v) => update(s.key, { delay_unit: v as StepDraft['delay_unit'] })}>
+                          <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="minutes">{uiText('minutos')}</SelectItem>
+                            <SelectItem value="hours">{uiText('horas')}</SelectItem>
+                            <SelectItem value="days">{uiText('dias')}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </>
+                    ) : (
+                      <>
+                        {s.timing_direction !== 'same' && (
+                          <Input type="number" min={1} className="h-8 w-16" value={s.timing_days}
+                            onChange={(e) => update(s.key, { timing_days: Math.max(1, Number(e.target.value) || 1) })} />
+                        )}
+                        <Select value={s.timing_direction} onValueChange={(v) => update(s.key, { timing_direction: v as StepDraft['timing_direction'] })}>
+                          <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="before">{uiText('dias antes de')}</SelectItem>
+                            <SelectItem value="same">{uiText('no dia de')}</SelectItem>
+                            <SelectItem value="after">{uiText('dias depois de')}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={s.timing_field_id ?? undefined} onValueChange={(v) => update(s.key, { timing_field_id: v })}>
+                          <SelectTrigger className="h-8 w-44"><SelectValue placeholder={uiText('Campo de data')} /></SelectTrigger>
+                          <SelectContent>{dateFields.map((f) => <SelectItem key={f.id} value={f.id}>{fieldLabel(f)}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <span className="text-xs text-muted-foreground">{uiText('às')}</span>
+                        <Input type="time" className="h-8 w-24" value={s.timing_time} onChange={(e) => update(s.key, { timing_time: e.target.value })} />
+                      </>
+                    )}
                     <div className="ml-auto flex gap-1">
                       <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="h-3.5 w-3.5" /></Button>
                       <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === steps.length - 1} onClick={() => move(i, 1)}><ArrowDown className="h-3.5 w-3.5" /></Button>
@@ -397,6 +501,34 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                       </div>
                     </div>
                   )}
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="text-xs text-muted-foreground">{uiText('Só sai se')}</span>
+                    <Select value={s.cond_field_id ?? '__always__'} onValueChange={(v) => update(s.key, { cond_field_id: v === '__always__' ? null : v, cond_value: '' })}>
+                      <SelectTrigger className="h-8 w-48"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__always__">{uiText('sempre (sem condição)')}</SelectItem>
+                        {(fields ?? []).map((f) => <SelectItem key={f.id} value={f.id}>{fieldLabel(f)}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    {s.cond_field_id && (
+                      <>
+                        <Select value={s.cond_operator} onValueChange={(v) => update(s.key, { cond_operator: v as StepDraft['cond_operator'] })}>
+                          <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="equals">{uiText('for igual a')}</SelectItem>
+                            <SelectItem value="not_equals">{uiText('for diferente de')}</SelectItem>
+                            <SelectItem value="is_filled">{uiText('estiver preenchido')}</SelectItem>
+                            <SelectItem value="is_empty">{uiText('estiver vazio')}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {(s.cond_operator === 'equals' || s.cond_operator === 'not_equals') && (
+                          <FieldValueInput field={fieldById.get(s.cond_field_id)} value={s.cond_value}
+                            onChange={(v) => update(s.key, { cond_value: v })} placeholder={uiText('Valor')} />
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {s.cond_field_id && <p className="text-[11px] text-muted-foreground">{uiText('A condição é lida na hora do envio. Vários passos no mesmo dia, cada um com uma condição, formam os ramos.')}</p>}
                   <label className="flex items-center gap-2 text-sm">
                     <Checkbox checked={s.ignore_send_window} onCheckedChange={(v) => update(s.key, { ignore_send_window: v === true })} />
                     {uiText('Sai na hora exata, fora da janela de envio')}
@@ -409,6 +541,12 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
               <p className="text-xs text-muted-foreground">{uiText('A régua está ligada: tempos e passos novos valem para quem entrar depois. Template e variáveis valem já no próximo envio.')}</p>
             )}
           </div>
+
+          <CadencePreview organizationId={organizationId} steps={steps.map((s) => ({
+            kind: s.kind, template_id: s.template_id, template_variables: s.template_variables, email_template_id: s.email_template_id,
+            task_title: s.task_title,
+            condition: s.cond_field_id ? { field_definition_id: s.cond_field_id, operator: s.cond_operator, value: s.cond_value } : null,
+          }))} />
         </div>
 
         <DialogFooter>

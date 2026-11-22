@@ -9,7 +9,7 @@ export const RESEND_OAUTH_CLIENT_ID = Deno.env.get("RESEND_OAUTH_CLIENT_ID") || 
 export const RESEND_OAUTH_REDIRECT = `${Deno.env.get("SUPABASE_URL")}/functions/v1/resend-oauth-callback`;
 export const RESEND_WEBHOOK_EVENTS = [
   "email.sent", "email.delivered", "email.delivery_delayed", "email.opened", "email.clicked",
-  "email.bounced", "email.complained", "email.failed", "email.suppressed",
+  "email.bounced", "email.complained", "email.failed", "email.suppressed", "email.received",
 ];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

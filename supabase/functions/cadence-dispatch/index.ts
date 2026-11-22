@@ -10,8 +10,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { verifyServiceRoleAuth } from "../_shared/auth.ts";
 import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
 import { resolveCadenceVariables, type CadenceVariableContext } from "../_shared/cadence-variables.ts";
-import { getResendAuth } from "../_shared/resend-auth.ts";
-import { fillText, renderEmail, resendRequest } from "../_shared/email-resend.ts";
+import { loadVariableContext, sendOrgEmail, type SendResult } from "../_shared/email-send-core.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -40,86 +39,21 @@ interface Prepared {
   is_marketing?: boolean;
 }
 
-/** Envia o e-mail do passo pela conta Resend da org. Devolve o id do registro em email_messages. */
 // deno-lint-ignore no-explicit-any
-async function sendCadenceEmail(supabase: any, sendId: string, p: Prepared): Promise<{ ok: true; emailId: string } | { ok: false; status: "failed" | "skipped"; reason: string }> {
-  const [{ data: settings }, { data: tpl }, { data: org }] = await Promise.all([
-    supabase.from("organization_email_settings").select("*").eq("organization_id", p.organization_id).maybeSingle(),
-    supabase.from("email_templates").select("id, subject, body").eq("id", p.email_template_id).maybeSingle(),
-    supabase.from("organizations").select("name").eq("id", p.organization_id).maybeSingle(),
-  ]);
-  if (!settings?.from_email) return { ok: false, status: "failed", reason: "e-mail da organização não conectado" };
+const loadContext = (supabase: any, p: Prepared) => loadVariableContext(supabase, {
+  organization_id: p.organization_id!, contact_id: p.contact_id!, opportunity_id: p.opportunity_id ?? null, owner_user_id: p.owner_user_id ?? null,
+});
+
+/** Passo de e-mail: modelo da régua pela conta Resend da org. */
+// deno-lint-ignore no-explicit-any
+async function sendCadenceEmail(supabase: any, sendId: string, p: Prepared): Promise<SendResult> {
+  const { data: tpl } = await supabase.from("email_templates").select("id, subject, body").eq("id", p.email_template_id).maybeSingle();
   if (!tpl) return { ok: false, status: "failed", reason: "modelo de e-mail removido" };
-  const apiKey = await getResendAuth(supabase, p.organization_id as string);
-  if (!apiKey) return { ok: false, status: "failed", reason: "sem acesso à conta Resend da organização (conecte de novo)" };
-
-  const ctx = await loadContext(supabase, p);
-  const subject = fillText(tpl.subject, ctx);
-  const body = fillText(tpl.body, ctx);
-  const missing = [...new Set([...subject.missing, ...body.missing])];
-  if (missing.length) return { ok: false, status: "skipped", reason: `variável sem valor: ${missing.join(", ")}` };
-
-  const { data: row, error: rowError } = await supabase.from("email_messages").insert({
-    organization_id: p.organization_id, contact_id: p.contact_id, opportunity_id: p.opportunity_id ?? null,
-    cadence_send_id: sendId, template_id: tpl.id, to_email: p.to_email, subject: subject.text.slice(0, 300),
-    is_marketing: !!p.is_marketing,
-  }).select("id, unsubscribe_token").single();
-  if (rowError) return { ok: false, status: "failed", reason: `registro: ${rowError.message}` };
-
-  const unsubscribeUrl = p.is_marketing ? `${Deno.env.get("SUPABASE_URL")}/functions/v1/email-unsubscribe?t=${row.unsubscribe_token}` : null;
-  const { html, text } = renderEmail({ body: body.text, branding: { ...settings, org_name: org?.name }, unsubscribeUrl });
-  const fromName = String(settings.from_name || org?.name || "").replace(/[<>"]/g, "");
-  const r = await resendRequest(apiKey, "POST", "/emails", {
-    from: fromName ? `${fromName} <${settings.from_email}>` : settings.from_email,
-    to: [p.to_email], subject: subject.text.slice(0, 300), html, text,
-    ...(settings.reply_to ? { reply_to: settings.reply_to } : {}),
-    ...(unsubscribeUrl ? { headers: { "List-Unsubscribe": `<${unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {}),
-    tags: [{ name: "seialz", value: p.is_marketing ? "cadence_marketing" : "cadence" }],
+  return await sendOrgEmail(supabase, {
+    organization_id: p.organization_id!, contact_id: p.contact_id!, opportunity_id: p.opportunity_id ?? null, owner_user_id: p.owner_user_id ?? null,
+    to_email: p.to_email!, is_marketing: !!p.is_marketing, subject: tpl.subject, body: tpl.body, template_id: tpl.id,
+    cadence_send_id: sendId, tag: p.is_marketing ? "cadence_marketing" : "cadence",
   });
-  if (!r.ok || !r.data?.id) {
-    const reason = `envio: ${String(r.data?.message ?? r.status)}`.slice(0, 300);
-    await supabase.from("email_messages").update({ status: "failed", error: reason }).eq("id", row.id);
-    return { ok: false, status: "failed", reason };
-  }
-  await supabase.from("email_messages").update({ status: "sent", provider_message_id: String(r.data.id), sent_at: new Date().toISOString() }).eq("id", row.id);
-  await supabase.from("activities").insert({
-    organization_id: p.organization_id, contact_id: p.contact_id, opportunity_id: p.opportunity_id ?? null,
-    activity_type: "message", title: `E-mail enviado: ${subject.text.slice(0, 150)}`, body: body.text.slice(0, 2000),
-    occurred_at: new Date().toISOString(),
-  });
-  return { ok: true, emailId: row.id };
-}
-
-// deno-lint-ignore no-explicit-any
-async function loadContext(supabase: any, p: Prepared): Promise<CadenceVariableContext> {
-  const [contact, opportunity, owner, org, custom] = await Promise.all([
-    supabase.from("contacts").select("full_name, first_name, email, phone").eq("id", p.contact_id).maybeSingle(),
-    p.opportunity_id
-      ? supabase.from("opportunities").select("title, amount, currency").eq("id", p.opportunity_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    p.owner_user_id
-      ? supabase.from("users").select("full_name, first_name").eq("id", p.owner_user_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase.from("organizations").select("name").eq("id", p.organization_id).maybeSingle(),
-    supabase.from("custom_field_values")
-      .select("record_id, value, custom_field_definitions:field_definition_id(name)")
-      .eq("organization_id", p.organization_id)
-      .in("record_id", [p.contact_id, p.opportunity_id].filter(Boolean) as string[]),
-  ]);
-  const customValues: Record<string, unknown> = {};
-  // Contato primeiro, oportunidade por cima (o dado da venda vale mais).
-  for (const pass of [p.contact_id, p.opportunity_id]) {
-    for (const row of (custom.data ?? []) as Array<{ record_id: string; value: unknown; custom_field_definitions: { name: string } | null }>) {
-      if (row.record_id === pass && row.custom_field_definitions?.name) customValues[row.custom_field_definitions.name.toLowerCase()] = row.value;
-    }
-  }
-  return {
-    contact: contact.data ?? {},
-    opportunity: opportunity.data ?? {},
-    owner: owner.data ?? null,
-    org: org.data ?? {},
-    custom: customValues,
-  };
 }
 
 serve(async (req) => {
