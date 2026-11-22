@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { hexToHslTriplet, hslTripletToHex, normalizeHex } from '@/lib/themeColor';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Check, Palette, Moon, Sun, Swatches } from '@phosphor-icons/react';
@@ -54,6 +57,21 @@ export function ThemeSettings() {
   const [savingSidebar, setSavingSidebar] = useState(false);
   const [savingDarkMode, setSavingDarkMode] = useState(false);
   const [savingPreset, setSavingPreset] = useState(false);
+  const [hexInput, setHexInput] = useState(() => hslTripletToHex(primaryColor) ?? '');
+
+  // Mantém o campo hex em sincronia quando a cor muda por um preset ou ao carregar a org.
+  useEffect(() => {
+    setHexInput(hslTripletToHex(primaryColor) ?? '');
+  }, [primaryColor]);
+
+  const hexNormalized = normalizeHex(hexInput);
+  const hexTriplet = hexNormalized ? hexToHslTriplet(hexNormalized) : null;
+  const isCustomColor = !COLOR_PRESETS.some((p) => p.value === primaryColor);
+
+  const handleHexApply = () => {
+    if (!hexTriplet || hexTriplet === primaryColor) return;
+    handlePrimaryColorChange(hexTriplet);
+  };
 
   const handlePresetChange = async (preset: ThemePreset) => {
     if (!organization || savingPreset) return;
@@ -236,8 +254,47 @@ export function ThemeSettings() {
                   </button>
                 ))}
               </div>
+              <div className="mt-6 space-y-2">
+                <Label htmlFor="primary-hex">Cor personalizada (hex)</Label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="color"
+                    aria-label="Escolher cor personalizada"
+                    value={hexNormalized ?? '#000000'}
+                    onChange={(e) => setHexInput(e.target.value)}
+                    disabled={savingPrimary}
+                    className={cn(
+                      "h-10 w-12 cursor-pointer rounded-md border border-input bg-background p-1 disabled:opacity-50",
+                      isCustomColor && "ring-2 ring-foreground ring-offset-2"
+                    )}
+                  />
+                  <Input
+                    id="primary-hex"
+                    value={hexInput}
+                    onChange={(e) => setHexInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleHexApply(); }}
+                    placeholder="#263B32"
+                    maxLength={7}
+                    spellCheck={false}
+                    autoComplete="off"
+                    className="w-32 font-mono uppercase"
+                    aria-invalid={hexInput !== '' && !hexNormalized}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleHexApply}
+                    disabled={savingPrimary || !hexTriplet || hexTriplet === primaryColor}
+                  >
+                    Aplicar
+                  </Button>
+                </div>
+                {hexInput !== '' && !hexNormalized && (
+                  <p className="text-sm text-destructive">Use o formato #RRGGBB, por exemplo #263B32.</p>
+                )}
+              </div>
               <p className="text-sm text-muted-foreground mt-4">
-                {t('settings.selectedColor')}: {COLOR_PRESETS.find(p => p.value === primaryColor)?.name || 'Custom'}
+                {t('settings.selectedColor')}: {COLOR_PRESETS.find(p => p.value === primaryColor)?.name || `Personalizada (${(hslTripletToHex(primaryColor) ?? primaryColor).toUpperCase()})`}
               </p>
             </CardContent>
           </Card>
