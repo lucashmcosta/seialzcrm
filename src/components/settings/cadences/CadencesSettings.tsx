@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { uiText } from '@/lib/ui-locale';
 import { CadenceEditorDialog, type CadenceRow } from './CadenceEditorDialog';
+import { CadenceReport } from './CadenceReport';
 
 const DAYS: Array<{ iso: string; label: string }> = [
   { iso: '1', label: 'Segunda' }, { iso: '2', label: 'Terça' }, { iso: '3', label: 'Quarta' },
@@ -203,6 +204,8 @@ export function CadencesSettings() {
           ))}
         </CardContent>
       </Card>
+
+      <CadenceReport organizationId={orgId} />
 
       <SendRulesCard organizationId={orgId} />
 
