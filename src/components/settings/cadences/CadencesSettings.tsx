@@ -91,9 +91,9 @@ function SendRulesCard({ organizationId }: { organizationId: string }) {
                   <span className={`w-20 text-sm ${w ? '' : 'text-muted-foreground'}`}>{uiText(d.label)}</span>
                   {w ? (
                     <div className="flex items-center gap-2">
-                      <InlineInput type="time" className="w-28" value={w[0]} onChange={(e) => setDay(d.iso, [e.target.value, w[1]])} />
+                      <InlineInput type="time" className="w-36" value={w[0]} onChange={(e) => setDay(d.iso, [e.target.value, w[1]])} />
                       <span className="text-xs text-muted-foreground">{uiText('até')}</span>
-                      <InlineInput type="time" className="w-28" value={w[1]} onChange={(e) => setDay(d.iso, [w[0], e.target.value])} />
+                      <InlineInput type="time" className="w-36" value={w[1]} onChange={(e) => setDay(d.iso, [w[0], e.target.value])} />
                     </div>
                   ) : <span className="text-xs text-muted-foreground">{uiText('não envia')}</span>}
                 </div>
