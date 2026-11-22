@@ -130,10 +130,10 @@ export function CadencesSettings() {
     enabled: !!orgId,
     queryFn: async () => {
       const { data, error } = await supabase.from('cadences' as never)
-        .select('id, name, description, is_active, trigger_type, trigger_stage_id, on_reply, exit_on_stage_change, created_at, pipeline_stages:trigger_stage_id(name)')
+        .select('id, name, description, is_active, trigger_type, trigger_stage_id, trigger_field_id, trigger_field_value, on_reply, exit_on_stage_change, created_at, pipeline_stages:trigger_stage_id(name), custom_field_definitions:trigger_field_id(label, name)')
         .eq('organization_id', orgId!).is('deleted_at', null).order('created_at');
       if (error) throw error;
-      return (data ?? []) as unknown as Array<CadenceRow & { pipeline_stages: { name: string } | null }>;
+      return (data ?? []) as unknown as Array<CadenceRow & { pipeline_stages: { name: string } | null; custom_field_definitions: { label: string | null; name: string } | null }>;
     },
   });
   const { data: liveCounts } = useQuery({
@@ -151,6 +151,10 @@ export function CadencesSettings() {
   const toggleActive = async (c: CadenceRow, active: boolean) => {
     if (active && c.trigger_type === 'stage_entered' && !c.trigger_stage_id) {
       toast.error(uiText('Escolha a etapa que dispara a régua antes de ligar.'));
+      return;
+    }
+    if (active && c.trigger_type === 'field_value' && !c.trigger_field_id) {
+      toast.error(uiText('Escolha o campo que dispara a régua antes de ligar.'));
       return;
     }
     if (active) {
@@ -191,6 +195,8 @@ export function CadencesSettings() {
                 <p className="truncate text-xs text-muted-foreground">
                   {c.trigger_type === 'manual'
                     ? uiText('Inscrição manual')
+                    : c.trigger_type === 'field_value'
+                    ? `${uiText('Campo')} ${c.custom_field_definitions?.label ?? c.custom_field_definitions?.name ?? '?'}${c.trigger_field_value ? ` = ${c.trigger_field_value}` : ` ${uiText('preenchido')}`}`
                     : `${uiText('Entrou na etapa')}: ${c.pipeline_stages?.name ?? uiText('(escolha a etapa)')}`}
                   {' · '}
                   {c.on_reply === 'cancel' ? uiText('resposta encerra') : c.on_reply === 'pause' ? uiText('resposta pausa') : uiText('resposta não muda nada')}
