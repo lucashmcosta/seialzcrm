@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { uiText } from '@/lib/ui-locale';
+import { EmailComposeDialog } from './EmailComposeDialog';
 
 interface SendRow { id: string; kind: string; status: string; scheduled_at: string; sent_at: string | null; result_reason: string | null; step_id: string | null; cadence_steps: { position: number; task_title: string | null; whatsapp_templates: { friendly_name: string | null; meta_template_name: string | null } | null; email_templates?: { name: string } | null } | null }
 interface EnrollmentRow { id: string; status: string; enrolled_at: string; ended_at: string | null; end_reason: string | null; cadences: { name: string } | null; cadence_sends: SendRow[] }
@@ -29,6 +30,15 @@ export function OpportunityCadences({ organizationId, opportunityId, isOpen, rel
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState<string>('');
+  const [composing, setComposing] = useState(false);
+  const { data: emailReady } = useQuery({
+    queryKey: ['org-email-ready', organizationId],
+    queryFn: async () => {
+      const { data } = await supabase.from('organization_email_settings' as never).select('status, from_email').eq('organization_id', organizationId).maybeSingle();
+      const s = data as unknown as { status?: string; from_email?: string | null } | null;
+      return s?.status === 'connected' && !!s?.from_email;
+    },
+  });
 
   const { data: cadences } = useQuery({
     queryKey: ['org-active-cadences', organizationId],
@@ -69,11 +79,14 @@ export function OpportunityCadences({ organizationId, opportunityId, isOpen, rel
   };
 
   if (!cadences || !enrollments) return null;
-  if (cadences.length === 0 && enrollments.length === 0) return null;
+  if (cadences.length === 0 && enrollments.length === 0 && !emailReady) return null;
 
   return (
     <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-base">{uiText('Réguas')}</CardTitle></CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-base">{uiText('Réguas e e-mail')}</CardTitle>
+        {emailReady && isOpen && <Button size="sm" variant="outline" className="h-7" onClick={() => setComposing(true)}>{uiText('Enviar e-mail')}</Button>}
+      </CardHeader>
       <CardContent className="space-y-3">
         {enrollments.length === 0 && <p className="text-sm text-muted-foreground">{uiText('Esta oportunidade não está em nenhuma régua.')}</p>}
         {enrollments.map((e) => {
@@ -126,6 +139,10 @@ export function OpportunityCadences({ organizationId, opportunityId, isOpen, rel
           </div>
         )}
       </CardContent>
+      {composing && (
+        <EmailComposeDialog organizationId={organizationId} opportunityId={opportunityId}
+          onClose={() => setComposing(false)} onSent={() => setComposing(false)} />
+      )}
     </Card>
   );
 }

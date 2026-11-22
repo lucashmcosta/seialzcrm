@@ -4,7 +4,7 @@
 // verify_domain, set_sender, send_test, disconnect.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { encryptSecret } from "../_shared/crypto.ts";
-import { finishResendConnect, getResendAuth, pkcePair, RESEND_OAUTH_CLIENT_ID, RESEND_OAUTH_REDIRECT, teardownResend } from "../_shared/resend-auth.ts";
+import { finishResendConnect, getResendAuth, pkcePair, RESEND_OAUTH_CLIENT_ID, RESEND_OAUTH_REDIRECT, RESEND_WEBHOOK_EVENTS, teardownResend } from "../_shared/resend-auth.ts";
 import { looksLikeEmail, renderEmail, resendRequest } from "../_shared/email-resend.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -112,6 +112,20 @@ Deno.serve(async (req) => {
     if (s?.domain_id === id) await saveSettings({ domain_status: r.data.status });
     return json({ ok: true, domain: { id: r.data.id, name: r.data.name, status: r.data.status, records: r.data.records ?? [],
       open_tracking: r.data.open_tracking ?? null, click_tracking: r.data.click_tracking ?? null, tracking_subdomain: r.data.tracking_subdomain ?? null } });
+  }
+  if (action === "set_inbound") {
+    // Respostas por e-mail no Seialz: endereço de recebimento da Resend da org (ex.: respostas@xxxx.resend.app).
+    const enabled = !!body.enabled;
+    const address = String(body.inbound_address ?? "").trim().toLowerCase();
+    if (enabled && !looksLikeEmail(address)) return json({ error: "invalid_inbound_address" }, 400);
+    const { data: s } = await admin.from("organization_email_settings").select("webhook_id, reply_to").eq("organization_id", orgId).maybeSingle();
+    if (enabled && String(s?.reply_to ?? "").toLowerCase() === address) return json({ error: "inbound_equals_reply_to" }, 400);
+    if (enabled && s?.webhook_id) {
+      const up = await resendRequest(apiKey, "PATCH", `/webhooks/${s.webhook_id}`, { events: RESEND_WEBHOOK_EVENTS });
+      if (!up.ok) return json({ error: "resend_error", message: String(up.data?.message ?? "").slice(0, 200) }, 400);
+    }
+    await saveSettings({ inbound_enabled: enabled, inbound_address: address || null });
+    return json({ ok: true });
   }
   if (action === "domain_tracking") {
     // Rastreio de aberturas e cliques: a Resend exige um subdomínio de rastreio verificado (CNAME).

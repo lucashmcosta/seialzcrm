@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { uiText } from '@/lib/ui-locale';
+import { CadencePreview } from './CadencePreview';
 
 export interface CadenceRow {
   id: string;
@@ -540,6 +541,12 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
               <p className="text-xs text-muted-foreground">{uiText('A régua está ligada: tempos e passos novos valem para quem entrar depois. Template e variáveis valem já no próximo envio.')}</p>
             )}
           </div>
+
+          <CadencePreview organizationId={organizationId} steps={steps.map((s) => ({
+            kind: s.kind, template_id: s.template_id, template_variables: s.template_variables, email_template_id: s.email_template_id,
+            task_title: s.task_title,
+            condition: s.cond_field_id ? { field_definition_id: s.cond_field_id, operator: s.cond_operator, value: s.cond_value } : null,
+          }))} />
         </div>
 
         <DialogFooter>
