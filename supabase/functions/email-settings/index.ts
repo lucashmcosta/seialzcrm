@@ -1,8 +1,10 @@
 // Conexão do e-mail da organização com a conta Resend DELA (a org cola a própria chave).
 // Só administrador da org (is_org_system_admin). A chave é testada, criptografada e nunca volta para a tela.
-// Ações: connect, domains, add_domain, domain, verify_domain, set_sender, send_test, disconnect.
+// Ações: oauth_start ("Conectar com Resend"), connect (chave colada), domains, add_domain, domain,
+// verify_domain, set_sender, send_test, disconnect.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { decryptSecret, encryptSecret } from "../_shared/crypto.ts";
+import { encryptSecret } from "../_shared/crypto.ts";
+import { finishResendConnect, getResendAuth, pkcePair, RESEND_OAUTH_CLIENT_ID, RESEND_OAUTH_REDIRECT, teardownResend } from "../_shared/resend-auth.ts";
 import { looksLikeEmail, renderEmail, resendRequest } from "../_shared/email-resend.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -15,10 +17,6 @@ const cors = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-const WEBHOOK_EVENTS = [
-  "email.sent", "email.delivered", "email.delivery_delayed", "email.opened", "email.clicked",
-  "email.bounced", "email.complained", "email.failed", "email.suppressed",
-];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -47,57 +45,46 @@ Deno.serve(async (req) => {
       { organization_id: orgId, ...patch, updated_by: me ?? null, updated_at: new Date().toISOString() },
       { onConflict: "organization_id" },
     );
-  const loadKey = async (): Promise<string | null> => {
-    const { data } = await admin.from("organization_email_secrets").select("api_key_encrypted").eq("organization_id", orgId).maybeSingle();
-    if (!data?.api_key_encrypted) return null;
-    try { return await decryptSecret(data.api_key_encrypted); } catch { return null; }
-  };
+
+  if (action === "oauth_start") {
+    // Tela de autorização da Resend; a volta cai em resend-oauth-callback (state + PKCE, 10 min).
+    const { verifier, challenge } = await pkcePair();
+    const state = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+    const { error } = await admin.from("email_oauth_states").insert({ state, organization_id: orgId, user_id: me ?? null, code_verifier: verifier });
+    if (error) return json({ error: "save_failed" }, 500);
+    await admin.from("email_oauth_states").delete().lt("expires_at", new Date().toISOString());
+    const url = new URL("https://api.resend.com/oauth/authorize");
+    url.search = new URLSearchParams({
+      client_id: RESEND_OAUTH_CLIENT_ID, response_type: "code", redirect_uri: RESEND_OAUTH_REDIRECT,
+      scope: "full_access", state, code_challenge: challenge, code_challenge_method: "S256",
+    }).toString();
+    return json({ ok: true, url: url.toString() });
+  }
 
   if (action === "connect") {
     const apiKey = String(body.api_key ?? "").trim();
     if (!/^re_[A-Za-z0-9_]{10,}$/.test(apiKey)) return json({ error: "invalid_key_format" }, 400);
     const test = await resendRequest(apiKey, "GET", "/domains");
     if (!test.ok) return json({ error: test.status === 401 || test.status === 403 ? "key_rejected" : "resend_unavailable", status: test.status }, 400);
-
     let encrypted: string;
     try { encrypted = await encryptSecret(apiKey); } catch { return json({ error: "encryption_unavailable" }, 503); }
-
-    // Desfaz o aviso de retorno da conexão anterior (melhor esforço) e cria um novo, com o segredo próprio.
-    const { data: prevSettings } = await admin.from("organization_email_settings").select("webhook_id").eq("organization_id", orgId).maybeSingle();
-    const prevKey = await loadKey();
-    if (prevSettings?.webhook_id && prevKey) await resendRequest(prevKey, "DELETE", `/webhooks/${prevSettings.webhook_id}`).catch(() => null);
-
-    const { data: secretRow, error: secretError } = await admin.from("organization_email_secrets")
-      .upsert({ organization_id: orgId, api_key_encrypted: encrypted, updated_at: new Date().toISOString() }, { onConflict: "organization_id" })
-      .select("webhook_token").single();
+    await teardownResend(admin, orgId);
+    const { error: secretError } = await admin.from("organization_email_secrets").upsert({
+      organization_id: orgId, auth_type: "api_key", api_key_encrypted: encrypted,
+      oauth_access_encrypted: null, oauth_refresh_encrypted: null, oauth_expires_at: null, updated_at: new Date().toISOString(),
+    }, { onConflict: "organization_id" });
     if (secretError) return json({ error: "save_failed" }, 500);
-
-    const hook = await resendRequest(apiKey, "POST", "/webhooks", {
-      endpoint: `${SUPABASE_URL}/functions/v1/resend-webhook?t=${secretRow.webhook_token}`,
-      events: WEBHOOK_EVENTS,
-    });
-    let webhookId: string | null = null;
-    let lastError: string | null = null;
-    if (hook.ok && hook.data?.signing_secret) {
-      webhookId = String(hook.data.id ?? "");
-      await admin.from("organization_email_secrets").update({
-        webhook_secret_encrypted: await encryptSecret(String(hook.data.signing_secret)), updated_at: new Date().toISOString(),
-      }).eq("organization_id", orgId);
-    } else {
-      lastError = "Não foi possível criar o aviso de retorno na Resend (a chave precisa de acesso total). Envios funcionam, mas sem entregue/aberto/devolvido.";
-    }
-    await saveSettings({ provider: "resend", status: "connected", key_last4: apiKey.slice(-4), webhook_id: webhookId, last_error: lastError, connected_at: new Date().toISOString() });
-    return json({ ok: true, webhook: !!webhookId, domains: (test.data?.data ?? []).map((d: any) => ({ id: d.id, name: d.name, status: d.status })) });
+    const done = await finishResendConnect(admin, orgId, apiKey, "api_key", apiKey.slice(-4), me ?? null);
+    return json({ ok: true, ...done });
   }
 
-  const apiKey = await loadKey();
   if (action === "disconnect") {
-    const { data: s } = await admin.from("organization_email_settings").select("webhook_id").eq("organization_id", orgId).maybeSingle();
-    if (s?.webhook_id && apiKey) await resendRequest(apiKey, "DELETE", `/webhooks/${s.webhook_id}`).catch(() => null);
+    await teardownResend(admin, orgId);
     await admin.from("organization_email_secrets").delete().eq("organization_id", orgId);
-    await saveSettings({ status: "disconnected", key_last4: null, webhook_id: null, last_error: null });
+    await saveSettings({ status: "disconnected", key_last4: null, auth_method: null, webhook_id: null, last_error: null });
     return json({ ok: true });
   }
+  const apiKey = await getResendAuth(admin, orgId);
   if (!apiKey) return json({ error: "not_connected" }, 400);
 
   if (action === "domains") {

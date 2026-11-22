@@ -19,7 +19,7 @@ import { uiText } from '@/lib/ui-locale';
 import { TOKENS } from './CadenceEditorDialog';
 
 interface Settings {
-  status: string; key_last4: string | null; webhook_id: string | null; domain_id: string | null; domain_name: string | null;
+  status: string; auth_method: string | null; key_last4: string | null; webhook_id: string | null; domain_id: string | null; domain_name: string | null;
   domain_status: string | null; from_name: string | null; from_email: string | null; reply_to: string | null;
   brand_color: string | null; logo_url: string | null; footer_text: string | null; last_error: string | null;
 }
@@ -132,6 +132,18 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
     },
   });
   const connected = settings?.status === 'connected';
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const r = params.get('resend');
+    if (!r) return;
+    const msg: Record<string, string> = {
+      connected: 'Resend conectada', denied: 'A conexão foi cancelada na Resend.', expired: 'O pedido de conexão expirou. Tente de novo.',
+      invalid: 'Link de volta inválido. Tente de novo.', error: 'A Resend não concluiu a conexão. Tente de novo.',
+    };
+    if (r === 'connected') toast.success(uiText(msg.connected)); else toast.error(uiText(msg[r] ?? msg.error));
+    params.delete('resend');
+    window.history.replaceState(null, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}`);
+  }, []);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['email-settings', orgId] });
 
   useEffect(() => {
@@ -172,29 +184,42 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             {uiText('E-mail')}
-            {connected ? <Badge variant="outline">{uiText('Conectado')} · …{settings?.key_last4}</Badge> : <Badge variant="outline">{uiText('Não conectado')}</Badge>}
+            {connected
+              ? <Badge variant="outline">{uiText('Conectado')} · {settings?.auth_method === 'oauth' ? uiText('pela conta Resend') : `${uiText('chave')} …${settings?.key_last4 ?? ''}`}</Badge>
+              : settings?.status === 'error' ? <Badge variant="destructive">{uiText('Reconectar')}</Badge> : <Badge variant="outline">{uiText('Não conectado')}</Badge>}
           </CardTitle>
           <CardDescription>
-            {uiText('Os e-mails das réguas saem pela conta da sua organização, com o seu domínio. 1) Crie uma conta grátis em resend.com. 2) Em API Keys, gere uma chave com acesso total. 3) Cole aqui.')}
+            {uiText('Os e-mails das réguas saem pela conta Resend da sua organização, com o seu domínio.')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {settings?.last_error && <p className="text-sm text-amber-600 dark:text-amber-400">{uiText(settings.last_error)}</p>}
-          <div className="flex flex-wrap gap-2">
-            <Input type="password" autoComplete="off" className="max-w-sm" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-              placeholder={connected ? uiText('Trocar a chave (re_...)') : 're_...'} />
-            <Button disabled={!apiKey.trim() || !!busy} onClick={() => run('connect', async () => {
-              const r = await call(orgId, 'connect', { api_key: apiKey.trim() });
-              setApiKey(''); setDomains(r.domains ?? []); refresh();
-              toast.success(r.webhook ? uiText('Resend conectada') : uiText('Resend conectada, sem aviso de retorno'));
-            })}>{busy === 'connect' ? uiText('Conectando...') : connected ? uiText('Trocar chave') : uiText('Conectar')}</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button disabled={!!busy} onClick={() => run('oauth', async () => {
+              const r = await call(orgId, 'oauth_start');
+              window.location.href = r.url;
+            })}>{busy === 'oauth' ? uiText('Abrindo a Resend...') : connected ? uiText('Reconectar com Resend') : uiText('Conectar com Resend')}</Button>
             {connected && (
               <Button variant="outline" disabled={!!busy} onClick={() => run('disconnect', async () => {
                 await call(orgId, 'disconnect'); setDomains(null); refresh(); toast.success(uiText('Resend desconectada'));
               })}>{uiText('Desconectar')}</Button>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">{uiText('A chave é guardada protegida e não aparece de novo. Use um subdomínio de envio (ex.: mail.suaempresa.com) para proteger o domínio principal e comece com poucos envios por dia nas duas primeiras semanas.')}</p>
+          <p className="text-xs text-muted-foreground">{uiText('Você entra na sua conta Resend (ou cria uma grátis), aprova o acesso e volta para cá já conectado. Dá para revogar quando quiser no painel da Resend.')}</p>
+          <details className="text-sm">
+            <summary className="cursor-pointer text-xs text-muted-foreground">{uiText('Prefere colar uma chave da API?')}</summary>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Input type="password" autoComplete="off" className="max-w-sm" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+              placeholder={connected ? uiText('Trocar a chave (re_...)') : 're_...'} />
+            <Button disabled={!apiKey.trim() || !!busy} onClick={() => run('connect', async () => {
+              const r = await call(orgId, 'connect', { api_key: apiKey.trim() });
+              setApiKey(''); setDomains(r.domains ?? []); refresh();
+              toast.success(r.webhook ? uiText('Resend conectada') : uiText('Resend conectada, sem aviso de retorno'));
+            })}>{busy === 'connect' ? uiText('Conectando...') : uiText('Conectar com a chave')}</Button>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">{uiText('Em resend.com → API Keys, gere uma chave com acesso total. Ela é guardada protegida e não aparece de novo.')}</p>
+          </details>
+          <p className="text-xs text-muted-foreground">{uiText('Use um subdomínio de envio (ex.: mail.suaempresa.com) para proteger o domínio principal e comece com poucos envios por dia nas duas primeiras semanas.')}</p>
         </CardContent>
       </Card>
 
