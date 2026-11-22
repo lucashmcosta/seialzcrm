@@ -10,6 +10,7 @@ import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
 import { effectiveContent, isAudioMessage } from "../_shared/intelligence/audio-content.ts";
 import { buildChoicesInteractive, withoutQuestionEcho } from "../_shared/intelligence/agent-choices.ts";
 import { interactiveFallbackText, normalizeInteractive, validateInteractive, type InteractivePayload } from "../_shared/whatsapp-interactive.ts";
+import { FOLLOWUP_OPTOUT_REPLY, FOLLOWUP_OPTOUT_TITLE, followUpOptOutInteractive, isFollowUpOptOut, shouldOfferFollowUpOptOut } from "../_shared/intelligence/followup-optout.ts";
 import { nammuxContextForAgent, nammuxSupportContext } from "../_shared/integrations/nammux-process-context.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { buildNammuxInterviewTools, NAMMUX_INTERVIEW_FLAG, nammuxToolDeps, nammuxToolsForAgent } from "../_shared/integrations/nammux-agent-tools.ts";
@@ -1845,7 +1846,7 @@ serve(async (req) => {
         // Não é mensagem do cliente: instrução para o agente escrever a retomada.
         message = followUpInstruction(followUp.attempt, followUp.total);
       }
-      const { data: latest } = followUp ? { data: null } : await supabase.from('messages').select('id, media_type, content')
+      const { data: latest } = followUp ? { data: null } : await supabase.from('messages').select('id, media_type, content, metadata')
         .eq('thread_id', threadId).eq('direction', 'inbound').is('deleted_at', null)
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
       // Duas mensagens no mesmo segundo abrem duas chamadas, e nenhuma vê a outra como mais nova.
@@ -1891,6 +1892,35 @@ serve(async (req) => {
           await dispatchWhatsAppSend({ organizationId, contactId, threadId, message: rated.reply, isAgentMessage: true, agentId: agent.id, senderName: agent.name });
           return skip(`support_rating_${rated.answer}`);
         }
+      }
+
+      // "Não tenho interesse" da retomada: lido sem o modelo. Despede-se uma vez, encerra a
+      // conversa (sem novas retomadas) e registra a recusa de marketing no WhatsApp.
+      // O texto digitado só vale quando o agente oferece o botão; o toque no botão vale sempre.
+      if (!followUp && latest && isFollowUpOptOut(
+        latest.metadata as { interactive_reply?: { id?: string | null } } | null,
+        agent.followup_optout_attempt ? latest.content : null,
+      )) {
+        const { error: byeError } = await dispatchWhatsAppSend({
+          organizationId, contactId, threadId, message: FOLLOWUP_OPTOUT_REPLY,
+          isAgentMessage: true, agentId: agent.id, senderName: agent.name,
+        });
+        if (byeError) console.warn('[ai-agent-respond] despedida do "não tenho interesse" falhou', byeError.message);
+        // Fecha depois da despedida: enviar reabre a conversa resolvida.
+        const now = new Date().toISOString();
+        const { error: closeError } = await supabase.from('message_threads').update({
+          status: 'resolved', resolved_at: now, ai_agent_closed_at: now,
+          last_routing_decision: { action: 'agent_closed', reason: 'cliente sem interesse (botão da retomada)', decided_at: now },
+        }).eq('id', threadId).not('ai_agent_id', 'is', null).is('ai_agent_released_at', null);
+        if (closeError) console.warn('[ai-agent-respond] não encerrou após "não tenho interesse"', closeError.message);
+        if (contactId) {
+          const { error: consentError } = await supabase.rpc('rpc_set_contact_consent_v1', {
+            p_contact_id: contactId, p_channel: 'whatsapp', p_granted: false,
+            p_source: 'whatsapp_button', p_source_detail: `${FOLLOWUP_OPTOUT_TITLE} (retomada do agente)`,
+          });
+          if (consentError) console.warn('[ai-agent-respond] não registrou a recusa de marketing', consentError.message);
+        }
+        return skip('followup_optout');
       }
 
       // Confirmação da entrevista: o toque em "Confirmar" / "Outro horário" é lido sem o modelo.
@@ -2745,13 +2775,22 @@ serve(async (req) => {
     const splitMessages = (agent.formatting_rules as { split_messages?: boolean } | null)?.split_messages === true;
     // Texto que só ecoa o encerramento ("Conversa encerrada.") nunca vai para o cliente.
     const cleanResponse = aiResponse ? toWhatsAppText(stripCloseEcho(aiResponse)) : aiResponse;
+    // Retomada com o botão "Não tenho interesse" (ai_agents.followup_optout_attempt): o texto
+    // inteiro vira uma única mensagem com o botão. Só na Meta Cloud, que tem botões de verdade;
+    // nos outros provedores o botão viraria "Responda com 1" e a retomada segue como texto.
+    const optOutPayload = followUp && cleanResponse && !isTestMode
+      && shouldOfferFollowUpOptOut(followUp.attempt, followUp.total, agent.followup_optout_attempt)
+      && await threadUsesMetaButtons(supabase, threadId)
+      ? followUpOptOutInteractive(cleanResponse)
+      : null;
+    const followUpOptOut = optOutPayload && validateInteractive(optOutPayload).length === 0 ? optOutPayload : null;
     // Depois de passar para a equipe ou encerrar, o agente não faz mais perguntas.
-    const interactive: InteractivePayload | null =
-      pendingInteractive && !toolsExecuted.includes('transfer_to_human') && !toolsExecuted.includes('end_conversation')
+    const interactive: InteractivePayload | null = followUpOptOut ??
+      (pendingInteractive && !toolsExecuted.includes('transfer_to_human') && !toolsExecuted.includes('end_conversation')
         ? pendingInteractive
-        : null;
+        : null);
     // A pergunta vai com os botões: uma mensagem de texto igual a ela sairia duplicada.
-    const bubbles = withoutQuestionEcho(
+    const bubbles = followUpOptOut ? [] : withoutQuestionEcho(
       (splitMessages ? splitIntoBubbles(cleanResponse) : (cleanResponse ? [cleanResponse] : []))
         .map((b) => stripCloseEcho(b)).filter((b) => b.length > 0),
       interactive?.body,
@@ -2955,3 +2994,17 @@ serve(async (req) => {
     );
   }
 });
+
+/** A conversa sai por um número da Meta Cloud (botões nativos)? Na dúvida, não. */
+// deno-lint-ignore no-explicit-any
+async function threadUsesMetaButtons(supabase: any, threadId: string | undefined): Promise<boolean> {
+  if (!threadId) return false;
+  const { data, error } = await supabase.from('message_threads')
+    .select('communication_endpoints:primary_endpoint_id(provider)')
+    .eq('id', threadId).maybeSingle();
+  if (error) {
+    console.warn('[ai-agent-respond] não leu o provedor da conversa', error.message);
+    return false;
+  }
+  return (data?.communication_endpoints as { provider?: string } | null)?.provider === 'meta_cloud_api';
+}
