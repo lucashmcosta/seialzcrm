@@ -32,8 +32,9 @@ interface StepDraft {
   key: string;
   delay_value: number;
   delay_unit: 'minutes' | 'hours' | 'days';
-  kind: 'whatsapp_template' | 'task';
+  kind: 'whatsapp_template' | 'task' | 'email';
   template_id: string | null;
+  email_template_id: string | null;
   template_variables: Record<string, string>;
   task_title: string;
   task_description: string;
@@ -65,7 +66,7 @@ const toDelay = (minutes: number): Pick<StepDraft, 'delay_value' | 'delay_unit'>
 
 const newKey = () => Math.random().toString(36).slice(2);
 const blankStep = (): StepDraft => ({
-  key: newKey(), delay_value: 0, delay_unit: 'days', kind: 'whatsapp_template', template_id: null, template_variables: {},
+  key: newKey(), delay_value: 0, delay_unit: 'days', kind: 'whatsapp_template', template_id: null, email_template_id: null, template_variables: {},
   task_title: '', task_description: '', task_due_hours: 4, task_priority: 'medium', is_marketing: false, ignore_send_window: false,
 });
 
@@ -120,15 +121,27 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
     },
   });
   const templateById = useMemo(() => new Map((templates ?? []).map((t) => [t.id, t])), [templates]);
+  const { data: emailTemplates } = useQuery({
+    queryKey: ['cadence-email-templates', organizationId],
+    queryFn: async () => {
+      const [{ data }, { data: settings }] = await Promise.all([
+        supabase.from('email_templates' as never).select('id, name, subject, is_marketing')
+          .eq('organization_id', organizationId).is('deleted_at', null).order('name'),
+        supabase.from('organization_email_settings' as never).select('status, from_email').eq('organization_id', organizationId).maybeSingle(),
+      ]);
+      const st = settings as unknown as { status?: string; from_email?: string | null } | null;
+      return { list: (data ?? []) as unknown as Array<{ id: string; name: string; subject: string; is_marketing: boolean }>, ready: st?.status === 'connected' && !!st?.from_email };
+    },
+  });
 
   useEffect(() => {
     if (!cadence) { setSteps([blankStep()]); return; }
     (async () => {
       const { data } = await supabase.from('cadence_steps' as never)
-        .select('id, position, delay_minutes, kind, template_id, template_variables, task_title, task_description, task_due_minutes, task_priority, is_marketing, ignore_send_window')
+        .select('id, position, delay_minutes, kind, template_id, email_template_id, template_variables, task_title, task_description, task_due_minutes, task_priority, is_marketing, ignore_send_window')
         .eq('cadence_id', cadence.id).order('position');
       setSteps(((data ?? []) as unknown as Array<Record<string, any>>).map((s) => ({
-        id: s.id, key: newKey(), ...toDelay(s.delay_minutes), kind: s.kind, template_id: s.template_id,
+        id: s.id, key: newKey(), ...toDelay(s.delay_minutes), kind: s.kind, template_id: s.template_id, email_template_id: s.email_template_id ?? null,
         template_variables: (s.template_variables ?? {}) as Record<string, string>,
         task_title: s.task_title ?? '', task_description: s.task_description ?? '',
         task_due_hours: Math.round((s.task_due_minutes ?? 240) / 60), task_priority: s.task_priority ?? 'medium',
@@ -156,6 +169,8 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
         const keys = templateVariableKeys(templateById.get(s.template_id)?.body);
         const empty = keys.filter((k) => !(s.template_variables[k] ?? '').trim());
         if (empty.length) return `Passo ${i + 1}: preencha a variável ${empty.map((k) => `{{${k}}}`).join(', ')}.`;
+      } else if (s.kind === 'email') {
+        if (!s.email_template_id) return `Passo ${i + 1}: escolha o modelo de e-mail.`;
       } else if (!s.task_title.trim()) return `Passo ${i + 1}: dê um título à tarefa.`;
     }
     return null;
@@ -195,12 +210,13 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
           delay_minutes: Math.max(0, Math.round(s.delay_value * UNIT_MIN[s.delay_unit])),
           kind: s.kind,
           template_id: s.kind === 'whatsapp_template' ? s.template_id : null,
+          email_template_id: s.kind === 'email' ? s.email_template_id : null,
           template_variables: Object.fromEntries(keys.map((k) => [k, s.template_variables[k] ?? ''])),
           task_title: s.kind === 'task' ? s.task_title.trim() : null,
           task_description: s.kind === 'task' ? (s.task_description.trim() || null) : null,
           task_due_minutes: Math.max(0, Math.round(s.task_due_hours * 60)),
           task_priority: s.task_priority,
-          is_marketing: s.kind === 'whatsapp_template' ? s.is_marketing : false,
+          is_marketing: s.kind === 'whatsapp_template' ? s.is_marketing : s.kind === 'email' ? !!emailTemplates?.list.find((t) => t.id === s.email_template_id)?.is_marketing : false,
           ignore_send_window: s.ignore_send_window,
         };
         const { error } = s.id
@@ -308,6 +324,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="whatsapp_template">{uiText('Enviar template de WhatsApp')}</SelectItem>
+                      <SelectItem value="email">{uiText('Enviar e-mail')}</SelectItem>
                       <SelectItem value="task">{uiText('Criar tarefa para o responsável')}</SelectItem>
                     </SelectContent>
                   </Select>
@@ -345,6 +362,20 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                         <Checkbox checked={s.is_marketing} onCheckedChange={(v) => update(s.key, { is_marketing: v === true })} />
                         {uiText('É marketing (só sai com aceite e conta no limite semanal)')}
                       </label>
+                    </div>
+                  ) : s.kind === 'email' ? (
+                    <div className="space-y-2">
+                      {!emailTemplates?.ready && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">{uiText('O e-mail da organização ainda não está conectado (Configurações → E-mail). Os passos de e-mail vão falhar até conectar.')}</p>
+                      )}
+                      <Select value={s.email_template_id ?? undefined} onValueChange={(v) => update(s.key, { email_template_id: v })}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder={uiText('Escolha um modelo de e-mail')} /></SelectTrigger>
+                        <SelectContent>
+                          {(emailTemplates?.list ?? []).map((t) => <SelectItem key={t.id} value={t.id}>{t.name}{t.is_marketing ? ` · ${uiText('marketing')}` : ''}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {(emailTemplates?.list ?? []).length === 0 && <p className="text-xs text-muted-foreground">{uiText('Nenhum modelo de e-mail. Crie em Configurações → E-mail.')}</p>}
+                      <p className="text-xs text-muted-foreground">{uiText('Modelo de marketing só vai para quem aceitou e leva o link de descadastro.')}</p>
                     </div>
                   ) : (
                     <div className="space-y-2">

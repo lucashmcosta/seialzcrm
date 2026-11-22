@@ -42,6 +42,14 @@ export function ContactMarketingConsent({ contactId }: { contactId: string }) {
     },
   });
 
+  const { data: emailState } = useQuery({
+    queryKey: ['contact-email-invalid', contactId],
+    queryFn: async () => {
+      const { data } = await supabase.from('contacts').select('email_invalid_at, email_invalid_reason' as never).eq('id', contactId).maybeSingle();
+      return data as unknown as { email_invalid_at: string | null; email_invalid_reason: string | null } | null;
+    },
+  });
+
   const toggle = async (channel: Channel, granted: boolean) => {
     setSaving(channel);
     const { error } = await supabase.rpc('rpc_set_contact_consent_v1' as never, {
@@ -71,6 +79,11 @@ export function ContactMarketingConsent({ contactId }: { contactId: string }) {
             <div className="min-w-0">
               <Label htmlFor={`consent-${c.id}`} className="text-sm">{c.label}</Label>
               <p className="truncate text-xs text-muted-foreground">{isLoading ? uiText('Carregando...') : detail}</p>
+              {c.id === 'email' && emailState?.email_invalid_at && (
+                <p className="truncate text-xs text-destructive">
+                  {uiText('E-mail inválido')} ({uiText(emailState.email_invalid_reason ?? 'devolvido')}): {uiText('não recebe mais e-mails')}
+                </p>
+              )}
             </div>
             <Switch
               id={`consent-${c.id}`}

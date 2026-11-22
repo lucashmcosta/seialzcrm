@@ -90,6 +90,7 @@ const settingsGroups: SettingsGroup[] = [
       { icon: WhatsappLogo, label: 'WhatsApp Comercial', description: 'Gerencie números, roteamento e provedores do WhatsApp Comercial.', to: 'whatsapp-comercial', permission: 'canManageIntegrations' },
       { icon: Link, label: 'Integrações', description: 'Conecte com ferramentas que você já usa', to: 'integrations', permission: 'canManageIntegrations' },
       { icon: ChatCircleText, label: 'WhatsApp Templates', description: 'Gerencie modelos de mensagem do WhatsApp', to: 'whatsapp-templates', permission: 'canManageIntegrations', flag: 'hasWhatsApp' },
+      { icon: ChatCircleText, label: 'E-mail', description: 'Conecte a sua conta Resend, o domínio e os modelos de e-mail', to: 'email', badge: 'Novo', badgeVariant: 'info', permission: 'canManageIntegrations' },
       { icon: ChatCircleText, label: 'Réguas', description: 'Sequências automáticas por etapa do funil: templates e tarefas', to: 'cadences', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },
       { icon: ChatCircleText, label: 'Botões do WhatsApp', description: 'O que o CRM faz quando o lead toca num botão de um template', to: 'whatsapp-buttons', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },
       { icon: ChatCircleText, label: 'Respostas Rápidas', description: 'Snippets internos para respostas na janela aberta do WhatsApp', to: 'whatsapp-snippets', permission: 'canManageSettings', flag: 'hasWhatsApp' },

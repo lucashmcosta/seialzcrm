@@ -1,7 +1,8 @@
 // Robô das réguas (a cada minuto, chamado pelo pg_cron com a chave interna).
 // 1. Reserva os envios vencidos (fn_cadence_claim_sends: cada envio uma vez só).
 // 2. Decide cada um na hora (fn_cadence_prepare_send: não contatar, aceite, janela, limites, repetição).
-// 3. Envia o template de WhatsApp pelo despachante (Twilio, Meta ou Evolution) ou cria a tarefa.
+// 3. Envia o template de WhatsApp pelo despachante (Twilio, Meta ou Evolution), o e-mail pela Resend
+//    da própria org, ou cria a tarefa.
 // 4. Registra o resultado (fn_cadence_finish_send), que conclui a inscrição quando não resta nada.
 // Vale para todas as organizações; "pausar todas as réguas" da org é respeitado na reserva.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -9,6 +10,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { verifyServiceRoleAuth } from "../_shared/auth.ts";
 import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
 import { resolveCadenceVariables, type CadenceVariableContext } from "../_shared/cadence-variables.ts";
+import { decryptSecret } from "../_shared/crypto.ts";
+import { fillText, renderEmail, resendRequest } from "../_shared/email-resend.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -18,7 +21,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 interface Prepared {
   action: string;
   reason?: string;
-  kind?: "whatsapp_template" | "task";
+  kind?: "whatsapp_template" | "task" | "email";
   organization_id?: string;
   contact_id?: string;
   opportunity_id?: string;
@@ -32,6 +35,60 @@ interface Prepared {
   task_description?: string | null;
   task_due_minutes?: number;
   task_priority?: string;
+  email_template_id?: string;
+  to_email?: string;
+  is_marketing?: boolean;
+}
+
+/** Envia o e-mail do passo pela conta Resend da org. Devolve o id do registro em email_messages. */
+// deno-lint-ignore no-explicit-any
+async function sendCadenceEmail(supabase: any, sendId: string, p: Prepared): Promise<{ ok: true; emailId: string } | { ok: false; status: "failed" | "skipped"; reason: string }> {
+  const [{ data: settings }, { data: secret }, { data: tpl }, { data: org }] = await Promise.all([
+    supabase.from("organization_email_settings").select("*").eq("organization_id", p.organization_id).maybeSingle(),
+    supabase.from("organization_email_secrets").select("api_key_encrypted").eq("organization_id", p.organization_id).maybeSingle(),
+    supabase.from("email_templates").select("id, subject, body").eq("id", p.email_template_id).maybeSingle(),
+    supabase.from("organizations").select("name").eq("id", p.organization_id).maybeSingle(),
+  ]);
+  if (!settings?.from_email || !secret?.api_key_encrypted) return { ok: false, status: "failed", reason: "e-mail da organização não conectado" };
+  if (!tpl) return { ok: false, status: "failed", reason: "modelo de e-mail removido" };
+  let apiKey: string;
+  try { apiKey = await decryptSecret(secret.api_key_encrypted); } catch { return { ok: false, status: "failed", reason: "chave da Resend ilegível" }; }
+
+  const ctx = await loadContext(supabase, p);
+  const subject = fillText(tpl.subject, ctx);
+  const body = fillText(tpl.body, ctx);
+  const missing = [...new Set([...subject.missing, ...body.missing])];
+  if (missing.length) return { ok: false, status: "skipped", reason: `variável sem valor: ${missing.join(", ")}` };
+
+  const { data: row, error: rowError } = await supabase.from("email_messages").insert({
+    organization_id: p.organization_id, contact_id: p.contact_id, opportunity_id: p.opportunity_id ?? null,
+    cadence_send_id: sendId, template_id: tpl.id, to_email: p.to_email, subject: subject.text.slice(0, 300),
+    is_marketing: !!p.is_marketing,
+  }).select("id, unsubscribe_token").single();
+  if (rowError) return { ok: false, status: "failed", reason: `registro: ${rowError.message}` };
+
+  const unsubscribeUrl = p.is_marketing ? `${Deno.env.get("SUPABASE_URL")}/functions/v1/email-unsubscribe?t=${row.unsubscribe_token}` : null;
+  const { html, text } = renderEmail({ body: body.text, branding: { ...settings, org_name: org?.name }, unsubscribeUrl });
+  const fromName = String(settings.from_name || org?.name || "").replace(/[<>"]/g, "");
+  const r = await resendRequest(apiKey, "POST", "/emails", {
+    from: fromName ? `${fromName} <${settings.from_email}>` : settings.from_email,
+    to: [p.to_email], subject: subject.text.slice(0, 300), html, text,
+    ...(settings.reply_to ? { reply_to: settings.reply_to } : {}),
+    ...(unsubscribeUrl ? { headers: { "List-Unsubscribe": `<${unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {}),
+    tags: [{ name: "seialz", value: p.is_marketing ? "cadence_marketing" : "cadence" }],
+  });
+  if (!r.ok || !r.data?.id) {
+    const reason = `envio: ${String(r.data?.message ?? r.status)}`.slice(0, 300);
+    await supabase.from("email_messages").update({ status: "failed", error: reason }).eq("id", row.id);
+    return { ok: false, status: "failed", reason };
+  }
+  await supabase.from("email_messages").update({ status: "sent", provider_message_id: String(r.data.id), sent_at: new Date().toISOString() }).eq("id", row.id);
+  await supabase.from("activities").insert({
+    organization_id: p.organization_id, contact_id: p.contact_id, opportunity_id: p.opportunity_id ?? null,
+    activity_type: "message", title: `E-mail enviado: ${subject.text.slice(0, 150)}`, body: body.text.slice(0, 2000),
+    occurred_at: new Date().toISOString(),
+  });
+  return { ok: true, emailId: row.id };
 }
 
 // deno-lint-ignore no-explicit-any
@@ -111,6 +168,13 @@ serve(async (req) => {
         if (taskError) { await finish(id, "failed", `tarefa: ${taskError.message}`); result.failed++; continue; }
         await finish(id, "sent", null, null, task.id);
         result.tasks++;
+        continue;
+      }
+
+      if (p.kind === "email") {
+        const r = await sendCadenceEmail(supabase, id, p);
+        if (r.ok) { await finish(id, "sent", null, r.emailId); result.sent++; }
+        else { await finish(id, r.status, r.reason); if (r.status === "skipped") result.skipped++; else result.failed++; }
         continue;
       }
 
