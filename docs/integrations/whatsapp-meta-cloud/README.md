@@ -38,7 +38,7 @@ Conexão sem copiar tokens: o cliente escolhe ou cria a WABA e o número no popu
 ### Configuração (uma vez, app Seialz `1866027811023327`)
 1. **App Dashboard → Facebook Login for Business → Configurations:** criar uma configuração do tipo **WhatsApp Embedded Signup** com `whatsapp_business_management` + `whatsapp_business_messaging` e o ativo "Contas do WhatsApp". Salvar o ID em `FACEBOOK_WA_CONFIG_ID`. Não alterar `FACEBOOK_CONFIG_ID`, que é de Ads/Leads.
 2. **Facebook Login for Business → Settings:** o domínio do app em *Allowed domains* e *Valid OAuth redirect URIs* (HTTPS).
-3. **WhatsApp → Configuration → Webhook:** callback `https://<project>.supabase.co/functions/v1/meta-whatsapp-webhook`, verify token = secret `META_WA_WEBHOOK_VERIFY_TOKEN`. Assinar `messages` e `account_update`. O handshake aceita esse secret além dos verify tokens por integração.
+3. **WhatsApp → Configuration → Webhook:** callback `https://<project>.supabase.co/functions/v1/meta-whatsapp-webhook`, verify token = secret `META_WA_WEBHOOK_VERIFY_TOKEN`. Assinar `messages`, `account_update`, `phone_number_quality_update`, `message_template_quality_update` e `message_template_status_update`. O handshake aceita esse secret além dos verify tokens por integração.
 4. **Secrets Supabase:** `FACEBOOK_WA_CONFIG_ID`, `META_WA_WEBHOOK_VERIFY_TOKEN`. `FACEBOOK_APP_ID`/`FACEBOOK_APP_SECRET` já existem.
 5. **Live mode:** só aparecem no popup as permissões com Advanced Access (App Review / Tech Provider). Em modo dev, só para quem tem papel no app.
 6. **Cobrança:** o cliente adiciona a forma de pagamento no WhatsApp Manager.
@@ -47,6 +47,7 @@ Conexão sem copiar tokens: o cliente escolhe ou cria a WABA e o número no popu
 - Endpoint: edge function `meta-whatsapp-webhook`.
 - Verificação Meta com `hub.verify_token`.
 - Resolve org via `waba_id` → `communication_endpoints`.
+- Eventos de conta (`account_update`, qualidade do número, qualidade/status de template) não trazem `phone_number_id`. A assinatura é validada com o app secret das integrações daquela WABA (`entry.id`) ou com `FACEBOOK_APP_SECRET`. Cada evento é gravado em `integration_inbound_events` como `account:<campo>`, deduplicado pelo hash do corpo. Restrição, violação, queda de qualidade e template pausado ou vermelho geram notificação para os administradores da org. Antes de 11/2026 esses eventos eram recusados com 401 e se perdiam.
 - Cross-org routing: quando várias orgs compartilham WABA/phone_number_id, a org destino é resolvida pelo identificador do canal antes de qualquer gravação (mesmo princípio do canal Twilio).
 
 ## Envio
