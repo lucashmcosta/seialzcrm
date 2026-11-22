@@ -1791,6 +1791,9 @@ serve(async (req) => {
       if (threadState?.ai_agent_paused_until && new Date(threadState.ai_agent_paused_until).getTime() > Date.now()) {
         return skip('paused_by_team');
       }
+      // Número com o envio bloqueado pela Meta: não responde nem retoma para o vazio. Quando a Meta
+      // liberar, a rotina wa-block-recovery retoma esta conversa lendo tudo.
+      if (await threadSendBlocked(supabase, threadId)) return skip('send_blocked');
       if (agent.agent_type === 'support') {
         // Agente de atendimento: responde conversas de clientes que já têm responsável.
         if (threadState?.ai_agent_id && threadState.ai_agent_id !== agentId) return skip('other_agent');
@@ -3008,4 +3011,20 @@ async function threadUsesMetaButtons(supabase: any, threadId: string | undefined
     return false;
   }
   return (data?.communication_endpoints as { provider?: string } | null)?.provider === 'meta_cloud_api';
+}
+
+/** O número da conversa está com o envio bloqueado pela Meta (config_values.send_block)? Na dúvida, não. */
+// deno-lint-ignore no-explicit-any
+async function threadSendBlocked(supabase: any, threadId: string | undefined): Promise<boolean> {
+  if (!threadId) return false;
+  const { data, error } = await supabase.from('message_threads')
+    .select('communication_endpoints:primary_endpoint_id(organization_integrations:organization_integration_id(config_values))')
+    .eq('id', threadId).maybeSingle();
+  if (error) {
+    console.warn('[ai-agent-respond] não leu o bloqueio do número', error.message);
+    return false;
+  }
+  const cv = (data?.communication_endpoints as { organization_integrations?: { config_values?: Record<string, unknown> } } | null)
+    ?.organization_integrations?.config_values;
+  return !!cv?.send_block;
 }
