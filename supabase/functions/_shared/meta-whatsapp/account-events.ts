@@ -20,6 +20,8 @@ export function accountEventWabaIds(payload: any): string[] {
 export interface AccountEventSummary {
   /** Merece aviso imediato para os administradores da org. */
   critical: boolean;
+  /** Boa notícia que também vale avisar (conta reativada). */
+  good_news?: boolean;
   title: string;
   body: string;
 }
@@ -32,11 +34,19 @@ export function describeAccountEvent(field: string, value: any): AccountEventSum
   switch (field) {
     case "account_update": {
       const event = s(v.event).toUpperCase();
+      if (event === "DISABLED_UPDATE" && s(v.ban_info?.waba_ban_state).toUpperCase() === "REINSTATE") {
+        return {
+          critical: false,
+          good_news: true,
+          title: "WhatsApp: a Meta reativou a conta",
+          body: "A conta do WhatsApp foi reativada pela Meta e pode voltar a enviar mensagens.",
+        };
+      }
       const critical = /VIOLATION|RESTRICT|DISABLE|BAN|LOCK/.test(event);
       const violation = s(v.violation_info?.violation_type);
       const restrictions = Array.isArray(v.restriction_info)
         ? v.restriction_info
-          .map((r: any) => [s(r?.restriction_type), r?.expiration ? `até ${new Date(Number(r.expiration) * 1000).toISOString().slice(0, 10)}` : ""].filter(Boolean).join(" "))
+          .map((r: any) => [s(r?.restriction_type), r?.expiration ? `previsão da Meta: até ${new Date(Number(r.expiration) * 1000).toISOString().slice(0, 10)}, pode mudar com o recurso` : ""].filter(Boolean).join(" "))
           .filter(Boolean)
           .join("; ")
         : "";

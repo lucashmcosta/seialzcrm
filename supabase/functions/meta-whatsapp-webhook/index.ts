@@ -31,6 +31,7 @@ import {
 } from "../_shared/meta-whatsapp/credentials.ts";
 import { accountEventWabaIds, describeAccountEvent } from "../_shared/meta-whatsapp/account-events.ts";
 import { notifyOrgSystemAdmins } from "../_shared/notify.ts";
+import { accountStateFromUpdate, isLockFailure, sendBlockFromStatus, sendBlockTransition } from "../_shared/meta-whatsapp/send-block.ts";
 
 type MediaKind = "image" | "audio" | "video" | "document" | "sticker";
 const MEDIA_KINDS: MediaKind[] = ["image", "audio", "video", "document", "sticker"];
@@ -442,6 +443,13 @@ serve(async (req) => {
               processStatus: "failed",
               processError: `exception:${errMsg}`,
             });
+          }
+
+          // Bloqueio de envio visto na resposta da Meta (sem prazo fixo). Nunca derruba o webhook.
+          try {
+            await trackSendBlock(supabase, endpoint, st);
+          } catch (e) {
+            console.error("[meta-wa-webhook] send_block_exception", { wamid, err: (e as Error)?.message });
           }
         }
       }
@@ -1290,9 +1298,8 @@ async function handleAccountEvent(
   const value = change?.value ?? {};
   const summary = describeAccountEvent(field, value);
 
-  const orgIds = /^\d+$/.test(wabaId)
-    ? [...new Set((await integrationsForWabas(supabase, [wabaId])).map((r: any) => r.organization_id as string))]
-    : [];
+  const integrations = /^\d+$/.test(wabaId) ? await integrationsForWabas(supabase, [wabaId]) : [];
+  const orgIds = [...new Set(integrations.map((r: any) => r.organization_id as string))];
 
   console.log("[meta-wa-webhook] account_event", JSON.stringify({
     waba_id: wabaId,
@@ -1329,11 +1336,87 @@ async function handleAccountEvent(
       });
       if (isDuplicateAuditError(error)) continue;
       if (error) console.error("[meta-wa-webhook] account_event_insert_error", { error, wabaId, field });
-      if (orgId && summary.critical) {
+      if (orgId && field === "account_update") {
+        await applyAccountState(supabase, integrations.filter((r: any) => r.organization_id === orgId), value);
+      }
+      if (orgId && (summary.critical || summary.good_news)) {
         await notifyOrgSystemAdmins(supabase, orgId, { type: "whatsapp_account_alert", title: summary.title, body: summary.body });
       }
     } catch (e) {
       console.error("[meta-wa-webhook] account_event_exception", { wabaId, field, err: (e as Error).message });
     }
+  }
+}
+
+// ============================================================
+// Estado de envio na integração (config_values):
+//   send_block       bloqueio visto no próprio envio; sai no primeiro "sent" posterior.
+//   meta_restriction restrição informada pela Meta (data só como referência na tela).
+// As gravações são condicionais (send_block vazio / preenchido): com vários status ao mesmo
+// tempo, só um marca ou libera e só ele avisa.
+// ============================================================
+
+const RESTRICTION_NOTICE_WINDOW_MS = 24 * 3600 * 1000;
+
+async function trackSendBlock(supabase: any, endpoint: any, st: any): Promise<void> {
+  if (!endpoint?.organization_integration_id) return;
+  if (!isLockFailure(st) && st?.status !== "sent") return;
+  const { data: oi } = await supabase.from("organization_integrations")
+    .select("id, organization_id, config_values")
+    .eq("id", endpoint.organization_integration_id).maybeSingle();
+  if (!oi) return;
+  const cv = (oi.config_values ?? {}) as Record<string, any>;
+  const transition = sendBlockTransition(st, cv.send_block ?? null);
+  if (!transition) return;
+  const phone = cv.display_phone_number ?? cv.phone_e164 ?? "";
+  const who = phone ? `Número ${phone}: ` : "";
+
+  if (transition === "block") {
+    const block = sendBlockFromStatus(st);
+    const { data: marked } = await supabase.from("organization_integrations")
+      .update({ config_values: { ...cv, send_block: block } })
+      .eq("id", oi.id).is("config_values->send_block", null).select("id");
+    if (!marked?.length) return;
+    console.warn("[meta-wa-webhook] send_block_on", { oi: oi.id, code: block.error_code });
+    // Se o aviso de restrição da Meta acabou de chegar, ele já avisou.
+    const restrictionAt = Date.parse(cv.meta_restriction?.received_at ?? "");
+    if (Number.isFinite(restrictionAt) && Date.now() - restrictionAt < RESTRICTION_NOTICE_WINDOW_MS) return;
+    await notifyOrgSystemAdmins(supabase, oi.organization_id, {
+      type: "whatsapp_account_alert",
+      title: "WhatsApp: a Meta bloqueou o envio",
+      body: `${who}as mensagens estão sendo recusadas pela Meta${block.error_title ? ` (${block.error_title})` : ""}. O motivo e o pedido de revisão ficam no Business Support Home da Meta.`,
+    });
+    return;
+  }
+
+  const { send_block: _block, meta_restriction: _restriction, ...rest } = cv;
+  const { data: cleared } = await supabase.from("organization_integrations")
+    .update({ config_values: { ...rest, send_unblocked_at: new Date().toISOString() } })
+    .eq("id", oi.id).not("config_values->send_block", "is", null).select("id");
+  if (!cleared?.length) return;
+  console.log("[meta-wa-webhook] send_block_off", { oi: oi.id });
+  await notifyOrgSystemAdmins(supabase, oi.organization_id, {
+    type: "whatsapp_account_alert",
+    title: "WhatsApp: envio liberado de novo",
+    body: `${who}a Meta voltou a aceitar as mensagens.`,
+  });
+}
+
+async function applyAccountState(supabase: any, integrations: any[], value: any): Promise<void> {
+  const state = accountStateFromUpdate(value);
+  if (!state) return;
+  for (const row of integrations) {
+    const { data: fresh } = await supabase.from("organization_integrations")
+      .select("config_values").eq("id", row.id).maybeSingle();
+    const cv = (fresh?.config_values ?? {}) as Record<string, any>;
+    let next: Record<string, any>;
+    if (state.kind === "restriction") {
+      next = { ...cv, meta_restriction: state.restriction };
+    } else {
+      const { send_block: _b, meta_restriction: _r, ...rest } = cv;
+      next = { ...rest, send_unblocked_at: new Date().toISOString() };
+    }
+    const { error } = await supabase.from("organization_integrations").update({ config_values: next }).eq("id", row.id);
+    if (error) console.error("[meta-wa-webhook] account_state_update_failed", { oi: row.id, err: error.message });
   }
 }

@@ -162,6 +162,9 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
 
   const ca = (orgIntegration?.connected_account ?? {}) as any;
   const cv = (orgIntegration?.config_values ?? {}) as any;
+  // Bloqueio visto no próprio envio (webhook): vale mais que o "Liberado" da consulta da Meta,
+  // que não mostra a restrição por spam.
+  const sendBlocked = !!cv.send_block?.since;
   const hasStoredAppSecret = !!ca.app_secret_encrypted;
   const hasStoredVerifyToken = !!ca.verify_token_encrypted;
 
@@ -226,22 +229,38 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                   <Field label="App ID" value={cv.app_id} mono />
                   <Field label={uiText("Qualidade")} value={QUALITY_LABEL[cv.quality_rating] ? uiText(QUALITY_LABEL[cv.quality_rating]) : cv.quality_rating} />
                   <Field label={uiText("Tier de envio")} value={cv.messaging_limit_tier} />
-                  <Field label={uiText("Envio")} value={CAN_SEND_LABEL[cv.can_send_message] ? uiText(CAN_SEND_LABEL[cv.can_send_message]) : cv.can_send_message} />
+                  <Field
+                    label={uiText("Envio")}
+                    value={sendBlocked
+                      ? uiText("Bloqueado pela Meta")
+                      : CAN_SEND_LABEL[cv.can_send_message] ? uiText(CAN_SEND_LABEL[cv.can_send_message]) : cv.can_send_message}
+                  />
                   <Field
                     label={uiText("Última validação")}
                     value={cv.last_validated_at ? new Date(cv.last_validated_at).toLocaleString(getUiLocale()) : "—"}
                   />
                 </div>
                 {/* Preenchido pela rotina meta-wa-health-check (números do app da plataforma). */}
-                {(cv.can_send_message === "LIMITED" || cv.can_send_message === "BLOCKED" || cv.quality_rating === "RED") && (
+                {(sendBlocked || cv.can_send_message === "LIMITED" || cv.can_send_message === "BLOCKED" || cv.quality_rating === "RED") && (
                   <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm space-y-1">
                     <p className="font-medium text-destructive">
-                      {cv.can_send_message === "BLOCKED"
+                      {sendBlocked || cv.can_send_message === "BLOCKED"
                         ? uiText("A Meta bloqueou o envio deste número.")
                         : cv.can_send_message === "LIMITED"
                           ? uiText("A Meta limitou o envio deste número.")
                           : uiText("A qualidade deste número está baixa.")}
                     </p>
+                    {sendBlocked && (
+                      <p className="text-muted-foreground">
+                        {uiText("Mensagens recusadas pela Meta desde {when}.", { when: new Date(cv.send_block.since).toLocaleString(getUiLocale()) })}
+                        {" "}{uiText("Volta para liberado sozinho no primeiro envio aceito (fim da restrição ou recurso aceito).")}
+                      </p>
+                    )}
+                    {sendBlocked && cv.meta_restriction?.expires_at && (
+                      <p className="text-muted-foreground">
+                        {uiText("Previsão informada pela Meta: até {date}. Pode mudar com o pedido de revisão.", { date: new Date(cv.meta_restriction.expires_at).toLocaleDateString(getUiLocale()) })}
+                      </p>
+                    )}
                     {Array.isArray(cv.health_errors) && cv.health_errors.slice(0, 3).map((e: any, i: number) => (
                       <p key={i} className="text-muted-foreground">
                         {e.error_description}{e.possible_solution ? ` ${e.possible_solution}` : ""}
