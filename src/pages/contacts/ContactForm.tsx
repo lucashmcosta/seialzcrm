@@ -35,6 +35,7 @@ import {
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 import { classifyContactDbError, cpfInputError } from '@/lib/contactRules';
 import { ContactOwnerCascadeDialog } from '@/components/contacts/ContactOwnerCascadeDialog';
+import { ContactMarketingConsent } from '@/components/contacts/ContactMarketingConsent';
 import { uiText } from '@/lib/ui-locale';
 import { useOrgUserFilterOptions } from '@/hooks/useOrgUserFilterOptions';
 
@@ -1171,6 +1172,8 @@ export function ContactFormView({
                 />
                 <Label htmlFor="doNotContact">{t('contacts.doNotContact')}</Label>
               </div>
+
+              {isEdit && id && <ContactMarketingConsent contactId={id} />}
 
               <div className="flex gap-2">
                 <Button type="submit" color="primary" disabled={loading}>

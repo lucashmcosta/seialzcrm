@@ -2,6 +2,7 @@ import { captureCommercialOrigin } from "../_shared/commercial-origin.ts";
 import { normalizeLeadAttribution, leadCommercialEvidence } from "../_shared/lead-attribution.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { parseCustomFieldInput, parseMarketingConsent, type CustomFieldDefinition, type CustomFieldRejection } from "../_shared/custom-field-input.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -57,6 +58,55 @@ interface LeadPayload {
   opportunity_title?: string;
   opportunity_value?: number;
   [key: string]: unknown;
+}
+
+const asObject = (v: unknown): Record<string, unknown> =>
+  v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+
+/**
+ * Grava campos customizados de um registro. onlyEmpty = não sobrescreve o que já estava preenchido
+ * (contato que já existia: o valor pode ter sido posto por uma pessoa).
+ */
+// deno-lint-ignore no-explicit-any
+async function saveCustomFields(supabase: any, organizationId: string, module: 'contacts' | 'opportunities', recordId: string, input: Record<string, unknown>, onlyEmpty: boolean) {
+  const out = { saved: [] as string[], kept: [] as string[], rejected: [] as CustomFieldRejection[] };
+  if (Object.keys(input).length === 0) return out;
+  const { data: defs, error: defsError } = await supabase
+    .from('custom_field_definitions')
+    .select('id, name, label, field_type, options')
+    .eq('organization_id', organizationId)
+    .eq('module', module);
+  if (defsError) {
+    out.rejected.push(...Object.keys(input).map((field) => ({ field, reason: 'não foi possível ler os campos da organização' })));
+    return out;
+  }
+  const parsed = parseCustomFieldInput(input, (defs ?? []) as CustomFieldDefinition[]);
+  out.rejected.push(...parsed.rejected);
+  let values = parsed.values;
+  if (onlyEmpty && values.length > 0) {
+    const { data: existing } = await supabase
+      .from('custom_field_values')
+      .select('field_definition_id, value')
+      .eq('record_id', recordId)
+      .in('field_definition_id', values.map((v) => v.definition.id));
+    const filled = new Set(((existing ?? []) as Array<{ field_definition_id: string; value: unknown }>)
+      .filter((r) => r.value != null && r.value !== '' && !(Array.isArray(r.value) && r.value.length === 0))
+      .map((r) => r.field_definition_id));
+    out.kept.push(...values.filter((v) => filled.has(v.definition.id)).map((v) => v.definition.name));
+    values = values.filter((v) => !filled.has(v.definition.id));
+  }
+  if (values.length === 0) return out;
+  const { error } = await supabase.from('custom_field_values').upsert(
+    values.map((v) => ({ organization_id: organizationId, module, record_id: recordId, field_definition_id: v.definition.id, value: v.value })),
+    { onConflict: 'record_id,field_definition_id' },
+  );
+  if (error) {
+    console.error('custom_fields save error', { module, message: error.message });
+    out.rejected.push(...values.map((v) => ({ field: v.definition.name, reason: 'falha ao gravar' })));
+  } else {
+    out.saved.push(...values.map((v) => v.definition.name));
+  }
+  return out;
 }
 
 // Check if scopes array has a specific scope
@@ -231,6 +281,9 @@ serve(async (req) => {
       .eq('entity_type', 'opportunity');
 
     let payload: LeadPayload;
+    // Campos customizados e aceite vindos pelo mapeamento (destino "custom:<nome>" e "marketing_consent").
+    const mappedCustom = { contact: {} as Record<string, unknown>, opportunity: {} as Record<string, unknown> };
+    let mappedConsent: unknown = undefined;
 
     if (contactMappings && contactMappings.length > 0) {
       // Apply field mapping: translate external fields to internal
@@ -251,6 +304,11 @@ serve(async (req) => {
         if (value != null) {
           mapped[m.internal_field] = value;
         }
+      }
+
+      for (const [key, value] of Object.entries(mapped)) {
+        if (key.startsWith('custom:')) mappedCustom.contact[key.slice(7)] = value;
+        else if (key === 'marketing_consent') mappedConsent = value;
       }
 
       // Build the payload from mapped fields
@@ -285,6 +343,8 @@ serve(async (req) => {
           const rawValue = rawPayload[m.external_field];
           const value = rawValue != null ? applyTransform(String(rawValue), m.transform_type) : (m.default_value || null);
           if (value != null) {
+            if (m.internal_field.startsWith('custom:')) mappedCustom.opportunity[m.internal_field.slice(7)] = value;
+            if (m.internal_field === 'marketing_consent') mappedConsent = value;
             if (m.internal_field === 'title') payload.opportunity_title = value;
             if (m.internal_field === 'amount') { payload.opportunity_value = parseFloat(value); payload.create_opportunity = true; }
             if (m.internal_field === 'source') payload.source = value;
@@ -507,6 +567,37 @@ serve(async (req) => {
       if (!activityError) activityId = activity?.id || null;
     }
 
+    // Campos customizados: bloco "custom_fields": { "contact": {...}, "opportunity": {...} } pelo nome interno.
+    // Valor inválido fica de fora (e volta na resposta), sem impedir o lead.
+    const rawCustom = asObject(rawPayload.custom_fields);
+    const contactCustomInput = { ...asObject(rawCustom.contact), ...mappedCustom.contact };
+    const opportunityCustomInput = { ...asObject(rawCustom.opportunity), ...mappedCustom.opportunity };
+    const contactCustom = await saveCustomFields(supabase, organizationId, 'contacts', contactId, contactCustomInput, duplicateReused);
+    const opportunityCustom = opportunityId
+      ? await saveCustomFields(supabase, organizationId, 'opportunities', opportunityId, opportunityCustomInput, false)
+      : { saved: [] as string[], kept: [] as string[], rejected: Object.keys(opportunityCustomInput).map((field) => ({ field, reason: 'nenhuma oportunidade foi criada' })) };
+    const customRejected = [
+      ...contactCustom.rejected.map((r) => ({ ...r, module: 'contact' })),
+      ...opportunityCustom.rejected.map((r) => ({ ...r, module: 'opportunity' })),
+    ];
+    if (customRejected.length > 0) console.warn('custom_fields rejected', { organization_id: organizationId, rejected: customRejected });
+
+    // Aceite de marketing: "marketing_consent": true | "Sim" | { "whatsapp": true, "email": false }.
+    const consentInput = mappedConsent !== undefined ? mappedConsent : rawPayload.marketing_consent;
+    const consentEntries = consentInput === undefined || consentInput === null || consentInput === '' ? null : parseMarketingConsent(consentInput);
+    const consentResult: Array<{ channel: string; granted: boolean; ok: boolean }> = [];
+    for (const entry of consentEntries ?? []) {
+      const { error: consentError } = await supabase.rpc('rpc_set_contact_consent_v1', {
+        p_contact_id: contactId, p_channel: entry.channel, p_granted: entry.granted,
+        p_source: 'webhook', p_source_detail: `api_key:${apiKeyData.id}`,
+      });
+      if (consentError) console.error('marketing_consent save error', consentError.message);
+      consentResult.push({ ...entry, ok: !consentError });
+    }
+    if (consentInput !== undefined && consentInput !== null && consentInput !== '' && consentEntries === null) {
+      console.warn('marketing_consent ignored: unrecognized value');
+    }
+
     await captureCommercialOrigin(supabase, {
       organizationId, key: `lead-webhook:${apiKeyData.id}:${typeof rawPayload.commercial_event_id === 'string' ? rawPayload.commercial_event_id.slice(0,200) : crypto.randomUUID()}`,
       contactId, opportunityId, channel: 'form', firstContactEntry: !existingContactId,
@@ -523,6 +614,14 @@ serve(async (req) => {
         activity_id: activityId,
         message: duplicateReused ? 'Existing contact reused' : 'Lead created successfully',
         duplicate_reused: duplicateReused,
+        custom_fields: {
+          saved: { contact: contactCustom.saved, opportunity: opportunityCustom.saved },
+          kept_existing: contactCustom.kept,
+          rejected: customRejected,
+        },
+        marketing_consent: consentEntries === null
+          ? (consentInput === undefined || consentInput === null || consentInput === '' ? null : { ignored: 'valor não reconhecido' })
+          : consentResult,
       }),
       { status: duplicateReused ? 200 : 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
