@@ -1,7 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { typingIndicatorBody } from "../supabase/functions/_shared/meta-whatsapp/typing.ts";
 import { DEFAULT_HANDOFF_ACK } from "../src/lib/agentDistribution.ts";
-import { AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, brazilNationalHoliday, pendingReplyNote, isTrivialClientMessage, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
+import { hasVisibleText, dropJunkParagraphs, AGENT_HANDOFF_ACK, shouldHandOffSilent, decideSupportGate, agentTypeForThread, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, agentInputKind, billableInputTokens, currentTimeForPrompt, brazilNationalHoliday, pendingReplyNote, isTrivialClientMessage, decideAgentGate, handoffAckText, joinAgentText, agentReplyText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText } from "../supabase/functions/_shared/intelligence/agent-gate.ts";
 
 const mine = { ai_agent_id: "a1", ai_agent_released_at: null, needs_human_attention: false, assigned_user_id: null };
 
@@ -334,4 +334,15 @@ Deno.test("espera conta da primeira pergunta, não de um obrigado antigo", () =>
   assertEquals(isTrivialClientMessage("Ok, obrigada!"), true);
   assertEquals(isTrivialClientMessage("Tá bom"), true);
   assertEquals(isTrivialClientMessage("Mudou o horário?"), false);
+});
+
+Deno.test("bolha só com símbolo solto, invisível ou traço não tem texto visível", () => {
+  for (const junk of ["∅", "‎", "̶", "𝅇", "  ", "", "-", "..."]) assertEquals(hasVisibleText(junk), false, JSON.stringify(junk));
+  for (const ok of ["Oi", "30%", "💖", "Quer que eu já prepare o seu contrato?"]) assertEquals(hasVisibleText(ok), true, ok);
+});
+
+Deno.test("parágrafo-lixo no fim da resposta sai antes de quebrar em bolhas", () => {
+  assertEquals(dropJunkParagraphs("Quer que eu já prepare o seu contrato?\n\n∅"), "Quer que eu já prepare o seu contrato?");
+  assertEquals(splitIntoBubbles(dropJunkParagraphs("A\n\nB\n\nC\n\n‎")), ["A", "B", "C"]);
+  assertEquals(dropJunkParagraphs("∅"), "");
 });
