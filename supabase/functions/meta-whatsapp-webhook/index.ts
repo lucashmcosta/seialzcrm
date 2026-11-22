@@ -1389,9 +1389,10 @@ async function trackSendBlock(supabase: any, endpoint: any, st: any): Promise<vo
     return;
   }
 
-  const { send_block: _block, meta_restriction: _restriction, ...rest } = cv;
+  const { send_block: block, meta_restriction: _restriction, ...rest } = cv;
+  const unblockedAt = new Date().toISOString();
   const { data: cleared } = await supabase.from("organization_integrations")
-    .update({ config_values: { ...rest, send_unblocked_at: new Date().toISOString() } })
+    .update({ config_values: { ...rest, send_unblocked_at: unblockedAt, block_recovery: recoveryFor(block, unblockedAt) } })
     .eq("id", oi.id).not("config_values->send_block", "is", null).select("id");
   if (!cleared?.length) return;
   console.log("[meta-wa-webhook] send_block_off", { oi: oi.id });
@@ -1413,10 +1414,16 @@ async function applyAccountState(supabase: any, integrations: any[], value: any)
     if (state.kind === "restriction") {
       next = { ...cv, meta_restriction: state.restriction };
     } else {
-      const { send_block: _b, meta_restriction: _r, ...rest } = cv;
-      next = { ...rest, send_unblocked_at: new Date().toISOString() };
+      const { send_block: block, meta_restriction: _r, ...rest } = cv;
+      const unblockedAt = new Date().toISOString();
+      next = { ...rest, send_unblocked_at: unblockedAt, ...(block?.since ? { block_recovery: recoveryFor(block, unblockedAt) } : {}) };
     }
     const { error } = await supabase.from("organization_integrations").update({ config_values: next }).eq("id", row.id);
     if (error) console.error("[meta-wa-webhook] account_state_update_failed", { oi: row.id, err: error.message });
   }
+}
+
+/** Recuperação das conversas sem resposta no período do bloqueio (rotina wa-block-recovery). */
+function recoveryFor(block: { since?: string } | undefined, unblockedAt: string) {
+  return { status: "pending", block_since: block?.since ?? unblockedAt, unblocked_at: unblockedAt };
 }
