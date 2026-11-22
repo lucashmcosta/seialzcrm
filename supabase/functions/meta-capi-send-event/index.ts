@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
+import { resolveMetaCredentials } from "../_shared/meta-whatsapp/credentials.ts";
 import { authorizeSendEvent } from "./auth.ts";
 import { buildMessagingCustomData, buildMessagingUserData, type CapiRule, MESSAGING_EVENTS, pickRule, singleValue } from "./messaging.ts";
 import { claimLogRow, findSentDuplicate, isRealSentRow, isTestSend, resolveEventId, resolveTestEventCode, testNeedsCode } from "./dedup.ts";
@@ -119,6 +120,19 @@ async function getAccessToken(admin: any, orgId: string, ca: any): Promise<strin
 }
 
 // ── Formato de mensagens (business_messaging) ──────────────────────────────
+async function whatsappAccessToken(admin: any, orgId: string): Promise<string | null> {
+  const { data } = await admin.from("organization_integrations")
+    .select("id, admin_integrations!inner(slug)")
+    .eq("organization_id", orgId).eq("is_enabled", true)
+    .eq("admin_integrations.slug", "meta-whatsapp-cloud");
+  if (!data || data.length !== 1) return null;
+  try {
+    return (await resolveMetaCredentials(admin, data[0].id)).accessToken || null;
+  } catch {
+    return null;
+  }
+}
+
 // WABA e página são lidos na hora, da conexão da org (não de uma cópia salva na config da CAPI,
 // que pode ficar vazia ou desatualizada).
 async function resolveWabaId(admin: any, orgId: string, ca: any): Promise<string | null> {
@@ -288,7 +302,11 @@ serve(async (req) => {
       }
     }
 
-    const accessToken = await getAccessToken(admin, organization_id, ca);
+    // O pixel do WhatsApp (messaging_dataset_id) é do negócio do WABA: só o token do WhatsApp tem acesso a ele.
+    const useMessagingDataset = messagingFormat && !!ca.messaging_dataset_id;
+    const accessToken = useMessagingDataset
+      ? await whatsappAccessToken(admin, organization_id)
+      : await getAccessToken(admin, organization_id, ca);
     if (!accessToken) {
       return json({
         error: "capi_token_missing",
@@ -445,7 +463,9 @@ serve(async (req) => {
       attempts = claim.attemptCount;
     }
 
-    const url = `https://graph.facebook.com/${META_API_VERSION}/${pixelId}/events`;
+    // Formato de mensagens vai para o pixel ligado ao WhatsApp, quando a org tiver um (meta-capi-messaging-dataset).
+    const targetDatasetId = useMessagingDataset ? String(ca.messaging_dataset_id) : pixelId;
+    const url = `https://graph.facebook.com/${META_API_VERSION}/${targetDatasetId}/events`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
