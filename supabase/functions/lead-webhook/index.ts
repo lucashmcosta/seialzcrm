@@ -1,5 +1,5 @@
 import { captureCommercialOrigin } from "../_shared/commercial-origin.ts";
-import { normalizeLeadAttribution, leadCommercialEvidence } from "../_shared/lead-attribution.ts";
+import { normalizeLeadAttribution, leadCommercialEvidence, opportunityOrigin } from "../_shared/lead-attribution.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { parseCustomFieldInput, parseMarketingConsent, type CustomFieldDefinition, type CustomFieldRejection } from "../_shared/custom-field-input.ts";
@@ -542,6 +542,9 @@ serve(async (req) => {
             amount: payload.opportunity_value || 0,
             marketing_campaign_id: contactMarketingCampaignId,
             status: 'open',
+            // Origem deste lead na própria oportunidade: o contato guarda a primeira origem,
+            // e um contato que volta por outra campanha precisa da origem nova aqui.
+            ...opportunityOrigin(payload.source, attribution),
           })
           .select('id')
           .single();

@@ -28,3 +28,16 @@ export function normalizeLeadAttribution(payload: Record<string, unknown>): Reco
 export function leadCommercialEvidence(attribution: Record<string, string>): Record<string, string> {
   return { ...attribution, ...(attribution.meta_ad_id ? { ad_id: attribution.meta_ad_id } : {}) };
 }
+
+/** Campos de origem gravados na oportunidade criada pelo webhook (só atribuição, nunca respostas do formulário). */
+export function opportunityOrigin(source: unknown, attribution: Record<string, string>) {
+  return {
+    source: (typeof source === 'string' && source.trim()) ? source.trim() : "api",
+    utm_source: attribution.utm_source || null,
+    utm_medium: attribution.utm_medium || null,
+    utm_campaign: attribution.utm_campaign || null,
+    utm_content: attribution.utm_content || null,
+    utm_term: attribution.utm_term || null,
+    attribution_data: attribution,
+  };
+}

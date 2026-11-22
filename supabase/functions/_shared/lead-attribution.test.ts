@@ -1,4 +1,4 @@
-import { normalizeLeadAttribution, leadCommercialEvidence } from "./lead-attribution.ts";
+import { normalizeLeadAttribution, leadCommercialEvidence, opportunityOrigin } from "./lead-attribution.ts";
 
 function equal(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(JSON.stringify({ actual, expected }));
@@ -23,4 +23,15 @@ Deno.test("optional malformed data and unresolved ad templates never become attr
 Deno.test("separate submissions never inherit another contact's attribution", () => {
   normalizeLeadAttribution({ source: "meta", utms: { utm_campaign: "previous" } });
   equal(leadCommercialEvidence(normalizeLeadAttribution({ source: "gads", gclid: "new" })), { source: "gads", gclid: "new" });
+});
+Deno.test("opportunity gets this lead's own origin (source, UTMs, full attribution)", () => {
+  const attribution = normalizeLeadAttribution({ source: "quiz_desantis", utm_source: "meta", utm_campaign: "L-1", all_params: { fbclid: "abc", landing_url: "https://x.test/analise/", nota: "A" } });
+  equal(opportunityOrigin("quiz_desantis", attribution), {
+    source: "quiz_desantis", utm_source: "meta", utm_medium: null, utm_campaign: "L-1", utm_content: null, utm_term: null,
+    attribution_data: { source: "quiz_desantis", utm_source: "meta", utm_campaign: "L-1", fbclid: "abc", landing_url: "https://x.test/analise/" },
+  });
+});
+Deno.test("opportunity origin defaults to api and keeps empty attribution as {}", () => {
+  equal(opportunityOrigin(undefined, {}), { source: "api", utm_source: null, utm_medium: null, utm_campaign: null, utm_content: null, utm_term: null, attribution_data: {} });
+  equal(opportunityOrigin("  ", {}).source, "api");
 });
