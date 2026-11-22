@@ -112,6 +112,29 @@ async function valorDaAdesao(db: Db, org: string, oppId: string, adesao: number 
   if (error) console.warn(`[plamev-quote] valor da adesão não gravado opp=${oppId} code=${error.code}`);
 }
 
+/**
+ * Cotação gravada = lead qualificado na Meta (QualifiedLead, formato de mensagens). Uma vez por pessoa: o envio já
+ * deduplica por oportunidade, e aqui pula se o contato já teve um QualifiedLead enviado (várias cotações, outra
+ * oportunidade). Org fora do formato de mensagens não manda nada. Falha não atrapalha a cotação.
+ */
+async function qualificadoNaMeta(db: Db, org: string, opp: { id: string; contact_id: string | null }) {
+  try {
+    const { data: formato } = await db.rpc("fn_capi_event_format", { p_organization_id: org });
+    if (formato !== "business_messaging") return;
+    if (opp.contact_id) {
+      const { data: ja } = await db.from("capi_event_log").select("id").eq("organization_id", org)
+        .eq("event_name", "QualifiedLead").eq("contact_id", opp.contact_id).eq("status", "sent").is("test_event_code", null).limit(1);
+      if (ja?.length) return;
+    }
+    const { error } = await db.rpc("fn_capi_dispatch_event", {
+      p_organization_id: org, p_event_name: "QualifiedLead", p_contact_id: opp.contact_id, p_opportunity_id: opp.id,
+    });
+    if (error) console.warn(`[plamev-quote] QualifiedLead não disparado opp=${opp.id} code=${error.code}`);
+  } catch (e) {
+    console.warn(`[plamev-quote] QualifiedLead falhou opp=${opp.id}: ${(e as Error).message}`);
+  }
+}
+
 /** Consulta a Plamev e grava o status. Adesão paga: nota na linha do tempo (uma vez) e, se ligado, oportunidade ganha. */
 async function verificarPagamento(db: Db, token: string, c: CotacaoLinha, marcarGanha: boolean) {
   const agora = new Date().toISOString();
@@ -525,7 +548,10 @@ Deno.serve(async (req) => {
           });
           if (e1 || e2) console.error(`[plamev-quote] salvar na oportunidade falhou opp=${opp.id} quotes=${e1?.code ?? "ok"} activity=${e2?.code ?? "ok"}`);
           salvaNaOportunidade = !e1;
-          if (!e1) await valorDaAdesao(db, org, opp.id, r.adesao);
+          if (!e1) {
+            await valorDaAdesao(db, org, opp.id, r.adesao);
+            await qualificadoNaMeta(db, org, opp);
+          }
         }
         return json(200, { resultado: r, salvaNaOportunidade, payload: trace });
       }
