@@ -50,7 +50,10 @@ Deno.serve(async (req) => {
     // Tela de autorização da Resend; a volta cai em resend-oauth-callback (state + PKCE, 10 min).
     const { verifier, challenge } = await pkcePair();
     const state = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
-    const { error } = await admin.from("email_oauth_states").insert({ state, organization_id: orgId, user_id: me ?? null, code_verifier: verifier });
+    // Endereço do app de onde veio o clique (só https), para voltar ao mesmo lugar.
+    const origin = req.headers.get("origin") ?? "";
+    const returnOrigin = /^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(origin) ? origin : null;
+    const { error } = await admin.from("email_oauth_states").insert({ state, organization_id: orgId, user_id: me ?? null, code_verifier: verifier, return_path: returnOrigin });
     if (error) return json({ error: "save_failed" }, 500);
     await admin.from("email_oauth_states").delete().lt("expires_at", new Date().toISOString());
     const url = new URL("https://api.resend.com/oauth/authorize");

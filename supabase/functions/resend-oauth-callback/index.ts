@@ -4,9 +4,10 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { finishResendConnect, RESEND_OAUTH_CLIENT_ID, RESEND_OAUTH_REDIRECT, storeOAuthTokens, teardownResend, tokenRequest } from "../_shared/resend-auth.ts";
 
-const BASE = (Deno.env.get("PUBLIC_APP_BASE_URL") || "https://seialz.com").replace(/\/$/, "");
-const back = (result: string) =>
-  new Response(null, { status: 302, headers: { Location: `${BASE}/settings/integrations/email?resend=${result}` } });
+const BASE = (Deno.env.get("PUBLIC_APP_BASE_URL") || "https://crm.seialz.com").replace(/\/$/, "");
+// Volta para o endereço do app em que a pessoa clicou (guardado no pedido); sem ele, o padrão.
+const back = (result: string, origin?: string | null) =>
+  new Response(null, { status: 302, headers: { Location: `${origin || BASE}/settings/integrations/email?resend=${result}` } });
 
 Deno.serve(async (req) => {
   if (req.method !== "GET") return new Response(null, { status: 405 });
@@ -19,9 +20,10 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   // Uso único: apaga ao ler.
   const { data: rows } = await admin.from("email_oauth_states").delete().eq("state", state)
-    .select("organization_id, user_id, code_verifier, expires_at");
+    .select("organization_id, user_id, code_verifier, expires_at, return_path");
   const st = rows?.[0];
   if (!st || new Date(st.expires_at).getTime() < Date.now()) return back("expired");
+  const origin = st.return_path as string | null;
 
   const r = await tokenRequest({
     grant_type: "authorization_code", code, redirect_uri: RESEND_OAUTH_REDIRECT,
@@ -29,11 +31,11 @@ Deno.serve(async (req) => {
   });
   if (!r.ok || !r.data.access_token || !r.data.refresh_token) {
     console.error("[resend-oauth-callback] token", r.status, r.data?.error);
-    return back("error");
+    return back("error", origin);
   }
   await teardownResend(admin, st.organization_id); // conexão anterior (outra conta ou chave)
   const { error } = await storeOAuthTokens(admin, st.organization_id, r.data);
-  if (error) { console.error("[resend-oauth-callback] store", error.message); return back("error"); }
+  if (error) { console.error("[resend-oauth-callback] store", error.message); return back("error", origin); }
   await finishResendConnect(admin, st.organization_id, String(r.data.access_token), "oauth", null, st.user_id ?? null);
-  return back("connected");
+  return back("connected", origin);
 });

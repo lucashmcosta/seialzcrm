@@ -3,7 +3,7 @@
 // revoga o aceite de marketing por e-mail do contato.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const BASE = (Deno.env.get("PUBLIC_APP_BASE_URL") || "https://seialz.com").replace(/\/$/, "");
+const BASE = (Deno.env.get("PUBLIC_APP_BASE_URL") || "https://crm.seialz.com").replace(/\/$/, "");
 const go = (status: "ok" | "invalid" | "error") =>
   new Response(null, { status: 302, headers: { Location: `${BASE}/descadastro-email?status=${status}` } });
 
