@@ -9,6 +9,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InlineInput } from '@/components/ui/inline-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -394,7 +395,7 @@ export function EmailSettings({ section = 'connection' }: { section?: 'connectio
                 <label className="flex items-center gap-2"><Checkbox checked={tracking.open} onCheckedChange={(v) => setTracking({ ...tracking, open: v === true })} />{uiText('Aberturas')}</label>
                 <label className="flex items-center gap-2"><Checkbox checked={tracking.click} onCheckedChange={(v) => setTracking({ ...tracking, click: v === true })} />{uiText('Cliques')}</label>
                 <div className="flex items-center gap-1">
-                  <Input className="h-8 w-24" value={tracking.sub} disabled={!!openDomain.tracking_subdomain} onChange={(e) => setTracking({ ...tracking, sub: e.target.value })} />
+                  <InlineInput className="h-8 w-24" value={tracking.sub} disabled={!!openDomain.tracking_subdomain} onChange={(e) => setTracking({ ...tracking, sub: e.target.value })} />
                   <span className="text-xs text-muted-foreground">.{openDomain.name}</span>
                 </div>
                 <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('tracking', async () => {

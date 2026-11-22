@@ -9,6 +9,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InlineInput } from '@/components/ui/inline-input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
@@ -185,7 +186,7 @@ function RuleEditor({ orgId, rule, onClose, onSaved }: { orgId: string; rule: Ru
                       <Input className="h-9" value={(a.description as string) ?? ''} onChange={(e) => setAction(i, { description: e.target.value })} placeholder={uiText('Descrição (opcional)')} />
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs text-muted-foreground">{uiText('Prazo em minutos')}</span>
-                        <Input type="number" min={0} className="h-8 w-24" value={Number(a.due_minutes ?? 60)} onChange={(e) => setAction(i, { due_minutes: Math.max(0, Number(e.target.value) || 0) })} />
+                        <InlineInput type="number" min={0} className="h-8 w-24" value={Number(a.due_minutes ?? 60)} onChange={(e) => setAction(i, { due_minutes: Math.max(0, Number(e.target.value) || 0) })} />
                         <Select value={(a.priority as string) || 'medium'} onValueChange={(v) => setAction(i, { priority: v })}>
                           <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
                           <SelectContent>
@@ -231,7 +232,7 @@ function RuleEditor({ orgId, rule, onClose, onSaved }: { orgId: string; rule: Ru
                       {templateVariableKeys(sendTpl?.body).map((k) => (
                         <div key={k} className="flex flex-wrap items-center gap-2">
                           <span className="w-14 font-mono text-xs">{`{{${k}}}`}</span>
-                          <Input className="h-8 min-w-[160px] flex-1 text-sm" value={vars[k] ?? ''} onChange={(e) => setAction(i, { variables: { ...vars, [k]: e.target.value } })} />
+                          <InlineInput className="h-8 min-w-[160px] flex-1 text-sm" value={vars[k] ?? ''} onChange={(e) => setAction(i, { variables: { ...vars, [k]: e.target.value } })} />
                           <Select value="" onValueChange={(tok) => setAction(i, { variables: { ...vars, [k]: `${vars[k] ?? ''}${tok}` } })}>
                             <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue placeholder={uiText('Inserir campo')} /></SelectTrigger>
                             <SelectContent>{TOKENS.map((t) => <SelectItem key={t.token} value={t.token}>{uiText(t.label)}</SelectItem>)}</SelectContent>
