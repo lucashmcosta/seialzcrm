@@ -110,7 +110,23 @@ Deno.serve(async (req) => {
     if (!r.ok) return json({ error: "resend_error", status: r.status }, 502);
     const { data: s } = await admin.from("organization_email_settings").select("domain_id").eq("organization_id", orgId).maybeSingle();
     if (s?.domain_id === id) await saveSettings({ domain_status: r.data.status });
-    return json({ ok: true, domain: { id: r.data.id, name: r.data.name, status: r.data.status, records: r.data.records ?? [] } });
+    return json({ ok: true, domain: { id: r.data.id, name: r.data.name, status: r.data.status, records: r.data.records ?? [],
+      open_tracking: r.data.open_tracking ?? null, click_tracking: r.data.click_tracking ?? null, tracking_subdomain: r.data.tracking_subdomain ?? null } });
+  }
+  if (action === "domain_tracking") {
+    // Rastreio de aberturas e cliques: a Resend exige um subdomínio de rastreio verificado (CNAME).
+    const id = String(body.domain_id ?? "");
+    if (!/^[A-Za-z0-9-]{8,}$/.test(id)) return json({ error: "invalid_params" }, 400);
+    const sub = String(body.tracking_subdomain ?? "links").trim().toLowerCase();
+    if (!/^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(sub)) return json({ error: "invalid_tracking_subdomain" }, 400);
+    const patch = await resendRequest(apiKey, "PATCH", `/domains/${id}`, {
+      open_tracking: !!body.open_tracking, click_tracking: !!body.click_tracking, tracking_subdomain: sub,
+    });
+    if (!patch.ok) return json({ error: "resend_error", message: String(patch.data?.message ?? "").slice(0, 200) }, 400);
+    const r = await resendRequest(apiKey, "GET", `/domains/${id}`);
+    return json({ ok: true, domain: { id: r.data.id, name: r.data.name, status: r.data.status, records: r.data.records ?? [],
+      open_tracking: r.data.open_tracking ?? !!body.open_tracking, click_tracking: r.data.click_tracking ?? !!body.click_tracking,
+      tracking_subdomain: r.data.tracking_subdomain ?? sub } });
   }
   if (action === "set_sender") {
     const id = String(body.domain_id ?? "");
