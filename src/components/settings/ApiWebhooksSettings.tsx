@@ -126,6 +126,31 @@ export function ApiWebhooksSettings() {
     enabled: !!organization,
   });
 
+  // Campos customizados da org como destino do mapeamento de entrada ("custom:<nome>").
+  const { data: customFieldDefs } = useQuery({
+    queryKey: ['webhook-custom-field-defs', organization?.id, mappingEntityType],
+    queryFn: async () => {
+      if (!organization) return [];
+      const { data, error } = await supabase
+        .from('custom_field_definitions')
+        .select('name, label')
+        .eq('organization_id', organization.id)
+        .eq('module', mappingEntityType === 'opportunity' ? 'opportunities' : 'contacts')
+        .order('order_index', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Array<{ name: string; label: string | null }>;
+    },
+    enabled: !!organization,
+  });
+  const targetOptions = [
+    ...(INTERNAL_FIELDS[mappingEntityType] || []),
+    ...(mappingDirection === 'inbound' && mappingEntityType === 'contact'
+      ? [{ value: 'marketing_consent', label: 'Aceite de marketing (Sim/Não)' }] : []),
+    ...(mappingDirection === 'inbound'
+      ? (customFieldDefs ?? []).map((f) => ({ value: `custom:${f.name}`, label: `Campo: ${f.label || f.name}` })) : []),
+  ];
+  const targetLabel = (value: string) => targetOptions.find((o) => o.value === value)?.label ?? value;
+
   // Field mappings query
   const { data: fieldMappings, isLoading: loadingMappings } = useQuery({
     queryKey: ['webhook-field-mappings', organization?.id, mappingDirection, mappingEntityType],
@@ -303,7 +328,12 @@ export function ApiWebhooksSettings() {
     notes: "Observações...",      // opcional
     create_opportunity: true,     // opcional
     opportunity_title: "Lead FB", // opcional
-    opportunity_value: 5000       // opcional
+    opportunity_value: 5000,      // opcional
+    marketing_consent: "Sim",     // opcional: aceite de marketing (ou { whatsapp: true, email: false })
+    custom_fields: {              // opcional: campos customizados pelo nome interno
+      contact: { linkedin: "linkedin.com/in/joao" },
+      opportunity: { nota: "A" }
+    }
   }`;
     }
 
@@ -526,7 +556,7 @@ export function ApiWebhooksSettings() {
                       <tr key={m.id} className="border-t">
                         <td className="p-2 font-mono text-xs">{m.external_field}</td>
                         <td className="p-2 text-muted-foreground">→</td>
-                        <td className="p-2 font-mono text-xs">{m.internal_field}</td>
+                        <td className="p-2 text-xs" title={m.internal_field}>{targetLabel(m.internal_field)}</td>
                         <td className="p-2">
                           <Badge variant="outline" className="text-xs">{m.transform_type}</Badge>
                         </td>
@@ -573,11 +603,11 @@ export function ApiWebhooksSettings() {
                   value={newMapping.internal_field}
                   onValueChange={(v) => setNewMapping({ ...newMapping, internal_field: v })}
                 >
-                  <SelectTrigger className="w-[160px] h-9">
+                  <SelectTrigger className="w-[220px] h-9">
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {(INTERNAL_FIELDS[mappingEntityType] || []).map((f) => (
+                    {targetOptions.map((f) => (
                       <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
                     ))}
                   </SelectContent>
