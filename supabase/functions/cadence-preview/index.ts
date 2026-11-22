@@ -30,9 +30,13 @@ Deno.serve(async (req) => {
     }
     if (st.kind === "whatsapp_template" && st.template_id) {
       const { data: t } = await admin.from("whatsapp_templates").select("body").eq("id", String(st.template_id)).eq("organization_id", orgId).maybeSingle();
-      const vars = resolveCadenceVariables(st.template_variables ?? {}, ctx);
-      const values = vars.ok ? vars.values : {};
-      const missing = vars.ok ? [] : vars.missing;
+      // Cada variável sozinha: mostra as preenchidas e marca só as vazias.
+      const values: Record<string, string> = {};
+      const missing: string[] = [];
+      for (const [k, raw] of Object.entries((st.template_variables ?? {}) as Record<string, unknown>)) {
+        const one = resolveCadenceVariables({ [k]: raw }, ctx);
+        if (one.ok) values[k] = one.values[k]; else missing.push(k);
+      }
       const text = String(t?.body ?? "").replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_m, k: string) => values[k] ?? `[${k} vazio]`);
       out.push({ kind: st.kind, text, missing, condition_ok: conditionOk });
     } else if (st.kind === "email" && st.email_template_id) {
