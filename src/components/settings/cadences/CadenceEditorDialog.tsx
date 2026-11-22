@@ -417,7 +417,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                           <SelectContent>{dateFields.map((f) => <SelectItem key={f.id} value={f.id}>{fieldLabel(f)}</SelectItem>)}</SelectContent>
                         </Select>
                         <span className="text-xs text-muted-foreground">{uiText('às')}</span>
-                        <InlineInput type="time" className="h-8 w-24" value={s.timing_time} onChange={(e) => update(s.key, { timing_time: e.target.value })} />
+                        <InlineInput type="time" className="h-8 w-36" value={s.timing_time} onChange={(e) => update(s.key, { timing_time: e.target.value })} />
                       </>
                     )}
                     <div className="ml-auto flex gap-1">
