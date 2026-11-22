@@ -10,7 +10,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { verifyServiceRoleAuth } from "../_shared/auth.ts";
 import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
 import { resolveCadenceVariables, type CadenceVariableContext } from "../_shared/cadence-variables.ts";
-import { decryptSecret } from "../_shared/crypto.ts";
+import { getResendAuth } from "../_shared/resend-auth.ts";
 import { fillText, renderEmail, resendRequest } from "../_shared/email-resend.ts";
 
 const json = (body: unknown, status = 200) =>
@@ -43,16 +43,15 @@ interface Prepared {
 /** Envia o e-mail do passo pela conta Resend da org. Devolve o id do registro em email_messages. */
 // deno-lint-ignore no-explicit-any
 async function sendCadenceEmail(supabase: any, sendId: string, p: Prepared): Promise<{ ok: true; emailId: string } | { ok: false; status: "failed" | "skipped"; reason: string }> {
-  const [{ data: settings }, { data: secret }, { data: tpl }, { data: org }] = await Promise.all([
+  const [{ data: settings }, { data: tpl }, { data: org }] = await Promise.all([
     supabase.from("organization_email_settings").select("*").eq("organization_id", p.organization_id).maybeSingle(),
-    supabase.from("organization_email_secrets").select("api_key_encrypted").eq("organization_id", p.organization_id).maybeSingle(),
     supabase.from("email_templates").select("id, subject, body").eq("id", p.email_template_id).maybeSingle(),
     supabase.from("organizations").select("name").eq("id", p.organization_id).maybeSingle(),
   ]);
-  if (!settings?.from_email || !secret?.api_key_encrypted) return { ok: false, status: "failed", reason: "e-mail da organização não conectado" };
+  if (!settings?.from_email) return { ok: false, status: "failed", reason: "e-mail da organização não conectado" };
   if (!tpl) return { ok: false, status: "failed", reason: "modelo de e-mail removido" };
-  let apiKey: string;
-  try { apiKey = await decryptSecret(secret.api_key_encrypted); } catch { return { ok: false, status: "failed", reason: "chave da Resend ilegível" }; }
+  const apiKey = await getResendAuth(supabase, p.organization_id as string);
+  if (!apiKey) return { ok: false, status: "failed", reason: "sem acesso à conta Resend da organização (conecte de novo)" };
 
   const ctx = await loadContext(supabase, p);
   const subject = fillText(tpl.subject, ctx);

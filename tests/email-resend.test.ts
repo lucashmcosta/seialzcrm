@@ -36,3 +36,11 @@ Deno.test("assinatura Svix: aceita a certa, recusa alterada e antiga", async () 
   assert(!(await verifySvixSignature({ secret, id: "msg_1", timestamp: "1700000000", signature: `v1,${sig}`, body: body + " ", nowSeconds: 1700000100 })));
   assert(!(await verifySvixSignature({ secret, id: "msg_1", timestamp: "1700000000", signature: `v1,${sig}`, body, nowSeconds: 1700009999 })));
 });
+
+import { pkcePair } from "../supabase/functions/_shared/resend-auth.ts";
+Deno.test("PKCE: desafio é o SHA-256 base64url do verificador", async () => {
+  const { verifier, challenge } = await pkcePair();
+  assert(/^[A-Za-z0-9_-]{43,128}$/.test(verifier));
+  const d = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  assertEquals(challenge, btoa(String.fromCharCode(...d)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""));
+});
