@@ -379,9 +379,9 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">{uiText('Passo')} {i + 1}</span>
                     <Select value={s.timing} onValueChange={(v) => update(s.key, { timing: v as StepDraft['timing'] })}>
-                      <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-8 w-[150px]"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="after_enrollment">{uiText('Depois da entrada')}</SelectItem>
+                        <SelectItem value="after_enrollment">{uiText('Após a entrada')}</SelectItem>
                         <SelectItem value="field_date" disabled={dateFields.length === 0}>{uiText('Por uma data')}</SelectItem>
                       </SelectContent>
                     </Select>
@@ -505,12 +505,12 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                     </div>
                   )}
                   <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="text-xs text-muted-foreground">{uiText('Só sai se')}</span>
+                    <span className="text-xs text-muted-foreground">{uiText('Envia')}</span>
                     <Select value={s.cond_field_id ?? '__always__'} onValueChange={(v) => update(s.key, { cond_field_id: v === '__always__' ? null : v, cond_value: '' })}>
-                      <SelectTrigger className="h-8 w-48"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-8 w-[220px]"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__always__">{uiText('sempre (sem condição)')}</SelectItem>
-                        {(fields ?? []).map((f) => <SelectItem key={f.id} value={f.id}>{fieldLabel(f)}</SelectItem>)}
+                        <SelectItem value="__always__">{uiText('sempre')}</SelectItem>
+                        {(fields ?? []).map((f) => <SelectItem key={f.id} value={f.id}>{uiText('só se')} {fieldLabel(f)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     {s.cond_field_id && (
@@ -552,7 +552,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
           }))} />
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="sticky bottom-0 -mx-6 -mb-6 border-t bg-background px-6 py-3">
           <Button variant="outline" disabled={saving} onClick={onClose}>{uiText('Cancelar')}</Button>
           <Button disabled={saving || !loadedSteps} onClick={save}>{saving ? uiText('Salvando...') : uiText('Salvar')}</Button>
         </DialogFooter>
