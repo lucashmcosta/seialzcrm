@@ -47,11 +47,12 @@ serve(async (req) => {
       evidence: { received_at: new Date().toISOString() },
     }).select("id").single();
 
-    const base = Deno.env.get("PUBLIC_APP_BASE_URL") || "https://seialz.com";
+    // App em crm.seialz.com (seialz.com não serve o app). Página pública de exclusão: /:locale/data-deletion.
+    const base = (Deno.env.get("PUBLIC_APP_BASE_URL") || "https://crm.seialz.com").replace(/\/$/, "");
     const code = reqRow?.id ?? crypto.randomUUID();
     // Formato exigido pela Meta: URL de status + código de confirmação.
     return new Response(JSON.stringify({
-      url: `${base}/data-deletion?code=${code}`,
+      url: `${base}/en/data-deletion?code=${code}`,
       confirmation_code: code,
     }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (e) {
