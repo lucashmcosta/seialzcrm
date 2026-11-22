@@ -1,5 +1,5 @@
-// Configurações → E-mail: a org conecta a PRÓPRIA conta Resend, escolhe o domínio e o remetente,
-// define a marca e o rodapé, e cria os modelos de e-mail usados nas réguas. Só administrador.
+// Integrações → E-mail (conexão: a org conecta a PRÓPRIA conta Resend, domínio, remetente, marca) e
+// Comunicação → Modelos de e-mail (modelos usados nas réguas). Só administrador.
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -100,7 +100,7 @@ function TemplateDialog({ orgId, tpl, onClose, onSaved }: { orgId: string; tpl: 
   );
 }
 
-export function EmailSettings() {
+export function EmailSettings({ section = 'connection' }: { section?: 'connection' | 'templates' }) {
   const { organization } = useOrganization();
   const orgId = organization?.id;
   const queryClient = useQueryClient();
@@ -162,14 +162,20 @@ export function EmailSettings() {
 
   return (
     <div className="space-y-6">
+      {section === 'templates' && !connected && settings !== undefined && (
+        <p className="rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+          {uiText('O e-mail da organização ainda não está conectado. Conecte em Configurações → Integrações → E-mail para os modelos poderem ser enviados.')}
+        </p>
+      )}
+      {section === 'connection' && <>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            {uiText('E-mail (Resend)')}
+            {uiText('E-mail')}
             {connected ? <Badge variant="outline">{uiText('Conectado')} · …{settings?.key_last4}</Badge> : <Badge variant="outline">{uiText('Não conectado')}</Badge>}
           </CardTitle>
           <CardDescription>
-            {uiText('Os e-mails das réguas saem pela conta Resend da sua organização, com o seu domínio. Crie a conta em resend.com, gere uma chave com acesso total e cole aqui.')}
+            {uiText('Os e-mails das réguas saem pela conta da sua organização, com o seu domínio. 1) Crie uma conta grátis em resend.com. 2) Em API Keys, gere uma chave com acesso total. 3) Cole aqui.')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -278,6 +284,9 @@ export function EmailSettings() {
         </Card>
       )}
 
+      </>}
+
+      {section === 'templates' && (
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
           <div>
@@ -305,6 +314,7 @@ export function EmailSettings() {
           ))}
         </CardContent>
       </Card>
+      )}
 
       {openDomain && (
         <Dialog open onOpenChange={(o) => { if (!o) setOpenDomain(null); }}>
@@ -338,6 +348,10 @@ export function EmailSettings() {
       )}
     </div>
   );
+}
+
+export function EmailTemplatesSettings() {
+  return <EmailSettings section="templates" />;
 }
 
 export default EmailSettings;

@@ -243,6 +243,7 @@ const CadencesSettings = lazyWithRetry("CadencesSettings", () => import("./compo
 const EmailUnsubscribed = lazyWithRetry("EmailUnsubscribed", () => import("./pages/public/EmailUnsubscribed"));
 const ButtonRulesSettings = lazyWithRetry("ButtonRulesSettings", () => import("./components/settings/cadences/ButtonRulesSettings"), "ButtonRulesSettings");
 const EmailSettings = lazyWithRetry("EmailSettings", () => import("./components/settings/cadences/EmailSettings"), "EmailSettings");
+const EmailTemplatesSettings = lazyWithRetry("EmailTemplatesSettings", () => import("./components/settings/cadences/EmailSettings"), "EmailTemplatesSettings");
 const DuplicatePreventionSettings = lazyWithRetry("DuplicatePreventionSettings", () => import("./components/settings/DuplicatePreventionSettings"), "DuplicatePreventionSettings");
 const CustomFieldsSettings = lazyWithRetry("CustomFieldsSettings", () => import("./components/settings/CustomFieldsSettings"), "CustomFieldsSettings");
 const TagsSettings = lazyWithRetry("TagsSettings", () => import("./components/settings/TagsSettings"), "TagsSettings");
@@ -765,7 +766,8 @@ const App = () => (
             <Route path="loss-reasons" element={<LossReasonsSettings />} />
             <Route path="cadences" element={<CadencesSettings />} />
             <Route path="whatsapp-buttons" element={<ButtonRulesSettings />} />
-            <Route path="email" element={<EmailSettings />} />
+            <Route path="integrations/email" element={<EmailSettings />} />
+            <Route path="email-templates" element={<EmailTemplatesSettings />} />
             <Route path="duplicates" element={<DuplicatePreventionSettings />} />
             <Route path="custom-fields" element={<CustomFieldsSettings />} />
             <Route path="tags" element={<TagsSettings />} />

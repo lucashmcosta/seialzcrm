@@ -366,7 +366,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                   ) : s.kind === 'email' ? (
                     <div className="space-y-2">
                       {!emailTemplates?.ready && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400">{uiText('O e-mail da organização ainda não está conectado (Configurações → E-mail). Os passos de e-mail vão falhar até conectar.')}</p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400">{uiText('O e-mail da organização ainda não está conectado (Configurações → Integrações → E-mail). Os passos de e-mail vão falhar até conectar.')}</p>
                       )}
                       <Select value={s.email_template_id ?? undefined} onValueChange={(v) => update(s.key, { email_template_id: v })}>
                         <SelectTrigger className="h-9"><SelectValue placeholder={uiText('Escolha um modelo de e-mail')} /></SelectTrigger>
@@ -374,7 +374,7 @@ export function CadenceEditorDialog({ organizationId, cadence, onClose, onSaved 
                           {(emailTemplates?.list ?? []).map((t) => <SelectItem key={t.id} value={t.id}>{t.name}{t.is_marketing ? ` · ${uiText('marketing')}` : ''}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      {(emailTemplates?.list ?? []).length === 0 && <p className="text-xs text-muted-foreground">{uiText('Nenhum modelo de e-mail. Crie em Configurações → E-mail.')}</p>}
+                      {(emailTemplates?.list ?? []).length === 0 && <p className="text-xs text-muted-foreground">{uiText('Nenhum modelo de e-mail. Crie em Configurações → Modelos de e-mail.')}</p>}
                       <p className="text-xs text-muted-foreground">{uiText('Modelo de marketing só vai para quem aceitou e leva o link de descadastro.')}</p>
                     </div>
                   ) : (
