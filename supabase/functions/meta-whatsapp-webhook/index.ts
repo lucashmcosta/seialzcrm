@@ -30,6 +30,7 @@ import {
   resolveMetaCredentials,
 } from "../_shared/meta-whatsapp/credentials.ts";
 import { accountEventWabaIds, describeAccountEvent } from "../_shared/meta-whatsapp/account-events.ts";
+import { notifyOrgSystemAdmins } from "../_shared/notify.ts";
 
 type MediaKind = "image" | "audio" | "video" | "document" | "sticker";
 const MEDIA_KINDS: MediaKind[] = ["image", "audio", "video", "document", "sticker"];
@@ -1328,37 +1329,11 @@ async function handleAccountEvent(
       });
       if (isDuplicateAuditError(error)) continue;
       if (error) console.error("[meta-wa-webhook] account_event_insert_error", { error, wabaId, field });
-      if (orgId && summary.critical) await notifyOrgAdmins(supabase, orgId, summary);
+      if (orgId && summary.critical) {
+        await notifyOrgSystemAdmins(supabase, orgId, { type: "whatsapp_account_alert", title: summary.title, body: summary.body });
+      }
     } catch (e) {
       console.error("[meta-wa-webhook] account_event_exception", { wabaId, field, err: (e as Error).message });
     }
   }
-}
-
-/** Avisa os administradores da org (perfil de sistema, nunca pelo nome). */
-async function notifyOrgAdmins(
-  supabase: any,
-  organizationId: string,
-  summary: { title: string; body: string },
-): Promise<void> {
-  const { data: admins, error } = await supabase
-    .from("user_organizations")
-    .select("user_id, permission_profiles!inner(is_system)")
-    .eq("organization_id", organizationId)
-    .eq("is_active", true)
-    .eq("permission_profiles.is_system", true);
-  if (error) {
-    console.error("[meta-wa-webhook] account_event_admins_lookup_failed", error.message);
-    return;
-  }
-  const rows = (admins ?? []).map((a: any) => ({
-    organization_id: organizationId,
-    user_id: a.user_id,
-    type: "whatsapp_account_alert",
-    title: summary.title,
-    body: summary.body,
-  }));
-  if (rows.length === 0) return;
-  const { error: insErr } = await supabase.from("notifications").insert(rows);
-  if (insErr) console.error("[meta-wa-webhook] account_event_notify_failed", insErr.message);
 }

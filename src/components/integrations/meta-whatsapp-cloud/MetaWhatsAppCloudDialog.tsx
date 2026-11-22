@@ -37,6 +37,10 @@ interface Props {
 
 type Purpose = "customer_service" | "commercial";
 
+// Situação do número lida da Meta (rotina meta-wa-health-check e botão Verificar).
+const QUALITY_LABEL: Record<string, string> = { GREEN: "Alta", YELLOW: "Média", RED: "Baixa", UNKNOWN: "Sem avaliação" };
+const CAN_SEND_LABEL: Record<string, string> = { AVAILABLE: "Liberado", LIMITED: "Limitado pela Meta", BLOCKED: "Bloqueado pela Meta" };
+
 const empty = {
   appId: "",
   wabaId: "",
@@ -220,13 +224,34 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                   <Field label="WABA ID" value={cv.waba_id} mono />
                   <Field label="Phone Number ID" value={cv.phone_number_id} mono />
                   <Field label="App ID" value={cv.app_id} mono />
-                  <Field label={uiText("Qualidade")} value={cv.quality_rating} />
+                  <Field label={uiText("Qualidade")} value={QUALITY_LABEL[cv.quality_rating] ? uiText(QUALITY_LABEL[cv.quality_rating]) : cv.quality_rating} />
                   <Field label={uiText("Tier de envio")} value={cv.messaging_limit_tier} />
+                  <Field label={uiText("Envio")} value={CAN_SEND_LABEL[cv.can_send_message] ? uiText(CAN_SEND_LABEL[cv.can_send_message]) : cv.can_send_message} />
                   <Field
                     label={uiText("Última validação")}
                     value={cv.last_validated_at ? new Date(cv.last_validated_at).toLocaleString(getUiLocale()) : "—"}
                   />
                 </div>
+                {/* Preenchido pela rotina meta-wa-health-check (números do app da plataforma). */}
+                {(cv.can_send_message === "LIMITED" || cv.can_send_message === "BLOCKED" || cv.quality_rating === "RED") && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm space-y-1">
+                    <p className="font-medium text-destructive">
+                      {cv.can_send_message === "BLOCKED"
+                        ? uiText("A Meta bloqueou o envio deste número.")
+                        : cv.can_send_message === "LIMITED"
+                          ? uiText("A Meta limitou o envio deste número.")
+                          : uiText("A qualidade deste número está baixa.")}
+                    </p>
+                    {Array.isArray(cv.health_errors) && cv.health_errors.slice(0, 3).map((e: any, i: number) => (
+                      <p key={i} className="text-muted-foreground">
+                        {e.error_description}{e.possible_solution ? ` ${e.possible_solution}` : ""}
+                      </p>
+                    ))}
+                    <p className="text-xs text-muted-foreground">
+                      {uiText("Muita gente bloqueando ou denunciando derruba a qualidade. Detalhes e pedido de revisão no Business Support Home da Meta.")}
+                    </p>
+                  </div>
+                )}
               </Card>
             )}
 
