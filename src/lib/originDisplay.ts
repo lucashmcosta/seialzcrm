@@ -4,6 +4,7 @@
 export function entryLabel(source: string | null | undefined): string {
   const s = (source || '').toLowerCase();
   if (!s) return 'Cadastro manual';
+  if (s === 'webchat') return 'Chat do site';
   if (s === 'ctwa' || s.includes('whatsapp')) return 'WhatsApp';
   if (s === 'meta_lead_ads' || s === 'meta') return 'Formulário da Meta';
   if (s.includes('landing') || s === 'api' || s === 'form') return 'Formulário do site';

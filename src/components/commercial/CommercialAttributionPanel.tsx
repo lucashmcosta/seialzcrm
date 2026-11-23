@@ -22,7 +22,7 @@ const evidenceLabels: Record<string, string> = {
   meta_campaign_id: "ID da campanha Meta", meta_adset_id: "ID do conjunto Meta",
   ad_id: "ID do anúncio", landing_url: "Página de entrada", referrer_url: "Veio do site",
 };
-const channelLabels: Record<string, string> = { whatsapp: "WhatsApp", form: "Formulário", legacy: "Importado" };
+const channelLabels: Record<string, string> = { whatsapp: "WhatsApp", form: "Formulário", webchat: "Chat do site", legacy: "Importado" };
 export function CommercialAttributionPanel(
   { entityType, entityId, contactId, entrySource }: {
     entityType: "contact" | "opportunity";
