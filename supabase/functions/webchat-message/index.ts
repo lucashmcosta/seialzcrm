@@ -13,6 +13,7 @@ import {
   edgeAuthMode, sha256Hex, newSessionToken, logInbound,
 } from "../_shared/webchat.ts";
 import { startFlow, advanceFlow, initialState, type Flow, type FlowState } from "../_shared/webchat-flow.ts";
+import { trackingFromLanding } from "../_shared/landing-tracking.ts";
 
 async function recordBot(sb: any, session: any, turns: { step_id: string; text: string; buttons?: string[]; input?: string }[]) {
   if (!turns.length) return;
@@ -53,6 +54,7 @@ Deno.serve(async (req) => {
       const flow: Flow = widget.inbound_settings?.flow ?? { steps: [] };
       const first = startFlow(flow);
 
+      const tracking = trackingFromLanding(body.landing_url, body.utm);
       const sessionToken = newSessionToken();
       const tokenHash = await sha256Hex(sessionToken);
       const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
@@ -65,8 +67,8 @@ Deno.serve(async (req) => {
         flow_state: first.state,
         landing_url: body.landing_url ?? null,
         referrer: body.referrer ?? null,
-        utm: body.utm ?? {},
-        fbclid: body.fbclid ?? null,
+        utm: tracking,
+        fbclid: body.fbclid ?? tracking.fbclid ?? null,
         fbc: body.fbc ?? null,
         fbp: body.fbp ?? null,
         ip,
@@ -81,7 +83,7 @@ Deno.serve(async (req) => {
       await logInbound(sb, {
         organization_id: widget.organization_id, source_event: "session_start",
         external_id: session.id, idempotency_key: `webchat:${session.id}:start`,
-        raw_payload: { landing_url: body.landing_url, utm: body.utm },
+        raw_payload: { landing_url: body.landing_url, utm: tracking },
       });
 
       // Marca/tema vão junto no start pra o app renderizar com 1 só round-trip

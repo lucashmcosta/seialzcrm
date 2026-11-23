@@ -4,6 +4,7 @@ import { detailParts, entryLabel, methodNote } from '../src/lib/originDisplay';
 describe('originDisplay', () => {
   test('entrou por', () => {
     expect(entryLabel('ctwa')).toBe('WhatsApp');
+    expect(entryLabel('webchat')).toBe('Chat do site');
     expect(entryLabel('meta_lead_ads')).toBe('Formulário da Meta');
     expect(entryLabel('landing_page_viagi')).toBe('Formulário do site');
     expect(entryLabel(null)).toBe('Cadastro manual');
