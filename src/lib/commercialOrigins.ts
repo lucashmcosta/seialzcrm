@@ -57,7 +57,7 @@ export const methodLabels: Record<string, string> = {
   message_rule: "Regra de mensagem",
   manual: "Manual",
   migrated: "Migrado",
-  unknown: "Não identificada",
+  unknown: "Não identificado",
 };
 export const dayAfter = (date: string) =>
   date
