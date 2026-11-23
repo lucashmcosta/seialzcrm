@@ -58,9 +58,28 @@ export function hasVisibleText(text: string | null | undefined): boolean {
   return /[\p{L}\p{N}\p{Extended_Pictographic}]/u.test(text ?? "");
 }
 
-/** Tira os parágrafos sem texto visível (o modelo às vezes fecha a resposta com um "∅" ou um caractere invisível). */
+// Comentário do modelo para o sistema, não para o cliente (ex.: "(sem texto adicional)", "Nada a acrescentar.").
+const META_NOTE_KEYS = /(texto adicional|nada (mais )?a acrescentar|n[ãa]o falta nada a (dizer|acrescentar)|resposta vazia|sem resposta adicional|^vazio\.?$)/i;
+const META_NOTE_START = /^(nada (mais )?a acrescentar|sem nada a acrescentar|n[ãa]o falta nada a (dizer|acrescentar)|o texto j[áa] foi enviado)/i;
+const META_NOTE_TAIL = /\s*[([](sem texto adicional|resposta vazia|vazio)[)\]]\.?\s*$/i;
+
+/** Parágrafo que é só um recado do modelo ("(sem texto adicional)", "[resposta vazia]", "Nada a acrescentar…"). */
+export function isMetaNote(paragraph: string): boolean {
+  const p = paragraph.trim();
+  const wrapped = p.match(/^[([](.*)[)\]]\.?$/s);
+  if (wrapped && META_NOTE_KEYS.test(wrapped[1].trim())) return true;
+  return META_NOTE_START.test(p);
+}
+
+/**
+ * Tira os parágrafos sem texto visível (o modelo às vezes fecha a resposta com um "∅" ou um caractere
+ * invisível) e os recados do modelo que não são para o cliente, inteiros ou no fim de um parágrafo.
+ */
 export function dropJunkParagraphs(text: string): string {
-  return text.split(/\n{2,}/).filter((p) => hasVisibleText(p)).join("\n\n").trim();
+  return text.split(/\n{2,}/)
+    .map((p) => p.replace(META_NOTE_TAIL, ""))
+    .filter((p) => hasVisibleText(p) && !isMetaNote(p))
+    .join("\n\n").trim();
 }
 
 /** Quebra em até 3 mensagens nos parágrafos, como quem escreve no WhatsApp. O excedente fica na última. */
