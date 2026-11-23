@@ -1,6 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+/** IDs de leads ou vendas do anúncio pela fonte única de origem; os registros vêm com as permissões do usuário. */
+async function adEntityIds(adId: string, type: 'contact' | 'opportunity'): Promise<string[]> {
+  const { data, error } = await supabase.rpc('marketing_ad_entity_ids' as any, { p_campaign: adId, p_type: type });
+  if (error) throw error;
+  return (data as string[] | null) || [];
+}
+const chunks = <T,>(xs: T[], n = 150) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
+
 export interface AdLead {
   id: string;
   full_name: string | null;
@@ -16,16 +24,16 @@ export function useAdLeads(adId: string | undefined, opts: { status?: string; se
     enabled: !!adId,
     staleTime: 1000 * 60 * 2,
     queryFn: async (): Promise<AdLead[]> => {
-      let q = supabase
-        .from('contacts')
-        .select('id, full_name, phone, email, created_at')
-        .eq('marketing_campaign_id', adId!)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(opts.limit || 100);
-      if (opts.search) q = q.ilike('full_name', `%${opts.search}%`);
-      const { data: contacts, error } = await q;
-      if (error) throw error;
+      const allIds = await adEntityIds(adId!, 'contact');
+      let contacts: Array<{ id: string; full_name: string | null; phone: string | null; email: string | null; created_at: string }> = [];
+      for (const part of chunks(allIds)) {
+        let q = supabase.from('contacts').select('id, full_name, phone, email, created_at').in('id', part).is('deleted_at', null);
+        if (opts.search) q = q.ilike('full_name', `%${opts.search}%`);
+        const { data, error } = await q;
+        if (error) throw error;
+        contacts.push(...(data || []));
+      }
+      contacts = contacts.sort((x, y) => y.created_at.localeCompare(x.created_at)).slice(0, opts.limit || 100);
 
       const ids = (contacts || []).map(c => c.id);
       if (ids.length === 0) return [];
@@ -76,9 +84,8 @@ export interface AdOpportunity {
 }
 
 /**
- * Lista TODAS as oportunidades vinculadas a contatos deste ad.
- * Usa join embarcado com filtro `!inner` para garantir que o total bate
- * com o KPI "Wins/Opps Abertas" da view de performance.
+ * Lista as oportunidades creditadas a este anúncio (mesma ponte da view de performance,
+ * então o total bate com os KPIs de vendas e abertas).
  */
 export function useAdOpportunities(
   adId: string | undefined,
@@ -89,26 +96,23 @@ export function useAdOpportunities(
     enabled: !!adId,
     staleTime: 1000 * 60 * 2,
     queryFn: async (): Promise<AdOpportunity[]> => {
-      let q = supabase
-        .from('opportunities')
-        .select(
-          'id, title, amount, status, close_date, created_at, contact_id, contact:contacts!inner(id, full_name, phone, marketing_campaign_id, deleted_at)'
-        )
-        .eq('contact.marketing_campaign_id', adId!)
-        .is('contact.deleted_at', null)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(opts.limit ?? 500);
-
-      if (opts.status && opts.status !== 'all') {
-        q = q.eq('status', opts.status as 'open' | 'won' | 'lost');
+      const allIds = await adEntityIds(adId!, 'opportunity');
+      const data: any[] = [];
+      for (const part of chunks(allIds)) {
+        let q = supabase
+          .from('opportunities')
+          .select('id, title, amount, status, close_date, created_at, contact_id, contact:contacts!inner(id, full_name, phone, deleted_at)')
+          .in('id', part)
+          .is('contact.deleted_at', null)
+          .is('deleted_at', null);
+        if (opts.status && opts.status !== 'all') q = q.eq('status', opts.status as 'open' | 'won' | 'lost');
+        if (opts.search) q = q.ilike('contact.full_name', `%${opts.search}%`);
+        const { data: rows, error } = await q;
+        if (error) throw error;
+        data.push(...(rows || []));
       }
-      if (opts.search) {
-        q = q.ilike('contact.full_name', `%${opts.search}%`);
-      }
-
-      const { data, error } = await q;
-      if (error) throw error;
+      data.sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
+      data.splice(opts.limit ?? 500);
 
       return (data || []).map((r: any) => ({
         id: r.id,

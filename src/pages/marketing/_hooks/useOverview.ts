@@ -39,62 +39,17 @@ async function fetchKPIs(orgId: string, from: Date, to: Date): Promise<OverviewK
   }
   const spend = spend_cents / 100;
 
-  // Leads (CRM) — contacts with marketing_campaign_id created in range
-  const fromTs = from.toISOString();
-  const toTs = to.toISOString();
-
-  const { count: leads } = await supabase
-    .from('contacts')
-    .select('id', { count: 'exact', head: true })
-    .eq('organization_id', orgId)
-    .not('marketing_campaign_id', 'is', null)
-    .is('deleted_at', null)
-    .gte('created_at', fromTs)
-    .lte('created_at', toTs);
-
-  // Opportunities tied to attributed contacts in range
-  const { data: oppContacts } = await supabase
-    .from('contacts')
-    .select('id')
-    .eq('organization_id', orgId)
-    .not('marketing_campaign_id', 'is', null)
-    .is('deleted_at', null)
-    .gte('created_at', fromTs)
-    .lte('created_at', toTs);
-
-  // Abertas: oportunidades dos contatos de anúncio que chegaram no período.
-  let opps_open = 0, wins = 0, revenue = 0;
-  if (oppContacts && oppContacts.length) {
-    const ids = oppContacts.map(c => c.id);
-    for (let i = 0; i < ids.length; i += 200) {
-      const { data: opps, error } = await supabase
-        .from('opportunities')
-        .select('id')
-        .eq('organization_id', orgId)
-        .eq('status', 'open')
-        .in('contact_id', ids.slice(i, i + 200))
-        .is('deleted_at', null);
-      if (error) throw error;
-      opps_open += (opps || []).length;
-    }
-  }
-
-  // Vendas: contam pela data da venda (won_at), não pela chegada do contato.
-  // Antes, uma venda de hoje de um lead que chegou ontem sumia ao filtrar "Hoje".
-  const { data: won, error: wonErr } = await supabase
-    .from('opportunities')
-    .select('amount, contact:contacts!inner(marketing_campaign_id)')
-    .eq('organization_id', orgId)
-    .eq('status', 'won')
-    .is('deleted_at', null)
-    .not('contact.marketing_campaign_id', 'is', null)
-    .gte('won_at', fromTs)
-    .lte('won_at', toTs);
-  if (wonErr) throw wonErr;
-  for (const o of won || []) {
-    wins++;
-    revenue += Number(o.amount || 0);
-  }
+  // Leads, abertas e vendas vêm da fonte única de origem (ponte no banco: origens ligadas ou campanha antiga).
+  // Vendas contam pela data da venda (won_at), não pela chegada do contato.
+  const { data: attr, error: attrErr } = await supabase.rpc('get_marketing_overview_attribution' as any, {
+    p_org: orgId, p_from: from.toISOString(), p_to: to.toISOString(),
+  });
+  if (attrErr) throw attrErr;
+  const a = (attr || {}) as { leads?: number; opps_open?: number; wins?: number; revenue?: number };
+  const leads = Number(a.leads || 0);
+  const opps_open = Number(a.opps_open || 0);
+  const wins = Number(a.wins || 0);
+  const revenue = Number(a.revenue || 0);
 
   const leadsN = Number(leads || 0);
   const cpl_real = leadsN > 0 ? +(spend / leadsN).toFixed(2) : null;
