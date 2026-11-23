@@ -2065,6 +2065,9 @@ serve(async (req) => {
         .eq('thread_id', threadId)
         .is('deleted_at', null)
         .neq('direction', 'internal')
+        // Mensagem que o WhatsApp recusou (ex.: número bloqueado) nunca chegou ao cliente: fora do
+        // histórico, senão o agente acha que já perguntou e segue a conversa sem o cliente ter visto.
+        .or('whatsapp_status.is.null,whatsapp_status.neq.failed')
         .order('created_at', { ascending: false })
         .limit(HISTORY_LIMIT),
       
