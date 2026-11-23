@@ -22,6 +22,7 @@ import { emptyResponseShape, providerForIntegration, toolArgKeys } from "../_sha
 import { lookupCepAddress, matchMaritalStatus, MARITAL_STATUS_FIELD, registrationFields, registrationReply, SAVE_REGISTRATION_TOOL_DEF } from "../_shared/intelligence/contact-registration.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES, type WidgetClientMedia } from "../_shared/widgets/agent-tools.ts";
+import { contractToolsForAgent, SEND_CONTRACT_TOOL } from "../_shared/intelligence/contract-tool.ts";
 
 /** No modo de teste nenhum arquivo é enviado: a bolha diz qual iria. */
 const mediaPlaceholder = (m: WidgetClientMedia) => `[${m.type === 'image' ? 'Imagem enviada' : 'Documento enviado'}: ${(m.caption ?? '').trim() || m.url.split('/').pop()}]`;
@@ -1991,6 +1992,12 @@ serve(async (req) => {
     const enabledTools = toolsWithName.filter((t) => !WIDGET_TOOL_NAMES.has(t) || widgetTools.some((w) => w.name === t));
     // Ferramentas da integração com o Nammux (agendar entrevista): só o agente de atendimento,
     // e só com a flag da org ligada. Para o comercial a lista volta vazia, sem consulta nenhuma.
+    // Gerar e enviar o contrato (SuvSign): só com a ferramenta ligada e configurada no agente.
+    widgetTools.push(...await contractToolsForAgent(toolsWithName, {
+      supabase, organizationId, contactId: contactId ?? null, isTestMode: !!isTestMode,
+      rawSettings: (agent.tool_settings as Record<string, unknown> | null)?.[SEND_CONTRACT_TOOL],
+      supabaseUrl: Deno.env.get('SUPABASE_URL')!, serviceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    }));
     widgetTools.push(...await nammuxToolsForAgent(
       agent.agent_type,
       (flag) => featureFlagEnabled(supabase, flag, organizationId),

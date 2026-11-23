@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CsRoundRobinTab } from './CsRoundRobinTab';
 import { RoundRobinPeopleList } from './RoundRobinPeopleList';
 import { AgentDistributionCard } from './AgentDistributionCard';
+import { AgentContractCard } from './AgentContractCard';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -210,6 +211,7 @@ function CommercialRoundRobinTab() {
       </div>
 
       {organization?.id && <AgentDistributionCard organizationId={organization.id} roundRobinEnabled={flags.round_robin_enabled} />}
+      {organization?.id && <AgentContractCard organizationId={organization.id} />}
 
       <Card>
         <CardHeader>

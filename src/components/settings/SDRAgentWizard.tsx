@@ -165,7 +165,8 @@ const CORE_TOOLS = [
   { id: 'schedule_follow_up', name: 'Agendar Follow-up', description: 'Agenda mensagem automática para data futura' },
   { id: 'send_payment_link', name: 'Enviar Link de Pagamento', description: 'Gera e envia link de pagamento' },
   { id: 'update_qualification', name: 'Atualizar Qualificação', description: 'Registra dados de qualificação do lead' },
-  { id: 'save_registration_data', name: 'Dados para o contrato', description: 'Grava CPF, e-mail e endereço (completado pelo CEP) no cadastro do contato' },
+  { id: 'save_registration_data', name: 'Dados para o contrato', description: 'Grava CPF, estado civil, e-mail e endereço (completado pelo CEP) no cadastro do contato' },
+  { id: 'send_contract', name: 'Gerar e enviar contrato', description: 'Confere o CPF, gera o contrato pela SuvSign e manda o link para assinar (modelo e responsável em Atribuição automática → Contrato pelo agente)' },
   { id: 'end_conversation', name: 'Encerrar conversa', description: 'Encerra quando o caso não se encaixa; reabre se o cliente voltar a escrever' },
   { id: 'send_choices', name: 'Perguntas com botões', description: 'Faz perguntas de opções fixas com botões ou lista no WhatsApp (texto numerado onde não há botões)' },
 ];

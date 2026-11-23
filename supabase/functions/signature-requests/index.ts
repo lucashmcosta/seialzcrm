@@ -6,6 +6,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { handleSignatureWhatsApp } from "../_shared/signature-whatsapp.ts";
 import { encryptSecret } from "../_shared/crypto.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
+import { isFunctionKeyCall } from "../_shared/auth.ts";
 import { resolveRequestedBy } from "./requested-by.ts";
 import { resolveDocxVariables, variableLabel, type CustomDef } from "../_shared/docx-variables.ts";
 const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
@@ -25,6 +26,8 @@ type Any = any;
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 const fail = (code: string, message: string, s = 400, extra: Record<string, unknown> = {}) => json({ error: code, message, ...extra }, s);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Ações aceitas na chamada interna (agente de IA): preparar, enviar e pegar o link de assinatura. */
+const INTERNAL_ACTIONS = new Set(["prepare_contract", "send_for_signature", "get_signing_link", "get_signature_status"]);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -34,22 +37,45 @@ Deno.serve(async (req) => {
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   if (!token) return fail("unauthorized", "Sessão ausente", 401);
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data: u } = await admin.auth.getUser(token);
-  if (!u?.user) return fail("unauthorized", "Sessão inválida", 401);
-  const userDb = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: `Bearer ${token}` } } });
-  const { data: me } = await admin.from("users").select("id, full_name, email").eq("auth_user_id", u.user.id).maybeSingle();
-  if (!me) return fail("unauthorized", "Usuário sem cadastro", 401);
 
   let body: Any;
   try { body = await req.json(); } catch { return fail("invalid_json", "JSON inválido"); }
   const action = String(body?.action ?? "");
 
+  // Chamada interna (agente de IA): chave da função + usuário responsável + org. Age em nome desse
+  // usuário (autor do contrato), só nas ações de enviar contrato, e só dentro da org informada.
+  const internal = isFunctionKeyCall(req);
+  let meRow: Any = null;
+  let userDb: Any;
+  let internalOrg: string | null = null;
+  if (internal) {
+    if (!INTERNAL_ACTIONS.has(action)) return fail("forbidden", "Ação não disponível para chamada interna", 403);
+    if (typeof body?.acting_user_id !== "string" || !UUID.test(body.acting_user_id)
+      || typeof body?.organization_id !== "string" || !UUID.test(body.organization_id)) {
+      return fail("invalid_input", "acting_user_id e organization_id são obrigatórios", 400);
+    }
+    internalOrg = body.organization_id;
+    const { data } = await admin.from("users").select("id, full_name, email").eq("id", body.acting_user_id).maybeSingle();
+    meRow = data ?? null;
+    userDb = admin;
+  } else {
+    const { data: u } = await admin.auth.getUser(token);
+    if (!u?.user) return fail("unauthorized", "Sessão inválida", 401);
+    userDb = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: `Bearer ${token}` } } });
+    const { data } = await admin.from("users").select("id, full_name, email").eq("auth_user_id", u.user.id).maybeSingle();
+    meRow = data ?? null;
+  }
+  if (!meRow) return fail("unauthorized", "Usuário sem cadastro", 401);
+  const me = meRow;
+
   async function isMember(orgId: string) {
-    const { data } = await admin.from("user_organizations").select("id").eq("user_id", me!.id)
+    if (internalOrg && orgId !== internalOrg) return false;
+    const { data } = await admin.from("user_organizations").select("id").eq("user_id", me.id)
       .eq("organization_id", orgId).eq("is_active", true).maybeSingle();
     return !!data;
   }
   // Oportunidade lida com o client do usuário → RLS real (owner/view_all).
+  // Na chamada interna, a org é a informada e o responsável precisa ser membro ativo dela.
   async function loadOpp(id: unknown) {
     if (typeof id !== "string" || !UUID.test(id)) return null;
     const { data } = await userDb.from("opportunities").select("id, organization_id, contact_id, title, amount, close_date").eq("id", id).maybeSingle();
@@ -386,7 +412,7 @@ Deno.serve(async (req) => {
         const snapshotSha = await sha256Hex(canonicalJson(snapshot));
         const { data: created, error } = await admin.from("signature_requests").insert({
           organization_id: opp.organization_id, opportunity_id: opp.id, contact_id: contact.id, created_by: me.id,
-          engine: "suvsign_v2", template_id: templateIds[0], template_name: templateNames,
+          engine: "suvsign_v2", template_id: templateIds[0], template_name: templateNames, created_via: internal ? "ai_agent" : "user",
           idempotency_key: `seialz:${crypto.randomUUID()}`, status: "draft", snapshot, snapshot_sha256: snapshotSha,
         }).select("id").single();
         if (error) throw error;

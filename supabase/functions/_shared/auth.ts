@@ -95,6 +95,16 @@ export function sameSecret(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/**
+ * Chamada interna de outra função (ex.: o agente de IA): o token é EXATAMENTE a chave da função
+ * (SUPABASE_SERVICE_ROLE_KEY). Mais estrito que verifyServiceRoleAuth: sem claims, sem cofre.
+ * Usado onde a chamada interna age em nome de um usuário da org (acting_user_id).
+ */
+export function isFunctionKeyCall(req: Request): boolean {
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  return isKnownInternalKey(token, [Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")]);
+}
+
 /** O token é exatamente uma das chaves internas? Lista vazia ou só com vazios: ninguém passa. */
 export function isKnownInternalKey(token: string, knownKeys: Array<string | null | undefined>): boolean {
   if (!token) return false;

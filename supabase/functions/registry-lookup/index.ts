@@ -173,7 +173,9 @@ Deno.serve(async (req) => {
     return json({ error: "invalid_cnpj" }, 422);
   }
 
-  const auth = await requireRegistryAccess(req, organizationId);
+  // acting_user_id só vale em chamada interna com a chave da função (checado em requireRegistryAccess).
+  const actingUserId = typeof body.acting_user_id === "string" ? body.acting_user_id : null;
+  const auth = await requireRegistryAccess(req, organizationId, actingUserId);
   if (!auth.ok) return json({ error: auth.error }, auth.status);
   if (!allowed(`${organizationId}:${auth.userId}`)) {
     return json({ error: "rate_limited" }, 429);

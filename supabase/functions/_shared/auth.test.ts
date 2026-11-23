@@ -63,3 +63,19 @@ Deno.test("SERVICE_AUTH_STRICT: padrão é observar", () => {
   assertEquals(serviceAuthMode(), "log");
   Deno.env.delete("SERVICE_AUTH_STRICT");
 });
+
+Deno.test("isFunctionKeyCall: só a chave exata da função, nunca um JWT com role service_role", async () => {
+  const { isFunctionKeyCall } = await import("./auth.ts");
+  const prev = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "sb_secret_chave-da-funcao-123");
+  try {
+    const req = (token: string) => new Request("https://x/functions/v1/y", { headers: { authorization: `Bearer ${token}` } });
+    if (!isFunctionKeyCall(req("sb_secret_chave-da-funcao-123"))) throw new Error("chave exata deveria passar");
+    if (isFunctionKeyCall(req("sb_secret_chave-da-funcao-124"))) throw new Error("chave diferente não pode passar");
+    const forged = `x.${btoa(JSON.stringify({ role: "service_role", iss: "supabase" }))}.y`;
+    if (isFunctionKeyCall(req(forged))) throw new Error("JWT forjado não pode passar");
+    if (isFunctionKeyCall(new Request("https://x"))) throw new Error("sem token não pode passar");
+  } finally {
+    if (prev === undefined) Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY"); else Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", prev);
+  }
+});
