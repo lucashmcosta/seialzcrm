@@ -9,23 +9,27 @@ import {
   campaignLabel,
   commercialDb,
   commercialRpc,
-  methodLabels,
 } from "@/lib/commercialOrigins";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { OriginSummary } from "@/components/commercial/OriginSummary";
+import { entryLabel } from "@/lib/originDisplay";
 const selectClass = "h-10 w-full rounded border bg-background px-2 text-sm";
 const evidenceLabels: Record<string, string> = {
-  utm_source: "UTM origem", utm_medium: "UTM meio", utm_campaign: "UTM campanha",
-  utm_content: "UTM conteúdo", utm_term: "UTM termo", utm_id: "UTM ID",
+  utm_source: "Fonte (utm_source)", utm_medium: "Meio (utm_medium)", utm_campaign: "Campanha (utm_campaign)",
+  utm_content: "Anúncio (utm_content)", utm_term: "Termo (utm_term)", utm_id: "ID (utm_id)",
   meta_campaign_id: "ID da campanha Meta", meta_adset_id: "ID do conjunto Meta",
-  ad_id: "ID do anúncio", landing_url: "Página de entrada",
+  ad_id: "ID do anúncio", landing_url: "Página de entrada", referrer_url: "Veio do site",
 };
+const channelLabels: Record<string, string> = { whatsapp: "WhatsApp", form: "Formulário", legacy: "Importado" };
 export function CommercialAttributionPanel(
-  { entityType, entityId, contactId }: {
+  { entityType, entityId, contactId, entrySource }: {
     entityType: "contact" | "opportunity";
     entityId: string;
     contactId?: string | null;
+    /** contacts.source: mostra "Entrou por" (fixo, separado da origem). */
+    entrySource?: string | null;
   },
 ) {
   const { orgId, enabled, origins } = useCommercialOrigins();
@@ -94,7 +98,7 @@ export function CommercialAttributionPanel(
   return (
     <section className="space-y-3 rounded border bg-background p-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-medium">Origem comercial</h2>
+        <h2 className="font-medium">Origem</h2>
         {canEdit && (
           <Button
             size="sm"
@@ -113,20 +117,13 @@ export function CommercialAttributionPanel(
       {attribution.error
         ? <p role="alert">{String(attribution.error)}</p>
         : (
-          <p className="text-sm">
-            {origins.find((o) => o.id === a?.origin_id)?.name ||
-              "Não identificada"} · {methodLabels[a?.method || "unknown"]}
-            {a?.pending ? " · Revisão pendente" : ""}
-            {a?.campaign_id
-              ? ` · ${
-                campaigns.find((c) => c.id === a.campaign_id)
-                  ? campaignLabel(
-                    campaigns.find((c) => c.id === a.campaign_id)!,
-                  )
-                  : "Campanha vinculada"
-              }`
-              : ""}
-          </p>
+          <div className="space-y-1 text-sm">
+            <OriginSummary entityType={entityType} entityId={entityId} />
+            {entityType === "contact" && (
+              <p className="text-xs text-muted-foreground">Entrou por: <span className="text-foreground">{entryLabel(entrySource)}</span></p>
+            )}
+            {a?.pending && <p className="text-xs text-amber-600 dark:text-amber-400">Campanha a confirmar</p>}
+          </div>
         )}
       {editing && (
         <form
@@ -149,7 +146,7 @@ export function CommercialAttributionPanel(
               });
               setEditing(false);
               setReason("");
-              toast.success("Origem comercial atualizada.");
+              toast.success("Origem atualizada.");
             } catch (err) {
               toast.error(String(err));
             } finally {
@@ -158,7 +155,7 @@ export function CommercialAttributionPanel(
           }}
         >
           <label className="block text-sm">
-            Evento de referência (opcional)<select
+            Com base em qual entrada (opcional)<select
               className={selectClass}
               value={event}
               onChange={(e) => {
@@ -172,10 +169,10 @@ export function CommercialAttributionPanel(
                 }
               }}
             >
-              <option value="">Sem evento</option>
+              <option value="">Nenhuma</option>
               {events.data?.map((ev) => (
                 <option key={ev.id} value={ev.id}>
-                  {new Date(ev.occurred_at).toLocaleString()} · {ev.channel} ·
+                  {new Date(ev.occurred_at).toLocaleString()} · {channelLabels[ev.channel] || ev.channel} ·
                   {" "}
                   {(ev.text_content || "Sem texto").slice(0, 70)}
                 </option>
@@ -188,7 +185,7 @@ export function CommercialAttributionPanel(
               value={origin}
               onChange={(e) => setOrigin(e.target.value)}
             >
-              <option value="">Não identificada</option>
+              <option value="">Não identificado</option>
               {origins.filter((o) => o.active).map((o) => (
                 <option key={o.id} value={o.id}>{o.name}</option>
               ))}
@@ -218,8 +215,10 @@ export function CommercialAttributionPanel(
           <Button type="submit" disabled={busy}>Salvar correção</Button>
         </form>
       )}
-      {a?.details?.evidence && (
-        <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+      {a?.details?.evidence && Object.keys(evidenceLabels).some((k) => typeof a.details.evidence[k] === "string" && a.details.evidence[k]) && (
+        <details>
+        <summary className="cursor-pointer text-sm">Pistas que definiram a origem</summary>
+        <dl className="mt-2 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
           {Object.entries(evidenceLabels).map(([key, label]) => {
             const value = a.details.evidence[key];
             return typeof value === "string" && value ? (
@@ -230,10 +229,11 @@ export function CommercialAttributionPanel(
             ) : null;
           })}
         </dl>
+        </details>
       )}
       <details>
         <summary className="cursor-pointer text-sm">
-          Entradas e histórico
+          Histórico
         </summary>
         {(events.error || history.error) && (
           <p role="alert">Não foi possível carregar o histórico.</p>
@@ -242,13 +242,13 @@ export function CommercialAttributionPanel(
           {events.data?.map((ev) => (
             <li key={ev.id}>
               <p>
-                {new Date(ev.occurred_at).toLocaleString()} · {ev.channel} ·
+                {new Date(ev.occurred_at).toLocaleString()} · {channelLabels[ev.channel] || ev.channel} ·
                 {" "}
                 {ev.evidence?.historical_initial
-                  ? "Entrada inicial reconstruída"
+                  ? "Primeiro contato"
                   : ev.entry_verified
-                  ? "Entrada vinculada"
-                  : "Vínculo não comprovado"}
+                  ? "Entrada"
+                  : "Mensagem sem vínculo comprovado"}
               </p>
               <p className="break-words text-muted-foreground">
                 {ev.text_content}
@@ -265,9 +265,9 @@ export function CommercialAttributionPanel(
               <p>{new Date(h.created_at).toLocaleString()} · {h.reason}</p>
               <p className="text-muted-foreground">
                 {origins.find((o) => o.id === h.before_data?.origin_id)?.name ||
-                  "Não identificada"} →{" "}
+                  "Não identificado"} →{" "}
                 {origins.find((o) => o.id === h.after_data?.origin_id)?.name ||
-                  "Não identificada"} ·{" "}
+                  "Não identificado"} ·{" "}
                 {h.actor_id ? "Alteração por usuário" : "Automático"}
               </p>
             </li>

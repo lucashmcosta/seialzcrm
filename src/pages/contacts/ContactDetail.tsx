@@ -1,6 +1,8 @@
 import { AdImage } from '@/components/contacts/AdOriginCard';
 import { CustomFieldsCard } from '@/components/custom-fields/CustomFieldsCard';
 import { CommercialAttributionPanel } from '@/components/commercial/CommercialAttributionPanel';
+import { OriginSummary } from '@/components/commercial/OriginSummary';
+import { useCommercialOrigins } from '@/hooks/useCommercialOrigins';
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Key } from 'react-aria-components';
@@ -101,6 +103,7 @@ export default function ContactDetail() {
   const [contact, setContact] = useState<any>(null);
   const [identityProfile, setIdentityProfile] = useState<ContactIdentityProfile | null>(null);
   const [campaign, setCampaign] = useState<any>(null);
+  const commercialOrigins = useCommercialOrigins();
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<Key>("details");
   const [createdByName, setCreatedByName] = useState<string | null>(null);
@@ -422,7 +425,7 @@ export default function ContactDetail() {
                 </Badge>
               )}
             </div>
-            <LeadOriginBadge contact={contact} campaign={campaign} />
+            {commercialOrigins.enabled ? <OriginSummary entityType="contact" entityId={contact.id} /> : <LeadOriginBadge contact={contact} campaign={campaign} />}
           </div>
 
           {/* Action buttons */}
@@ -533,7 +536,7 @@ export default function ContactDetail() {
 
           {/* Tab content */}
           <div className="flex-1 overflow-auto px-4 pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            {selectedTab === 'details' && <CommercialAttributionPanel key={contact.id} entityType="contact" entityId={contact.id} />}
+            {selectedTab === 'details' && <CommercialAttributionPanel key={contact.id} entityType="contact" entityId={contact.id} entrySource={contact.source} />}
             {renderTabContent()}
           </div>
         </div>
@@ -602,7 +605,7 @@ export default function ContactDetail() {
                 {contact.email && (
                   <p className="text-sm text-muted-foreground">{contact.email}</p>
                 )}
-                <LeadOriginBadge contact={contact} campaign={campaign} />
+                {commercialOrigins.enabled ? <OriginSummary entityType="contact" entityId={contact.id} /> : <LeadOriginBadge contact={contact} campaign={campaign} />}
               </div>
             </div>
 
@@ -696,7 +699,7 @@ export default function ContactDetail() {
             </Tabs.List>
 
             <Tabs.Panel id="details" className="space-y-4">
-              <CommercialAttributionPanel key={contact.id} entityType="contact" entityId={contact.id} />
+              <CommercialAttributionPanel key={contact.id} entityType="contact" entityId={contact.id} entrySource={contact.source} />
               <Card className="p-6">
                 <h2 className="text-lg font-semibold mb-4 text-foreground">{t('contacts.details')}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

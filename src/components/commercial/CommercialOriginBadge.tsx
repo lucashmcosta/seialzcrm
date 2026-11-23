@@ -8,12 +8,12 @@ export function CommercialOriginBadge(
   return (
     <span
       className="inline-flex max-w-full rounded border px-2 py-0.5 text-xs text-muted-foreground"
-      title={`Origem comercial · ${methodLabels[origin?.method || "unknown"]}${
+      title={`Origem · ${methodLabels[origin?.method || "unknown"]}${
         origin?.campaign_name ? ` · ${origin.campaign_name}` : ""
       }`}
     >
-      {origin?.name || "Não identificada"}
-      {origin?.pending ? " · Revisar" : ""}
+      {origin?.name || "Não identificado"}
+      {origin?.pending ? " · campanha a confirmar" : ""}
     </span>
   );
 }

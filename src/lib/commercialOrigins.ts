@@ -58,7 +58,7 @@ export const methodLabels: Record<string, string> = {
   manual: "Manual",
   migrated: "Migrado",
   inherited: "Herdada do contato",
-  unknown: "Não identificada",
+  unknown: "Não identificado",
 };
 export const dayAfter = (date: string) =>
   date
