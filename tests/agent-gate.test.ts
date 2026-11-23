@@ -346,3 +346,30 @@ Deno.test("parágrafo-lixo no fim da resposta sai antes de quebrar em bolhas", (
   assertEquals(splitIntoBubbles(dropJunkParagraphs("A\n\nB\n\nC\n\n‎")), ["A", "B", "C"]);
   assertEquals(dropJunkParagraphs("∅"), "");
 });
+
+Deno.test("dropJunkParagraphs: tira recados do modelo que não são para o cliente", () => {
+  assertEquals(dropJunkParagraphs("(sem texto adicional)"), "");
+  assertEquals(dropJunkParagraphs("[resposta vazia]"), "");
+  assertEquals(dropJunkParagraphs("(vazio)"), "");
+  assertEquals(dropJunkParagraphs("Com quem eu falo?\n\n(sem texto adicional)"), "Com quem eu falo?");
+  assertEquals(dropJunkParagraphs("Com quem eu falo? (sem texto adicional)"), "Com quem eu falo?");
+  assertEquals(dropJunkParagraphs("(Sem nada a acrescentar: a saudação e a pergunta do nome já foram enviadas.)"), "");
+  assertEquals(dropJunkParagraphs("(Não falta nada a dizer ao cliente.)"), "");
+  assertEquals(dropJunkParagraphs("Nada a acrescentar por enquanto. Fico aguardando o nome dela."), "");
+  assertEquals(dropJunkParagraphs("O texto já foi enviado, e não falta nada a dizer por enquanto."), "");
+  assertEquals(
+    dropJunkParagraphs("Quer que eu prepare o seu contrato?\n\nNão falta nada a acrescentar."),
+    "Quer que eu prepare o seu contrato?",
+  );
+});
+
+Deno.test("dropJunkParagraphs: parênteses normais da conversa ficam", () => {
+  const keep = [
+    "Você (ou alguém por você) já pediu o salário-maternidade?",
+    "Me manda o CEP com o número da casa (e o complemento, se tiver).",
+    "(o CEP eu já tenho)",
+    "Pode mandar a foto do documento (frente e verso).",
+    "Se não tiver nada a acrescentar no cadastro, seguimos.",
+  ];
+  for (const t of keep) assertEquals(dropJunkParagraphs(t), t);
+});

@@ -2465,11 +2465,18 @@ serve(async (req) => {
       let toolIterations = 0;
       
       while (claudeData.stop_reason === 'tool_use' && toolIterations < MAX_TOOL_ITERATIONS) {
+        const toolUseBlocks = (claudeData.content ?? []).filter((c: any) => c.type === 'tool_use');
+        // A API às vezes devolve stop_reason=tool_use sem nenhum bloco de ferramenta. Continuar mandaria
+        // uma mensagem de usuário vazia (erro 400) e a conversa iria para a equipe sem resposta: o texto
+        // que veio é a resposta (ou, se vazio, o pedido de resposta final logo abaixo).
+        if (toolUseBlocks.length === 0) {
+          console.warn('[ai-agent-respond] tool_use sem ferramenta: usando o texto da resposta');
+          break;
+        }
         toolIterations++;
         console.log(`Claude tool iteration ${toolIterations}/${MAX_TOOL_ITERATIONS}`);
         
         claudeText.push(...claudeData.content.filter((c: any) => c.type === 'text').map((c: any) => c.text));
-        const toolUseBlocks = claudeData.content.filter((c: any) => c.type === 'tool_use');
         const toolResults = [];
 
         for (const toolUse of toolUseBlocks) {
