@@ -65,6 +65,13 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Contrato que o agente de IA enviou: assinado → oportunidade ganha e conversa para a equipe.
+  // O enviado por uma pessoa segue como antes (quem move é ela). Idempotente: só oportunidade aberta.
+  if (r.created_via === "ai_agent") {
+    const { data: fresh } = await admin.from("signature_requests").select("status").eq("id", r.id).maybeSingle();
+    if (fresh?.status === "completed") await winAfterAgentContract(admin, r);
+  }
+
   if (!seen) {
     const title = event === "document.sent" ? "Contrato enviado (SuvSign)"
       : event === "signatory.signed" ? `Contrato assinado por ${payload?.data?.signatory?.name ?? "signatário"}`
@@ -138,4 +145,40 @@ async function storePdf(admin: Any, r: Any, payload: Any): Promise<{ ok: boolean
   });
   if (error && error.code !== "23505") return { ok: false, error: "document_insert_failed" };
   return { ok: true };
+}
+
+/** Dia de hoje em Brasília (AAAA-MM-DD). */
+const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+
+async function winAfterAgentContract(admin: Any, r: Any) {
+  if (!r.opportunity_id) return;
+  const { data: opp } = await admin.from("opportunities").select("status, deleted_at")
+    .eq("id", r.opportunity_id).eq("organization_id", r.organization_id).maybeSingle();
+  if (!opp || opp.deleted_at || opp.status !== "open") return;
+  const { data: stage } = await admin.from("pipeline_stages").select("id")
+    .eq("organization_id", r.organization_id).eq("type", "won").order("order_index", { ascending: true }).limit(1).maybeSingle();
+  let won = false;
+  let reason = "";
+  if (stage) {
+    // Mesmas regras de fechamento da tela (política da org); sem override.
+    const { data, error } = await admin.rpc("transition_opportunity_stage_v1", {
+      _organization_id: r.organization_id, _opportunity_id: r.opportunity_id, _target_stage_id: stage.id,
+      _close_date: today(), _override: false, _override_reason: "", _source: "ai_agent_contract_signed",
+    });
+    won = !error && data?.ok === true;
+    if (!won) reason = String(error?.message ?? data?.error ?? "regra de fechamento");
+  } else reason = "a org não tem etapa de ganho";
+  if (!won) console.warn("[suvsign-v2-webhook] ganho automático não aplicado", { opp: r.opportunity_id, reason });
+
+  // A conversa do agente com a cliente passa para a equipe, com o próximo passo.
+  const { data: thread } = await admin.from("message_threads").select("id")
+    .eq("organization_id", r.organization_id).eq("contact_id", r.contact_id).not("ai_agent_id", "is", null)
+    .order("last_message_at", { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
+  if (thread?.id) {
+    const summary = won
+      ? "Contrato assinado pela cliente. A oportunidade foi marcada como Ganho. Próximo passo: seguir com os documentos e o pedido."
+      : `Contrato assinado pela cliente, mas a oportunidade não foi para Ganho automaticamente (${reason}). Confira e mova manualmente.`;
+    const { error } = await admin.rpc("fn_agent_release_thread", { _thread: thread.id, _reason: "contract_signed", _summary: summary });
+    if (error) console.warn("[suvsign-v2-webhook] passagem para a equipe falhou", error.message);
+  }
 }
