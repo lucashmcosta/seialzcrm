@@ -30,6 +30,7 @@ import {
   resolveMetaCredentials,
 } from "../_shared/meta-whatsapp/credentials.ts";
 import { accountEventWabaIds, describeAccountEvent } from "../_shared/meta-whatsapp/account-events.ts";
+import { templateStatusPatch } from "../_shared/meta-whatsapp/template-status.ts";
 import { notifyOrgSystemAdmins } from "../_shared/notify.ts";
 import { accountStateFromUpdate, isLockFailure, sendBlockFromStatus, sendBlockTransition } from "../_shared/meta-whatsapp/send-block.ts";
 
@@ -1339,6 +1340,9 @@ async function handleAccountEvent(
       if (orgId && field === "account_update") {
         await applyAccountState(supabase, integrations.filter((r: any) => r.organization_id === orgId), value);
       }
+      if (orgId && field === "message_template_status_update") {
+        await applyTemplateStatus(supabase, integrations.filter((r: any) => r.organization_id === orgId), value, entry?.time);
+      }
       if (orgId && (summary.critical || summary.good_news)) {
         await notifyOrgSystemAdmins(supabase, orgId, { type: "whatsapp_account_alert", title: summary.title, body: summary.body });
       }
@@ -1421,6 +1425,31 @@ async function applyAccountState(supabase: any, integrations: any[], value: any)
     const { error } = await supabase.from("organization_integrations").update({ config_values: next }).eq("id", row.id);
     if (error) console.error("[meta-wa-webhook] account_state_update_failed", { oi: row.id, err: error.message });
   }
+}
+
+/**
+ * Aprovação, rejeição, pausa etc. de template: grava no whatsapp_templates na hora, sem esperar
+ * a sincronização manual. Só sobrescreve se o que está gravado não é mais novo que o evento
+ * (a Meta pode reenviar um evento antigo depois de uma sincronização).
+ */
+async function applyTemplateStatus(supabase: any, integrations: any[], value: any, entryTime: unknown): Promise<void> {
+  const update = templateStatusPatch(value);
+  if (!update || integrations.length === 0) return;
+  const seconds = Number(entryTime);
+  const eventAt = new Date(Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : Date.now()).toISOString();
+  let query = supabase.from("whatsapp_templates")
+    .update({ ...update.patch, last_synced_at: eventAt, updated_at: new Date().toISOString() })
+    .eq("provider", "meta_cloud_api")
+    .in("organization_integration_id", integrations.map((r: any) => r.id))
+    .eq("meta_template_name", update.name)
+    .or(`last_synced_at.is.null,last_synced_at.lte.${eventAt}`);
+  if (update.language) query = query.eq("language", update.language);
+  const { data, error } = await query.select("id");
+  if (error) {
+    console.error("[meta-wa-webhook] template_status_update_failed", { name: update.name, err: error.message });
+    return;
+  }
+  console.log("[meta-wa-webhook] template_status", { name: update.name, event: value?.event ?? null, rows: data?.length ?? 0 });
 }
 
 /** Recuperação das conversas sem resposta no período do bloqueio (rotina wa-block-recovery). */

@@ -8,6 +8,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { metaWaGet, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
 import { resolveMetaCredentials, MetaCredentialsError } from "../_shared/meta-whatsapp/credentials.ts";
 import { resolveSyncedTemplateType } from "./template_type.ts";
+import { mapTemplateStatus } from "../_shared/meta-whatsapp/template-status.ts";
 
 function pickHeaderMedia(metadata: unknown): Record<string, unknown> {
   const m = (metadata && typeof metadata === "object" ? metadata : {}) as Record<string, unknown>;
@@ -40,15 +41,6 @@ interface MetaTemplate {
   rejected_reason?: string;
 }
 
-
-function mapStatus(meta: string): string {
-  const s = (meta || "").toUpperCase();
-  if (s === "APPROVED") return "approved";
-  if (s === "REJECTED") return "rejected";
-  if (s === "PENDING" || s === "IN_APPEAL" || s === "PENDING_DELETION") return "pending";
-  if (s === "DISABLED" || s === "PAUSED") return "not_submitted";
-  return "pending";
-}
 
 function extractText(components: MetaComponent[] | undefined, type: string): string | null {
   if (!Array.isArray(components)) return null;
@@ -192,7 +184,7 @@ serve(async (req) => {
     const byStatus: Record<string, number> = {};
     let synced = 0;
     for (const tpl of all) {
-      const status = mapStatus(tpl.status);
+      const status = mapTemplateStatus(tpl.status);
       byStatus[status] = (byStatus[status] || 0) + 1;
       const bodyText = extractText(tpl.components, "BODY");
       const headerText = extractText(tpl.components, "HEADER");
