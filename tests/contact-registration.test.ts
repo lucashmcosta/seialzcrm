@@ -1,5 +1,5 @@
 import { assertEquals, assert } from "jsr:@std/assert";
-import { registrationFields, registrationReply } from "../supabase/functions/_shared/intelligence/contact-registration.ts";
+import { matchMaritalStatus, registrationFields, registrationReply } from "../supabase/functions/_shared/intelligence/contact-registration.ts";
 
 const vazio = { cpf: null, email: null, address_zip: null, address_number: null, address_street: null };
 const CPF_OK = "529.982.247-25";
@@ -41,4 +41,31 @@ Deno.test("dados do contrato: resposta diz o que falta, sem CPF na conversa", ()
   assert(semRua.includes("nome da rua"));
   const ok = registrationReply({ email: "a@b.com" }, [], { cpf: "x", email: "a@b.com", address_zip: "1", address_number: "2", address_street: "R" }, true);
   assert(ok.includes("completo"));
+});
+
+const MARITAL = ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)"];
+
+Deno.test("estado civil: o que a cliente escreve vira uma opção do campo", () => {
+  assertEquals(matchMaritalStatus("solteira", MARITAL), "Solteiro(a)");
+  assertEquals(matchMaritalStatus("Sou casada", MARITAL), "Casado(a)");
+  assertEquals(matchMaritalStatus("divorciada", MARITAL), "Divorciado(a)");
+  assertEquals(matchMaritalStatus("viúva", MARITAL), "Viúvo(a)");
+  assertEquals(matchMaritalStatus("VIUVA", MARITAL), "Viúvo(a)");
+});
+
+Deno.test("estado civil: sem opção clara não grava (o agente pergunta de novo)", () => {
+  assertEquals(matchMaritalStatus("união estável", MARITAL), null);
+  assertEquals(matchMaritalStatus("", MARITAL), null);
+  assertEquals(matchMaritalStatus("casada mas divorciando", MARITAL), null);
+});
+
+Deno.test("estado civil: campo sem opções grava o texto como veio", () => {
+  assertEquals(matchMaritalStatus("Solteira", []), "Solteira");
+});
+
+Deno.test("estado civil entra no que falta só quando a org tem o campo", () => {
+  const base = { cpf: "1", email: "a@b.co", address_zip: "1", address_number: "1", address_street: "Rua" };
+  assert(!registrationReply({}, [], base, true).includes("estado civil"));
+  assert(registrationReply({}, [], { ...base, marital_status: null }, true).includes("Ainda falta: estado civil"));
+  assert(registrationReply({}, [], { ...base, marital_status: "Casado(a)" }, true).includes("completo"));
 });

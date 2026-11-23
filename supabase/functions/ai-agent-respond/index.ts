@@ -19,7 +19,7 @@ import { captureInterviewConfirmation, interviewConfirmDeps } from "../_shared/i
 import { capturePresence, presenceDeps } from "../_shared/integrations/nammux-interview-presence.ts";
 import { dropJunkParagraphs, hasVisibleText, decideSupportGate, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText, pendingReplyNote, type PendingMsg } from "../_shared/intelligence/agent-gate.ts";
 import { emptyResponseShape, providerForIntegration, toolArgKeys } from "../_shared/intelligence/agent-log.ts";
-import { lookupCepAddress, registrationFields, registrationReply, SAVE_REGISTRATION_TOOL_DEF } from "../_shared/intelligence/contact-registration.ts";
+import { lookupCepAddress, matchMaritalStatus, MARITAL_STATUS_FIELD, registrationFields, registrationReply, SAVE_REGISTRATION_TOOL_DEF } from "../_shared/intelligence/contact-registration.ts";
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES, type WidgetClientMedia } from "../_shared/widgets/agent-tools.ts";
 
@@ -933,13 +933,40 @@ async function executeTool(
             return { success: false, message: 'Não foi possível gravar os dados agora. Não peça de novo; siga e avise na passagem que os dados estão na conversa.' };
           }
         }
+        // Estado civil: só na org que tem o campo personalizado de contato "estado_civil" (o mesmo
+        // que os modelos de contrato leem). Grava uma das opções do campo.
+        const { data: maritalDef } = await supabase.from('custom_field_definitions')
+          .select('id, options')
+          .eq('organization_id', context.organizationId).eq('module', 'contacts').eq('name', MARITAL_STATUS_FIELD)
+          .maybeSingle();
+        let maritalNow: string | null | undefined = undefined;
+        if (maritalDef) {
+          const options = ((maritalDef.options as { options?: Array<{ value?: string; label?: string }> } | null)?.options ?? [])
+            .map((o) => String(o.value ?? o.label ?? '')).filter(Boolean);
+          if (args?.marital_status != null && String(args.marital_status).trim()) {
+            const chosen = matchMaritalStatus(args.marital_status, options);
+            if (!chosen) {
+              problems.push(`o estado civil precisa ser um destes: ${options.join(', ')} (peça para ela escolher um)`);
+            } else {
+              const { error: mError } = await supabase.from('custom_field_values').upsert({
+                organization_id: context.organizationId, module: 'contacts', record_id: context.contactId,
+                field_definition_id: maritalDef.id, value: chosen, updated_at: new Date().toISOString(),
+              }, { onConflict: 'record_id,field_definition_id' });
+              if (mError) console.error('[save_registration_data] estado civil', { code: mError.code });
+              else fields.estado_civil = chosen;
+            }
+          }
+          const { data: mv } = await supabase.from('custom_field_values').select('value')
+            .eq('record_id', context.contactId).eq('field_definition_id', maritalDef.id).maybeSingle();
+          maritalNow = typeof mv?.value === 'string' ? mv.value : null;
+        }
         const { data: after } = await supabase.from('contacts')
           .select('cpf, email, address_zip, address_number, address_street')
           .eq('id', context.contactId).maybeSingle();
         console.log('[save_registration_data]', { saved: Object.keys(fields), problems: problems.length });
         return {
           success: true,
-          message: registrationReply(fields, problems, after ?? { cpf: null, email: null, address_zip: null, address_number: null, address_street: null }, true),
+          message: registrationReply(fields, problems, { ...(after ?? { cpf: null, email: null, address_zip: null, address_number: null, address_street: null }), marital_status: maritalNow }, true),
         };
       }
 
@@ -1538,7 +1565,7 @@ Você tem acesso a ferramentas que DEVE usar quando apropriado:
     }
     if (enabledTools.includes('save_registration_data')) {
       prompt += `
-- **save_registration_data**: Grave CPF, e-mail, CEP, número e complemento assim que o cliente mandar (pode ser em partes). Peça de novo só o que a ferramenta apontar como problema ou faltando, uma vez.
+- **save_registration_data**: Grave CPF, estado civil, e-mail, CEP, número e complemento assim que o cliente mandar (pode ser em partes). Peça de novo só o que a ferramenta apontar como problema ou faltando, uma vez.
 `;
     }
     if (enabledTools.includes('create_opportunity')) {

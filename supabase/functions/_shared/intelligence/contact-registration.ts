@@ -3,6 +3,10 @@
 // Serve para qualquer org: o agente só tem a ferramenta se ela estiver ligada nele.
 import { isValidCpfValue, lookupBrasilApiCep, lookupViaCep } from "../registry/providers.ts";
 
+const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
+const clean = (v: unknown, max: number) =>
+  typeof v === "string" || typeof v === "number" ? String(v).replace(/\s+/g, " ").trim().slice(0, max) : "";
+
 export const SAVE_REGISTRATION_TOOL = "save_registration_data";
 
 export interface RegistrationArgs {
@@ -13,6 +17,28 @@ export interface RegistrationArgs {
   address_complement?: unknown;
   address_street?: unknown;
   address_neighborhood?: unknown;
+  marital_status?: unknown;
+}
+
+/** Campo personalizado de contato com este nome guarda o estado civil (mesmo nome que os modelos de contrato usam). */
+export const MARITAL_STATUS_FIELD = "estado_civil";
+
+const fold = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+/**
+ * Estado civil escrito pelo cliente → uma das opções do campo da org ("solteira" → "Solteiro(a)").
+ * Compara o começo da palavra (4 letras), para servir a "Solteiro(a)", "Solteira" ou "solteiro".
+ * Sem opções no campo, grava o texto como veio. null = não deu para casar com nenhuma opção.
+ */
+export function matchMaritalStatus(input: unknown, options: string[]): string | null {
+  const said = fold(clean(input, 40));
+  if (!said) return null;
+  if (!options.length) return clean(input, 40);
+  const hits = options.filter((o) => {
+    const stem = fold(o).replace(/[^a-z]/g, "").slice(0, 4);
+    return stem.length === 4 && said.replace(/[^a-z ]/g, "").split(/\s+/).some((w) => w.startsWith(stem));
+  });
+  return hits.length === 1 ? hits[0] : null;
 }
 
 export interface CepAddress { street?: string | null; neighborhood?: string | null; city?: string | null; state?: string | null }
@@ -24,11 +50,10 @@ export interface RegistrationState {
   address_zip: string | null;
   address_number: string | null;
   address_street: string | null;
+  /** undefined = a org não tem o campo de estado civil (não entra no que falta). */
+  marital_status?: string | null;
 }
 
-const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
-const clean = (v: unknown, max: number) =>
-  typeof v === "string" || typeof v === "number" ? String(v).replace(/\s+/g, " ").trim().slice(0, max) : "";
 
 /**
  * Converte o que o cliente escreveu em campos do contato. Só entra o que é válido; o resto volta
@@ -83,11 +108,14 @@ const LABELS: Array<[keyof RegistrationState, string]> = [
   ["email", "e-mail"],
   ["address_zip", "CEP"],
   ["address_number", "número da casa ou do prédio"],
+  ["marital_status", "estado civil"],
 ];
 
 /** O que volta para o agente: o que entrou, o que tem problema e o que ainda falta. */
 export function registrationReply(fields: Record<string, string>, problems: string[], after: RegistrationState, saved: boolean): string {
-  const missing = LABELS.filter(([k]) => !String(after[k] ?? "").trim()).map(([, label]) => label);
+  const missing = LABELS
+    .filter(([k]) => !(k === "marital_status" && after.marital_status === undefined))
+    .filter(([k]) => !String(after[k] ?? "").trim()).map(([, label]) => label);
   // CEP geral (sem rua): a rua vem do cliente.
   if (String(after.address_zip ?? "").trim() && !String(after.address_street ?? "").trim()) missing.push("nome da rua (o CEP não traz a rua)");
   return [
@@ -121,7 +149,7 @@ export const SAVE_REGISTRATION_TOOL_DEF = {
   function: {
     name: SAVE_REGISTRATION_TOOL,
     description:
-      "Grava no cadastro do cliente os dados que ele mandou para o contrato: CPF, e-mail, CEP, número, complemento " +
+      "Grava no cadastro do cliente os dados que ele mandou para o contrato: CPF, estado civil, e-mail, CEP, número, complemento " +
       "(e rua/bairro só quando o CEP não trouxer). O endereço é completado pelo CEP. Passe só o que o cliente escreveu; " +
       "não invente nem complete nada. Pode chamar de novo quando ele mandar o que faltou.",
     parameters: {
@@ -134,6 +162,7 @@ export const SAVE_REGISTRATION_TOOL_DEF = {
         address_complement: { type: "string", description: "Apartamento, bloco, casa dos fundos." },
         address_street: { type: "string", description: "Rua, só se o CEP não trouxer a rua." },
         address_neighborhood: { type: "string", description: "Bairro, só se o CEP não trouxer o bairro." },
+        marital_status: { type: "string", description: "Estado civil, como o cliente escreveu (ex.: solteira, casada)." },
       },
     },
   },
