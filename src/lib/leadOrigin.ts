@@ -28,8 +28,8 @@ interface ContactAttribution {
 export function getLeadOrigin(contact: ContactAttribution | null | undefined): LeadOrigin {
   if (!contact) return { kind: 'organic', label: 'Orgânico' };
 
-  // Meta Lead Ads form (capturado pela integração nativa)
-  if (contact.ad_referral_source_type === 'lead_ad') {
+  // Formulário da Meta (Lead Ads). A integração grava 'lead_form'; 'lead_ad' fica por compatibilidade.
+  if (contact.ad_referral_source_type === 'lead_form' || contact.ad_referral_source_type === 'lead_ad') {
     return { kind: 'meta_form', label: 'Formulário Meta' };
   }
 
