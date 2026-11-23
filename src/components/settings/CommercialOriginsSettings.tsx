@@ -428,7 +428,7 @@ function CommercialOriginsSettingsContent() {
               {decision.status === "matched"
                 ? `Origem: ${
                   origins.find((o) => o.id === decision.origin_id)?.name ||
-                  "Não identificada"
+                  "Não identificado"
                 }`
                 : decision.status === "conflict"
                 ? "Conflito entre regras. Nenhuma origem será aplicada."

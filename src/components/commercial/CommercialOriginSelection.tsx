@@ -76,7 +76,7 @@ export function CommercialOriginSelection(
           value={value.origin}
           onChange={(e) => onChange({ ...value, origin: e.target.value })}
         >
-          <option value="">Não identificada</option>
+          <option value="">Não identificado</option>
           {origins.filter((o) => o.active).map((o) => (
             <option key={o.id} value={o.id}>{o.name}</option>
           ))}

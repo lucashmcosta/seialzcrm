@@ -27,7 +27,7 @@ export function CommercialFilters(
         onChange={(e) => onChange({ ...value, origin: e.target.value })}
       >
         <option value="">Todas as origens</option>
-        <option value="unknown">Não identificada</option>
+        <option value="unknown">Não identificado</option>
         {origins.map((o) => (
           <option key={o.id} value={o.id}>
             {o.name}
