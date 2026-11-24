@@ -15,7 +15,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
-export type InboxTab = 'active' | 'waiting' | 'resolved_today';
+export type InboxTab = 'active' | 'waiting' | 'resolved_today' | 'agent_solved';
 
 export const EXCLUDED_PURPOSES = ['commercial', 'vendor_personal'] as const;
 
@@ -120,6 +120,24 @@ export async function fetchInboxScopedThreads(
   const empty = { rows: [] as InboxScopedThread[], debug: { bRaw: 0, bFiltered: 0, merged: 0 } };
   if (!p.organizationId) return empty;
   if (p.onlyMine && !p.internalUserId) return empty;
+
+  // "Agente resolveu hoje": mesma regra do número do topo (rpc_inbox_agent_stats).
+  if (p.tab === 'agent_solved') {
+    const { data, error } = await supabase.rpc('rpc_list_agent_solved_threads' as never, {
+      p_organization_id: p.organizationId,
+      p_since: startOfDayIso(p.orgTimezone),
+      p_only_mine: !!p.onlyMine,
+      p_assigned_user_id: p.onlyMine ? p.internalUserId : null,
+      p_limit: p.limit ?? 200,
+    } as never);
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error('[inboxScope] rpc_list_agent_solved_threads error:', (error as { message: string }).message);
+      return empty;
+    }
+    const rows = ((data ?? []) as unknown as InboxScopedThread[]);
+    return { rows, debug: { bRaw: rows.length, bFiltered: rows.length, merged: rows.length } };
+  }
 
   const { data, error } = await supabase.rpc('rpc_list_inbox_threads', {
     p_organization_id: p.organizationId,

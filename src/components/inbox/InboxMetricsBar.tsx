@@ -18,7 +18,7 @@ interface Props {
   agentStats?: InboxAgentStats | null;
 }
 
-function AgentStats({ stats }: { stats: InboxAgentStats }) {
+function AgentStats({ stats, onOpenSolved }: { stats: InboxAgentStats; onOpenSolved: () => void }) {
   const solved = stats.handled - stats.escalated;
   const { pct, overTarget } = handoffRate(stats.handled, stats.escalated, stats.target_pct);
   const areas = Object.entries(stats.by_area).sort((a, b) => b[1] - a[1]).map(([a, n]) => `${a}: ${n}`).join(' · ');
@@ -28,7 +28,14 @@ function AgentStats({ stats }: { stats: InboxAgentStats }) {
       title={`Hoje o agente atendeu ${stats.handled} conversas. Resolveu ${solved} sozinho e passou ${stats.escalated} para a equipe.${areas ? ` Passadas por setor: ${areas}.` : ''} Meta: passar no máximo ${stats.target_pct}%.`}
     >
       <span className="uppercase tracking-wider">Agente hoje</span>
-      <span className="font-data text-foreground">{solved}</span> resolvidas
+      <button
+        type="button"
+        onClick={onOpenSolved}
+        className="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2 hover:text-foreground"
+        title="Ver as conversas que o agente resolveu hoje sem passar para a equipe"
+      >
+        <span className="font-data text-foreground">{solved}</span> resolvidas
+      </button>
       <span>·</span>
       <span className="font-data text-foreground">{stats.escalated}</span> passadas
       <span className={cn('font-data font-medium', overTarget ? 'text-destructive' : 'text-primary')}>({pct}%)</span>
@@ -41,12 +48,15 @@ const TABS: { id: InboxTab; label: string }[] = [
   { id: 'active', label: 'Ativos' },
   { id: 'waiting', label: 'Aguardando' },
   { id: 'resolved_today', label: 'Concluídos 7 dias' },
+  { id: 'agent_solved', label: 'Agente resolveu hoje' },
 ];
 
 export function InboxMetricsBar({ counts, active, onChange, onlyMine, onOnlyMineChange, onNewConversation, agentStats }: Props) {
+  const hasAgent = !!agentStats && agentStats.handled > 0;
+  const solved = agentStats ? agentStats.handled - agentStats.escalated : 0;
   return (
     <div className="h-12 border-b border-border bg-[hsl(var(--sz-bg2))] flex items-center px-6 gap-1 flex-shrink-0">
-      {TABS.map((t) => {
+      {TABS.filter((t) => t.id !== 'agent_solved' || hasAgent || active === 'agent_solved').map((t) => {
         const isActive = active === t.id;
         return (
           <button
@@ -63,13 +73,13 @@ export function InboxMetricsBar({ counts, active, onChange, onlyMine, onOnlyMine
             <span className={cn('text-[11px] uppercase tracking-wider', isActive && 'font-medium')}>
               {t.label}
             </span>
-            <span className="font-data text-sm text-foreground">{counts[t.id]}</span>
+            <span className="font-data text-sm text-foreground">{t.id === 'agent_solved' ? solved : counts[t.id]}</span>
           </button>
         );
       })}
 
       <div className="ml-auto flex items-center gap-3">
-        {agentStats && agentStats.handled > 0 && <AgentStats stats={agentStats} />}
+        {agentStats && hasAgent && <AgentStats stats={agentStats} onOpenSolved={() => onChange('agent_solved')} />}
         {onNewConversation && (
           <Button
             size="sm"
