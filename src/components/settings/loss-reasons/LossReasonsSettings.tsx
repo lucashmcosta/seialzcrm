@@ -42,6 +42,14 @@ export function LossReasonsSettings() {
 
   useEffect(() => { setDraft(settings); }, [settings]);
 
+  // Acerto da IA: quantas sugestões a pessoa manteve ao marcar a perda (últimos 90 dias).
+  const [aiStats, setAiStats] = useState<{ decided: number; reason_hits: number } | null>(null);
+  useEffect(() => {
+    if (!orgId) return;
+    void Promise.resolve(supabase.rpc('loss_suggestion_stats_v1', { _organization_id: orgId, _days: 90 }))
+      .then(({ data }) => setAiStats((data as unknown as { decided: number; reason_hits: number } | null) ?? null));
+  }, [orgId]);
+
   if (!orgId) return null;
   if (loading) {
     return <div className="flex items-center gap-2 text-sm text-muted-foreground"><SpinnerGap className="animate-spin" /> {uiText('Carregando…')}</div>;
@@ -50,7 +58,8 @@ export function LossReasonsSettings() {
   const reasonUsed = (r: LossReason) => !!usage.reasons[r.id] || details.some((d) => d.reason_id === r.id && !!usage.details[d.id]);
   const detailInRule = (d: LossDetail) => rules.some((r) => r.detail_id === d.id);
   const hasActiveReason = reasons.some((r) => r.is_active);
-  const settingsDirty = draft.reason_required !== settings.reason_required || draft.detail_mode !== settings.detail_mode;
+  const settingsDirty = draft.reason_required !== settings.reason_required || draft.detail_mode !== settings.detail_mode
+    || draft.ai_suggest !== settings.ai_suggest;
 
   const saveSettings = async () => {
     setSavingSettings(true);
@@ -221,6 +230,21 @@ export function LossReasonsSettings() {
                 <SelectItem value="required">{uiText('Obrigatório')}</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+            <div>
+              <Label>{uiText('IA sugere o motivo')}</Label>
+              <p className="text-xs text-muted-foreground">
+                {uiText('Ao marcar como Perdida, a IA lê a conversa e já deixa o motivo marcado; a pessoa confere e confirma. Usa a chave de IA da organização.')}
+              </p>
+              {aiStats && aiStats.decided > 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {uiText('Últimos 90 dias: a equipe manteve o motivo sugerido em {0} de {1} perdas.', { 0: aiStats.reason_hits, 1: aiStats.decided })}
+                </p>
+              )}
+            </div>
+            <Switch checked={draft.ai_suggest} disabled={!canManage}
+              onCheckedChange={(v) => setDraft({ ...draft, ai_suggest: v })} />
           </div>
           {canManage && (
             <div className="flex justify-end">

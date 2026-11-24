@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { SpinnerGap } from '@phosphor-icons/react';
+import { Sparkle, SpinnerGap } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,8 @@ interface Props {
   onSuccess: () => void | Promise<void>;
 }
 
+interface LossSuggestion { id: string | null; reason_id: string; detail_id: string | null; confidence: number; evidence: string }
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** Marcar como Perdida: data + motivo, detalhe e descrição conforme as regras da organização. */
@@ -35,13 +37,36 @@ export function LossDialog({ open, onOpenChange, opportunityIds, opportunityTitl
   const [date, setDate] = useState(today());
   const [choice, setChoice] = useState<LossChoice>(EMPTY_LOSS_CHOICE);
   const [saving, setSaving] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestion, setSuggestion] = useState<LossSuggestion | null>(null);
   const batch = opportunityIds.length > 1;
+  const singleId = batch ? null : opportunityIds[0] ?? null;
 
   useEffect(() => {
     if (!open) return;
     setDate(initialCloseDate || today());
     setChoice(EMPTY_LOSS_CHOICE);
+    setSuggestion(null);
   }, [open, initialCloseDate]);
+
+  // Sugestão da IA (só uma oportunidade por vez): pré-seleciona se a pessoa ainda não escolheu nada.
+  useEffect(() => {
+    if (!open || !singleId || !organization?.id) return;
+    let cancelled = false;
+    setSuggesting(true);
+    void supabase.functions.invoke('suggest-loss-reason', { body: { organization_id: organization.id, opportunity_id: singleId } })
+      .then(({ data }) => {
+        const s = (data as { suggestion?: LossSuggestion | null } | null)?.suggestion ?? null;
+        if (cancelled || !s) return;
+        setSuggestion(s);
+        setChoice((current) => (current.reasonId || current.detailId || current.description)
+          ? current
+          : { reasonId: s.reason_id, detailId: s.detail_id, description: '' });
+      })
+      .catch(() => { /* sem sugestão: a pessoa escolhe como antes */ })
+      .finally(() => { if (!cancelled) setSuggesting(false); });
+    return () => { cancelled = true; };
+  }, [open, singleId, organization?.id]);
 
   const problem = loading ? null : validateLossChoice(options, choice.reasonId, choice.detailId, choice.description);
 
@@ -92,6 +117,20 @@ export function LossDialog({ open, onOpenChange, opportunityIds, opportunityTitl
           {loading
             ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><SpinnerGap className="animate-spin" /> {uiText('Carregando…')}</div>
             : <LossChoiceFields options={options} value={choice} onChange={setChoice} disabled={saving} />}
+          {!loading && suggesting && !suggestion && (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><SpinnerGap className="animate-spin" /> {uiText('A IA está lendo a conversa para sugerir o motivo…')}</p>
+          )}
+          {!loading && suggestion && (
+            <p className="flex items-start gap-1.5 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+              <Sparkle className="mt-0.5 shrink-0" weight="fill" />
+              <span>
+                {suggestion.reason_id === choice.reasonId && suggestion.detail_id === choice.detailId
+                  ? uiText('Sugerido pela IA a partir da conversa. Confira antes de confirmar.')
+                  : uiText('A IA tinha sugerido outro motivo.')}
+                {suggestion.evidence ? <> “{suggestion.evidence}”</> : null}
+              </span>
+            </p>
+          )}
           {problem && (choice.reasonId || choice.detailId || choice.description) && <p className="text-xs text-destructive">{problem}</p>}
         </div>
         <DialogFooter>

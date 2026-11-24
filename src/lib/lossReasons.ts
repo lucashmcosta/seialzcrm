@@ -25,10 +25,12 @@ export interface LossDetail {
 export interface LossSettings {
   reason_required: boolean;
   detail_mode: LossDetailMode;
+  /** IA sugere o motivo lendo a conversa (precisa de chave de IA da org). */
+  ai_suggest: boolean;
 }
 
 /** Org sem linha em opportunity_loss_settings usa este padrão (igual ao banco). */
-export const DEFAULT_LOSS_SETTINGS: LossSettings = { reason_required: true, detail_mode: 'optional' };
+export const DEFAULT_LOSS_SETTINGS: LossSettings = { reason_required: true, detail_mode: 'optional', ai_suggest: true };
 
 /**
  * Move o item uma posição para cima/baixo e devolve só as linhas cujo order_index mudou.
