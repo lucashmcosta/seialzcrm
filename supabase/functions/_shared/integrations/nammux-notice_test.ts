@@ -128,8 +128,10 @@ Deno.test("modelo da Meta não começa nem termina com variável", () => {
 Deno.test("variável de modelo sai sem quebra de linha; todo tipo tem modelo", () => {
   const r = renderMovementNotice("movement_update", { text: "Linha um.\nLinha dois.\t  Fim." });
   assertEquals(r.ok && r.rendered.variables, ["Linha um. Linha dois. Fim."]);
+  // Os convites de entrevista são texto fixo, igual para todos (sem variável).
+  const fixed = new Set(["interview_invite", "interview_invite_reminder", "interview_last_call"]);
   for (const [kind, tpl] of Object.entries(NOTICE_TEMPLATES)) {
-    if (!tpl.includes("{{1}}")) throw new Error(`modelo de ${kind} sem variável`);
+    if (!fixed.has(kind) && !tpl.includes("{{1}}")) throw new Error(`modelo de ${kind} sem variável`);
   }
 });
 
