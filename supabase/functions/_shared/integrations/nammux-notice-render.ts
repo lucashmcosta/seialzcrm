@@ -8,6 +8,7 @@ import {
   renderEventNotice,
   renderFinanceNotice,
   renderInterviewNotice,
+  renderInterviewOutreachNotice,
   renderMovementNotice,
   type RenderResult,
 } from "./nammux-notice-texts.ts";
@@ -79,6 +80,15 @@ export async function renderNoticeFromDb(supabase: any, notice: Subject): Promis
     const { data } = await supabase.from("nammux_interview_requests")
       .select("status, requested_start_at").eq("id", notice.subject_id).eq("organization_id", org).maybeSingle();
     return data ? renderInterviewNotice(kind, data) : { ok: false, reason: "subject_gone" };
+  }
+
+  if (notice.subject_type === "opportunity") {
+    const { data, error } = await supabase.rpc("nammux_interview_still_waiting", {
+      _organization_id: org, _opportunity_id: notice.subject_id,
+    });
+    if (error) return { ok: false, reason: "missing_data" };
+    const { data: org_ } = await supabase.from("organizations").select("name").eq("id", org).maybeSingle();
+    return renderInterviewOutreachNotice(kind, data === true, org_?.name ?? null);
   }
 
   return { ok: false, reason: "kind_mismatch" };

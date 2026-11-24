@@ -174,3 +174,19 @@ Com a flag `nammux_notices_planned_by_source` ligada na organização, o Seialz
 deixa de planejar avisos de agenda a partir de `nammux_process_events`. A
 confirmação de pedidos de entrevista continua.
 
+
+## Convite para marcar a entrevista
+
+Processo na etapa "Entrevista" do Nammux, numa situação de espera (aguardando agendamento, não compareceu, reagendada ou cancelada) e sem entrevista futura recebe convites para marcar. "Agendada" fica de fora mesmo com a data no passado. Liga com a flag `nammux_interview_outreach` (desligada por padrão) e precisa também de `nammux_interview_scheduling`, que dá ao agente as ferramentas de horário; a fila e o envio são os mesmos dos outros avisos.
+
+| Tipo | Quando | Botões |
+|---|---|---|
+| `interview_invite` | dia 0 e dia 2 | Quero marcar |
+| `interview_invite_reminder` | dia 5 e dia 9 | Quero marcar |
+| `interview_last_call` | dia 14 | Quero marcar · Falar com a equipe |
+
+- Os dias contam a partir do primeiro convite e, além disso, respeitam o intervalo desde a última tentativa (fim de semana ou processo que volta à espera não junta várias em dias seguidos). Toda tentativa criada conta, saindo ou não; no máximo 5. Só se planeja tentativa cujo modelo da Meta está aprovado na org (`nammux_interview_outreach_template_ok`). Texto sem variável numerada; `{{escritorio}}` vira o nome da organização no texto livre e no push, e o modelo da Meta é cadastrado por org com o nome dela (`NOTICE_TEMPLATES` em `nammux-notice-texts.ts`). Assunto `subject_type = 'opportunity'`.
+- Antes de cada envio o worker confere `nammux_interview_still_waiting`: marcou ou saiu da etapa, o convite é cancelado e a cadência para.
+- `nammux-interview-outreach` roda em dias úteis às 09:05 (pg_cron); em feriado nacional (`brazilNationalHoliday`) não faz nada. Agenda as próximas tentativas de quem já foi convidado e começa processos novos (primeiro "Aguardando agendamento", depois os parados há mais tempo) até a quota do dia.
+- A quota acompanha a agenda (`nammux-interview-outreach-quota.ts`): horários livres de entrevista nos próximos 7 dias (consulta `seialz-interview-slots` no Nammux), menos as marcações esperadas dos convites dos últimos 3 dias, dividido pela taxa de quem marca (medida com 10 ou mais convidados; senão 35%). Agenda enchendo, menos convites; vazia, mais (teto de 60 por dia). O Nammux devolve até 120 horários; como 120 livres já levam ao teto, o limite não reduz a quota.
+- Resposta: "Quero marcar" vira uma nota para o agente de atendimento consultar e oferecer horários; "Falar com a equipe" faz o agente passar a conversa (`nammux-interview-outreach-reply.ts`).

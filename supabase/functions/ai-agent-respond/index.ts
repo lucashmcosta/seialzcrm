@@ -17,6 +17,7 @@ import { buildNammuxInterviewTools, NAMMUX_INTERVIEW_FLAG, nammuxToolDeps, nammu
 import { captureRating, ratingDeps, ratingForAgent } from "../_shared/integrations/support-rating.ts";
 import { captureInterviewConfirmation, interviewConfirmDeps } from "../_shared/integrations/nammux-interview-confirm.ts";
 import { capturePresence, presenceDeps } from "../_shared/integrations/nammux-interview-presence.ts";
+import { captureOutreachReply, outreachReplyDeps } from "../_shared/integrations/nammux-interview-outreach-reply.ts";
 import { dropJunkParagraphs, hasVisibleText, decideSupportGate, agentIdentityLine, aiQuestionMode, asksNameWhenNotReal, nameInstructionWhenNotReal, agentInputKind, attachmentNote, followUpInstruction, isFollowUpSkip, stripCloseEcho, billableInputTokens, currentTimeForPrompt, decideAgentGate, AFTER_TOOL_HINT, agentReplyText, handoffAckText, splitIntoBubbles, splitPromptForCache, withoutRepeatedLast, placeCurrentMessage, CROSSED_REPLY_NOTE, toWhatsAppText, pendingReplyNote, type PendingMsg } from "../_shared/intelligence/agent-gate.ts";
 import { emptyResponseShape, providerForIntegration, toolArgKeys } from "../_shared/intelligence/agent-log.ts";
 import { lookupCepAddress, matchMaritalStatus, MARITAL_STATUS_FIELD, registrationFields, registrationReply, SAVE_REGISTRATION_TOOL_DEF } from "../_shared/intelligence/contact-registration.ts";
@@ -1982,6 +1983,13 @@ serve(async (req) => {
           return skip(presence.outcome);
         }
         if (presence?.kind === 'continue') message = `${message}\n\n${presence.note}`;
+      }
+
+      // Resposta ao convite para marcar a entrevista ("Quero marcar" / "Falar com a equipe").
+      if (!followUp && threadId && contactId && agent.agent_type === 'support'
+        && await featureFlagEnabled(supabase, 'nammux_interview_outreach', organizationId)) {
+        const outreach = await captureOutreachReply(message, outreachReplyDeps(supabase, { organizationId, contactId }));
+        if (outreach) message = `${message}\n\n${outreach.note}`;
       }
     }
 

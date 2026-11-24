@@ -15,7 +15,8 @@ export type NoticeKind =
   | "event_reminder_7d" | "event_reminder_1d" | "event_reminder_1h" | "event_starting"
   | "interview_slot_unavailable"
   | "agreement_homologated" | "installment_paid" | "installment_overdue" | "payout_done"
-  | "movement_update" | "movement_unfavorable";
+  | "movement_update" | "movement_unfavorable"
+  | "interview_invite" | "interview_invite_reminder" | "interview_last_call";
 
 export interface EventState {
   event_type: string;
@@ -106,6 +107,18 @@ function build(title: string, template: string, values: string[]): RenderResult 
   return { ok: true, rendered: { title, text, variables } };
 }
 
+// Convite para marcar a entrevista (processo parado na etapa Entrevista). Sem variáveis
+// numeradas: o modelo da Meta é cadastrado por organização já com o nome dela no lugar de
+// {{escritorio}}. No texto livre e no push, {{escritorio}} vira o nome da organização.
+export const INTERVIEW_BOOK = "Quero marcar";
+export const INTERVIEW_TALK_TEAM = "Falar com a equipe";
+const INTERVIEW_INVITE_TEXT =
+  "Olá! Aqui é da {{escritorio}}. Para darmos andamento ao seu processo, precisamos fazer uma entrevista rápida com você, de cerca de 30 minutos, por ligação. É nela que o advogado confirma os detalhes do seu caso. Toque no botão abaixo para escolher o melhor horário.";
+const INTERVIEW_INVITE_REMINDER_TEXT =
+  "Ainda não conseguimos marcar a sua entrevista, e o seu processo está parado esperando por ela. Sem a entrevista, não conseguimos entrar com a ação. Leva só 30 minutos e você escolhe o horário. Toque abaixo para marcar.";
+const INTERVIEW_LAST_CALL_TEXT =
+  "Este é o nosso último aviso sobre a sua entrevista. Sem ela, não conseguimos seguir com o seu processo, e o caso pode ser encerrado como desistência. Nesse caso, pode haver a cobrança prevista no seu contrato. Queremos seguir com você: toque abaixo e escolha um horário ainda esta semana.";
+
 /** Modelo (frase com {{n}}) de cada tipo. É o texto a cadastrar na Meta. */
 export const NOTICE_TEMPLATES: Record<NoticeKind, string> = {
   event_scheduled: "Olá! Sua {{1}} foi marcada para {{2}}, às {{3}}. {{4}} Se tiver dúvida, é só responder esta mensagem.",
@@ -122,6 +135,9 @@ export const NOTICE_TEMPLATES: Record<NoticeKind, string> = {
   payout_done: "O repasse de {{1}} referente ao seu processo foi feito em {{2}}. Se tiver dúvida, é só responder esta mensagem.",
   movement_update: "Novidade no seu processo: {{1}} Se tiver dúvida, é só responder esta mensagem.",
   movement_unfavorable: "Novidade no seu processo: {{1}} Se tiver dúvida, é só responder esta mensagem.",
+  interview_invite: INTERVIEW_INVITE_TEXT,
+  interview_invite_reminder: INTERVIEW_INVITE_REMINDER_TEXT,
+  interview_last_call: INTERVIEW_LAST_CALL_TEXT,
 };
 
 /**
@@ -215,4 +231,17 @@ export function renderInterviewNotice(kind: NoticeKind, r: InterviewRequestState
   const date = longDate(r.requested_start_at, TZ);
   const time = clock(r.requested_start_at, TZ);
   return build("Horário indisponível", NOTICE_TEMPLATES.interview_slot_unavailable, [date && time ? `${date} às ${time}` : ""]);
+}
+
+/** Convite para marcar a entrevista: só sai se o processo ainda espera a entrevista. */
+export function renderInterviewOutreachNotice(kind: NoticeKind, stillWaiting: boolean, orgName?: string | null): RenderResult {
+  if (kind !== "interview_invite" && kind !== "interview_invite_reminder" && kind !== "interview_last_call") {
+    return { ok: false, reason: "kind_mismatch" };
+  }
+  if (!stillWaiting) return { ok: false, reason: "subject_changed" };
+  const title = kind === "interview_last_call" ? "Último aviso: sua entrevista" : "Marque sua entrevista";
+  const buttons = kind === "interview_last_call" ? [INTERVIEW_BOOK, INTERVIEW_TALK_TEAM] : [INTERVIEW_BOOK];
+  const office = clean(orgName ?? "") || "equipe do seu processo";
+  const text = NOTICE_TEMPLATES[kind].replace("{{escritorio}}", office);
+  return { ok: true, rendered: { title, text, variables: [], buttons } };
 }
