@@ -607,6 +607,12 @@ serve(async (req) => {
       evidence: leadCommercialEvidence(attribution),
     });
 
+    // Pixel do Seialz: liga a visita ao site a este contato.
+    if (attribution.sz_ref && /^[A-Za-z0-9]{8}$/.test(attribution.sz_ref)) {
+      const { error: linkError } = await supabase.rpc('site_pixel_link_visit', { p_org: organizationId, p_code: attribution.sz_ref, p_contact: contactId });
+      if (linkError) console.warn('site_pixel_link_visit error:', linkError.code);
+    }
+
     console.log(`Lead processed: contact_id=${contactId}, opportunity_id=${opportunityId}, mapping=${contactMappings && contactMappings.length > 0 ? 'yes' : 'no'}`);
 
     return new Response(

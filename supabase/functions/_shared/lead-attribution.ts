@@ -11,8 +11,10 @@ export function normalizeLeadAttribution(payload: Record<string, unknown>): Reco
   const layers = [payload, object(payload.utms), params, object(params.utms), object(params.raw)];
   const result: Record<string, string> = {};
   for (const field of ["source", "utm_source", "utm_medium", "utm_campaign", "utm_content",
-    "utm_term", "utm_id", "utm_source_platform", "fbclid", "gclid", "meta_ad_id",
-    "meta_adset_id", "meta_campaign_id", "landing_url", "referrer_url"]) {
+    "utm_term", "utm_id", "utm_source_platform", "fbclid", "gclid", "gbraid", "wbraid", "meta_ad_id",
+    "meta_adset_id", "meta_campaign_id", "landing_url", "referrer_url",
+    // Campos que o pixel do Seialz põe no formulário.
+    "fbp", "fbc", "site_entry", "sz_ref"]) {
     const alias = field.startsWith("meta_") ? field.slice(5) : field;
     for (const layer of layers) {
       const value = layer[field] ?? layer[alias];

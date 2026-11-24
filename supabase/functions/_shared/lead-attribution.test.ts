@@ -35,3 +35,8 @@ Deno.test("opportunity origin defaults to api and keeps empty attribution as {}"
   equal(opportunityOrigin(undefined, {}), { source: "api", utm_source: null, utm_medium: null, utm_campaign: null, utm_content: null, utm_term: null, attribution_data: {} });
   equal(opportunityOrigin("  ", {}).source, "api");
 });
+
+Deno.test("pixel fields reach the evidence", () => {
+  const a = normalizeLeadAttribution({ gbraid: "g1", fbp: "fb.1.1700000000000.123", site_entry: "direct", sz_ref: "ABCD2345", nome: "x" });
+  if (a.gbraid !== "g1" || a.fbp !== "fb.1.1700000000000.123" || a.site_entry !== "direct" || a.sz_ref !== "ABCD2345" || "nome" in a) throw new Error(JSON.stringify(a));
+});

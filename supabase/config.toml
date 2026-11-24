@@ -87,6 +87,9 @@ verify_jwt = false
 [functions.webchat-message]
 verify_jwt = false
 
+[functions.site-pixel]
+verify_jwt = false
+
 [functions.webchat-messages]
 verify_jwt = false
 
