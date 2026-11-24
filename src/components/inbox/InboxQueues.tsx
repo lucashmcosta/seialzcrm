@@ -15,7 +15,7 @@ interface Props {
 const TABS: { id: InboxTab; label: string; icon: typeof ChatCircleDots }[] = [
   { id: 'active', label: 'Ativos', icon: ChatCircleDots },
   { id: 'waiting', label: 'Aguardando', icon: Hourglass },
-  { id: 'resolved_today', label: 'Concluídos hoje', icon: CheckCircle },
+  { id: 'resolved_today', label: 'Concluídos 7 dias', icon: CheckCircle },
 ];
 
 export function InboxQueues({ active, counts, onChange, onlyMine, onOnlyMineChange }: Props) {

@@ -102,7 +102,7 @@ function Pill({ children, cls, dot, pulse }: { children: React.ReactNode; cls: s
 const TABS: { id: InboxTab; label: string }[] = [
   { id: 'active', label: 'Ativos' },
   { id: 'waiting', label: 'Aguardando' },
-  { id: 'resolved_today', label: 'Concluídos hoje' },
+  { id: 'resolved_today', label: 'Concluídos 7 dias' },
 ];
 
 // ─── Component ───────────────────────────────────────────────────

@@ -1732,8 +1732,12 @@ function sanitizeAgentResponse(
   const maxNewlines = formattingRules?.max_consecutive_newlines ?? 2;
   const stripEmpty = formattingRules?.strip_empty_lines ?? false;
   
-  let sanitized = response;
-  
+  // Raciocínio interno do modelo ("<think>…</think>") nunca vai para o cliente. Se sobrar só
+  // isso, a resposta fica vazia e segue o caminho de silêncio/fallback abaixo.
+  let sanitized = response
+    .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
+    .replace(/<think(?:ing)?>[\s\S]*$/i, '');
+
   // Remove excessive newlines
   if (stripEmpty || maxNewlines === 1) {
     // Replace multiple newlines with at most maxNewlines

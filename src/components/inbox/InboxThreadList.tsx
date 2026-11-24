@@ -5,7 +5,7 @@ import { InboxSlaChip } from './InboxSlaChip';
 import { SearchBar } from '@/components/common/SearchBar';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import type { InboxThreadRow } from '@/hooks/inbox/useInboxThreads';
-import { agentFilterCounts, handoffInfo, matchesAgentFilter, type InboxAgentFilter } from '@/lib/inboxAgentFilters';
+import { agentFilterCounts, handoffInfo, matchesAgentFilter, waitingTeam, type InboxAgentFilter } from '@/lib/inboxAgentFilters';
 
 interface Props {
   threads: InboxThreadRow[];
@@ -82,7 +82,7 @@ export function InboxThreadList({ threads, loading, selectedId, onSelect, offici
       const last = (t.last_message_content || '').toLowerCase();
       return name.includes(q) || phone.includes(q) || last.includes(q);
     });
-  }, [threads, search]);
+  }, [threads, search, agentFilter]);
 
   return (
     <div className="w-[320px] flex-shrink-0 border-r border-border flex flex-col bg-background">
@@ -100,6 +100,7 @@ export function InboxThreadList({ threads, loading, selectedId, onSelect, offici
               ['all', 'Todas', counts.all],
               ['agent', 'Com o agente', counts.agent],
               ['needs_human', 'Precisa de você', counts.needsHuman],
+              ['answered', 'Equipe respondeu', counts.answered],
               ...(counts.urgent ? [['urgent', 'Urgente', counts.urgent] as const] : []),
               ...counts.areas.map(([area, n]) => [`area:${area}`, area, n] as const),
             ] as ReadonlyArray<readonly [InboxAgentFilter, string, number]>).map(([id, label, n]) => (
@@ -185,8 +186,17 @@ export function InboxThreadList({ threads, loading, selectedId, onSelect, offici
                     )}
                     {t.needs_human_attention && (() => {
                       const h = handoffInfo(t);
+                      if (!waitingTeam(t)) {
+                        return (
+                          <span title="A equipe respondeu por último. Volta para Precisa de você quando o cliente escrever.">
+                            <Pill cls="bg-slate-500/15 text-slate-600 dark:text-slate-300" dot="bg-slate-500">
+                              Equipe respondeu{h.area ? ` · ${h.area}` : ''}
+                            </Pill>
+                          </span>
+                        );
+                      }
                       return (
-                        <span title="O agente passou esta conversa para a equipe e ninguém respondeu ainda">
+                        <span title="O agente passou esta conversa para a equipe e o cliente está esperando resposta">
                           <Pill cls="bg-destructive/15 text-destructive" dot="bg-destructive" pulse={h.urgent}>
                             {h.urgent ? 'Urgente · ' : ''}Precisa de você{h.area ? ` · ${h.area}` : ''}
                           </Pill>
