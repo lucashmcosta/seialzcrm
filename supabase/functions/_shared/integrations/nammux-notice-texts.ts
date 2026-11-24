@@ -107,12 +107,13 @@ function build(title: string, template: string, values: string[]): RenderResult 
   return { ok: true, rendered: { title, text, variables } };
 }
 
-// Convite para marcar a entrevista (processo parado na etapa Entrevista). Sem variáveis:
-// o texto é o mesmo para todos. Botões cadastrados no modelo da Meta.
+// Convite para marcar a entrevista (processo parado na etapa Entrevista). Sem variáveis
+// numeradas: o modelo da Meta é cadastrado por organização já com o nome dela no lugar de
+// {{escritorio}}. No texto livre e no push, {{escritorio}} vira o nome da organização.
 export const INTERVIEW_BOOK = "Quero marcar";
 export const INTERVIEW_TALK_TEAM = "Falar com a equipe";
 const INTERVIEW_INVITE_TEXT =
-  "Olá! Aqui é da Central Trabalhista. Para darmos andamento ao seu processo, precisamos fazer uma entrevista rápida com você, de cerca de 30 minutos, por ligação. É nela que o advogado confirma os detalhes do seu caso. Toque no botão abaixo para escolher o melhor horário.";
+  "Olá! Aqui é da {{escritorio}}. Para darmos andamento ao seu processo, precisamos fazer uma entrevista rápida com você, de cerca de 30 minutos, por ligação. É nela que o advogado confirma os detalhes do seu caso. Toque no botão abaixo para escolher o melhor horário.";
 const INTERVIEW_INVITE_REMINDER_TEXT =
   "Ainda não conseguimos marcar a sua entrevista, e o seu processo está parado esperando por ela. Sem a entrevista, não conseguimos entrar com a ação. Leva só 30 minutos e você escolhe o horário. Toque abaixo para marcar.";
 const INTERVIEW_LAST_CALL_TEXT =
@@ -233,12 +234,14 @@ export function renderInterviewNotice(kind: NoticeKind, r: InterviewRequestState
 }
 
 /** Convite para marcar a entrevista: só sai se o processo ainda espera a entrevista. */
-export function renderInterviewOutreachNotice(kind: NoticeKind, stillWaiting: boolean): RenderResult {
+export function renderInterviewOutreachNotice(kind: NoticeKind, stillWaiting: boolean, orgName?: string | null): RenderResult {
   if (kind !== "interview_invite" && kind !== "interview_invite_reminder" && kind !== "interview_last_call") {
     return { ok: false, reason: "kind_mismatch" };
   }
   if (!stillWaiting) return { ok: false, reason: "subject_changed" };
   const title = kind === "interview_last_call" ? "Último aviso: sua entrevista" : "Marque sua entrevista";
   const buttons = kind === "interview_last_call" ? [INTERVIEW_BOOK, INTERVIEW_TALK_TEAM] : [INTERVIEW_BOOK];
-  return { ok: true, rendered: { title, text: NOTICE_TEMPLATES[kind], variables: [], buttons } };
+  const office = clean(orgName ?? "") || "equipe do seu processo";
+  const text = NOTICE_TEMPLATES[kind].replace("{{escritorio}}", office);
+  return { ok: true, rendered: { title, text, variables: [], buttons } };
 }

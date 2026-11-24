@@ -87,7 +87,8 @@ export async function renderNoticeFromDb(supabase: any, notice: Subject): Promis
       _organization_id: org, _opportunity_id: notice.subject_id,
     });
     if (error) return { ok: false, reason: "missing_data" };
-    return renderInterviewOutreachNotice(kind, data === true);
+    const { data: org_ } = await supabase.from("organizations").select("name").eq("id", org).maybeSingle();
+    return renderInterviewOutreachNotice(kind, data === true, org_?.name ?? null);
   }
 
   return { ok: false, reason: "kind_mismatch" };

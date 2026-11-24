@@ -39,10 +39,13 @@ Deno.test("texto do convite: só sai se o processo ainda espera", () => {
   const r = renderInterviewOutreachNotice("interview_invite", true);
   assertEquals(r.ok, true);
   if (r.ok) {
-    assertEquals(r.rendered.text, NOTICE_TEMPLATES.interview_invite);
+    assertEquals(r.rendered.text.includes("{{escritorio}}"), false);
+    assertEquals(r.rendered.text.startsWith("Olá! Aqui é da equipe do seu processo."), true);
     assertEquals(r.rendered.variables, []);
     assertEquals(r.rendered.buttons, [INTERVIEW_BOOK]);
   }
+  const named = renderInterviewOutreachNotice("interview_invite", true, "Escritório Exemplo");
+  if (named.ok) assertEquals(named.rendered.text.startsWith("Olá! Aqui é da Escritório Exemplo."), true);
   const last = renderInterviewOutreachNotice("interview_last_call", true);
   if (last.ok) assertEquals(last.rendered.buttons, [INTERVIEW_BOOK, INTERVIEW_TALK_TEAM]);
   assertEquals(renderInterviewOutreachNotice("interview_invite_reminder", false), { ok: false, reason: "subject_changed" });

@@ -177,7 +177,7 @@ confirmação de pedidos de entrevista continua.
 
 ## Convite para marcar a entrevista
 
-Processo na etapa "Entrevista" do Nammux, numa situação de espera (aguardando agendamento, não compareceu, reagendada, cancelada ou agendada sem data futura) e sem entrevista futura recebe convites para marcar. Liga com a flag `nammux_interview_outreach` (desligada por padrão); a fila e o envio são os mesmos dos outros avisos.
+Processo na etapa "Entrevista" do Nammux, numa situação de espera (aguardando agendamento, não compareceu, reagendada ou cancelada) e sem entrevista futura recebe convites para marcar. "Agendada" fica de fora mesmo com a data no passado. Liga com a flag `nammux_interview_outreach` (desligada por padrão) e precisa também de `nammux_interview_scheduling`, que dá ao agente as ferramentas de horário; a fila e o envio são os mesmos dos outros avisos.
 
 | Tipo | Quando | Botões |
 |---|---|---|
@@ -185,7 +185,7 @@ Processo na etapa "Entrevista" do Nammux, numa situação de espera (aguardando 
 | `interview_invite_reminder` | dia 5 e dia 9 | Quero marcar |
 | `interview_last_call` | dia 14 | Quero marcar · Falar com a equipe |
 
-- Os dias contam a partir do primeiro convite; no máximo uma mensagem por dia e 5 no total. Texto fixo, sem variável (`NOTICE_TEMPLATES` em `nammux-notice-texts.ts`), assunto `subject_type = 'opportunity'`.
+- Os dias contam a partir do primeiro convite e, além disso, respeitam o intervalo desde a última tentativa (fim de semana ou processo que volta à espera não junta várias em dias seguidos). Toda tentativa criada conta, saindo ou não; no máximo 5. Só se planeja tentativa cujo modelo da Meta está aprovado na org (`nammux_interview_outreach_template_ok`). Texto sem variável numerada; `{{escritorio}}` vira o nome da organização no texto livre e no push, e o modelo da Meta é cadastrado por org com o nome dela (`NOTICE_TEMPLATES` em `nammux-notice-texts.ts`). Assunto `subject_type = 'opportunity'`.
 - Antes de cada envio o worker confere `nammux_interview_still_waiting`: marcou ou saiu da etapa, o convite é cancelado e a cadência para.
 - `nammux-interview-outreach` roda em dias úteis às 09:05 (pg_cron). Agenda as próximas tentativas de quem já foi convidado e começa processos novos (primeiro "Aguardando agendamento", depois os parados há mais tempo) até a quota do dia.
 - A quota acompanha a agenda (`nammux-interview-outreach-quota.ts`): horários livres de entrevista nos próximos 7 dias (consulta `seialz-interview-slots` no Nammux), menos as marcações esperadas dos convites dos últimos 3 dias, dividido pela taxa de quem marca (medida com 10 ou mais convidados; senão 35%). Agenda enchendo, menos convites; vazia, mais (teto de 60 por dia).

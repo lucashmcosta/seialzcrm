@@ -35,13 +35,14 @@ alter table public.nammux_notices drop constraint if exists nammux_notices_subje
 alter table public.nammux_notices add constraint nammux_notices_subject_type_check check (subject_type in (
   'event', 'finance', 'movement', 'interview_request', 'source_event', 'opportunity'));
 
--- Situações do Nammux em que o processo espera a entrevista ser marcada.
+-- Situações do Nammux em que o processo espera a entrevista ser marcada. "Agendada" fica de fora:
+-- mesmo com a data no passado, o Nammux diz que está marcada e o convite soaria errado.
 create or replace function public.nammux_interview_waiting_status(_status text)
 returns boolean
 language sql
 immutable
 as $$
-  select coalesce(_status in ('Aguardando agendamento', 'Não compareceu', 'Reagendada', 'Cancelada', 'Agendada'), false);
+  select coalesce(_status in ('Aguardando agendamento', 'Não compareceu', 'Reagendada', 'Cancelada'), false);
 $$;
 
 -- O processo ainda espera a entrevista? (etapa Entrevista, situação de espera, sem entrevista futura)
@@ -63,6 +64,24 @@ as $$
 $$;
 revoke all on function public.nammux_interview_still_waiting(uuid, uuid) from public, anon, authenticated;
 grant execute on function public.nammux_interview_still_waiting(uuid, uuid) to service_role;
+
+-- O modelo da Meta deste tipo está aprovado na org? Sem modelo aprovado não se planeja a tentativa:
+-- o worker pularia o envio (no_template) e a tentativa seria gasta à toa.
+create or replace function public.nammux_interview_outreach_template_ok(_organization_id uuid, _kind text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.nammux_notice_templates nt
+      join public.whatsapp_templates w on w.id = nt.whatsapp_template_id
+     where nt.organization_id = _organization_id and nt.kind = _kind
+       and w.status = 'approved' and coalesce(w.is_active, true));
+$$;
+revoke all on function public.nammux_interview_outreach_template_ok(uuid, text) from public, anon, authenticated;
+grant execute on function public.nammux_interview_outreach_template_ok(uuid, text) to service_role;
 
 -- Cadência: dia (desde o 1º convite) e tipo de cada tentativa.
 create or replace function public.nammux_interview_outreach_step(_attempt int)
@@ -88,6 +107,7 @@ declare
   r record;
   v_step record;
   v_next int;
+  v_prev_offset int;
   v_followups int := 0;
   v_started int := 0;
   v_quota int;
@@ -101,23 +121,29 @@ begin
 
   -- 1) Quem já está na cadência: próxima tentativa, se chegou o dia e o processo ainda espera.
   for r in
+    -- Tentativa = número no fim da chave. Toda tentativa criada conta, tenha saído ou não
+    -- (pulada, vencida, cancelada): a cadência segue para a próxima em vez de travar.
     select n.opportunity_id, n.contact_id,
-           count(*) filter (where n.status = 'sent') as sent,
-           min(n.created_at) filter (where n.dedup_key like '%:1') as first_at,
+           max(split_part(n.dedup_key, ':', 3)::int) as last_attempt,
+           min(coalesce(n.sent_at, n.created_at)) filter (where n.dedup_key like '%:1') as first_at,
            bool_or(n.status in ('scheduled', 'sending', 'pending_approval')) as open,
-           max(n.created_at) as last_at
+           max(coalesce(n.sent_at, n.created_at)) as last_at
       from public.nammux_notices n
      where n.organization_id = _organization_id and n.subject_type = 'opportunity'
        and n.kind in ('interview_invite', 'interview_invite_reminder', 'interview_last_call')
      group by n.opportunity_id, n.contact_id
   loop
-    continue when r.open or r.first_at is null or r.sent >= 5;
-    continue when (r.last_at at time zone 'America/Sao_Paulo')::date >= v_today;
+    continue when r.open or r.first_at is null or r.last_attempt >= 5;
     continue when not public.nammux_interview_still_waiting(_organization_id, r.opportunity_id);
-    v_next := r.sent + 1;
+    v_next := r.last_attempt + 1;
     select * into v_step from public.nammux_interview_outreach_step(v_next);
     continue when v_step.kind is null;
+    select s.day_offset into v_prev_offset from public.nammux_interview_outreach_step(r.last_attempt) s;
+    -- Chegou o dia contado do 1º convite E passou o intervalo desde a última tentativa
+    -- (sem isso, fim de semana ou um processo que volta à espera juntaria várias em dias seguidos).
     continue when (r.first_at at time zone 'America/Sao_Paulo')::date + v_step.day_offset > v_today;
+    continue when (r.last_at at time zone 'America/Sao_Paulo')::date + (v_step.day_offset - coalesce(v_prev_offset, 0)) > v_today;
+    continue when not public.nammux_interview_outreach_template_ok(_organization_id, v_step.kind);
     v_id := public.nammux_notice_enqueue(_organization_id, r.opportunity_id, r.contact_id, v_step.kind, 'opportunity',
       r.opportunity_id, null, null, 'interview_outreach:' || r.opportunity_id || ':' || v_next, v_send, v_expires, 'outreach');
     if v_id is not null then v_followups := v_followups + 1; end if;
@@ -133,7 +159,8 @@ begin
       join public.contacts c on c.id = o.contact_id
      where s.organization_id = _organization_id
        and s.stage_name = 'Entrevista' and public.nammux_interview_waiting_status(s.status_name)
-       and coalesce(c.phone, '') <> ''
+       and length(regexp_replace(coalesce(c.phone, ''), '\D', '', 'g')) >= 10
+       and coalesce(c.do_not_contact, false) = false and c.deleted_at is null
        and not exists (select 1 from public.nammux_notices n
                         where n.organization_id = _organization_id and n.contact_id = o.contact_id
                           and n.subject_type = 'opportunity'
@@ -142,7 +169,7 @@ begin
     ) x
     order by (x.status_name = 'Aguardando agendamento') desc, x.status_changed_at nulls first
   loop
-    exit when v_started >= v_quota;
+    exit when v_started >= v_quota or not public.nammux_interview_outreach_template_ok(_organization_id, 'interview_invite');
     continue when not public.nammux_interview_still_waiting(_organization_id, r.opportunity_id);
     v_id := public.nammux_notice_enqueue(_organization_id, r.opportunity_id, r.contact_id, 'interview_invite', 'opportunity',
       r.opportunity_id, null, null, 'interview_outreach:' || r.opportunity_id || ':1', v_send, v_expires, 'outreach');
