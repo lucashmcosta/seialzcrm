@@ -100,10 +100,10 @@ export default function MarketingPixel() {
                 <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
                   <li>{uiText('Formulários do site: acrescenta campos escondidos com a origem (utm_source, gclid, fbclid…). Funciona com os formulários que mandam os dados para o Seialz pelo webhook.')}</li>
                   <li>{uiText('Botões de WhatsApp: acrescenta um código curto no fim da mensagem, como [sz:AB12CD34]. Quando a mensagem chega, o Seialz liga a conversa à visita.')}</li>
-                  <li>{uiText('Não grava IP, navegador nem o que a pessoa digita. Visitas que não viram contato são apagadas depois de 13 meses.')}</li>
+                  <li>{uiText('Grava o IP da visita para casar com as conversões dos anúncios. Não grava o navegador nem o que a pessoa digita. Visitas que não viram contato são apagadas depois de 13 meses.')}</li>
                 </ul>
                 <p className="text-xs text-muted-foreground">
-                  {uiText('LGPD: o aviso de cookies do site precisa dizer que o site guarda a origem da visita para atendimento e medição de anúncios.')}
+                  {uiText('LGPD: o aviso de cookies e a política de privacidade do site precisam dizer que o site guarda a origem da visita e o IP para atendimento e medição de anúncios.')}
                 </p>
               </div>
             </>

@@ -1,6 +1,6 @@
 // site-pixel: recebe as visitas do pixel do Seialz (public/px/s.js).
-// Público (a chave px_ é pública, como a do chat do site). Grava só pistas de
-// origem, sem IP nem navegador. Devolve o código curto da visita, que o pixel
+// Público (a chave px_ é pública, como a do chat do site). Grava as pistas de
+// origem e o IP do visitante (para casar com as conversões), sem o navegador. Devolve o código curto da visita, que o pixel
 // põe nas mensagens de WhatsApp e nos formulários.
 import { serviceClient } from "../_shared/webchat.ts";
 import { cleanVisit } from "../_shared/site-pixel.ts";
@@ -12,6 +12,13 @@ const cors = {
 };
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+
+// Primeiro endereço da cadeia de proxies = o do visitante.
+function clientIp(req: Request): string | null {
+  const raw = req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for") || "";
+  const ip = raw.split(",")[0].trim();
+  return ip && ip.length <= 45 ? ip : null;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -33,6 +40,7 @@ Deno.serve(async (req) => {
     p_landing: visit.landingUrl,
     p_referrer_host: visit.referrerHost,
     p_evidence: visit.evidence,
+    p_ip: clientIp(req),
   });
   if (error) {
     console.error("[site-pixel] record failed", { code: error.code });
