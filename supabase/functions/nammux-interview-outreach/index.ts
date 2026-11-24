@@ -14,6 +14,7 @@ import { isInternalCaller } from "../_shared/integrations/internal-auth.ts";
 import { nammuxSignedPost } from "../_shared/integrations/nammux-client.ts";
 import { parseSlots } from "../_shared/integrations/nammux-agent-tools.ts";
 import { countSlotsWithin, outreachQuota } from "../_shared/integrations/nammux-interview-outreach-quota.ts";
+import { brazilNationalHoliday } from "../_shared/intelligence/agent-gate.ts";
 
 const FLAG = "nammux_interview_outreach";
 const json = (body: unknown, status = 200) =>
@@ -25,6 +26,14 @@ serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   if (!(await isInternalCaller(req, supabase))) return json({ error: "unauthorized" }, 401);
+
+  // Feriado nacional: ninguém da equipe para atender quem tocar em "Quero marcar". Fica para o próximo dia útil.
+  const [y, m, d] = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }).split("-").map(Number);
+  const holiday = brazilNationalHoliday(y, m, d);
+  if (holiday) {
+    console.log("[nammux-interview-outreach] feriado, sem convites hoje:", holiday);
+    return json({ ok: true, skipped: "holiday", holiday });
+  }
 
   const { data: flags, error: flagError } = await supabase.from("integration_feature_flags")
     .select("organization_id").eq("flag_key", FLAG).eq("enabled", true).not("organization_id", "is", null);
