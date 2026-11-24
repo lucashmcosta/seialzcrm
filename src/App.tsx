@@ -224,6 +224,7 @@ const MarketingWebhooks = lazyWithRetry("MarketingWebhooks", () => import("./pag
 const MarketingCampaigns = lazyWithRetry("MarketingCampaigns", () => import("./pages/marketing/campaigns/index"));
 const MarketingLinks = lazyWithRetry("MarketingLinks", () => import("./pages/marketing/links/index"));
 const MarketingPixel = lazyWithRetry("MarketingPixel", () => import("./pages/marketing/pixel/index"));
+const MarketingRetorno = lazyWithRetry("MarketingRetorno", () => import("./pages/marketing/retorno/index"));
 const SocialInboxPage = lazyWithRetry("SocialInboxPage", () => import("./pages/social/index"));
 const CommercialOriginsSettings = lazyWithRetry("CommercialOriginsSettings", () => import("./components/settings/CommercialOriginsSettings"), "CommercialOriginsSettings");
 const CommercialOriginsReport = lazyWithRetry("CommercialOriginsReport", () => import("./pages/commercial/OriginsReport"));
@@ -754,6 +755,7 @@ const App = () => (
           <Route path="/marketing/campaigns" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingCampaigns /></RequirePerm></ProtectedRoute>} />
           <Route path="/marketing/links" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingLinks /></RequirePerm></ProtectedRoute>} />
           <Route path="/marketing/pixel" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingPixel /></RequirePerm></ProtectedRoute>} />
+          <Route path="/marketing/retorno" element={<ProtectedRoute><RequirePerm path="ferramentas.marketing"><MarketingRetorno /></RequirePerm></ProtectedRoute>} />
           <Route path="/social" element={<ProtectedRoute><SocialInboxPage /></ProtectedRoute>} />
           <Route path="/commercial/origins" element={<ProtectedRoute><CommercialOriginsReport /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
