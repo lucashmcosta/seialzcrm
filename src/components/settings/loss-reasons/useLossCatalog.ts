@@ -31,7 +31,7 @@ export function useLossCatalog(organizationId: string | undefined, canManage: bo
       supabase.from('opportunity_loss_reason_details')
         .select('id,reason_id,code,name,help_text,order_index,is_active,requires_description,automation_only')
         .eq('organization_id', organizationId).order('order_index'),
-      supabase.from('opportunity_loss_settings').select('reason_required,detail_mode,ai_suggest').eq('organization_id', organizationId).maybeSingle(),
+      supabase.from('opportunity_loss_settings').select('reason_required,detail_mode,ai_suggest,close_conversation').eq('organization_id', organizationId).maybeSingle(),
       supabase.rpc('loss_reason_usage_v1', { _organization_id: organizationId }),
       supabase.from('pipeline_stages').select('id,name,order_index,type').eq('organization_id', organizationId).order('order_index'),
       supabase.from('opportunity_loss_stage_rules').select('id,stage_id,detail_id').eq('organization_id', organizationId),

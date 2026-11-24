@@ -24,6 +24,8 @@ import { lookupCepAddress, matchMaritalStatus, MARITAL_STATUS_FIELD, registratio
 import { showTypingIndicator } from "../_shared/meta-whatsapp/typing.ts";
 import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES, type WidgetClientMedia } from "../_shared/widgets/agent-tools.ts";
 import { contractToolsForAgent, SEND_CONTRACT_TOOL } from "../_shared/intelligence/contract-tool.ts";
+import { endConversationWithLoss, loadAgentLossOptions, markLostByAgent, markLostEnabled } from "../_shared/intelligence/agent-loss.ts";
+import type { LossOptions } from "../_shared/loss-suggestion.ts";
 
 /** No modo de teste nenhum arquivo é enviado: a bolha diz qual iria. */
 const mediaPlaceholder = (m: WidgetClientMedia) => `[${m.type === 'image' ? 'Imagem enviada' : 'Documento enviado'}: ${(m.caption ?? '').trim() || m.url.split('/').pop()}]`;
@@ -405,7 +407,7 @@ async function executeTool(
   supabase: any,
   toolName: string,
   args: any,
-  context: { contactId: string; organizationId: string; threadId: string; agentId?: string; timezone?: string }
+  context: { contactId: string; organizationId: string; threadId: string; agentId?: string; timezone?: string; lossOptions?: LossOptions | null }
 ): Promise<ToolResult> {
   // Só os nomes dos campos: os valores trazem nome, telefone e o que o cliente contou.
   console.log(`Executing tool: ${toolName}`, toolArgKeys(args));
@@ -624,13 +626,21 @@ async function executeTool(
       }
 
       case 'end_conversation': {
-        const { error } = await supabase.from('message_threads').update({
+        const { data: closed, error } = await supabase.from('message_threads').update({
           status: 'resolved',
           resolved_at: new Date().toISOString(),
           ai_agent_closed_at: new Date().toISOString(),
-          last_routing_decision: { action: 'agent_closed', reason: args.reason || 'caso não se encaixa', decided_at: new Date().toISOString() },
-        }).eq('id', context.threadId).not('ai_agent_id', 'is', null).is('ai_agent_released_at', null);
+          last_routing_decision: { action: 'agent_closed', reason: args.reason || 'caso não se encaixa', loss_code: args.loss_code ?? null, decided_at: new Date().toISOString() },
+        }).eq('id', context.threadId).not('ai_agent_id', 'is', null).is('ai_agent_released_at', null).select('id');
         if (error) return { success: false, message: error.message };
+        // Perde a oportunidade junto, só se a conversa ainda era do agente (não foi passada para a equipe).
+        if (context.lossOptions && args.loss_code && closed?.length) {
+          const loss = await markLostByAgent(supabase, {
+            organizationId: context.organizationId, contactId: context.contactId, agentId: context.agentId,
+            code: args.loss_code, reason: args.reason, options: context.lossOptions,
+          });
+          console.log('[end_conversation] perda', loss.lost ? 'gravada' : `não gravada: ${loss.note}`);
+        }
         return { success: true, message: 'Feito. Não escreva mais nada ao cliente sobre o encerramento.' };
       }
 
@@ -2010,6 +2020,9 @@ serve(async (req) => {
       rawSettings: (agent.tool_settings as Record<string, unknown> | null)?.[SEND_CONTRACT_TOOL],
       supabaseUrl: Deno.env.get('SUPABASE_URL')!, serviceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     }));
+    // Encerrar a conversa também perde a oportunidade (ligado por agente, com motivo cadastrado na org).
+    const lossOptions = toolsWithName.includes('end_conversation') && markLostEnabled(agent.tool_settings)
+      ? await loadAgentLossOptions(supabase, organizationId) : null;
     widgetTools.push(...await nammuxToolsForAgent(
       agent.agent_type,
       (flag) => featureFlagEnabled(supabase, flag, organizationId),
@@ -2359,7 +2372,8 @@ serve(async (req) => {
     // Filter enabled tools
     // Na retomada o agente só escreve: nada de passar para a equipe, agendar ou salvar dados.
     const tools: any[] = followUp ? [] : [
-      ...AVAILABLE_TOOLS.filter(t => enabledTools.includes(t.function.name)),
+      ...AVAILABLE_TOOLS.filter(t => enabledTools.includes(t.function.name))
+        .map((t) => t.function.name === 'end_conversation' ? endConversationWithLoss(t, lossOptions) : t),
       ...widgetTools.map((w) => ({ type: 'function', function: { name: w.name, description: w.description, parameters: w.parameters } })),
     ];
 
@@ -2533,7 +2547,7 @@ serve(async (req) => {
             supabase,
             toolUse.name,
             toolUse.input,
-            { contactId, organizationId, threadId, agentId, timezone: agent.working_hours?.timezone }
+            { contactId, organizationId, threadId, agentId, timezone: agent.working_hours?.timezone, lossOptions }
           );
 
           if (CLOSING_TOOLS.has(toolUse.name) && (result as { success?: boolean })?.success !== false) closedByTool = true;
@@ -2731,7 +2745,7 @@ serve(async (req) => {
             supabase,
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments || '{}'),
-            { contactId, organizationId, threadId, agentId, timezone: agent.working_hours?.timezone }
+            { contactId, organizationId, threadId, agentId, timezone: agent.working_hours?.timezone, lossOptions }
           );
 
           if (CLOSING_TOOLS.has(toolCall.function.name) && (result as { success?: boolean })?.success !== false) closedByTool = true;
