@@ -203,3 +203,17 @@ Deno.test("conflicting template orders and manual/automatic identity reject befo
  error="";try{buildMultiDocument([{...d,signatories:[k]},{...d,signatories:[{...k,identity:"suvsign-user:uid",signing_mode:"automatic",auto_user_id:"uid"}]}]);}catch(e){error=(e as Error).message;}
  assertEquals(error,"participant_signing_mode_conflict");
 });
+
+import { templateUsesCustom } from "./suvsign-v2.ts";
+Deno.test("templateUsesCustom: só exige o campo que o modelo usa", () => {
+  const frozen = { pages: [{ blocks: [
+    { type: "text", content: "Eu, [Custom.cpf], brasileiro(a), residente em [Custom.Endereco]" },
+    { type: "heading", content: "Contrato" },
+  ] }] };
+  assertEquals(templateUsesCustom(frozen, "cpf"), true);
+  assertEquals(templateUsesCustom(frozen, "rg"), false);
+  assertEquals(templateUsesCustom(frozen, "nationality"), false);
+  assertEquals(templateUsesCustom({ pages: [{ blocks: [{ type: "text", content: "RG [[Custom.rg]] [Custom.rg_issuer]" }] }] }, "rg"), true);
+  assertEquals(templateUsesCustom({ pages: [{ blocks: [{ type: "text", content: "[Custom.rg_issuer]" }] }] }, "rg"), false);
+  assertEquals(templateUsesCustom(null, "rg"), false);
+});
