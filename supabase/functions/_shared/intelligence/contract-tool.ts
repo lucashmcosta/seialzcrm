@@ -183,12 +183,19 @@ export async function runSendContract(args: any, deps: ContractToolDeps): Promis
   if (!deps.settings) {
     return { modelMessage: `A ferramenta de contrato não está configurada. ${HANDOFF} que a cliente quer contratar e os dados estão no cadastro.` };
   }
+  const { values, problems } = opportunityFieldValues(deps.opportunityFieldDefs, args?.opportunity_fields);
+  if (problems.length) return { modelMessage: `Problema nos dados do caso: ${problems.join("; ")}. Corrija pelo que ela contou (ou pergunte, uma vez) e chame send_contract de novo.` };
+
+  // Simulador: sem contato nem oportunidade de verdade; só confere os dados do caso e simula o envio.
+  if (deps.isTestMode) {
+    return { modelMessage: "Modo de teste: o CPF seria conferido e o contrato gerado e enviado agora; o link de assinatura iria logo depois da sua mensagem. Diga em uma frase curta que o contrato está pronto e que ela lê com calma e assina pelo celular." };
+  }
+
   const opp = await deps.openOpportunity();
   if (!opp) return { modelMessage: `Não achei uma oportunidade aberta desta cliente. ${HANDOFF} "contrato: sem oportunidade aberta".` };
 
   // Autor do contrato: o dono da oportunidade; sem dono usável, o responsável configurado.
-  const author = deps.isTestMode ? "test"
-    : opp.owner_user_id && await deps.isUsableAuthor(opp.owner_user_id) ? opp.owner_user_id
+  const author = opp.owner_user_id && await deps.isUsableAuthor(opp.owner_user_id) ? opp.owner_user_id
     : deps.settings.responsible_user_id && await deps.isUsableAuthor(deps.settings.responsible_user_id) ? deps.settings.responsible_user_id
     : null;
   if (!author) return { modelMessage: `Não há uma pessoa responsável para assinar o envio do contrato. ${HANDOFF} "contrato: sem responsável".` };
@@ -196,7 +203,6 @@ export async function runSendContract(args: any, deps: ContractToolDeps): Promis
   // Já enviado: manda o link de novo em vez de gerar outro contrato.
   const existing = await deps.existingRequest(opp.id);
   if (existing && ["sent", "in_progress"].includes(existing.status)) {
-    if (deps.isTestMode) return { modelMessage: "Modo de teste: o contrato já teria sido enviado; o link iria de novo." };
     const link = await signingLink(existing.id, deps, author);
     return link
       ? { modelMessage: "O contrato já tinha sido enviado. O link vai de novo logo depois da sua mensagem: diga em uma frase curta que é só abrir e assinar. Não escreva o link.", clientText: linkText(link) }
@@ -216,13 +222,6 @@ export async function runSendContract(args: any, deps: ContractToolDeps): Promis
   if (String(contact?.address_zip ?? "").trim() && !String(contact?.address_street ?? "").trim()) missing.push("nome da rua");
   if (missing.length) {
     return { modelMessage: `Antes do contrato falta: ${missing.join(", ")}. Peça só isso, grave com save_registration_data e chame send_contract de novo.` };
-  }
-
-  const { values, problems } = opportunityFieldValues(deps.opportunityFieldDefs, args?.opportunity_fields);
-  if (problems.length) return { modelMessage: `Problema nos dados do caso: ${problems.join("; ")}. Corrija pelo que ela contou (ou pergunte, uma vez) e chame send_contract de novo.` };
-
-  if (deps.isTestMode) {
-    return { modelMessage: "Modo de teste: o CPF seria conferido e o contrato gerado e enviado agora; o link de assinatura iria logo depois da sua mensagem. Diga em uma frase curta que o contrato está pronto e que ela lê com calma e assina pelo celular." };
   }
 
   // CPF verificado (exigido para o ganho). O nome oficial entra no cadastro se bater com o que ela mandou.

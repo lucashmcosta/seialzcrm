@@ -146,6 +146,13 @@ Deno.test("sem responsável usável: passa para a equipe", async () => {
   assertEquals(calls.length, 0);
 });
 
+Deno.test("modo de teste sem contato nem oportunidade: simula o envio", async () => {
+  const { deps, calls } = fakeDeps({ isTestMode: true, openOpportunity: async () => null, contact: async () => null });
+  const out = await runSendContract(ARGS, deps);
+  assert(out.modelMessage.startsWith("Modo de teste"));
+  assertEquals(calls.length, 0);
+});
+
 Deno.test("modo de teste: simula, sem consultar CPF nem enviar", async () => {
   let consulted = false;
   const { deps, calls } = fakeDeps({ isTestMode: true, verifyCpf: async () => { consulted = true; return { status: 200, body: {} }; } });
