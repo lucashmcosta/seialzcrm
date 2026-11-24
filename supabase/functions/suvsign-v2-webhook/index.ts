@@ -147,6 +147,13 @@ async function storePdf(admin: Any, r: Any, payload: Any): Promise<{ ok: boolean
   return { ok: true };
 }
 
+/** O agente pediu para seguir com a conversa depois da assinatura até o ganho? */
+async function keepsAgentUntilWon(admin: Any, agentId: string | null): Promise<boolean> {
+  if (!agentId) return false;
+  const { data } = await admin.from("ai_agents").select("tool_settings").eq("id", agentId).maybeSingle();
+  return data?.tool_settings?.send_contract?.after_signed === "keep_agent_until_won";
+}
+
 /** Dia de hoje em Brasília (AAAA-MM-DD). */
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 
@@ -171,9 +178,22 @@ async function winAfterAgentContract(admin: Any, r: Any) {
   if (!won) console.warn("[suvsign-v2-webhook] ganho automático não aplicado", { opp: r.opportunity_id, reason });
 
   // A conversa do agente com a cliente passa para a equipe, com o próximo passo.
-  const { data: thread } = await admin.from("message_threads").select("id")
+  const { data: thread } = await admin.from("message_threads").select("id, ai_agent_id")
     .eq("organization_id", r.organization_id).eq("contact_id", r.contact_id).not("ai_agent_id", "is", null)
     .order("last_message_at", { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
+  // Opção do agente (tool_settings.send_contract.after_signed = "keep_agent_until_won"): se o ganho
+  // ainda não foi aplicado (ex.: faltam documentos da regra de fechamento), a conversa fica com o
+  // agente, que segue pedindo os documentos e passa para a equipe quando chegarem.
+  if (thread?.id && !won && await keepsAgentUntilWon(admin, thread.ai_agent_id)) {
+    const { error } = await admin.from("messages").insert({
+      organization_id: r.organization_id, thread_id: thread.id, direction: "internal", is_internal_note: true,
+      sender_type: "system", sender_agent_id: thread.ai_agent_id,
+      content: `Contrato assinado pela cliente. Ainda não foi para Ganho (${reason}). O agente segue pedindo os documentos e passa para a equipe quando chegarem.`,
+      sent_at: new Date().toISOString(),
+    });
+    if (error) console.warn("[suvsign-v2-webhook] nota do contrato assinado falhou", error.message);
+    return;
+  }
   if (thread?.id) {
     const summary = won
       ? "Contrato assinado pela cliente. A oportunidade foi marcada como Ganho. Próximo passo: seguir com os documentos e o pedido."
