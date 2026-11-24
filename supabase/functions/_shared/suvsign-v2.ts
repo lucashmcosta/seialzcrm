@@ -146,6 +146,20 @@ export function findUnresolvedPlaceholders(frozen: Any, roleRefs: string[] = [])
   return [...found];
 }
 
+// O modelo usa [Custom.<chave>] em algum bloco de texto? (para só exigir o dado que o contrato usa)
+export function templateUsesCustom(frozen: Any, key: string): boolean {
+  const re = varRe(`Custom\\.${esc(key)}`);
+  let used = false;
+  const walk = (x: Any) => {
+    if (used) return;
+    if (typeof x === "string") { if (!x.startsWith("data:") && (re.lastIndex = 0, re.test(x))) used = true; }
+    else if (Array.isArray(x)) x.forEach(walk);
+    else if (x && typeof x === "object") Object.values(x).forEach(walk);
+  };
+  walk(frozen);
+  return used;
+}
+
 export function friendlyTemplateError(code: string | undefined): string {
   if (code === "template_not_v2_compatible" || code === "template_has_no_v2_definition" || code === "template_has_invalid_fields") {
     return "Este modelo ainda não é compatível com o novo fluxo de assinatura.";

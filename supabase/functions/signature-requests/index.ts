@@ -13,7 +13,7 @@ const SIGNING_V2_PILOT_FLAG = "signing.suvsign_v2_pilot";
 import {
   canonicalJson, CrmPerson, DEFAULT_V2_BASE, fillFrozenContent, findUnresolvedPlaceholders, friendlyTemplateError, loadV2Credentials,
   mapOperationStatus, sha256Hex, buildMultiDocument, resolveTemplateSignatories, buildDealCustom, SIGNING_V2_FLAG, suvsignFetch,
-  isDiscardableDraft, discardDraftAtomic, automaticSigningError,
+  isDiscardableDraft, discardDraftAtomic, automaticSigningError, templateUsesCustom,
 } from "../_shared/suvsign-v2.ts";
 
 const cors = {
@@ -335,8 +335,12 @@ Deno.serve(async (req) => {
         if (onlyDocx) { if (!firstName) missing.push("Nome"); req("E-mail", contact.email); }
         else {
         if (!firstName) missing.push("Nome");
-        req("Email", contact.email); req("Telefone", contact.phone); req("CPF", contact.cpf); req("RG", contact.rg);
-        req("Órgão Emissor do RG", contact.rg_issuer); req("Nacionalidade", contact.nationality);
+        req("Email", contact.email); req("Telefone", contact.phone); req("CPF", contact.cpf);
+        // RG, órgão emissor e nacionalidade só são exigidos quando algum modelo escolhido usa o campo.
+        const uses = (key: string) => defs.some((d) => d.def?.source_format !== "docx" && templateUsesCustom(d.def?.frozen_content, key));
+        if (uses("rg")) req("RG", contact.rg);
+        if (uses("rg_issuer")) req("Órgão Emissor do RG", contact.rg_issuer);
+        if (uses("nationality")) req("Nacionalidade", contact.nationality);
         req("Endereço", contact.address_street); req("Bairro", contact.address_neighborhood); req("Cidade", contact.address_city);
         req("Estado", contact.address_state); req("CEP", contact.address_zip);
         }
