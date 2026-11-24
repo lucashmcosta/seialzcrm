@@ -40,7 +40,7 @@ function AgentStats({ stats }: { stats: InboxAgentStats }) {
 const TABS: { id: InboxTab; label: string }[] = [
   { id: 'active', label: 'Ativos' },
   { id: 'waiting', label: 'Aguardando' },
-  { id: 'resolved_today', label: 'Concluídos hoje' },
+  { id: 'resolved_today', label: 'Concluídos 7 dias' },
 ];
 
 export function InboxMetricsBar({ counts, active, onChange, onlyMine, onOnlyMineChange, onNewConversation, agentStats }: Props) {

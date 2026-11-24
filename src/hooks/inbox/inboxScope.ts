@@ -104,6 +104,16 @@ export function startOfDayIso(timezone: string | null): string {
   }
 }
 
+/** A aba de concluídos mostra os últimos dias, não só hoje. */
+export const RESOLVED_DAYS = 7;
+
+/** Início do dia de RESOLVED_DAYS - 1 dias atrás (hoje conta como 1). */
+export function resolvedSinceIso(timezone: string | null): string {
+  const start = new Date(startOfDayIso(timezone));
+  start.setUTCDate(start.getUTCDate() - (RESOLVED_DAYS - 1));
+  return start.toISOString();
+}
+
 export async function fetchInboxScopedThreads(
   p: ScopeParams,
 ): Promise<{ rows: InboxScopedThread[]; debug: ScopeDebug }> {
@@ -116,7 +126,7 @@ export async function fetchInboxScopedThreads(
     p_tab: p.tab,
     p_only_mine: !!p.onlyMine,
     p_assigned_user_id: p.onlyMine ? p.internalUserId : null,
-    p_resolved_since: startOfDayIso(p.orgTimezone),
+    p_resolved_since: resolvedSinceIso(p.orgTimezone),
     p_include_service_endpoints: !!p.csIncludesServiceEndpoints,
     p_limit: p.limit ?? 200,
     // Só enviado quando true: mantém a chamada idêntica à anterior por padrão.
@@ -149,7 +159,7 @@ export async function fetchInboxScopedCounts(
     p_organization_id: p.organizationId,
     p_only_mine: !!p.onlyMine,
     p_assigned_user_id: p.onlyMine ? p.internalUserId : null,
-    p_resolved_since: startOfDayIso(p.orgTimezone),
+    p_resolved_since: resolvedSinceIso(p.orgTimezone),
     p_include_service_endpoints: !!p.csIncludesServiceEndpoints,
   } as any);
 
