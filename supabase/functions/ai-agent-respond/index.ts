@@ -26,6 +26,7 @@ import { activeWidgetTools, widgetToolsPrompt, WIDGET_TOOL_NAMES, type WidgetCli
 import { contractToolsForAgent, SEND_CONTRACT_TOOL } from "../_shared/intelligence/contract-tool.ts";
 import { endConversationWithLoss, loadAgentLossOptions, markLostByAgent, markLostEnabled } from "../_shared/intelligence/agent-loss.ts";
 import type { LossOptions } from "../_shared/loss-suggestion.ts";
+import { applyFunnelRule, CLASSIFY_LEAD_TOOL, funnelToolsForAgent } from "../_shared/intelligence/funnel-tool.ts";
 
 /** No modo de teste nenhum arquivo é enviado: a bolha diz qual iria. */
 const mediaPlaceholder = (m: WidgetClientMedia) => `[${m.type === 'image' ? 'Imagem enviada' : 'Documento enviado'}: ${(m.caption ?? '').trim() || m.url.split('/').pop()}]`;
@@ -2023,6 +2024,12 @@ serve(async (req) => {
     // Encerrar a conversa também perde a oportunidade (ligado por agente, com motivo cadastrado na org).
     const lossOptions = toolsWithName.includes('end_conversation') && markLostEnabled(agent.tool_settings)
       ? await loadAgentLossOptions(supabase, organizationId) : null;
+    // Funil pelo agente: registrar a conclusão do caso move a oportunidade (configurado no agente).
+    const funnelCtx = {
+      supabase, organizationId, contactId: contactId ?? null, threadId: threadId ?? null, agentId: agent.id,
+      isTestMode: !!isTestMode, rawSettings: (agent.tool_settings as Record<string, unknown> | null)?.[CLASSIFY_LEAD_TOOL],
+    };
+    widgetTools.push(...await funnelToolsForAgent(toolsWithName, funnelCtx));
     widgetTools.push(...await nammuxToolsForAgent(
       agent.agent_type,
       (flag) => featureFlagEnabled(supabase, flag, organizationId),
@@ -2979,6 +2986,19 @@ serve(async (req) => {
             .eq('id', threadId).not('ai_agent_id', 'is', null).is('ai_agent_released_at', null).is('assigned_user_id', null);
           if (closeError) console.warn('[ai-agent-respond] não fechou de novo após a despedida', closeError.message);
         }
+      }
+    }
+
+    // Funil pelo agente, por regra (sem o modelo): a lead respondeu, ou o agente passou para a
+    // equipe sem registrar a conclusão. Só avança; nunca derruba a resposta.
+    if (!followUp && toolsWithName.includes(CLASSIFY_LEAD_TOOL)) {
+      try {
+        await applyFunnelRule('reply', funnelCtx);
+        if (toolsExecuted.includes('transfer_to_human') && !toolsExecuted.includes(CLASSIFY_LEAD_TOOL)) {
+          await applyFunnelRule('handoff', funnelCtx);
+        }
+      } catch (e) {
+        console.warn(`[${CLASSIFY_LEAD_TOOL}] regra do funil falhou`, (e as Error).message);
       }
     }
 
