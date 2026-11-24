@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from '@/hooks/use-toast';
@@ -38,6 +39,7 @@ export function LossDialog({ open, onOpenChange, opportunityIds, opportunityTitl
   const [choice, setChoice] = useState<LossChoice>(EMPTY_LOSS_CHOICE);
   const [saving, setSaving] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
+  const [closeConversation, setCloseConversation] = useState(true);
   const [suggestion, setSuggestion] = useState<LossSuggestion | null>(null);
   const batch = opportunityIds.length > 1;
   const singleId = batch ? null : opportunityIds[0] ?? null;
@@ -47,6 +49,7 @@ export function LossDialog({ open, onOpenChange, opportunityIds, opportunityTitl
     setDate(initialCloseDate || today());
     setChoice(EMPTY_LOSS_CHOICE);
     setSuggestion(null);
+    setCloseConversation(true);
   }, [open, initialCloseDate]);
 
   // Sugestão da IA (só uma oportunidade por vez): pré-seleciona se a pessoa ainda não escolheu nada.
@@ -93,6 +96,10 @@ export function LossDialog({ open, onOpenChange, opportunityIds, opportunityTitl
       });
       return;
     }
+    // Org em "perguntar": a pessoa deixou marcado → encerra a conversa (o banco pula quem tem outra oportunidade aberta).
+    if (options.close_conversation === 'ask' && closeConversation) {
+      await supabase.rpc('close_conversations_after_loss_v1', { _organization_id: organization.id, _opportunity_ids: opportunityIds });
+    }
     toast({ title: batch ? uiText('{0} oportunidades marcadas como perdidas', { 0: opportunityIds.length }) : uiText('Oportunidade marcada como perdida') });
     await onSuccess();
     onOpenChange(false);
@@ -130,6 +137,12 @@ export function LossDialog({ open, onOpenChange, opportunityIds, opportunityTitl
                 {suggestion.evidence ? <> “{suggestion.evidence}”</> : null}
               </span>
             </p>
+          )}
+          {!loading && options.close_conversation === 'ask' && (
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={closeConversation} onCheckedChange={(v) => setCloseConversation(v === true)} disabled={saving} />
+              {batch ? uiText('Encerrar as conversas com os clientes') : uiText('Encerrar a conversa com o cliente')}
+            </label>
           )}
           {problem && (choice.reasonId || choice.detailId || choice.description) && <p className="text-xs text-destructive">{problem}</p>}
         </div>

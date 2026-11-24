@@ -10755,6 +10755,7 @@ export type Database = {
       opportunity_loss_settings: {
         Row: {
           ai_suggest: boolean
+          close_conversation: string
           created_at: string
           created_by: string | null
           detail_mode: string
@@ -10765,6 +10766,7 @@ export type Database = {
         }
         Insert: {
           ai_suggest?: boolean
+          close_conversation?: string
           created_at?: string
           created_by?: string | null
           detail_mode?: string
@@ -10775,6 +10777,7 @@ export type Database = {
         }
         Update: {
           ai_suggest?: boolean
+          close_conversation?: string
           created_at?: string
           created_by?: string | null
           detail_mode?: string
@@ -17389,6 +17392,10 @@ export type Database = {
       loss_reason_usage_v1: {
         Args: { _organization_id: string }
         Returns: Json
+      }
+      close_conversations_after_loss_v1: {
+        Args: { _opportunity_ids: string[]; _organization_id: string }
+        Returns: number
       }
       loss_suggestion_stats_v1: {
         Args: { _days?: number; _organization_id: string }

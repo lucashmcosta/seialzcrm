@@ -76,15 +76,26 @@ export function parseSuggestion(raw: string, options: LossOptions): LossSuggesti
   if (!match) return null;
   let data: any;
   try { data = JSON.parse(match[0]); } catch { return null; }
-  const code = typeof data?.code === "string" ? data.code.trim().toUpperCase() : "";
-  if (!code) return null;
+  const code = data?.code;
   const confidence = Math.max(0, Math.min(1, Number(data.confidence) || 0));
   const evidence = typeof data.evidence === "string" ? data.evidence.trim().slice(0, 500) : "";
+  const found = resolveLossCode(code, options);
+  return found ? { ...found, confidence, evidence } : null;
+}
+
+/** Código de detalhe (A1) ou de motivo (A) → ids do cadastro. null = fora do cadastro. */
+export function resolveLossCode(code: unknown, options: LossOptions): { reasonId: string; detailId: string | null } | null {
+  const c = typeof code === "string" ? code.trim().toUpperCase() : "";
+  if (!c) return null;
   for (const r of options.reasons) {
-    const d = r.details.find((x) => x.code.toUpperCase() === code);
-    if (d) return { reasonId: r.id, detailId: d.id, confidence, evidence };
+    const d = r.details.find((x) => x.code.toUpperCase() === c);
+    if (d) return { reasonId: r.id, detailId: d.id };
   }
-  const reason = options.reasons.find((r) => r.code.toUpperCase() === code);
-  if (reason) return { reasonId: reason.id, detailId: null, confidence, evidence };
-  return null;
+  const reason = options.reasons.find((r) => r.code.toUpperCase() === c);
+  return reason ? { reasonId: reason.id, detailId: null } : null;
+}
+
+/** Códigos que podem ser escolhidos: o detalhe quando o motivo tem, senão o próprio motivo. */
+export function lossCodes(options: LossOptions): string[] {
+  return options.reasons.flatMap((r) => r.details.length ? r.details.map((d) => d.code) : [r.code]);
 }

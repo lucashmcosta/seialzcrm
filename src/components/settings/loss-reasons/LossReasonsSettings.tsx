@@ -16,12 +16,13 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from '@/hooks/use-toast';
 import { uiText, useUiLocale } from '@/lib/ui-locale';
 import {
-  lossErrorMessage, reorderLossItems, type LossDetail, type LossDetailMode, type LossReason, type LossSettings,
+  lossErrorMessage, reorderLossItems, type LossDetail, type LossDetailMode, type LossCloseConversation, type LossReason, type LossSettings,
 } from '@/lib/lossReasons';
 import { useLossCatalog } from './useLossCatalog';
 import { LossReasonDialog } from './LossReasonDialog';
 import { LossDetailDialog } from './LossDetailDialog';
 import { LossStageRulesCard } from './LossStageRulesCard';
+import { LossAgentsCard } from './LossAgentsCard';
 
 type DeleteTarget = { kind: 'reason'; item: LossReason } | { kind: 'detail'; item: LossDetail };
 
@@ -59,7 +60,7 @@ export function LossReasonsSettings() {
   const detailInRule = (d: LossDetail) => rules.some((r) => r.detail_id === d.id);
   const hasActiveReason = reasons.some((r) => r.is_active);
   const settingsDirty = draft.reason_required !== settings.reason_required || draft.detail_mode !== settings.detail_mode
-    || draft.ai_suggest !== settings.ai_suggest;
+    || draft.ai_suggest !== settings.ai_suggest || draft.close_conversation !== settings.close_conversation;
 
   const saveSettings = async () => {
     setSavingSettings(true);
@@ -231,6 +232,22 @@ export function LossReasonsSettings() {
               </SelectContent>
             </Select>
           </div>
+          <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Label>{uiText('Encerrar a conversa ao perder')}</Label>
+              <p className="text-xs text-muted-foreground">
+                {uiText('Não encerra se o contato tiver outra oportunidade aberta nem conversa de atendimento. Se o cliente voltar a escrever, a conversa reabre.')}
+              </p>
+            </div>
+            <Select value={draft.close_conversation} disabled={!canManage} onValueChange={(v) => setDraft({ ...draft, close_conversation: v as LossCloseConversation })}>
+              <SelectTrigger className="sm:w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="never">{uiText('Nunca')}</SelectItem>
+                <SelectItem value="ask">{uiText('Perguntar na hora')}</SelectItem>
+                <SelectItem value="always">{uiText('Sempre')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
             <div>
               <Label>{uiText('IA sugere o motivo')}</Label>
@@ -255,6 +272,8 @@ export function LossReasonsSettings() {
           )}
         </CardContent>
       </Card>
+
+      <LossAgentsCard organizationId={orgId} canManage={canManage} hasActiveReason={hasActiveReason} />
 
       <LossStageRulesCard organizationId={orgId} canManage={canManage} stages={stages} rules={rules} issues={issues}
         reasons={reasons} details={details} onChanged={reload} />

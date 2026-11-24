@@ -27,10 +27,12 @@ export interface LossSettings {
   detail_mode: LossDetailMode;
   /** IA sugere o motivo lendo a conversa (precisa de chave de IA da org). */
   ai_suggest: boolean;
+  /** Perder também encerra a conversa: nunca, perguntar na tela ou sempre. */
+  close_conversation: LossCloseConversation;
 }
 
 /** Org sem linha em opportunity_loss_settings usa este padrão (igual ao banco). */
-export const DEFAULT_LOSS_SETTINGS: LossSettings = { reason_required: true, detail_mode: 'optional', ai_suggest: true };
+export const DEFAULT_LOSS_SETTINGS: LossSettings = { reason_required: true, detail_mode: 'optional', ai_suggest: true, close_conversation: 'ask' };
 
 /**
  * Move o item uma posição para cima/baixo e devolve só as linhas cujo order_index mudou.
@@ -117,7 +119,9 @@ export const rpcNullable = (value: string | null | undefined) => (value ?? null)
 /** Resposta de list_loss_reason_options_v1: só o que a pessoa pode escolher. */
 export interface LossOptionDetail { id: string; code: string; name: string; help_text: string | null; requires_description: boolean }
 export interface LossOptionReason { id: string; code: string; name: string; details: LossOptionDetail[] }
-export interface LossOptions { reason_required: boolean; detail_mode: LossDetailMode; reasons: LossOptionReason[] }
+export type LossCloseConversation = 'never' | 'ask' | 'always';
+
+export interface LossOptions { reason_required: boolean; detail_mode: LossDetailMode; close_conversation?: LossCloseConversation; reasons: LossOptionReason[] }
 
 export const EMPTY_LOSS_OPTIONS: LossOptions = { reason_required: false, detail_mode: 'optional', reasons: [] };
 
