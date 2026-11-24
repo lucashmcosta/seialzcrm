@@ -190,3 +190,7 @@ Processo na etapa "Entrevista" do Nammux, numa situação de espera (aguardando 
 - `nammux-interview-outreach` roda em dias úteis às 09:05 (pg_cron); em feriado nacional (`brazilNationalHoliday`) não faz nada. Agenda as próximas tentativas de quem já foi convidado e começa processos novos (primeiro "Aguardando agendamento", depois os parados há mais tempo) até a quota do dia.
 - A quota acompanha a agenda (`nammux-interview-outreach-quota.ts`): horários livres de entrevista nos próximos 7 dias (consulta `seialz-interview-slots` no Nammux), menos as marcações esperadas dos convites dos últimos 3 dias, dividido pela taxa de quem marca (medida com 10 ou mais convidados; senão 35%). Agenda enchendo, menos convites; vazia, mais (teto de 60 por dia). O Nammux devolve até 120 horários; como 120 livres já levam ao teto, o limite não reduz a quota.
 - Resposta: "Quero marcar" vira uma nota para o agente de atendimento consultar e oferecer horários; "Falar com a equipe" faz o agente passar a conversa (`nammux-interview-outreach-reply.ts`).
+
+## Entrevista por ligação
+
+Entrevista sem link e sem local é por ligação (`isPhoneInterview`). Nos avisos de agenda, o "como participar" vira "É por ligação: vamos te ligar nesse horário, então deixe o celular por perto." No "está começando" a entrevista usa um modelo próprio (`interview_starting_call`, sem variável): "Sua entrevista é agora. Vamos te ligar nos próximos minutos…", em vez do texto geral que manda entrar no link.

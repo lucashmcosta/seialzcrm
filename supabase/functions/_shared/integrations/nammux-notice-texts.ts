@@ -92,8 +92,15 @@ export function howToJoin(e: EventState): string {
   const link = meetingLinkText(e.virtual_link);
   if (link) return `É por vídeo, neste link: ${link}`;
   if (e.location) return `É presencial, neste local: ${e.location}`;
+  if (isPhoneInterview(e)) return PHONE_INTERVIEW_JOIN;
   return "O escritório vai informar como participar.";
 }
+
+/** Entrevista sem link nem local: é por ligação, o escritório liga para o cliente. */
+export function isPhoneInterview(e: EventState): boolean {
+  return e.event_type === "entrevista" && !meetingLinkText(e.virtual_link) && !e.location;
+}
+export const PHONE_INTERVIEW_JOIN = "É por ligação: vamos te ligar nesse horário, então deixe o celular por perto.";
 
 /** Variável de modelo não aceita quebra de linha, tabulação nem vários espaços seguidos. */
 function clean(value: string): string {
@@ -152,6 +159,11 @@ export const INTERVIEW_REMINDER_1D_TEMPLATE =
 
 const HORA_A_CONFIRMAR = "horário a confirmar";
 
+/** Entrevista por ligação começando: modelo próprio (o geral manda "entrar" no link). */
+export const INTERVIEW_STARTING_KEY = "interview_starting_call";
+export const INTERVIEW_STARTING_CALL_TEXT =
+  "Sua entrevista é agora. Vamos te ligar nos próximos minutos: deixe o celular por perto e atenda mesmo que o número não esteja salvo. Se tiver algum problema, responda esta mensagem.";
+
 export function renderEventNotice(kind: NoticeKind, e: EventState, expectedStartAt: string | null): RenderResult {
   const name = EVENT_NAME[e.event_type] ?? "compromisso";
   const date = longDate(e.start_at, e.timezone);
@@ -188,6 +200,9 @@ export function renderEventNotice(kind: NoticeKind, e: EventState, expectedStart
       return build(`Sua ${name} começa em 1 hora`, NOTICE_TEMPLATES.event_reminder_1h, [name, time, join]);
     case "event_starting":
       if (e.all_day) return { ok: false, reason: "subject_changed" };
+      if (isPhoneInterview(e)) {
+        return { ok: true, rendered: { title: "Sua entrevista é agora", text: INTERVIEW_STARTING_CALL_TEXT, variables: [], templateKey: INTERVIEW_STARTING_KEY } };
+      }
       return build(`Sua ${name} está iniciando`, NOTICE_TEMPLATES.event_starting, [name, join]);
     default:
       return { ok: false, reason: "kind_mismatch" };
