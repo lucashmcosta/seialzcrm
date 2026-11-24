@@ -3,7 +3,7 @@ import { uiText, useUiLocale } from '@/lib/ui-locale';
 import { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
-import { ChartBar, Megaphone, Funnel, ChartLine, House, InstagramLogo, PaperPlaneTilt, ChatCircle, BellRinging, LinkSimple } from '@phosphor-icons/react';
+import { ChartBar, Megaphone, Funnel, ChartLine, House, InstagramLogo, PaperPlaneTilt, ChatCircle, BellRinging, LinkSimple, Crosshair } from '@phosphor-icons/react';
 import { useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -16,6 +16,7 @@ const BASE_TABS = [
   { href: '/marketing/funnel', get label() { return uiText("Funil"); }, icon: Funnel },
   { href: '/marketing/timeline', get label() { return uiText("Histórico"); }, icon: ChartLine },
   { href: '/marketing/links', get label() { return uiText("Links"); }, icon: LinkSimple },
+  { href: '/marketing/pixel', get label() { return uiText("Pixel"); }, icon: Crosshair },
 ];
 
 export function MarketingLayout({ children, title }: { children: ReactNode; title?: string }) {
