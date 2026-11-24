@@ -48,7 +48,7 @@ Deno.test("os sete avisos de agenda, com perícia presencial e entrevista sem lo
   assertStringIncludes(text(renderEventNotice("event_reminder_1d", AUD, AUD.start_at)), "sua audiência é amanhã, quinta-feira, 10/12/2026");
   assertEquals(text(renderEventNotice("event_reminder_1h", AUD, AUD.start_at)), "Sua audiência começa em 1 hora, às 10:00 (horário de Brasília). É por vídeo, neste link: https://exemplo.invalid/sala Se tiver algum problema, responda esta mensagem.");
   assertEquals(text(renderEventNotice("event_starting", AUD, AUD.start_at)), "Sua audiência está começando agora. Entre o quanto antes para não perder o horário. É por vídeo, neste link: https://exemplo.invalid/sala Se tiver algum problema para entrar, responda esta mensagem.");
-  assertStringIncludes(text(renderEventNotice("event_scheduled", entrevista, entrevista.start_at)), "Sua entrevista foi marcada para quinta-feira, 10/12/2026, às 10:00 (horário de Brasília). O escritório vai informar como participar.");
+  assertStringIncludes(text(renderEventNotice("event_scheduled", entrevista, entrevista.start_at)), "Sua entrevista foi marcada para quinta-feira, 10/12/2026, às 10:00 (horário de Brasília). É por ligação: vamos te ligar nesse horário, então deixe o celular por perto.");
   assertEquals(text(renderEventNotice("event_cancelled", { ...AUD, status: "cancelado" }, AUD.start_at)), "Sua audiência do dia quinta-feira, 10/12/2026 foi cancelada. Assim que houver nova data, avisamos você por aqui.");
 });
 
@@ -287,4 +287,17 @@ Deno.test("aviso de tribunal em outro fuso diz a hora local e a de Brasília", (
   assertEquals(r.ok && r.rendered.variables[2], "09:00 (horário de Campo Grande; 10:00 no horário de Brasília)");
   const lembrete = renderEventNotice("event_reminder_1h", { ...AUD, timezone: "America/Manaus" }, AUD.start_at);
   assertStringIncludes(text(lembrete), "às 09:00 (horário de Manaus; 10:00 no horário de Brasília)");
+});
+
+Deno.test("entrevista por ligação: texto de ligação, e o \"começando\" usa modelo próprio", () => {
+  const ent = { event_type: "entrevista", status: "pendente", start_at: "2026-12-10T13:00:00Z", all_day: false, timezone: "America/Sao_Paulo", modality: null, location: null, virtual_link: null, removed_at: null };
+  const r1h = renderEventNotice("event_reminder_1h", ent, ent.start_at);
+  assertStringIncludes(r1h.ok ? r1h.rendered.text : "", "vamos te ligar");
+  const st = renderEventNotice("event_starting", ent, ent.start_at);
+  assertEquals(st.ok && st.rendered.templateKey, "interview_starting_call");
+  assertEquals(st.ok && st.rendered.variables, []);
+  assertStringIncludes(st.ok ? st.rendered.text : "", "Vamos te ligar nos próximos minutos");
+  // Entrevista com link continua com o texto de vídeo.
+  const vid = renderEventNotice("event_starting", { ...ent, virtual_link: "https://exemplo.invalid/sala" }, ent.start_at);
+  assertEquals(vid.ok && vid.rendered.templateKey, undefined);
 });
