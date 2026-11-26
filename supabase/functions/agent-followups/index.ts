@@ -4,6 +4,8 @@
 // 2. Mensagens que o agente agendou (scheduled_messages, created_by = 'agent').
 // 3. Conversa quente parada: o cliente recebeu o resultado de um widget (ex.: o cálculo), não
 //    respondeu a nenhuma retomada e passaram 2 h da última. Vai para a equipe (rodízio).
+// 4. Funil pelo agente (classify_lead): os follow-ups acabaram e a lead não respondeu por N horas.
+//    A oportunidade é perdida com o detalhe configurado para a etapa. Não manda mensagem.
 // Tudo só dentro da janela de 24 h do WhatsApp e em conversas que continuam com o agente.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -11,6 +13,9 @@ import { verifyServiceRoleAuth } from "../_shared/auth.ts";
 import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
 import { checkProactiveContact, DO_NOT_CONTACT_REASON } from "../_shared/contact-consent.ts";
 import { SILENT_HANDOFF_AFTER_MS, shouldHandOffSilent } from "../_shared/intelligence/agent-gate.ts";
+import {
+  applyFunnelAction, CLASSIFY_LEAD_TOOL, decideLoss, loadFunnelDeps, parseFunnelSettings, silenceLossDetail,
+} from "../_shared/intelligence/funnel-tool.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -25,7 +30,7 @@ serve(async (req) => {
   // Repassa a mesma credencial interna que chamou esta rotina (o JWT de service_role do agendador):
   // a variável SUPABASE_SERVICE_ROLE_KEY pode estar no formato novo, que o agente não reconhece.
   const forwardAuth = req.headers.get("authorization") ?? `Bearer ${serviceKey}`;
-  const result = { followups: 0, followup_errors: 0, scheduled_sent: 0, scheduled_skipped: 0, silent_handoffs: 0 };
+  const result = { followups: 0, followup_errors: 0, scheduled_sent: 0, scheduled_skipped: 0, silent_handoffs: 0, silence_losses: 0 };
 
   // 1. Retomadas
   const { data: due, error: claimError } = await supabase.rpc("fn_agent_followup_claim", { _limit: 20 });
@@ -136,6 +141,63 @@ serve(async (req) => {
     else result.silent_handoffs++;
   }
 
+  // 4. Funil pelo agente: perda por silêncio
+  try {
+    result.silence_losses = await silenceLosses(supabase);
+  } catch (e) {
+    console.error("[agent-followups] perda por silêncio", (e as Error).message);
+  }
+
   console.log("[agent-followups]", result);
   return json({ ok: true, ...result });
 });
+
+/** Perde as oportunidades das conversas do agente em silêncio depois do último follow-up. */
+// deno-lint-ignore no-explicit-any
+async function silenceLosses(supabase: any): Promise<number> {
+  const { data: agents } = await supabase.from("ai_agents")
+    .select("id, organization_id, enabled_tools, tool_settings, followup_enabled, followup_delays_minutes")
+    .eq("is_enabled", true).eq("followup_enabled", true).contains("enabled_tools", [CLASSIFY_LEAD_TOOL]);
+  let done = 0;
+  for (const agent of (agents ?? []) as any[]) {
+    const raw = agent.tool_settings?.[CLASSIFY_LEAD_TOOL];
+    const settings = parseFunnelSettings(raw);
+    const total = agent.followup_delays_minutes?.length ?? 0;
+    if (!settings?.silence_rules.length || total < 1) continue;
+    const now = Date.now();
+    const cutoff = new Date(now - settings.silence_after_hours * 3600_000).toISOString();
+    const { data: threads } = await supabase.from("message_threads")
+      .select("id, contact_id, ai_followup_count, ai_followup_last_at")
+      .eq("ai_agent_id", agent.id).eq("organization_id", agent.organization_id)
+      .is("ai_agent_released_at", null).is("assigned_user_id", null).not("status", "in", "(resolved,closed)")
+      .not("needs_human_attention", "is", true).gte("ai_followup_count", total)
+      .lte("ai_followup_last_at", cutoff)
+      // Só o que ficou em silêncio nos últimos 7 dias além do prazo: o resto é a arrumação única.
+      .gte("ai_followup_last_at", new Date(now - (settings.silence_after_hours + 7 * 24) * 3600_000).toISOString())
+      .order("ai_followup_last_at", { ascending: true }).limit(50);
+    for (const t of (threads ?? []) as any[]) {
+      const { data: lastIn } = await supabase.from("messages").select("sent_at")
+        .eq("thread_id", t.id).eq("direction", "inbound").is("deleted_at", null)
+        .order("sent_at", { ascending: false }).limit(1).maybeSingle();
+      const deps = await loadFunnelDeps({
+        supabase, organizationId: agent.organization_id, contactId: t.contact_id, threadId: t.id,
+        agentId: agent.id, isTestMode: false, rawSettings: raw,
+      });
+      const opp = await deps.openOpportunity();
+      const detailId = silenceLossDetail({
+        settings, stageId: opp?.pipeline_stage_id ?? null, followupCount: t.ai_followup_count ?? 0, followupTotal: total,
+        lastFollowupAt: t.ai_followup_last_at, lastInboundAt: lastIn?.sent_at ?? null, now,
+      });
+      if (!detailId) continue;
+      const action = decideLoss(opp, deps.stages, detailId, settings.silence_rules.map((r) => r.detail_id));
+      const detail = deps.lossDetails.find((d) => d.id === detailId);
+      const r = await applyFunnelAction(deps, settings.mode, opp, action, {
+        origin: "rule_silence", label: detail?.name ?? "Parou de responder", detailName: detail?.name ?? null,
+        reason: `sem resposta ${settings.silence_after_hours} h depois do último follow-up.`,
+        description: detail?.requires_description ? `Sem resposta ${settings.silence_after_hours} h depois do último follow-up.` : null,
+      });
+      if (r.applied) done++;
+    }
+  }
+  return done;
+}

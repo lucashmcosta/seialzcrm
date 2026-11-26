@@ -167,6 +167,7 @@ const CORE_TOOLS = [
   { id: 'update_qualification', name: 'Atualizar Qualificação', description: 'Registra dados de qualificação do lead' },
   { id: 'save_registration_data', name: 'Dados para o contrato', description: 'Grava CPF, estado civil, e-mail e endereço (completado pelo CEP) no cadastro do contato' },
   { id: 'send_contract', name: 'Gerar e enviar contrato', description: 'Confere o CPF, gera o contrato pela SuvSign e manda o link para assinar (modelo e responsável em Atribuição automática → Contrato pelo agente)' },
+  { id: 'classify_lead', name: 'Funil pelo agente', description: 'Registra a conclusão do caso e move a oportunidade no funil (resultados e regras em Atribuição automática → Funil pelo agente)' },
   { id: 'end_conversation', name: 'Encerrar conversa', description: 'Encerra quando o caso não se encaixa; reabre se o cliente voltar a escrever' },
   { id: 'send_choices', name: 'Perguntas com botões', description: 'Faz perguntas de opções fixas com botões ou lista no WhatsApp (texto numerado onde não há botões)' },
 ];
