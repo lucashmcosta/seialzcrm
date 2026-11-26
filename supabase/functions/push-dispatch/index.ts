@@ -11,6 +11,7 @@
 // Badge só é enviado para tokens com suporte, nos dois tipos.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { isActiveMember } from "./membership.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -76,6 +77,7 @@ Deno.serve(async (req) => {
   const summary = {
     sent: 0,
     no_token: 0,
+    not_member: 0,
     read_sync_sent: 0,
     read_sync_skipped: 0,
     retried: 0,
@@ -103,6 +105,18 @@ Deno.serve(async (req) => {
 
     for (const job of jobs) {
       try {
+        if (!(await isActiveMember(supabase, job.recipient_user_id, job.organization_id))) {
+          summary.not_member++;
+          await supabase
+            .from("push_delivery_jobs")
+            .update({
+              status: "skipped",
+              completed_at: new Date().toISOString(),
+              last_error: "recipient_not_active_member",
+            })
+            .eq("id", job.id);
+          continue;
+        }
         if ((job.kind ?? "message") === "read_sync") {
           await processReadSyncJob(supabase, job, summary);
         } else {
