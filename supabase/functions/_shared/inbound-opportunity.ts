@@ -5,6 +5,10 @@
 //                                 | 'no_open_opportunity' (qualquer contato sem oportunidade aberta)
 //   reopen_skip_won_days          com 'no_open_opportunity': não cria se o contato ganhou uma
 //                                 oportunidade nos últimos N dias (0/ausente = sem carência)
+//   reopen_skip_lost_hours        com 'no_open_opportunity': não cria se o contato perdeu uma
+//                                 oportunidade nas últimas N horas (0/ausente = sem carência).
+//                                 Evita oportunidade nova no "ok, obrigada" logo depois de o agente
+//                                 encerrar e perder (end_conversation com motivo).
 //   default_stage_id              etapa inicial (inválida/ausente = primeira etapa da org)
 
 export type OpportunityTrigger = "new_contact" | "no_open_opportunity";
@@ -13,6 +17,7 @@ export interface InboundOpportunitySettings {
   auto_create_opportunity?: boolean;
   opportunity_trigger?: OpportunityTrigger | null;
   reopen_skip_won_days?: number | null;
+  reopen_skip_lost_hours?: number | null;
   default_stage_id?: string | null;
 }
 
@@ -21,7 +26,8 @@ export type InboundOpportunityDecision =
   | "disabled"
   | "existing_contact"
   | "open_opportunity"
-  | "recent_win";
+  | "recent_win"
+  | "recent_loss";
 
 /** Só a regra, sem banco: o que fazer com a mensagem que chegou. */
 export function decideInboundOpportunity(input: {
@@ -29,6 +35,7 @@ export function decideInboundOpportunity(input: {
   contactCreated: boolean;
   hasOpenOpportunity: boolean;
   lastWonAt: string | null;
+  lastLostAt?: string | null;
   now: Date;
 }): InboundOpportunityDecision {
   const { settings, contactCreated, hasOpenOpportunity, lastWonAt, now } = input;
@@ -42,6 +49,11 @@ export function decideInboundOpportunity(input: {
   if (!contactCreated && days > 0 && lastWonAt) {
     const wonMs = Date.parse(lastWonAt);
     if (Number.isFinite(wonMs) && now.getTime() - wonMs < days * 86_400_000) return "recent_win";
+  }
+  const hours = Number(settings.reopen_skip_lost_hours) || 0;
+  if (!contactCreated && hours > 0 && input.lastLostAt) {
+    const lostMs = Date.parse(input.lastLostAt);
+    if (Number.isFinite(lostMs) && now.getTime() - lostMs < hours * 3_600_000) return "recent_loss";
   }
   return "create";
 }
@@ -90,12 +102,28 @@ export async function autoCreateInboundOpportunity(
         .maybeSingle();
       lastWonAt = won?.won_at ?? null;
     }
+    let lastLostAt: string | null = null;
+    if (!openOpp && !input.contactCreated && Number(settings.reopen_skip_lost_hours) > 0) {
+      const { data: lost } = await supabase
+        .from("opportunities")
+        .select("lost_at")
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .eq("status", "lost")
+        .is("deleted_at", null)
+        .not("lost_at", "is", null)
+        .order("lost_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      lastLostAt = lost?.lost_at ?? null;
+    }
 
     const decision = decideInboundOpportunity({
       settings,
       contactCreated: input.contactCreated,
       hasOpenOpportunity: !!openOpp,
       lastWonAt,
+      lastLostAt,
       now: new Date(),
     });
     if (decision !== "create") {

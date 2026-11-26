@@ -495,6 +495,7 @@ interface InboundSettings {
   default_opportunity_owner?: string;
   opportunity_trigger?: OpportunityTrigger | null;
   reopen_skip_won_days?: number | null;
+  reopen_skip_lost_hours?: number | null;
 }
 const DEFAULT_INBOUND_SETTINGS: InboundSettings = {
   auto_create_contact: true,

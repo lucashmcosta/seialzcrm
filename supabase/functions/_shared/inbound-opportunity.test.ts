@@ -44,3 +44,14 @@ Deno.test("carência depois de venda ganha", () => {
   assertEquals(decide(s, { wonAt: null }), "create");
   assertEquals(decide({ ...s, reopen_skip_won_days: 0 }, { wonAt: diasAtras(1) }), "create");
 });
+
+Deno.test("perda recente: não cria dentro da carência em horas; cria depois", () => {
+  const s = { auto_create_opportunity: true, opportunity_trigger: "no_open_opportunity" as const, reopen_skip_lost_hours: 24 };
+  const now = new Date("2026-11-26T12:00:00Z");
+  const base = { settings: s, contactCreated: false, hasOpenOpportunity: false, lastWonAt: null, now };
+  assertEquals(decideInboundOpportunity({ ...base, lastLostAt: "2026-11-26T11:59:00Z" }), "recent_loss");
+  assertEquals(decideInboundOpportunity({ ...base, lastLostAt: "2026-11-25T11:00:00Z" }), "create");
+  assertEquals(decideInboundOpportunity({ ...base, lastLostAt: null }), "create");
+  assertEquals(decideInboundOpportunity({ ...base, settings: { ...s, reopen_skip_lost_hours: 0 }, lastLostAt: "2026-11-26T11:59:00Z" }), "create");
+  assertEquals(decideInboundOpportunity({ ...base, contactCreated: true, lastLostAt: "2026-11-26T11:59:00Z" }), "create");
+});

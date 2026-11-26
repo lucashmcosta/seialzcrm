@@ -617,6 +617,8 @@ export const uiEnglish: Record<string, string> = {
   "Inclui contato antigo que volta a falar e quem já teve oportunidade ganha ou perdida.": "Includes returning contacts and those with won or lost opportunities.",
   "Não criar se ganhou uma oportunidade nos últimos (dias)": "Skip if an opportunity was won in the last (days)",
   "Evita oportunidade nova quando o cliente que acabou de comprar manda mensagem. Vazio ou 0: sem carência.": "Avoids a new opportunity when a customer who just bought sends a message. Empty or 0: no waiting period.",
+  "Não criar se perdeu uma oportunidade nas últimas (horas)": "Skip if an opportunity was lost in the last (hours)",
+  "Evita oportunidade nova quando o contato responde logo depois de a oportunidade ser perdida (ex.: \"ok, obrigada\" depois que o agente encerrou). Vazio ou 0: sem carência.": "Avoids a new opportunity when the contact replies right after the opportunity was lost (e.g. \"ok, thanks\" after the agent closed it). Empty or 0: no waiting period.",
   "sem permissão para alterar este número": "no permission to change this number",
   "Primeira etapa (padrão)": "First stage (default)",
   "Nenhuma etapa cadastrada. Crie um pipeline em Configurações &gt; Pipeline.": "No stages configured. Create a pipeline in Settings > Pipeline.",

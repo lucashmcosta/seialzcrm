@@ -8,6 +8,7 @@ export type OpportunityTrigger = 'new_contact' | 'no_open_opportunity';
 export interface OpportunityTriggerSettings {
   opportunity_trigger?: OpportunityTrigger | null;
   reopen_skip_won_days?: number | null;
+  reopen_skip_lost_hours?: number | null;
 }
 
 interface Props {
@@ -60,6 +61,29 @@ export function InboundOpportunityTriggerFields({ value, onChange, disabled }: P
           />
           <p className="text-xs text-muted-foreground">
             {uiText("Evita oportunidade nova quando o cliente que acabou de comprar manda mensagem. Vazio ou 0: sem carência.")}
+          </p>
+        </div>
+      )}
+
+      {trigger === 'no_open_opportunity' && (
+        <div className="space-y-2">
+          <Label className="text-sm">{uiText("Não criar se perdeu uma oportunidade nas últimas (horas)")}</Label>
+          <Input
+            type="number"
+            min={0}
+            max={720}
+            inputMode="numeric"
+            className="h-9 w-32 text-sm"
+            placeholder="0"
+            value={value.reopen_skip_lost_hours ? String(value.reopen_skip_lost_hours) : ''}
+            onChange={(e) => {
+              const n = Math.min(720, Math.max(0, Math.floor(Number(e.target.value) || 0)));
+              onChange({ reopen_skip_lost_hours: n || null });
+            }}
+            disabled={disabled}
+          />
+          <p className="text-xs text-muted-foreground">
+            {uiText("Evita oportunidade nova quando o contato responde logo depois de a oportunidade ser perdida (ex.: \"ok, obrigada\" depois que o agente encerrou). Vazio ou 0: sem carência.")}
           </p>
         </div>
       )}
