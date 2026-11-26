@@ -1,0 +1,3 @@
+-- Rollback da desativação de 2026-11-26: 11 tokens de 7 usuários sem vínculo ativo.
+UPDATE public.user_push_tokens SET is_active = true, updated_at = now()
+ WHERE id IN ('16f4efdd-85a0-45fa-a577-c3f3a83d6508','535298bf-2903-409f-a3cf-d8434d55de41','59ccde5b-2c86-423a-ba2b-e9156a793c2f','5ca37419-7a2a-40f0-b74b-be5ea312acc4','61d7a2b6-4aed-4253-b630-c2f864cb6461','96633594-3490-4bc2-8b95-575537f35872','a176ca6d-1dc8-45d5-ba9e-b349650534fe','a4e73b95-d4a7-4849-b0c8-385a09acbd27','b3cabf96-fa14-4f6f-99e7-a76bbda20306','cb153a48-f212-4995-954e-fd93e1ec6fcf','daaa7ffc-1665-4e4d-902d-7ec40161f8cb');
