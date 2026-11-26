@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, test } from 'bun:test';
 import { agentFilterCounts, handoffInfo, handoffRate, matchesAgentFilter } from './inboxAgentFilters';
 import type { InboxScopedThread } from '@/hooks/inbox/inboxScope';

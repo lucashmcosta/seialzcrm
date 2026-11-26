@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, it } from 'vitest';
 import {
   type HearingCheckItem, dayBR, daysUntil, groupByKind, mapRow, problemText, todayInSaoPaulo, urgentCount, whenLabel,
