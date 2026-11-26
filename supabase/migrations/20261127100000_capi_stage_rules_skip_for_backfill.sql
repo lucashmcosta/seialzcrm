@@ -3,7 +3,7 @@
 -- o sinal das campanhas fica distorcido. Quem faz o lote liga, NA PRÓPRIA TRANSAÇÃO,
 --   select set_config('app.capi_skip', 'on', true);
 -- e esta função não dispara nada enquanto a opção estiver ligada. Fora disso, nada muda.
--- Rollback: supabase/rollback/20261126100000_capi_stage_rules_skip_for_backfill_DOWN.sql
+-- Rollback: supabase/rollback/20261127100000_capi_stage_rules_skip_for_backfill_DOWN.sql
 CREATE OR REPLACE FUNCTION public.fn_capi_trigger_stage_rules()
  RETURNS trigger
  LANGUAGE plpgsql

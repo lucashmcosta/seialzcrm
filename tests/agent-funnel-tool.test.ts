@@ -23,7 +23,6 @@ const RAW = {
   outcomes: [
     { key: "segue", label: "Qualificada", description: "o caso segue", stage_id: QUALI },
     { key: "equipe_analisa", label: "Equipe analisa", description: "precisa de análise", stage_id: EQUIPE },
-    { key: "nao_se_encaixa", label: "Não se encaixa", description: "sem direito", loss_detail_ids: [D_NUNCA, D_IDADE] },
   ],
   reply_stage_id: CONF,
   handoff_stage_id: EQUIPE,
@@ -40,10 +39,7 @@ function fakeDeps(over: Partial<FunnelDeps> = {}) {
     isTestMode: false,
     settings: parseFunnelSettings(RAW),
     stages: STAGES,
-    lossDetails: [
-      { id: D_NUNCA, name: "Nunca contribuiu antes do parto", requires_description: false },
-      { id: D_IDADE, name: "Bebê com 5 anos ou mais", requires_description: false },
-    ],
+    lossDetails: [{ id: D_SILENCIO, name: "Parou no meio da triagem", requires_description: false }],
     openOpportunity: async () => open(NOVA),
     move: async (o, s) => { calls.push(`move:${o}:${s}`); return { ok: true }; },
     lose: async (o, d) => { calls.push(`lose:${o}:${d}`); return { ok: true }; },
@@ -58,7 +54,7 @@ Deno.test("configuração: guarda só o que é válido e começa em modo sombra"
   const s = parseFunnelSettings({
     outcomes: [
       { key: "ok", label: "Ok", stage_id: QUALI },
-      { key: "dup", label: "Etapa e perda juntas", stage_id: QUALI, loss_detail_ids: [D_NUNCA] },
+      { key: "perda", label: "Perda não é mais por aqui", loss_detail_ids: [D_NUNCA] },
       { key: "Bad Key!", label: "x", stage_id: QUALI },
       { key: "sem_nada", label: "Sem etapa nem perda" },
       { key: "ok", label: "Repetida", stage_id: CONF },
@@ -112,19 +108,6 @@ Deno.test("classify_lead: move para a etapa do resultado e deixa a nota", async 
   assertEquals(calls, [`move:opp-1:${QUALI}`]);
   assertEquals(notes.length, 1);
   assertEquals(notes[0].meta.origin, "classify_lead");
-});
-
-Deno.test("classify_lead: perda pelo nome do detalhe", async () => {
-  const { deps, calls } = fakeDeps();
-  await runClassifyLead({ outcome: "nao_se_encaixa", loss_detail: "bebe com 5 anos ou mais", reason: "bebê de 2019" }, deps);
-  assertEquals(calls, [`lose:opp-1:${D_IDADE}`]);
-});
-
-Deno.test("classify_lead: perda sem detalhe pede o detalhe e não grava", async () => {
-  const { deps, calls, notes } = fakeDeps();
-  const out = await runClassifyLead({ outcome: "nao_se_encaixa", reason: "x" }, deps);
-  assert(out.modelMessage.includes("Falta o motivo"));
-  assertEquals(calls.length + notes.length, 0);
 });
 
 Deno.test("classify_lead: resultado desconhecido não grava", async () => {

@@ -5,8 +5,9 @@
 // são os da própria org, escolhidos na tela do agente. Nada aqui conhece uma org.
 //
 // Três caminhos movem a oportunidade, todos pelas funções que a tela já usa:
-//   1. o modelo registra a conclusão do caso (classify_lead): vai para uma etapa ou é perdida
-//      com um detalhe do catálogo da org;
+//   1. o modelo registra a conclusão do caso (classify_lead): vai para a etapa do resultado.
+//      Quem não se encaixa NÃO passa por aqui: é o end_conversation com loss_code
+//      (agent-loss.ts) que encerra e perde, com o motivo do catálogo da org;
 //   2. regra, sem o modelo: a lead respondeu (vai para reply_stage_id) ou o agente passou para a
 //      equipe sem classificar (vai para handoff_stage_id);
 //   3. regra, na rotina agent-followups: os follow-ups acabaram e a lead não respondeu por N horas
@@ -31,10 +32,8 @@ export interface FunnelOutcome {
   label: string;
   /** Quando usar, para o modelo (ex.: "o caso segue e ela quer contratar"). */
   description: string;
-  /** Etapa para onde vai. Nulo quando o resultado é perda. */
-  stage_id: string | null;
-  /** Detalhes de perda que o modelo pode escolher. Vazio quando o resultado é etapa. */
-  loss_detail_ids: string[];
+  /** Etapa para onde vai. */
+  stage_id: string;
 }
 
 export interface SilenceRule {
@@ -63,10 +62,8 @@ export function parseFunnelSettings(raw: unknown): FunnelSettings | null {
     const label = text(x.label, 60);
     if (!KEY.test(key) || !label || outcomes.some((y) => y.key === key)) continue;
     const stage = uuidOrNull(x.stage_id);
-    const details = [...new Set((Array.isArray(x.loss_detail_ids) ? x.loss_detail_ids : []).map(uuidOrNull).filter((d): d is string => !!d))];
-    // Ou etapa, ou perda: as duas coisas juntas não fazem sentido.
-    if (!!stage === details.length > 0) continue;
-    outcomes.push({ key, label, description: text(x.description, 300), stage_id: stage, loss_detail_ids: stage ? [] : details });
+    if (!stage) continue;
+    outcomes.push({ key, label, description: text(x.description, 300), stage_id: stage });
   }
   const rules: SilenceRule[] = [];
   for (const s of Array.isArray(r.silence_rules) ? r.silence_rules : []) {
@@ -178,12 +175,9 @@ export interface FunnelDeps {
   shadowNoted(opportunityId: string, origin: string, outcome: string | null): Promise<boolean>;
 }
 
-const fold = (v: string) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 const DONE = "Registrado. Não comente isso com a cliente; siga a conversa normalmente.";
 
-export function funnelToolParameters(settings: FunnelSettings, details: LossDetailInfo[]): Record<string, unknown> {
-  const lossDetails = [...new Set(settings.outcomes.flatMap((o) => o.loss_detail_ids))]
-    .map((id) => details.find((d) => d.id === id)?.name).filter((n): n is string => !!n);
+export function funnelToolParameters(settings: FunnelSettings): Record<string, unknown> {
   return {
     type: "object",
     properties: {
@@ -192,9 +186,6 @@ export function funnelToolParameters(settings: FunnelSettings, details: LossDeta
         enum: settings.outcomes.map((o) => o.key),
         description: settings.outcomes.map((o) => `${o.key}: ${o.description || o.label}`).join(" | "),
       },
-      ...(lossDetails.length ? {
-        loss_detail: { type: "string", enum: lossDetails, description: "Só quando o resultado é de perda: o motivo que melhor descreve o caso." },
-      } : {}),
       reason: { type: "string", description: "Por que, em uma frase curta, sem copiar CPF, telefone ou e-mail." },
     },
     required: ["outcome", "reason"],
@@ -208,26 +199,12 @@ export async function runClassifyLead(args: any, deps: FunnelDeps): Promise<Widg
   if (!outcome) return { modelMessage: `Resultado inválido. Use um destes: ${settings.outcomes.map((o) => o.key).join(", ")}.` };
   const reason = text(args?.reason, 300) || null;
 
-  let detail: LossDetailInfo | null = null;
-  if (!outcome.stage_id) {
-    const allowed = deps.lossDetails.filter((d) => outcome.loss_detail_ids.includes(d.id));
-    const given = fold(String(args?.loss_detail ?? ""));
-    detail = allowed.find((d) => fold(d.name) === given) ?? (allowed.length === 1 ? allowed[0] : null);
-    if (!detail) return { modelMessage: `Falta o motivo. Chame classify_lead de novo com loss_detail sendo um destes: ${allowed.map((d) => d.name).join(", ")}.` };
-  }
-
   // Simulador: não existe oportunidade; só confirma o que seria feito.
-  if (deps.isTestMode) {
-    return { modelMessage: `${DONE} (Simulado: ${outcome.label}${detail ? ` — ${detail.name}` : ""}.)` };
-  }
+  if (deps.isTestMode) return { modelMessage: `${DONE} (Simulado: ${outcome.label}.)` };
 
   const opp = await deps.openOpportunity();
-  const action = outcome.stage_id
-    ? decideMove(opp, deps.stages, outcome.stage_id)
-    : decideLoss(opp, deps.stages, detail!.id, outcome.loss_detail_ids);
-  await applyFunnelAction(deps, settings.mode, opp, action, {
+  await applyFunnelAction(deps, settings.mode, opp, decideMove(opp, deps.stages, outcome.stage_id), {
     origin: "classify_lead", outcome: outcome.key, label: outcome.label, reason,
-    detailName: detail?.name ?? null, description: detail?.requires_description ? reason : null,
   });
   return { modelMessage: DONE };
 }
@@ -284,10 +261,7 @@ export async function loadFunnelDeps(ctx: FunnelContext): Promise<FunnelDeps> {
   const db = ctx.supabase;
   const org = ctx.organizationId;
   const settings = parseFunnelSettings(ctx.rawSettings);
-  const detailIds = [...new Set([
-    ...(settings?.outcomes.flatMap((o) => o.loss_detail_ids) ?? []),
-    ...(settings?.silence_rules.map((r) => r.detail_id) ?? []),
-  ])];
+  const detailIds = [...new Set(settings?.silence_rules.map((r) => r.detail_id) ?? [])];
   const [{ data: stages }, { data: details }] = await Promise.all([
     db.from("pipeline_stages").select("id, order_index, type").eq("organization_id", org),
     detailIds.length
@@ -350,6 +324,7 @@ function toolPrompt(settings: FunnelSettings): string {
 - **${CLASSIFY_LEAD_TOOL}**: Quando chegar a uma conclusão sobre o caso, registre com ${CLASSIFY_LEAD_TOOL}, na mesma resposta em que contar o resultado ou passar para a equipe. Resultados:
 ${lines}
   Use uma vez por conclusão. Se a conclusão mudar depois (ela trouxe informação nova), registre de novo. Não comente o registro com a cliente.
+  Caso que não se encaixa não é registrado aqui: depois da despedida, use end_conversation.
 `;
 }
 
@@ -361,8 +336,8 @@ export async function funnelToolsForAgent(enabledTools: string[], ctx: FunnelCon
   return [{
     widgetKey: "agent_funnel",
     name: CLASSIFY_LEAD_TOOL,
-    description: "Registra a conclusão sobre o caso da lead (qualificada, a equipe analisa, não se encaixa...) e move a oportunidade no funil.",
-    parameters: funnelToolParameters(settings, deps.lossDetails),
+    description: "Registra a conclusão sobre o caso da lead (ex.: qualificada, a equipe analisa) e move a oportunidade para a etapa certa do funil.",
+    parameters: funnelToolParameters(settings),
     prompt: toolPrompt(settings),
     run: (args) => runClassifyLead(args, deps),
   }];

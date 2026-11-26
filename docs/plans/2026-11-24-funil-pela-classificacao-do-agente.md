@@ -46,7 +46,11 @@ Data: 24/11/2026. Primeira org: Auxilius (Gabi). O desenho é genérico e config
 | 5 | Perda por silêncio | 72 h depois do último follow-up sem resposta: Nova conversa → BB1, Em conferência → BB2, Qualificada → BB3. Nunca em "Equipe analisa" nem em "Contrato enviado", que são da equipe |
 | 6 | Lead que volta depois de perdida | Confirmar a regra atual (nova oportunidade ou reabrir) antes da Fase 3 |
 
+> **Atualização 26/11:** o PR #318 (já no main) deu ao `end_conversation` o `loss_code`: encerrar a conversa também perde a oportunidade com o motivo do catálogo, ligado por agente em `tool_settings.end_conversation.mark_lost`. Por isso o `classify_lead` **só move etapa**; o "não se encaixa" (decisão 4 da Fase 0) passa pelo `end_conversation` do #318. A perda por silêncio continua neste plano, porque nada mais cobre esse caso.
+
 ## Fase 1: parar o follow-up depois da despedida (pequena, primeiro por causa do RED)
+
+- Ligar também `tool_settings.end_conversation.mark_lost` na Gabi (PR #318), para que o encerramento já marque a perda com o motivo.
 
 - Ligar `end_conversation` na Gabi. O prompt v28 muda o mínimo possível: na 17.2, depois da despedida de NÃO SE ENCAIXA, chamar `end_conversation`. Não mexer no foco de venda, nas perguntas nem nas objeções.
 - Conferir no código se `fn_agent_followup_claim` exclui as conversas com `ai_agent_closed_at`. Se não excluir, corrigir isso nesta fase.
@@ -59,12 +63,12 @@ Data: 24/11/2026. Primeira org: Auxilius (Gabi). O desenho é genérico e config
 - Configuração em `tool_settings.classify_lead`:
   - `enabled`;
   - `mode` (`shadow` | `apply`);
-  - `outcomes[]`, cada um com `key`, `label`, a descrição para o modelo e uma ação: `stage_id`, ou `lose` com `detail_ids[]` permitidos.
-- O enum da ferramenta e as descrições saem dessa configuração. O modelo só escolhe entre os resultados configurados e, na perda, só entre os detalhes permitidos.
+  - `outcomes[]`, cada um com `key`, `label`, a descrição para o modelo e o `stage_id` de destino (a perda fica com o `end_conversation` do #318).
+- O enum da ferramenta e as descrições saem dessa configuração. O modelo só escolhe entre os resultados configurados.
 - No servidor, a lógica de decisão fica numa função pura em `_shared/intelligence/`, para dar teste unitário:
   1. Acha a oportunidade aberta do contato, como o `send_contract` faz.
   2. Aplica a regra de só avançar.
-  3. Move pela `transition_opportunity_stage_v1` com `_source: "ai_agent_classification"`, ou perde pela `fn_mark_opportunity_lost_internal_v1` com `actor_type` do agente e `automation_ref = agent:<id>`.
+  3. Move pela `transition_opportunity_stage_v1` com `_source: "ai_agent_funnel"`.
   4. Grava uma nota interna na conversa com a classificação e o motivo, para a equipe ver o porquê.
 - Idempotência: repetir o mesmo resultado não faz nada. A transição trava a linha (`FOR UPDATE`) e a perda exige a oportunidade aberta.
 - Modo sombra: grava só a nota interna e o log `[classify_lead] would_*`, sem mover nada.
@@ -103,7 +107,7 @@ Configurado no mesmo cartão:
 
 - **Relatório a seco primeiro:** para cada oportunidade, a etapa ou a perda proposta e a evidência (resumo da passagem, despedida, silêncio). Ninguém aprova sem ver o relatório.
 - **A CAPI não dispara na arrumação.** O lote marcaria dezenas de eventos ao mesmo tempo e distorceria o sinal das campanhas.
-  - Mudança: `fn_capi_trigger_stage_rules` ignora quando `current_setting('app.capi_skip', true) = 'on'`, e o lote liga essa opção na transação.
+  - Mudança: `fn_capi_trigger_stage_rules` ignora quando `current_setting('app.capi_skip', true) = 'on'`, e o lote liga essa opção na transação (migração `20261127100000`).
   - Teste SQL cobrindo isso.
 - Aplicar em lote com `automation_ref = funil-backfill-2026-11` para poder desfazer: reabrir pelo `reopen_opportunity_v1` filtrando por esse ref.
 

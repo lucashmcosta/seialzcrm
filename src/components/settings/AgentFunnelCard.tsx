@@ -1,7 +1,7 @@
 // Funil pelo agente (ferramenta classify_lead). Liga/desliga a ferramenta no agente e guarda a
 // configuração em tool_settings.classify_lead:
-//  - resultados que o agente registra e o que cada um faz (ir para uma etapa ou perder com um
-//    dos detalhes de perda da org);
+//  - resultados que o agente registra e a etapa de cada um (quem não se encaixa é perdido pelo
+//    "Encerrar conversa" com motivo, em Configurações → Motivos de perda);
 //  - regras sem o modelo: etapa quando a lead responde, etapa quando o agente passa para a equipe
 //    sem classificar e perda por silêncio depois do último follow-up;
 //  - modo "Em teste" (só deixa uma nota dizendo o que faria) ou "Valendo".
@@ -12,7 +12,6 @@ import { Funnel, Plus, Trash } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -23,7 +22,6 @@ import { useLossOptions } from '@/components/opportunities/loss/useLossOptions';
 
 const TOOL = 'classify_lead';
 const NONE = '__none__';
-const LOSE = '__lose__';
 
 interface AgentRow {
   id: string;
@@ -35,14 +33,13 @@ interface OutcomeDraft {
   key: string;
   label: string;
   description: string;
-  /** id da etapa, LOSE para perda, NONE sem ação. */
+  /** id da etapa, ou NONE sem etapa escolhida. */
   action: string;
-  loss_detail_ids: string[];
 }
 
 interface SavedSettings {
   mode?: 'shadow' | 'apply';
-  outcomes?: Array<{ key: string; label: string; description?: string; stage_id?: string | null; loss_detail_ids?: string[] }>;
+  outcomes?: Array<{ key: string; label: string; description?: string; stage_id?: string | null }>;
   reply_stage_id?: string | null;
   handoff_stage_id?: string | null;
   silence_after_hours?: number;
@@ -56,7 +53,7 @@ function outcomeKey(label: string): string {
   return /^[a-z]/.test(k) ? k : `r_${k}`.slice(0, 40);
 }
 
-const emptyOutcome = (): OutcomeDraft => ({ key: '', label: '', description: '', action: NONE, loss_detail_ids: [] });
+const emptyOutcome = (): OutcomeDraft => ({ key: '', label: '', description: '', action: NONE });
 
 export function AgentFunnelCard({ organizationId }: { organizationId: string }) {
   const { toast } = useToast();
@@ -109,8 +106,7 @@ export function AgentFunnelCard({ organizationId }: { organizationId: string }) 
     setMode(saved.mode === 'apply' ? 'apply' : 'shadow');
     setOutcomes((saved.outcomes ?? []).map((o) => ({
       key: o.key, label: o.label, description: o.description ?? '',
-      action: o.stage_id ? o.stage_id : (o.loss_detail_ids?.length ? LOSE : NONE),
-      loss_detail_ids: o.loss_detail_ids ?? [],
+      action: o.stage_id ?? NONE,
     })));
     setReplyStage(saved.reply_stage_id ?? NONE);
     setHandoffStage(saved.handoff_stage_id ?? NONE);
@@ -131,8 +127,7 @@ export function AgentFunnelCard({ organizationId }: { organizationId: string }) 
       const key = o.key || outcomeKey(o.label);
       if (keys.has(key)) return `Há dois resultados com o mesmo nome: ${o.label}.`;
       keys.add(key);
-      if (o.action === NONE) return `Escolha o que acontece em "${o.label}".`;
-      if (o.action === LOSE && !o.loss_detail_ids.length) return `Escolha ao menos um motivo de perda em "${o.label}".`;
+      if (o.action === NONE) return `Escolha a etapa de "${o.label}".`;
     }
     const hours = Number(silenceHours);
     if (Object.values(silence).some((d) => d !== NONE) && !(hours >= 24)) return 'O prazo da perda por silêncio é de pelo menos 24 horas.';
@@ -157,8 +152,7 @@ export function AgentFunnelCard({ organizationId }: { organizationId: string }) 
         key: o.key || outcomeKey(o.label),
         label: o.label.trim(),
         description: o.description.trim(),
-        stage_id: o.action !== LOSE ? o.action : null,
-        loss_detail_ids: o.action === LOSE ? o.loss_detail_ids : [],
+        stage_id: o.action,
       })),
       reply_stage_id: replyStage !== NONE ? replyStage : null,
       handoff_stage_id: handoffStage !== NONE ? handoffStage : null,
@@ -195,8 +189,9 @@ export function AgentFunnelCard({ organizationId }: { organizationId: string }) 
           Funil pelo agente
         </CardTitle>
         <CardDescription>
-          O agente registra a conclusão de cada caso e a oportunidade vai para a etapa certa, ou é perdida com o motivo.
-          Ele só avança: nunca volta uma etapa nem mexe em oportunidade ganha ou perdida.
+          O agente registra a conclusão de cada caso e a oportunidade vai para a etapa certa. Ele só avança: nunca volta
+          uma etapa nem mexe em oportunidade ganha ou perdida. Quem não se encaixa é perdido ao encerrar a conversa,
+          com o motivo (Configurações → Motivos de perda).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -236,26 +231,10 @@ export function AgentFunnelCard({ organizationId }: { organizationId: string }) 
               <Select value={o.action} onValueChange={(v) => patchOutcome(i, { action: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE}>Escolha o que acontece</SelectItem>
+                  <SelectItem value={NONE}>Escolha a etapa</SelectItem>
                   {stages.map((s) => <SelectItem key={s.id} value={s.id}>Ir para {s.name}</SelectItem>)}
-                  <SelectItem value={LOSE}>Marcar como perdida</SelectItem>
                 </SelectContent>
               </Select>
-              {o.action === LOSE && (
-                <div className="space-y-1.5">
-                  <p className="text-xs text-muted-foreground">Motivos que o agente pode escolher:</p>
-                  {details.map((d) => (
-                    <label key={d.id} className="flex items-center gap-2 text-sm">
-                      <Checkbox checked={o.loss_detail_ids.includes(d.id)}
-                        onCheckedChange={(c) => patchOutcome(i, {
-                          loss_detail_ids: c ? [...o.loss_detail_ids, d.id] : o.loss_detail_ids.filter((x) => x !== d.id),
-                        })} />
-                      <span>{d.reasonName}: {d.name}</span>
-                    </label>
-                  ))}
-                  {!details.length && <p className="text-xs text-muted-foreground">A org não tem motivos de perda com detalhe.</p>}
-                </div>
-              )}
             </div>
           ))}
           <Button variant="outline" size="sm" onClick={() => setOutcomes((list) => [...list, emptyOutcome()])}>
