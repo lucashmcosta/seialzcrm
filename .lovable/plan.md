@@ -53,3 +53,15 @@
 
 ## Sugestões (não aplicadas)
 - Ligar alguém no rodízio Comercial grava só o legado do perfil; alinhar para gravar o v2.
+
+## Adendo — aba Comercial (agente)
+
+**`followup_optout_attempt`** (botão "Não tenho interesse"):
+- "Sem botão" → `null`
+- "Na 1ª retomada" → `1`
+- "Na 2ª retomada" → `2`
+
+**`rpc_agent_distribution_stats(_org uuid, _days integer default 30)`** → um objeto jsonb (números inteiros):
+`{ agent_leads, agent_handed_off, agent_closed, agent_followed_up, agent_replied_after_followup, agent_won, human_leads, human_won }`
+- Frase do Web: `{agent_leads} leads, {agent_handed_off} passados, {agent_closed} encerrados pelo agente, {agent_won} ganhos`; depois `{agent_followed_up} conversas retomadas, {agent_replied_after_followup} voltaram a responder`; e para humanos `{human_leads} leads, {human_won} ganhos`.
+- Exige permissão de gerenciar integrações na org; senão erro `forbidden`. Conta só conversas WhatsApp de contatos vindos de WhatsApp/anúncio, fora do Atendimento, criadas nos últimos `_days` dias.
