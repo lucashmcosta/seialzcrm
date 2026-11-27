@@ -110,15 +110,18 @@ export function InboxConversationTimeline({ threadId, organizationId, contactId,
     supabase.auth.getSession().then(({ data }) => setAccessToken(data.session?.access_token));
   }, []);
 
-  // Oportunidades abertas do contato (destino possível ao vincular).
+  // Oportunidades abertas e ganhas do contato (destino possível ao vincular).
   useEffect(() => {
     if (!organizationId || !contactId) { setOpportunities([]); return; }
     (async () => {
       const { data } = await supabase.from('opportunities')
-        .select('id, title')
+        .select('id, title, status')
         .eq('organization_id', organizationId).eq('contact_id', contactId)
-        .eq('status', 'open').is('deleted_at', null);
-      setOpportunities((data as AttachOpportunity[]) || []);
+        .in('status', ['open', 'won']).is('deleted_at', null);
+      const rows = ((data as Array<AttachOpportunity & { status: string }>) || [])
+        .sort((a, b) => (a.status === 'open' ? 0 : 1) - (b.status === 'open' ? 0 : 1))
+        .map(({ status: _s, ...o }) => o as AttachOpportunity);
+      setOpportunities(rows);
     })();
   }, [organizationId, contactId]);
 
