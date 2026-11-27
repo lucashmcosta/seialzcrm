@@ -139,7 +139,7 @@ export function AttachMediaDialog({
           {/* Tipo */}
           <div className="space-y-1.5">
             <Label className="text-xs">Tipo de documento</Label>
-            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+            <Popover modal open={pickerOpen} onOpenChange={setPickerOpen}>
               <PopoverTrigger asChild>
                 <Button type="button" variant="outline" className="w-full justify-between font-normal">
                   <span className="truncate">{selectedType ? selectedType.name : 'Escolher tipo...'}</span>
