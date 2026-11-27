@@ -140,3 +140,7 @@ Documentos comuns vinculados somente ao contato ainda exigem uma política
 explícita de roteamento quando o contato possui vários processos. A exceção
 deliberada são contratos SuvSign, conforme ADR-0010. Ver também
 `docs/audit/07-divida-tecnica.md`.
+
+## Documentos do cliente após o ganho
+
+Documentos salvos no cliente (exceto contratos SuvSign) são enfileirados por `trg_emit_nammux_contact_document_v1` para cada oportunidade ganha do cliente já entregue ao Nammux. Falha nunca bloqueia o upload.

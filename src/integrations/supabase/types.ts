@@ -19248,6 +19248,10 @@ export type Database = {
         Args: { _document_id: string; _replay_reason?: string }
         Returns: Json
       }
+      fn_enqueue_nammux_contact_document_v1: {
+        Args: { _document_id: string }
+        Returns: number
+      }
       fn_feature_flag_enabled: {
         Args: { _flag_key: string; _organization_id?: string }
         Returns: boolean
