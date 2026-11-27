@@ -1,5 +1,7 @@
 import { displayThreadStatus } from '@/lib/threadStatus';
 import { useState, useEffect, useRef, Fragment } from 'react';
+import { ImageAlbumBubble, ImageAlbumViewer, useAlbumViewer, type AlbumImage } from '@/components/messages/ImageAlbumBubble';
+import { groupConsecutiveImages, albumFollowerIndexes } from '@/lib/messageImageGroups';
 import { useThreadPerms, DENY_CLOSE, DENY_ASSIGN } from '@/hooks/useThreadPerms';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
@@ -174,6 +176,7 @@ export function MobileMessagesList() {
   const [showMediaPreview, setShowMediaPreview] = useState(false);
   const [mediaUploading, setMediaUploading] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const albumViewer = useAlbumViewer();
 
   // AI state
   const [aiImproving, setAiImproving] = useState(false);
@@ -960,7 +963,16 @@ export function MobileMessagesList() {
                         return new Date(dateA).getTime() - new Date(dateB).getTime();
                       });
 
+                      const albums = groupConsecutiveImages(chatItems.map((ci) => ci._type === 'message'
+                        ? { isMessage: true, direction: ci.data.direction, senderId: ci.data.sender_agent_id ?? ci.data.sender_name ?? null,
+                            mediaType: ci.data.media_type, mediaUrls: ci.data.media_urls, content: ci.data.content,
+                            sentAt: ci.data.sent_at, failed: ci.data.whatsapp_status === 'failed' }
+                        : { isMessage: false, direction: null, senderId: null, mediaType: null, mediaUrls: null, content: null, sentAt: ci.data.occurred_at }));
+                      const albumFollowers = albumFollowerIndexes(albums);
+
                       return chatItems.map((item, idx) => {
+                        if (albumFollowers.has(idx)) return null;
+                        const albumIdx = albums.get(idx);
                         const itemDate = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
                         const prevItem = chatItems[idx - 1];
                         const prevDate = prevItem ? (prevItem._type === 'message' ? prevItem.data.sent_at : prevItem.data.occurred_at) : null;
@@ -1050,8 +1062,15 @@ export function MobileMessagesList() {
                                 <QuotedMessage content={message.reply_to_message.content} direction={message.reply_to_message.direction} />
                               )}
 
+                              {albumIdx && (() => {
+                                const imgs: AlbumImage[] = albumIdx.map((i) => {
+                                  const am = (chatItems[i] as any).data;
+                                  return { id: am.id, url: getProxiedMediaUrl(am.media_urls[0], organization?.id, accessToken) };
+                                });
+                                return <ImageAlbumBubble className="mb-1 w-[220px]" images={imgs} onOpen={(i) => albumViewer.open(imgs, i)} />;
+                              })()}
                               {/* Media */}
-                              {message.media_urls && message.media_urls.length > 0 && (
+                              {!albumIdx && message.media_urls && message.media_urls.length > 0 && (
                                 <div className="space-y-1 mb-1">
                                   {message.media_urls.map((rawUrl, i) => {
                                     const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
@@ -1193,6 +1212,7 @@ export function MobileMessagesList() {
         isLoading={mediaUploading}
       />
 
+      <ImageAlbumViewer images={albumViewer.images} index={albumViewer.index} onIndexChange={albumViewer.setIndex} />
       <Dialog open={!!previewImageUrl} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
         <DialogContent className="max-w-[95vw] max-h-[90vh] p-0 bg-transparent border-none">
           {previewImageUrl && (

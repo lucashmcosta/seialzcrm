@@ -138,6 +138,8 @@ import { AttachMediaDialog, type AttachMedia } from '@/components/documents/Atta
 import { isAttachableMedia } from '@/lib/mediaToFile';
 import { computeMessageGroups, computeContextBlocks, type GroupingItem } from '@/lib/messageGrouping';
 import { TimelineBlock } from '@/components/messages/timeline/TimelineBlock';
+import { ImageAlbumBubble, ImageAlbumViewer, useAlbumViewer, type AlbumImage } from '@/components/messages/ImageAlbumBubble';
+import { groupConsecutiveImages, albumFollowerIndexes } from '@/lib/messageImageGroups';
 import { MessageEditControl } from '@/components/messages/MessageEditControl';
 import { useMessageEditFlag } from '@/hooks/messages/useMessageEditFlag';
 
@@ -563,6 +565,7 @@ function DesktopMessagesList() {
   
   // Image preview state
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const albumViewer = useAlbumViewer();
   // Sessão de "Vincular como documento": páginas (mídias) + modo de seleção na conversa.
   const [attach, setAttach] = useState<{ pages: AttachMedia[] } | null>(null);
   const [attachPicking, setAttachPicking] = useState(false);
@@ -2652,10 +2655,29 @@ function DesktopMessagesList() {
 
 
 
+                            // Álbum: 4+ imagens seguidas viram um único balão (estilo WhatsApp).
+                            const albums = groupConsecutiveImages(chatItems.map((i) => i._type === 'message'
+                              ? {
+                                  isMessage: !i.data.is_internal_note,
+                                  direction: i.data.direction,
+                                  senderId: i.data.sender_agent_id ?? i.data.sender_user_id ?? null,
+                                  mediaType: i.data.media_type,
+                                  mediaUrls: i.data.media_urls,
+                                  content: i.data.content,
+                                  sentAt: i.data.sent_at,
+                                  failed: i.data.whatsapp_status === 'failed',
+                                }
+                              : { isMessage: false, direction: null, senderId: null, mediaType: null, mediaUrls: null, content: null, sentAt: itemDateOf(i) }));
+                            const albumFollowers = albumFollowerIndexes(albums);
+
                             const renderedItems = chatItems.map((item, itemIndex) => {
                               const group = groupFlags[itemIndex] ?? { isGroupStart: true, isGroupEnd: true };
+                              const albumIdx = albums.get(itemIndex);
+                              const albumMessages = albumIdx ? albumIdx.map((i) => (chatItems[i] as Extract<ChatItem, { _type: 'message' }>).data) : null;
                               const isGroupStart = group.isGroupStart;
-                              const isGroupEnd = group.isGroupEnd;
+                              const isGroupEnd = albumIdx
+                                ? (groupFlags[albumIdx[albumIdx.length - 1]] ?? group).isGroupEnd
+                                : group.isGroupEnd;
                               const block = blockFlags[itemIndex] ?? { isBlockStart: true, isBlockEnd: true, blockIndex: 0 };
                               const descriptor = descriptors[itemIndex];
                               const itemDate = itemDateOf(item);
@@ -2856,8 +2878,38 @@ function DesktopMessagesList() {
                                         direction={message.reply_to_message.direction}
                                       />
                                     )}
+                                    {/* Álbum de imagens */}
+                                    {albumMessages && (() => {
+                                      const albumImages: AlbumImage[] = albumMessages.map((am) => ({
+                                        id: am.id,
+                                        url: getProxiedMediaUrl(am.media_urls![0], organization?.id, accessToken),
+                                      }));
+                                      const pending = albumMessages.filter((am) => !(am.metadata as any)?.attached_document);
+                                      return (
+                                        <div className="space-y-1">
+                                          <ImageAlbumBubble images={albumImages} onOpen={(i) => albumViewer.open(albumImages, i)} />
+                                          {!isOutbound && pending.length > 0 && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                if (attachPicking && attach) {
+                                                  const have = new Set(attach.pages.map((p) => p.url));
+                                                  setAttach({ pages: [...attach.pages, ...pending.filter((am) => !have.has(am.media_urls![0])).map(mediaToAttach)] });
+                                                } else {
+                                                  setAttach({ pages: pending.map(mediaToAttach) });
+                                                }
+                                                setAttachPicking(false);
+                                              }}
+                                              className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                                            >
+                                              {attachPicking ? <><Plus className="h-3.5 w-3.5" /> Adicionar estas fotos</> : <><Paperclip className="h-3.5 w-3.5" /> Vincular fotos como documento</>}
+                                            </button>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                     {/* Media */}
-                                    {message.media_urls && message.media_urls.length > 0 && (
+                                    {!albumMessages && message.media_urls && message.media_urls.length > 0 && (
                                       <div className="space-y-2">
                                         {message.media_urls.map((rawUrl, i) => {
                                           const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
@@ -3046,7 +3098,7 @@ function DesktopMessagesList() {
                             // sistema entram NELE como marcadores internos.
                             let currentBlock: Extract<Segment, { type: 'block' }> | null = null;
                             let visualBlockSeq = 0;
-                            for (const r of renderedItems) {
+                            for (const r of renderedItems.filter((_, i) => !albumFollowers.has(i))) {
                               if (currentBlock && r.endpointBreak) {
                                 currentBlock = null;
                               }
@@ -3509,6 +3561,23 @@ function DesktopMessagesList() {
       )}
 
       {/* Image Preview Dialog */}
+      <ImageAlbumViewer
+        images={albumViewer.images}
+        index={albumViewer.index}
+        onIndexChange={albumViewer.setIndex}
+        renderActions={(img) => {
+          const am = messages.find((m) => m.id === img.id);
+          if (!am || am.direction === 'outbound' || !am.media_urls?.[0]) return null;
+          if ((am.metadata as any)?.attached_document) {
+            return <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><Check className="h-3.5 w-3.5" /> Vinculado</span>;
+          }
+          return (
+            <Button size="sm" variant="outline" onClick={() => { albumViewer.setIndex(null); setAttach({ pages: [mediaToAttach(am)] }); setAttachPicking(false); }}>
+              <Paperclip className="h-3.5 w-3.5 mr-1" /> Vincular esta foto
+            </Button>
+          );
+        }}
+      />
       <Dialog open={!!previewImageUrl} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
         <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 bg-transparent border-none">
           <div className="relative">

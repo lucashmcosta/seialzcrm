@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { ImageAlbumBubble, ImageAlbumViewer, useAlbumViewer, type AlbumImage } from '@/components/messages/ImageAlbumBubble';
+import { groupConsecutiveImages, albumFollowerIndexes } from '@/lib/messageImageGroups';
 import { SpinnerGap, FileText, ArrowBendUpLeft, Paperclip, Plus, Check } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { useInboxThreadMessages, type InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
@@ -97,6 +99,7 @@ export function InboxConversationTimeline({ threadId, organizationId, contactId,
   // Vincular mídia recebida como documento (triagem inline), igual ao Comercial.
   const [attach, setAttach] = useState<{ pages: AttachMedia[] } | null>(null);
   const [attachPicking, setAttachPicking] = useState(false);
+  const albumViewer = useAlbumViewer();
   const [justLinked, setJustLinked] = useState<Record<string, string>>({}); // url → tipo (feedback imediato)
   const [opportunities, setOpportunities] = useState<AttachOpportunity[]>([]);
   const mediaToAttach = (m: InboxMessageRow): AttachMedia => ({
@@ -156,7 +159,22 @@ export function InboxConversationTimeline({ threadId, organizationId, contactId,
             Sem mensagens nesta conversa.
           </div>
         ) : (
-          messages.map((m, idx) => {
+          (() => {
+          const albums = groupConsecutiveImages(messages.map((x) => ({
+            isMessage: !x.is_internal_note,
+            direction: x.direction,
+            senderId: x.sender_name ?? null,
+            mediaType: x.media_type,
+            mediaUrls: x.media_urls,
+            content: x.content,
+            sentAt: x.sent_at,
+            failed: x.whatsapp_status === 'failed',
+          })));
+          const followers = albumFollowerIndexes(albums);
+          return messages.map((m, idx) => {
+            if (followers.has(idx)) return null;
+            const albumIdx = albums.get(idx);
+            const albumMsgs = albumIdx ? albumIdx.map((i) => messages[i]) : null;
             const isOutbound = m.direction === 'outbound';
             const isAudioOnly = m.media_type === 'audio';
             const isMediaPlaceholder = !!m.content && /^\[(Áudio|Imagem|Vídeo|Documento|Sticker)\]$/.test(m.content);
@@ -241,10 +259,33 @@ export function InboxConversationTimeline({ threadId, organizationId, contactId,
                       />
                     )}
 
-                    <Media msg={m} orgId={organizationId} accessToken={accessToken} />
+                    {albumMsgs ? (() => {
+                      const imgs: AlbumImage[] = albumMsgs.map((am) => ({ id: am.id, url: getProxiedMediaUrl(am.media_urls![0], organizationId, accessToken) }));
+                      const pending = albumMsgs.filter((am) => !(am.metadata as any)?.attached_document && !justLinked[am.media_urls![0]]);
+                      return (
+                        <div className="space-y-1">
+                          <ImageAlbumBubble images={imgs} onOpen={(i) => albumViewer.open(imgs, i)} />
+                          {!isOutbound && contactId && pending.length > 0 && (
+                            <button type="button"
+                              onClick={() => {
+                                if (attachPicking && attach) {
+                                  const have = new Set(attach.pages.map((p) => p.url));
+                                  setAttach({ pages: [...attach.pages, ...pending.filter((am) => !have.has(am.media_urls![0])).map(mediaToAttach)] });
+                                } else {
+                                  setAttach({ pages: pending.map(mediaToAttach) });
+                                }
+                                setAttachPicking(false);
+                              }}
+                              className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
+                              {attachPicking ? <><Plus size={13} /> Adicionar estas fotos</> : <><Paperclip size={13} /> Vincular fotos como documento</>}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })() : <Media msg={m} orgId={organizationId} accessToken={accessToken} />}
 
                     {/* Triagem inline: vincular mídia recebida (imagem/PDF) como documento */}
-                    {!isOutbound && contactId && isAttachableMedia(m.media_type) && m.media_urls?.[0] && (() => {
+                    {!albumMsgs && !isOutbound && contactId && isAttachableMedia(m.media_type) && m.media_urls?.[0] && (() => {
                       const thisUrl = m.media_urls[0];
                       const already = attach?.pages.some((p) => p.url === thisUrl);
                       const linkedName = (m.metadata as any)?.attached_document?.type_name ?? justLinked[thisUrl];
@@ -314,10 +355,29 @@ export function InboxConversationTimeline({ threadId, organizationId, contactId,
                 </div>
               </div>
             );
-          })
+          });
+          })()
         )}
         </div>
       </div>
+
+      <ImageAlbumViewer
+        images={albumViewer.images}
+        index={albumViewer.index}
+        onIndexChange={albumViewer.setIndex}
+        renderActions={(img) => {
+          const am = messages.find((x) => x.id === img.id);
+          if (!am || am.direction === 'outbound' || !contactId || !am.media_urls?.[0]) return null;
+          if ((am.metadata as any)?.attached_document || justLinked[am.media_urls[0]]) {
+            return <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><Check size={13} /> Vinculado</span>;
+          }
+          return (
+            <Button size="sm" variant="outline" onClick={() => { albumViewer.setIndex(null); setAttach({ pages: [mediaToAttach(am)] }); setAttachPicking(false); }}>
+              <Paperclip size={13} className="mr-1" /> Vincular esta foto
+            </Button>
+          );
+        }}
+      />
 
       {attach && contactId && organizationId && (
         <AttachMediaDialog
